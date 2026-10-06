@@ -83,9 +83,9 @@ const Notificaciones = () => {
   };
 
   return (
-    <div className="container mx-auto max-w-2xl px-3 sm:px-4 py-4 sm:py-6 pb-24 space-y-4">
+    <div className="container mx-auto max-w-2xl px-3 sm:px-4 py-4 sm:py-6 pb-mobile-nav md:pb-8 space-y-4">
       <header className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
             <Bell className="w-5 h-5 text-primary" />
             <h1 className="text-lg font-bold tracking-tight">Notificaciones</h1>

@@ -249,7 +249,7 @@ export function PiezaAprobarDialog({ pieza, onClose }: { pieza: PiezaIA | null; 
 
   return (
     <Dialog open={!!pieza} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[94vh] w-[calc(100vw-1.5rem)] max-w-lg overflow-y-auto rounded-2xl">
+      <DialogContent className="sm:max-h-[94dvh] w-[calc(100vw-1.5rem)] max-w-lg overflow-y-auto rounded-2xl">
         <DialogHeader className="text-left">
           <DialogTitle>{puede ? "¿Va así?" : "Tu pieza"}</DialogTitle>
           <DialogDescription>
@@ -257,7 +257,7 @@ export function PiezaAprobarDialog({ pieza, onClose }: { pieza: PiezaIA | null; 
           </DialogDescription>
         </DialogHeader>
         <div className="overflow-hidden rounded-xl border bg-muted">
-          {v ? <VersionImg v={v} className="max-h-[55vh]" /> : <p className="p-8 text-center text-sm text-muted-foreground">Sin imagen</p>}
+          {v ? <VersionImg v={v} className="max-h-[55dvh]" /> : <p className="p-8 text-center text-sm text-muted-foreground">Sin imagen</p>}
         </div>
         {puede ? (
           cambios ? (
@@ -410,7 +410,7 @@ export function PedirPiezaDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[94vh] w-[calc(100vw-1.5rem)] max-w-lg overflow-y-auto rounded-2xl">
+      <DialogContent className="sm:max-h-[94dvh] w-[calc(100vw-1.5rem)] max-w-lg overflow-y-auto rounded-2xl">
         <DialogHeader className="text-left">
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" /> Pedir una pieza gráfica

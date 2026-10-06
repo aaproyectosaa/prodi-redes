@@ -25,9 +25,12 @@ export function getPool(): Pool {
   if (!url) throw new Error("Falta DATABASE_URL (la conexión a Postgres / Neon) en las variables de entorno.");
   const local = /@(localhost|127\.0\.0\.1)[:/]/.test(url);
   pool = new Pool({
-    connectionString: url,
+    // "sslmode=require" de Neon: pg ya lo trata como verify-full; se pone explícito para no llenar el log de avisos.
+    connectionString: local ? url : url.replace(/([?&])sslmode=require\b/, "$1sslmode=verify-full"),
     // Neon exige SSL; en local no hace falta.
     ssl: local ? undefined : { rejectUnauthorized: true },
+    // Neon pide channel_binding=require en su link: se usa SCRAM-SHA-256-PLUS.
+    enableChannelBinding: /[?&]channel_binding=require/.test(url),
     max: Number(process.env.DB_POOL_MAX ?? 3),
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 10_000,

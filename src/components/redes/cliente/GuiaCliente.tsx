@@ -93,14 +93,9 @@ export function GuiaCliente({
     instagram !== (cliente.redes?.instagram ?? "");
 
   const terminar = async () => {
-    if (!infoOk || falta.logo) {
-      setAviso(
-        falta.logo && !infoOk
-          ? "Falta tu logo y contarnos de tu negocio."
-          : falta.logo
-            ? "Falta subir tu logo."
-            : "Completá a qué se dedica tu negocio y qué lo hace distinto."
-      );
+    // El logo se pide pero no frena: si no lo tiene a mano (o no se puede subir), lo sube después desde "Mi negocio".
+    if (!infoOk) {
+      setAviso("Completá a qué se dedica tu negocio y qué lo hace distinto.");
       return;
     }
     if (infoCambio || falta.info) {
@@ -122,7 +117,7 @@ export function GuiaCliente({
     // Sin marca no se puede cerrar: lo llevamos al paso de la marca.
     if (obligatorio && !completo) {
       setPaso(3);
-      setAviso("Para empezar necesitamos tu logo y unos datos de tu marca.");
+      setAviso("Para empezar necesitamos unos datos de tu marca.");
       return;
     }
     onOpenChange(false);
@@ -140,7 +135,7 @@ export function GuiaCliente({
     <Dialog open={open} onOpenChange={cerrar}>
       <DialogContent
         className={cn(
-          "max-h-[94vh] w-[calc(100vw-2rem)] max-w-lg overflow-y-auto rounded-2xl p-0",
+          "sm:max-h-[94dvh] w-[calc(100vw-2rem)] max-w-lg overflow-y-auto rounded-2xl p-0",
           obligatorio && "[&>button.absolute]:hidden"
         )}
         onPointerDownOutside={(e) => obligatorio && e.preventDefault()}
@@ -229,7 +224,7 @@ export function GuiaCliente({
               <div>
                 <DialogTitle className="text-xl">Tu marca</DialogTitle>
                 <DialogDescription>
-                  Con esto armamos tus videos, los textos y las piezas gráficas con tu identidad. Es lo único obligatorio.
+                  Con esto armamos tus videos, los textos y las piezas gráficas con tu identidad. Con contarnos de tu negocio ya arrancamos.
                 </DialogDescription>
               </div>
               <div className="space-y-3">
@@ -261,8 +256,8 @@ export function GuiaCliente({
               </div>
               <div className="space-y-1.5">
                 <Label>
-                  Logo <span className="text-destructive">*</span>
-                  <span className="ml-1 font-normal text-muted-foreground">y los colores de tu marca</span>
+                  Logo y colores de tu marca
+                  <span className="ml-1 font-normal text-muted-foreground">(si no los tenés a mano, después)</span>
                 </Label>
                 <MarcaArchivos cliente={cliente} />
               </div>
@@ -292,7 +287,7 @@ export function GuiaCliente({
             ) : (
               <Button onClick={() => void terminar()} disabled={guardando}>
                 {guardando ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
-                Listo, ir a mi panel {!guardando && <CheckCircle2 className="ml-1.5 h-4 w-4" />}
+                {falta.logo ? "Listo, el logo lo subo después" : "Listo, ir a mi panel"} {!guardando && <CheckCircle2 className="ml-1.5 h-4 w-4" />}
               </Button>
             )}
           </div>

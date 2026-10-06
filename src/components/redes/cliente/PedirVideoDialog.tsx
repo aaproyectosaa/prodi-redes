@@ -129,7 +129,7 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[94vh] w-[calc(100vw-2rem)] max-w-lg overflow-y-auto rounded-2xl">
+      <DialogContent className="sm:max-h-[94dvh] w-[calc(100vw-2rem)] max-w-lg overflow-y-auto rounded-2xl">
         {listo ? (
           <div className="flex flex-col items-center gap-3 py-6 text-center">
             <span className="flex h-16 w-16 items-center justify-center rounded-full bg-success/15 text-success animate-in zoom-in-50 duration-500">

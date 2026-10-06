@@ -70,7 +70,7 @@ export function PlanMesCliente({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[94vh] w-[calc(100vw-1.5rem)] max-w-xl overflow-y-auto rounded-2xl">
+      <DialogContent className="sm:max-h-[94dvh] w-[calc(100vw-1.5rem)] max-w-xl overflow-y-auto rounded-2xl">
         {listo ? (
           <div className="flex flex-col items-center gap-3 py-6 text-center animate-in fade-in zoom-in-95 duration-500">
             <span className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/15 text-primary">

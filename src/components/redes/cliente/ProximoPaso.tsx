@@ -1,5 +1,5 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
-import {
+import { Palette,
   ArrowRight,
   CalendarDays,
   CheckCircle2,
@@ -26,6 +26,7 @@ const ICONOS: Record<TipoPaso, LucideIcon> = {
   en_produccion: Film,
   resultados: TrendingUp,
   todo_listo: CheckCircle2,
+  marca: Palette,
 };
 
 function useIrA(onPedir?: () => void, onIdeas?: () => void) {

@@ -98,7 +98,7 @@ export function MiPlan({
               >
                 <Receipt className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1">
-                  <span className="block font-medium capitalize">
+                  <span className="block font-medium first-letter:uppercase">
                     {f.tipo} de {mesLabel(f.mes).toLowerCase()}
                   </span>
                   <span className={cn("block text-xs", f.vencimiento < hoy ? "font-semibold text-destructive" : "text-muted-foreground")}>
@@ -114,15 +114,20 @@ export function MiPlan({
             <div className="mt-4 rounded-xl bg-background/60 p-3 text-sm">
               <p className="font-medium">Cómo pagar: transferencia</p>
               <div className="mt-1.5 flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" className="h-8" onClick={() => copiar(cobro.alias, "Alias")}>
-                  <Copy className="mr-1.5 h-3.5 w-3.5" /> Alias: {cobro.alias}
-                </Button>
-                <Button size="sm" variant="outline" className="h-8" onClick={() => copiar(cobro.cbu, "CBU")}>
-                  <Copy className="mr-1.5 h-3.5 w-3.5" /> CBU
-                </Button>
+                {cobro.alias && (
+                  <Button size="sm" variant="outline" className="h-8" onClick={() => copiar(cobro.alias, "Alias")}>
+                    <Copy className="mr-1.5 h-3.5 w-3.5" /> Alias: {cobro.alias}
+                  </Button>
+                )}
+                {cobro.cbu && (
+                  <Button size="sm" variant="outline" className="h-8" onClick={() => copiar(cobro.cbu, "CBU")}>
+                    <Copy className="mr-1.5 h-3.5 w-3.5" /> CBU
+                  </Button>
+                )}
               </div>
               <p className="mt-1.5 text-xs text-muted-foreground">
-                A nombre de {cobro.titular} · {cobro.banco}. Cuando pagues, avisanos por el chat o por WhatsApp.
+                {[cobro.titular && `A nombre de ${cobro.titular}`, cobro.banco].filter(Boolean).join(" · ")}
+                {cobro.titular || cobro.banco ? ". " : ""}Cuando pagues, avisanos por el chat o por WhatsApp.
               </p>
             </div>
           )}
@@ -226,8 +231,8 @@ function FilaBoleta({ f, hoy, onClick }: { f: FacturaDoc; hoy: string; onClick: 
   return (
     <button type="button" onClick={onClick} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-muted/40">
       <div className="min-w-0">
-        <p className="font-medium capitalize">
-          {f.tipo} · {mesLabel(f.mes)}
+        <p className="font-medium first-letter:uppercase">
+          {f.tipo} · {mesLabel(f.mes).toLowerCase()}
         </p>
         <p className={cn("text-xs", vencida ? "font-semibold text-destructive" : "text-muted-foreground")}>
           {f.estado === "cobrada" ? "Pagada ✓" : f.debito ? "Se debita sola" : `${vencida ? "Venció" : "Vence"} el ${ddmm(f.vencimiento)}`}

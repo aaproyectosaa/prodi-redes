@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { asset } from "@/lib/asset";
 import { useLocation, useNavigate } from "react-router-dom";
 import { signOut } from "@/lib/auth";
@@ -155,8 +155,49 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
   );
 };
 
+const esCampoDeTexto = (el: Element | null) =>
+  !!el &&
+  (el.tagName === "TEXTAREA" ||
+    (el as HTMLElement).isContentEditable ||
+    (el.tagName === "INPUT" && !["checkbox", "radio", "range", "color", "file", "button", "submit"].includes((el as HTMLInputElement).type)));
+
+/** Con el teclado abierto en el celular la barra de abajo se esconde (si no, queda flotando arriba del teclado). */
+function useTecladoAbierto() {
+  const [abierto, setAbierto] = useState(false);
+  useEffect(() => {
+    const revisar = () => {
+      const si = window.innerWidth < 768 && esCampoDeTexto(document.activeElement);
+      setAbierto(si);
+      document.documentElement.classList.toggle("teclado-abierto", si);
+    };
+    // Entrar a un campo esconde la barra al toque. Salir (o tocar un botón) espera un poco: si el toque fue en
+    // "Guardar" o "Enviar", que el click caiga antes de que la barra vuelva y mueva todo.
+    let espera: ReturnType<typeof setTimeout> | undefined;
+    const alSalir = () => {
+      clearTimeout(espera);
+      espera = setTimeout(revisar, 350);
+    };
+    const alEntrar = (e: FocusEvent) => {
+      if (esCampoDeTexto(e.target as Element)) {
+        clearTimeout(espera);
+        revisar();
+      } else alSalir();
+    };
+    document.addEventListener("focusin", alEntrar);
+    document.addEventListener("focusout", alSalir);
+    return () => {
+      clearTimeout(espera);
+      document.removeEventListener("focusin", alEntrar);
+      document.removeEventListener("focusout", alSalir);
+      document.documentElement.classList.remove("teclado-abierto");
+    };
+  }, []);
+  return abierto;
+}
+
 /** Barra inferior del celular con los accesos principales del rol. */
 export const MobileTabBar = ({ role }: { role?: UserRole }) => {
+  const teclado = useTecladoAbierto();
   const navigate = useNavigate();
   const location = useLocation();
   const pendientes = usePendientes();
@@ -164,7 +205,7 @@ export const MobileTabBar = ({ role }: { role?: UserRole }) => {
     .flatMap((s) => s.items)
     .filter((i) => i.mobile)
     .slice(0, 4);
-  if (items.length === 0) return null;
+  if (items.length === 0 || teclado) return null;
   return (
     <nav className="safe-area-pb fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 backdrop-blur md:hidden">
       <div className="grid" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>

@@ -188,7 +188,7 @@ export function PublicarDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] max-w-lg overflow-y-auto">
+      <DialogContent className="sm:max-h-[92dvh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Marcar como publicado</DialogTitle>
           <DialogDescription>
@@ -351,7 +351,7 @@ export function ResultadosDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] max-w-lg overflow-y-auto">
+      <DialogContent className="sm:max-h-[92dvh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Resultados de la pauta</DialogTitle>
           <DialogDescription>

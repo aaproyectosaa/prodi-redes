@@ -162,7 +162,7 @@ export function DriveVideoPlayer({
           <p className="text-xs text-muted-foreground leading-relaxed">
             A veces tarda un poco. Tocá reintentar para verlo acá mismo.
           </p>
-          {debugDetail && (
+          {debugDetail && import.meta.env.DEV && (
             <p className="text-[10px] text-left font-mono text-muted-foreground/90 break-all pt-1">
               {debugDetail}
             </p>

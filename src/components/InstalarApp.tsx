@@ -71,7 +71,7 @@ export function InstalarDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[94vh] w-[calc(100vw-2rem)] max-w-md overflow-y-auto rounded-2xl">
+      <DialogContent className="sm:max-h-[94dvh] w-[calc(100vw-2rem)] max-w-md overflow-y-auto rounded-2xl">
         <div className="flex flex-col items-center gap-3 pt-2 text-center">
           <img src={asset("/icons/icon-192.png")} alt="" className="h-16 w-16 rounded-2xl shadow-lg" />
           <DialogTitle className="text-xl">{invitacion ? "Instalá la app de Prodi" : "Instalá Prodi como app"}</DialogTitle>

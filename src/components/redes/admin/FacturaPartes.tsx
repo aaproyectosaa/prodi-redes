@@ -216,7 +216,7 @@ export function DatosFacturacionDialog({ proyectoId, onClose }: { proyectoId: st
   };
   return (
     <Dialog open={!!proyectoId} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[94vh] w-[calc(100vw-1.5rem)] max-w-md overflow-y-auto rounded-2xl">
+      <DialogContent className="sm:max-h-[94dvh] w-[calc(100vw-1.5rem)] max-w-md overflow-y-auto rounded-2xl">
         <DialogHeader>
           <DialogTitle>Datos de facturación · {c.nombre}</DialogTitle>
           <DialogDescription>Se usan cada vez que se prepara su boleta.</DialogDescription>
@@ -326,7 +326,7 @@ export function EditarFacturaDialog({ f, onClose, ivaPct }: { f: FacturaDoc | nu
   };
   return (
     <Dialog open={!!f} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[94vh] w-[calc(100vw-1.5rem)] max-w-lg overflow-y-auto rounded-2xl">
+      <DialogContent className="sm:max-h-[94dvh] w-[calc(100vw-1.5rem)] max-w-lg overflow-y-auto rounded-2xl">
         <DialogHeader>
           <DialogTitle>{f.cliente}</DialogTitle>
           <DialogDescription>{mesLabel(f.mes)}</DialogDescription>

@@ -372,7 +372,7 @@ function UsuarioDialog({
 
   return (
     <Dialog open={!!persona} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-lg overflow-y-auto">
+      <DialogContent className="sm:max-h-[92dvh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{nuevo ? "Nuevo usuario" : `Editar a ${p?.nombre}`}</DialogTitle>
           <DialogDescription>
@@ -409,7 +409,10 @@ function UsuarioDialog({
           {usaClientes && (
             <div className="space-y-1.5">
               <Label>{rol === "cliente" ? "Marca a la que pertenece" : "Clientes en los que trabaja"}</Label>
-              <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border p-2">
+              <div className="space-y-1 rounded-lg border p-2 sm:max-h-56 sm:overflow-y-auto">
+                {clientes.length === 0 && (
+                  <p className="px-2 py-1.5 text-xs text-muted-foreground">Todavía no hay clientes. Cuando des de alta uno, lo asignás desde acá o desde la ficha del cliente.</p>
+                )}
                 {clientes.map((c) => (
                   <label key={c.id} className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/60">
                     <Checkbox

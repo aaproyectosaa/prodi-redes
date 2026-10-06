@@ -110,6 +110,25 @@ planificado → agendado (rodaje) → edición → revisión interna → revisi�
 - Se borraron `firestore.rules` y la dependencia `firebase`. `firebase-admin` queda solo para la migración.
 - Pruebas hechas contra un Postgres 16 real (mismo motor que Neon): 37 pruebas de seguridad por rol (`scripts/probar-seguridad.py`), login, cambio de clave, links de clave, registro, chat en vivo entre dos usuarios, emisión de boletas que le llegan al cliente, pagos al equipo, deudas, colores y contexto comercial del cliente, cron diario.
 
+### Versión 12.1 (correcciones antes de subir)
+
+- **Arreglado:** la función `/api/usuarios` (crear, editar y desactivar usuarios, links de contraseña, datos de ejemplo) se caía en Vercel porque usaba los datos de ejemplo desde la carpeta `demo/`. Ahora están en `api/_lib/ejemplo-datos.ts`.
+- Conexión a Neon: usa el link tal cual lo da Neon (`sslmode=require&channel_binding=require`), con verificación del certificado y channel binding.
+- Se toma `vercel.json` y el arreglo de `api/_lib/google.ts` de la versión de Ariel.
+- Probado con lo mismo que arma Vercel (`vercel build`): las 10 funciones compiladas cargan y responden, contra un Postgres con SSL y usuario/contraseña como Neon. 37 pruebas de seguridad, todas las pantallas de todos los roles (compu y celular) sin errores, y los recorridos de cobros, chat en vivo, links de contraseña, registro, pagos, deudas y panel del cliente.
+
+### Versión 12.2 (scroll en el celular)
+
+- La app usa el alto real de la pantalla del celular (`dvh`): en iPhone la parte de abajo ya no queda escondida detrás de la barra del navegador. Lo mismo para todas las ventanas.
+- Las ventanas (nuevo cliente, gasto, pieza, reunión…) ya no se salen de la pantalla en el celular: el alto propio de cada una ahora solo aplica en compu.
+- Kanban de videos y piezas: en el celular las columnas ya no tienen scroll propio (se deslizaba la columna en vez de la página); se baja con la página y se pasa de columna deslizando de costado. En compu queda igual.
+- Tablero y Gastos se salían de costado en el celular (una tabla ancha estiraba toda la pantalla); arreglado para todas las grillas. Notificaciones también, en celulares chicos.
+- Los cuadros de texto crecen con lo que se escribe (no queda un scroll adentro de otro).
+- En iPhone, tocar un campo ya no hace zoom y deja la pantalla corrida (letra de 16 px en los campos del celular).
+- Con el teclado abierto se esconde la barra de abajo (el chat queda pegado al teclado).
+- Perfil: el botón *Guardar cambios* quedaba tapado por la barra de abajo. La barra de *Subidas* a Drive tapaba la barra de abajo. Las listas de personas dentro de las ventanas ya no scrollean aparte en el celular.
+- Probado en 390 px y 360 px de ancho, con gestos táctiles, en todas las pantallas de todos los roles: sin desbordes, sin zonas trabadas, nada tapado por la barra.
+
 ## 2. Pasos para desplegar (versión 12, Neon)
 
 1. **Neon**: en el proyecto, copiar la *connection string* "pooled" (termina en `-pooler…/neondb?sslmode=require`).

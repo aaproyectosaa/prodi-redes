@@ -249,7 +249,7 @@ function GastoDialog({ gasto, mes, onClose, uid }: { gasto: Gasto | "nuevo" | nu
 
   return (
     <Dialog open={!!gasto} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[94vh] w-[calc(100vw-1.5rem)] max-w-md overflow-y-auto rounded-2xl">
+      <DialogContent className="sm:max-h-[94dvh] w-[calc(100vw-1.5rem)] max-w-md overflow-y-auto rounded-2xl">
         <DialogHeader>
           <DialogTitle>{nuevo ? "Cargar gasto" : "Editar gasto"}</DialogTitle>
           <DialogDescription>Lo que sale de la caja de Prodi.</DialogDescription>

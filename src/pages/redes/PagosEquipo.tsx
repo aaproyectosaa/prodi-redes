@@ -288,7 +288,7 @@ function PersonaPago({
                   Aplicar
                 </Button>
               </div>
-              <div className="max-h-64 divide-y overflow-y-auto rounded-lg border bg-background">
+              <div className="divide-y rounded-lg border bg-background sm:max-h-64 sm:overflow-y-auto">
                 {clientes.map((c) => {
                   const tildado = porCliente[c.id] !== undefined;
                   return (

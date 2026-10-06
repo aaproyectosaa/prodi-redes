@@ -82,7 +82,7 @@ export function PlanMesDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[94vh] w-[calc(100vw-1.5rem)] max-w-3xl overflow-y-auto rounded-2xl p-0">
+      <DialogContent className="sm:max-h-[94dvh] w-[calc(100vw-1.5rem)] max-w-3xl overflow-y-auto rounded-2xl p-0">
         <DialogHeader className="space-y-1 border-b px-5 pb-4 pt-5 text-left">
           <DialogTitle className="flex items-center gap-2 text-xl">
             <Sparkles className="h-5 w-5 text-primary" /> Armar el mes con IA

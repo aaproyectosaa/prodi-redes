@@ -18,7 +18,7 @@ const RoleRedirect = () => {
   }, [user, role, loading, navigate]);
 
   return (
-    <div className="flex min-h-[60vh] items-center justify-center">
+    <div className="flex min-h-[60dvh] items-center justify-center">
       <img src={asset("/brand/isotipo.png")} alt="" className="h-10 w-auto animate-pulse" />
     </div>
   );

@@ -225,6 +225,8 @@ function PlanesEditor({ planes }: { planes: PlanRedes[] }) {
 }
 
 function PlanRow({ plan }: { plan: PlanRedes }) {
+  const { clientes } = useRedes();
+  const enUso = clientes.filter((c) => c.plan_redes_id === plan.id).length;
   const [f, setF] = useState(plan);
   const [dirty, setDirty] = useState(false);
   useEffect(() => {
@@ -251,6 +253,8 @@ function PlanRow({ plan }: { plan: PlanRedes }) {
         <Button
           size="icon"
           variant="ghost"
+          disabled={enUso > 0}
+          title={enUso > 0 ? `Lo ${enUso === 1 ? "usa 1 cliente" : `usan ${enUso} clientes`}: desactivalo en vez de borrarlo` : "Eliminar plan"}
           onClick={async () => {
             await deleteDoc(doc(db, "planes_redes", plan.id));
             toast.success("Plan eliminado");

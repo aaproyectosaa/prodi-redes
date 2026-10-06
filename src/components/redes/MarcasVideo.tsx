@@ -118,13 +118,13 @@ export function ReproductorMarcas({
 
   return (
     <div className={cn("space-y-2", className)}>
-      <div className="flex max-h-[42vh] items-center justify-center overflow-hidden rounded-xl bg-black">
+      <div className="flex max-h-[42dvh] items-center justify-center overflow-hidden rounded-xl bg-black">
         {fuente.tipo === "drive" ? (
-          <DriveVideoPlayer fileId={attachment.drive_file_id} mimeType={attachment.mime_type} className="max-h-[42vh] w-full" onVideoEl={setEl} />
+          <DriveVideoPlayer fileId={attachment.drive_file_id} mimeType={attachment.mime_type} className="max-h-[42dvh] w-full" onVideoEl={setEl} />
         ) : fuente.tipo === "url" ? (
-          <video ref={setEl} src={fuente.url} controls playsInline preload="metadata" className="max-h-[42vh] w-full object-contain" />
+          <video ref={setEl} src={fuente.url} controls playsInline preload="metadata" className="max-h-[42dvh] w-full object-contain" />
         ) : (
-          <img src={fuente.url} alt="" className="max-h-[42vh] object-contain" />
+          <img src={fuente.url} alt="" className="max-h-[42dvh] object-contain" />
         )}
       </div>
 
@@ -303,7 +303,7 @@ export function CorreccionesDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[94vh] w-[calc(100vw-1.5rem)] max-w-2xl overflow-y-auto rounded-2xl">
+      <DialogContent className="sm:max-h-[94dvh] w-[calc(100vw-1.5rem)] max-w-2xl overflow-y-auto rounded-2xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}

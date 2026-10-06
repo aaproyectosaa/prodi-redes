@@ -2,7 +2,7 @@
 // Sirve para probar el sistema completo de verdad antes de pasar los datos reales.
 // Uso: DATABASE_URL="postgresql://…" npm run db:ejemplo            (clave de todos: la que diga CLAVE_EJEMPLO o "prodi2026")
 //      agregá --forzar para cargar aunque la base ya tenga datos (pisa los mismos ids).
-import { seed } from "../demo/seed";
+import { seed } from "../api/_lib/ejemplo-datos";
 import { getPool } from "../api/_lib/db";
 import { hashClave } from "../api/_lib/cuentas";
 

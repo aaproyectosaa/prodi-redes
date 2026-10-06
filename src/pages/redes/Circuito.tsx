@@ -121,7 +121,7 @@ function TableroEquipo({ tablero }: { tablero: TableroRol }) {
                   {col.tuya && <span className="font-semibold text-primary">Te toca · </span>}
                   {col.ayuda}
                 </p>
-                <div className="flex max-h-[calc(100vh-230px)] min-h-[120px] flex-col gap-2 overflow-y-auto px-2 pb-2">
+                <div className="flex min-h-[120px] flex-col gap-2 px-2 pb-2 md:max-h-[calc(100dvh-230px)] md:overflow-y-auto">
                   {items.map((v) => (
                     <VideoCard key={v.id} video={v} showEtapa={false} accion={col.tuya ? col.accion : undefined} />
                   ))}
@@ -265,7 +265,7 @@ function CircuitoCompleto() {
                   </span>
                 </div>
                 <p className="px-3 pb-2 text-[11px] leading-snug text-muted-foreground">{e.descripcion}</p>
-                <div className="flex max-h-[calc(100vh-300px)] min-h-[120px] flex-col gap-2 overflow-y-auto px-2 pb-2">
+                <div className="flex min-h-[120px] flex-col gap-2 px-2 pb-2 md:max-h-[calc(100dvh-300px)] md:overflow-y-auto">
                   {items.map((v) => (
                     <VideoCard key={v.id} video={v} showEtapa={false} />
                   ))}

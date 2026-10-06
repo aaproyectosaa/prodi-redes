@@ -5,7 +5,7 @@
 
 import { adminDb } from "./db";
 import { HttpError } from "./auth";
-import { seed } from "../../demo/seed";
+import { seed } from "./ejemplo-datos";
 
 const REGISTRO = "demo_ejemplo";
 // No se tocan: la configuración real (Drive, precios) ni el admin real.

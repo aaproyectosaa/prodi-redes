@@ -104,13 +104,13 @@ export function TaskMediaGallery({
     const imageSize = mode === "fullscreen" ? 2400 : 1200;
     const imageClass =
       mode === "fullscreen"
-        ? "max-w-full max-h-[85vh] w-auto h-auto object-contain mx-auto rounded-md"
-        : "max-w-full max-h-[40vh] w-auto h-auto object-contain rounded-md sm:max-h-[42vh] md:max-h-full";
+        ? "max-w-full max-h-[85dvh] w-auto h-auto object-contain mx-auto rounded-md"
+        : "max-w-full max-h-[40dvh] w-auto h-auto object-contain rounded-md sm:max-h-[42dvh] md:max-h-full";
     // Clases idénticas al panel PM / AttachmentPreview (donde el video se ve).
     const videoClass =
       mode === "fullscreen"
-        ? "w-full max-w-3xl mx-auto max-h-[85vh] aspect-video object-contain"
-        : "w-full max-w-3xl mx-auto max-h-[40vh] aspect-video object-contain sm:max-h-[42vh]";
+        ? "w-full max-w-3xl mx-auto max-h-[85dvh] aspect-video object-contain"
+        : "w-full max-w-3xl mx-auto max-h-[40dvh] aspect-video object-contain sm:max-h-[42dvh]";
 
     if (isCurrentImage) {
       return (
@@ -197,7 +197,7 @@ export function TaskMediaGallery({
           </div>
         </div>
 
-        <div className="relative flex min-h-[200px] max-h-[42vh] items-center justify-center overflow-hidden bg-black/5 p-3 dark:bg-black/20 sm:max-h-[48vh]">
+        <div className="relative flex min-h-[200px] max-h-[42dvh] items-center justify-center overflow-hidden bg-black/5 p-3 dark:bg-black/20 sm:max-h-[48dvh]">
           {renderMedia("preview")}
         </div>
 

@@ -135,6 +135,53 @@ All colors MUST be HSL.
   }
 
   .pb-mobile-nav {
-    padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: var(--alto-barra);
   }
+}
+
+/* Alto de la barra de abajo del celular (se achica cuando está el teclado abierto). */
+:root {
+  --alto-barra: calc(4rem + env(safe-area-inset-bottom, 0px));
+}
+html.teclado-abierto {
+  --alto-barra: env(safe-area-inset-bottom, 0px);
+}
+@media (min-width: 768px) {
+  :root,
+  html.teclado-abierto {
+    --alto-barra: 0px;
+  }
+}
+
+/* Celulares viejos sin dvh: vuelven a la altura de pantalla clásica. */
+@supports not (height: 100dvh) {
+  .h-dvh {
+    height: 100vh;
+  }
+  .min-h-dvh {
+    min-height: 100vh;
+  }
+}
+
+/* Grillas: un hijo con contenido ancho (tabla, texto largo) no estira la columna más
+   allá de la pantalla; lo ancho scrollea dentro de su caja. */
+@layer base {
+  .grid > * {
+    min-width: 0;
+  }
+}
+
+/* iPhone: con letra menor a 16px, al tocar un campo Safari hace zoom y la pantalla
+   queda corrida y con scroll de costado. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Barras de "Guardar" pegadas abajo: en la página quedan arriba de la barra del celular; dentro de una ventana, al fondo. */
+[role="dialog"] .barra-guardar {
+  bottom: 0;
 }

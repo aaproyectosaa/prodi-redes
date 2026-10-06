@@ -249,7 +249,7 @@ const Profile = () => {
         }
       />
 
-      <main className="flex-1 overflow-y-auto px-4 py-4 sm:py-5 pb-24 sm:pb-8">
+      <main className="flex-1 px-4 py-4 sm:py-5 pb-[calc(var(--alto-barra)+5rem)] sm:pb-mobile-nav md:pb-8">
         <div className="max-w-2xl mx-auto space-y-4">
           {/* Resumen */}
           <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
@@ -503,7 +503,7 @@ const Profile = () => {
       </main>
 
       {tab === "cuenta" && (
-        <div className="sm:hidden fixed bottom-0 inset-x-0 z-20 border-t border-border bg-card/95 backdrop-blur p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="sm:hidden fixed inset-x-0 bottom-[calc(var(--alto-barra)+1px)] z-20 border-t border-border bg-card/95 backdrop-blur p-3">
           <Button
             onClick={handleSave}
             disabled={saving}

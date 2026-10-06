@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { addDoc, collection } from "@/lib/db";
 import { Building2, Copy, Loader2, MessageCircle, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -48,7 +48,7 @@ export default function Clientes() {
   return (
     <PageShell
       title="Clientes"
-      subtitle={`${clientes.length} clientes activos`}
+      subtitle={clientes.length === 1 ? "1 cliente activo" : `${clientes.length} clientes activos`}
       actions={
         isAdmin && (
           <Button onClick={() => setNuevo(true)}>
@@ -197,7 +197,7 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     const tel = alta.whatsapp.replace(/\D/g, "");
     return (
       <Dialog open={open} onOpenChange={cerrar}>
-        <DialogContent className="max-h-[94vh] max-w-lg overflow-y-auto">
+        <DialogContent className="sm:max-h-[94dvh] max-w-lg overflow-y-auto">
           <DialogHeader>
             <DialogTitle>¡{alta.nombre} ya está adentro! 🎉</DialogTitle>
           </DialogHeader>
@@ -237,7 +237,7 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
 
   return (
     <Dialog open={open} onOpenChange={cerrar}>
-      <DialogContent className="max-h-[94vh] max-w-lg overflow-y-auto">
+      <DialogContent className="sm:max-h-[94dvh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nuevo cliente</DialogTitle>
         </DialogHeader>
@@ -263,6 +263,15 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                     ))}
                   </SelectContent>
                 </Select>
+                {!planes.some((p) => p.activo) && (
+                  <p className="text-xs text-muted-foreground">
+                    Todavía no hay planes. Crealos en{" "}
+                    <Link to="/ajustes" className="font-medium text-primary underline-offset-2 hover:underline">
+                      Ajustes
+                    </Link>{" "}
+                    (ej. 4, 8 y 12 videos por mes).
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label>Se le hace</Label>
@@ -361,7 +370,7 @@ function mensajeBienvenida(a: Alta, plan?: { nombre: string; videos_mes: number;
     `${hola} Bienvenidos a Prodi 🙌`,
     "",
     `Ya está listo el panel de ${a.nombre}. Ahí vas a ver tus videos, aprobarlos, pedir piezas gráficas, seguir los resultados y tus boletas.`,
-    plan ? `Tu plan ${plan.nombre} incluye ${plan.videos_mes} videos con publicidad${plan.piezas_mes ? ` y ${plan.piezas_mes} piezas gráficas` : ""} por mes.` : "",
+    plan ? `${/^plan\b/i.test(plan.nombre.trim()) ? `Tu ${plan.nombre}` : `Tu plan ${plan.nombre}`} incluye ${plan.videos_mes} videos con publicidad${plan.piezas_mes ? ` y ${plan.piezas_mes} piezas gráficas` : ""} por mes.` : "",
     "",
     `Entrá acá: ${url}`,
     a.email ? `Usuario: ${a.email}` : "",

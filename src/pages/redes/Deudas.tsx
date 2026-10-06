@@ -338,7 +338,7 @@ function DetalleObligacion({ o, hoy, onClose, onPagar }: { o: Obligacion; hoy: s
   };
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="flex max-h-[90vh] max-w-lg flex-col">
+      <DialogContent className="flex sm:max-h-[90dvh] max-w-lg flex-col">
         <DialogHeader>
           <DialogTitle>{o.nombre}</DialogTitle>
           <DialogDescription>

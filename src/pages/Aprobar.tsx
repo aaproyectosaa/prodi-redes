@@ -52,7 +52,7 @@ export default function Aprobar() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-dvh bg-background text-foreground">
       <header className="flex h-14 items-center justify-center border-b">
         <img src={asset("/brand/logo-horizontal-blanco.png")} alt="Prodi" className="hidden h-5 w-auto dark:block" />
         <img src={asset("/brand/logo-horizontal-negro.png")} alt="Prodi" className="h-5 w-auto dark:hidden" />
@@ -119,7 +119,7 @@ export default function Aprobar() {
                       controls
                       playsInline
                       preload="metadata"
-                      className="max-h-[70vh] w-full rounded-2xl bg-black"
+                      className="max-h-[70dvh] w-full rounded-2xl bg-black"
                     />
                   ) : (
                     <img key={f.drive_file_id} src={m.url} alt={f.name} className="w-full rounded-2xl bg-black object-contain" />

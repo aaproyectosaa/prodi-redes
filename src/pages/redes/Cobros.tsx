@@ -420,7 +420,7 @@ function PasoEmitir({
               </div>
             );
           })}
-          <div className="sticky bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-10 md:bottom-4">
+          <div className="sticky bottom-[calc(var(--alto-barra)+0.75rem)] z-10 md:bottom-4">
             <Button
               className="h-12 w-full text-base shadow-lg"
               onClick={() => void emitir(elegidas, "varias")}

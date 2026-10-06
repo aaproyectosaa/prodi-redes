@@ -36,7 +36,7 @@ import { ContextoComercialEditor } from "@/components/redes/ContextoComercial";
 import { cn } from "@/lib/utils";
 import { DATOS_COBRO_DEFAULT } from "@/lib/redes/types";
 import { SelectorVista, VistaCalendario, useVista } from "@/components/redes/VistaCalendario";
-import { faltaMarca, pasosCliente } from "@/lib/redes/proximoPaso";
+import { faltaMarca, pasosCliente, resumenMarca } from "@/lib/redes/proximoPaso";
 
 type Tab = "inicio" | "resultados" | "piezas" | "plan" | "negocio";
 
@@ -171,9 +171,9 @@ export default function ClientePortal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planDeLink]);
 
-  // Logo y datos de la marca son obligatorios: sin eso la bienvenida no se puede cerrar.
+  // Los datos de la marca son obligatorios: sin eso la bienvenida no se puede cerrar (el logo se pide, pero no frena).
   const falta = cliente ? faltaMarca(cliente) : { logo: false, info: false };
-  const marcaObligatoria = (falta.logo || falta.info) && !viewingAs;
+  const marcaObligatoria = falta.info && !viewingAs;
 
   // La primera vez que entra (o mientras falte la marca), la bienvenida se abre sola.
   useEffect(() => {
@@ -366,7 +366,7 @@ export default function ClientePortal() {
             <p className="mb-4 text-sm text-muted-foreground">
               Contanos qué vendés, qué querés empujar y qué tenés de temporada. Con esto armamos los videos y las piezas para que te traigan consultas y ventas.
             </p>
-            <ContextoComercialEditor proyectoId={cliente.id} nombre={cliente.nombre} cliente compacto />
+            <ContextoComercialEditor proyectoId={cliente.id} nombre={cliente.nombre} sugerido={resumenMarca(cliente)} cliente compacto />
           </div>
         </TabsContent>
       </Tabs>

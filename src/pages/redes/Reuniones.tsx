@@ -211,7 +211,7 @@ function NuevaReunionDialog({ open, onOpenChange, onCreada }: { open: boolean; o
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] max-w-lg overflow-y-auto">
+      <DialogContent className="sm:max-h-[92dvh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nueva reunión</DialogTitle>
           <DialogDescription>Se crea un link de videollamada gratis (Jitsi Meet). No hace falta instalar nada.</DialogDescription>
@@ -245,7 +245,7 @@ function NuevaReunionDialog({ open, onOpenChange, onCreada }: { open: boolean; o
           </div>
           <div className="space-y-1.5">
             <Label>Participantes</Label>
-            <div className="max-h-52 space-y-1 overflow-y-auto rounded-lg border p-2">
+            <div className="space-y-1 rounded-lg border p-2 sm:max-h-52 sm:overflow-y-auto">
               {candidatos.map((p) => (
                 <label key={p.id} className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/60">
                   <Checkbox

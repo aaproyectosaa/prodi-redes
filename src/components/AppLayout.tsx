@@ -24,7 +24,7 @@ const LayoutInner = () => {
 
   if (!authChecked) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-dvh items-center justify-center bg-background">
         <img src={asset("/brand/isotipo.png")} alt="" className="h-10 w-auto animate-pulse" />
       </div>
     );
@@ -33,7 +33,7 @@ const LayoutInner = () => {
 
   return (
     <RedesDataProvider>
-      <div className="flex h-screen overflow-hidden bg-background">
+      <div className="flex h-dvh overflow-hidden bg-background">
         <AppSidebar profile={profile} role={role}>
           {extras}
         </AppSidebar>

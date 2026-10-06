@@ -41,7 +41,7 @@ const PRODUCTOR: TableroRol = {
   columnas: [
     { id: "planificado", titulo: "Agendar rodaje", ayuda: "Ideas acordadas con el cliente.", tuya: true, accion: "Agendar", dot: "bg-slate-400" },
     { id: "agendado", titulo: "Filmar y subir crudo", ayuda: "Después de filmar, subí el material.", tuya: true, accion: "Subir crudo", dot: "bg-sky-500" },
-    { id: "edicion", titulo: "En edición", ayuda: "Lo está editando Nati.", tuya: false, dot: "bg-amber-500" },
+    { id: "edicion", titulo: "En edición", ayuda: "Lo tiene el editor.", tuya: false, dot: "bg-amber-500" },
     { id: "revision_interna", titulo: "Revisar", ayuda: "Miralo antes de que lo vea el cliente.", tuya: true, accion: "Revisar", dot: "bg-orange-500" },
     { id: "revision_cliente", titulo: "Esperando al cliente", ayuda: "Si tarda, escribile por el chat.", tuya: false, dot: "bg-prodi" },
     { id: "listo", titulo: "Aprobados", ayuda: "Ya los tiene pauta. Este mes.", tuya: false, dot: "bg-emerald-500" },
@@ -59,7 +59,7 @@ const EDITOR: TableroRol = {
   columnas: [
     { id: "correcciones", titulo: "Correcciones", ayuda: "Pidieron cambios: van primero.", tuya: true, accion: "Corregir", dot: "bg-orange-500" },
     { id: "editar", titulo: "Para editar", ayuda: "El crudo ya está subido.", tuya: true, accion: "Editar", dot: "bg-amber-500" },
-    { id: "revision", titulo: "Entregados", ayuda: "Los están revisando Lucía o el cliente.", tuya: false, dot: "bg-prodi" },
+    { id: "revision", titulo: "Entregados", ayuda: "Los está revisando producción o el cliente.", tuya: false, dot: "bg-prodi" },
     { id: "listo", titulo: "Aprobados", ayuda: "Terminados este mes.", tuya: false, dot: "bg-emerald-500" },
   ],
   columnaDe: (v) => {

@@ -72,8 +72,14 @@ async function api<T>(
       (body && typeof body === "object" && "error" in body
         ? (body as { error: string }).error
         : "unknown") || "unknown";
+    const AVISOS: Record<string, string> = {
+      no_connection: "Google Drive todavía no está conectado (se conecta en Ajustes). Hasta entonces no se pueden subir archivos.",
+      not_connected: "Google Drive todavía no está conectado (se conecta en Ajustes). Hasta entonces no se pueden subir archivos.",
+      needs_reconnect: "Hay que volver a conectar Google Drive en Ajustes.",
+      refresh_revoked: "Hay que volver a conectar Google Drive en Ajustes.",
+    };
     const message =
-      typeof errCode === "string" ? errCode : "Error desconocido";
+      typeof errCode === "string" ? AVISOS[errCode] ?? errCode : "Error desconocido";
     const known: DriveAuthError["code"][] = [
       "no_connection",
       "needs_reconnect",

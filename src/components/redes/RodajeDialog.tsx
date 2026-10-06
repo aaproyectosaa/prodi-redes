@@ -143,7 +143,7 @@ export function RodajeDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] max-w-lg overflow-y-auto">
+      <DialogContent className="sm:max-h-[92dvh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{rodaje ? "Editar rodaje" : "Agendar rodaje"}</DialogTitle>
           <DialogDescription>
@@ -240,7 +240,7 @@ export function RodajeDialog({
                 Este cliente no tiene videos planificados sin rodaje. Planificá primero.
               </p>
             ) : (
-              <div className="max-h-64 space-y-1.5 overflow-y-auto rounded-lg border p-2">
+              <div className="space-y-1.5 rounded-lg border p-2 sm:max-h-64 sm:overflow-y-auto">
                 {candidatos.map((v) => (
                   <label
                     key={v.id}

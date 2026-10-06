@@ -28,12 +28,15 @@ export function ContextoComercialEditor({
   nombre,
   compacto = false,
   cliente = false,
+  sugerido,
 }: {
   proyectoId: string;
   nombre: string;
   compacto?: boolean;
   /** Lo carga el propio cliente desde su panel (textos en segunda persona). */
   cliente?: boolean;
+  /** Lo que ya contó de su negocio (bienvenida): se usa de punto de partida si todavía no escribió nada acá. */
+  sugerido?: string;
 }) {
   const [guardado, setGuardado] = useComercial(proyectoId, cliente);
   const [c, setC] = useState<ContextoComercial>({});
@@ -41,7 +44,7 @@ export function ContextoComercialEditor({
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!dirty) setC(guardado ?? {});
+    if (!dirty) setC({ ...(guardado ?? {}), enfoque: guardado?.enfoque || sugerido || undefined });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guardado?.actualizado_at, guardado === undefined, proyectoId]);
 
@@ -207,7 +210,7 @@ export function ContextoComercialEditor({
         </Button>
       </div>
 
-      <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t bg-background/95 py-3 backdrop-blur">
+      <div className="barra-guardar sticky bottom-[var(--alto-barra)] z-10 flex items-center justify-end gap-3 border-t bg-background/95 py-3 backdrop-blur">
         {dirty && <span className="text-xs text-muted-foreground">Sin guardar</span>}
         <Button onClick={() => void guardar()} disabled={busy || !dirty}>
           {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -249,7 +252,7 @@ export function ResumenComercial({ proyectoId, nombre }: { proyectoId: string; n
         <span className="shrink-0 text-xs font-semibold text-primary">{vacio ? "Cargar" : "Editar"}</span>
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[94vh] w-[calc(100vw-1.5rem)] max-w-2xl overflow-y-auto rounded-2xl pb-0">
+        <DialogContent className="sm:max-h-[94dvh] w-[calc(100vw-1.5rem)] max-w-2xl overflow-y-auto rounded-2xl pb-0">
           <DialogHeader>
             <DialogTitle>Contexto comercial · {nombre}</DialogTitle>
             <DialogDescription>Lo que vende y lo que está de temporada. La IA lo usa para que todo apunte a traer consultas y ventas.</DialogDescription>

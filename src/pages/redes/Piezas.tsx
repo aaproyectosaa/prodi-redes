@@ -157,7 +157,7 @@ export default function Piezas() {
                       {col.tuya && <span className="font-semibold text-primary">Te toca · </span>}
                       {col.ayuda}
                     </p>
-                    <div className="flex max-h-[calc(100vh-230px)] min-h-[120px] flex-col gap-2 overflow-y-auto px-2 pb-2">
+                    <div className="flex min-h-[120px] flex-col gap-2 px-2 pb-2 md:max-h-[calc(100dvh-230px)] md:overflow-y-auto">
                       {items.map((p, i) => (
                         <PiezaCard key={p.id} pieza={p} i={i} cliente={clienteById(p.proyecto_id)?.nombre} onClick={() => setAbierta(p.id)} />
                       ))}
@@ -313,7 +313,7 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
 
   return (
     <Dialog open={!!pieza} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[94vh] w-[calc(100vw-1.5rem)] max-w-4xl overflow-y-auto rounded-2xl">
+      <DialogContent className="sm:max-h-[94dvh] w-[calc(100vw-1.5rem)] max-w-4xl overflow-y-auto rounded-2xl">
         <DialogHeader className="text-left">
           <DialogTitle className="flex flex-wrap items-center gap-2">
             {cliente?.nombre} · {info.label}

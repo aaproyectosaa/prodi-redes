@@ -12,8 +12,6 @@ dist
 dist-ssr
 *.local
 
-# Generado por Vite (config Firebase embebida)
-public/firebase-messaging-sw.js
 
 # Environment & secrets (nunca commitear valores reales)
 .env

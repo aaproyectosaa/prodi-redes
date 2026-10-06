@@ -12,14 +12,15 @@ export type TipoPaso =
   | "planificar"
   | "en_produccion"
   | "resultados"
-  | "todo_listo";
+  | "todo_listo"
+  | "marca";
 
 export interface Paso {
   tipo: TipoPaso;
   titulo: string;
   texto: string;
   /** Acción principal sugerida. */
-  accion?: { label: string; destino: "video" | "piezas" | "chat" | "resultados" | "plan" | "pedir" | "ideas"; videoId?: string };
+  accion?: { label: string; destino: "video" | "piezas" | "chat" | "resultados" | "plan" | "pedir" | "ideas" | "negocio"; videoId?: string };
   /** true = el cliente tiene que hacer algo; false = solo información. */
   teToca: boolean;
 }
@@ -112,6 +113,16 @@ export function pasosCliente(params: {
   const rodaje = rodajes
     .filter((r) => r.proyecto_id === cliente.id && r.estado === "agendado" && r.fecha >= hoy && r.fecha <= en7)
     .sort((a, b) => (a.fecha + (a.hora ?? "")).localeCompare(b.fecha + (b.hora ?? "")))[0];
+  if (!cliente.marca_archivos?.logo) {
+    out.push({
+      tipo: "marca",
+      teToca: true,
+      titulo: "Subí tu logo",
+      texto: "Con tu logo y tus colores, los videos y las piezas salen con tu identidad.",
+      accion: { label: "Subir logo", destino: "negocio" },
+    });
+  }
+
   if (rodaje) {
     const n = rodaje.video_ids.length;
     out.push({
@@ -189,4 +200,13 @@ export function faltaMarca(cliente: import("@/integrations/firebase/types").Proj
     logo: !cliente.marca_archivos?.logo,
     info: !(m.rubro && m.rubro.trim().length >= 3 && (m.descripcion || m.notas || "").trim().length >= 10),
   };
+}
+
+/** Lo que el cliente contó de su negocio en la bienvenida, en una línea (punto de partida del contexto comercial). */
+export function resumenMarca(cliente: import("@/integrations/firebase/types").Project): string | undefined {
+  const m = cliente.marca ?? {};
+  const partes = [m.rubro, m.descripcion || m.notas, m.publico ? `Le vendemos a: ${m.publico}` : ""]
+    .map((x) => (x ?? "").trim().replace(/\.$/, ""))
+    .filter(Boolean);
+  return partes.length ? `${partes.join(". ")}.` : undefined;
 }

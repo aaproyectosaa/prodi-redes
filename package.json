@@ -13,6 +13,7 @@
     "local": "tsx scripts/servidor-local.ts",
     "db:setup": "node scripts/db-setup.mjs",
     "db:ejemplo": "tsx scripts/db-ejemplo.ts",
+    "db:admin": "tsx scripts/db-admin.ts",
     "migrar:firebase": "node scripts/migrar-firebase.mjs"
   },
   "dependencies": {

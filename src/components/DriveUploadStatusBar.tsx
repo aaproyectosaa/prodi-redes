@@ -52,7 +52,7 @@ export function DriveUploadStatusBar() {
     <div
       className={cn(
         "fixed z-[60] left-2 right-2 md:left-auto md:right-4 md:w-96",
-        "bottom-[max(1rem,env(safe-area-inset-bottom,0px))] md:bottom-4",
+        "bottom-[calc(var(--alto-barra)+0.5rem)] md:bottom-4",
         "rounded-lg border border-border bg-background/95 backdrop-blur shadow-lg",
         "supports-[backdrop-filter]:bg-background/90"
       )}

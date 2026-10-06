@@ -199,8 +199,8 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
             {!isCliente && video.etapa !== "publicado" && (
               <span className={cn("text-xs", trabado ? "font-medium text-warning" : "text-muted-foreground")}>
                 {trabado && <AlertTriangle className="mr-1 inline h-3 w-3" />}
-                {diasEnEtapa(video) === 1 ? "1 día" : `${diasEnEtapa(video)} días`} en esta etapa · le toca a{" "}
-                {info.responsable === "cliente" ? "el cliente" : roleNombre(info.responsable)}
+                {diasEnEtapa(video) === 1 ? "1 día" : `${diasEnEtapa(video)} días`} en esta etapa · le toca{" "}
+                {info.responsable === "cliente" ? "al cliente" : `a ${roleNombre(info.responsable)}`}
               </span>
             )}
           </div>

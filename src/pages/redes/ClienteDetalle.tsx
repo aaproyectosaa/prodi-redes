@@ -24,6 +24,7 @@ import { PlanUsage } from "@/components/redes/PlanUsage";
 import { PlanificarDialog } from "@/components/redes/PlanificarDialog";
 import { BotonArmarMes } from "@/components/redes/PlanesAviso";
 import { ContextoComercialEditor } from "@/components/redes/ContextoComercial";
+import { resumenMarca } from "@/lib/redes/proximoPaso";
 import { ResultadosMes, resumirMes } from "@/components/redes/ResultadosMes";
 import { EvolucionMensajes } from "@/components/redes/EvolucionMensajes";
 import { useRedes } from "@/contexts/redes-data-context";
@@ -155,7 +156,7 @@ export default function ClienteDetalle() {
             title="Contexto comercial para la IA"
             description="Lo que vende, qué cuenta como resultado y lo que está de temporada. La IA lo usa en el plan del mes, los textos, los guiones y las piezas."
           >
-            <ContextoComercialEditor proyectoId={cliente.id} nombre={cliente.nombre} />
+            <ContextoComercialEditor proyectoId={cliente.id} nombre={cliente.nombre} sugerido={resumenMarca(cliente)} />
           </Section>
         </TabsContent>
 
@@ -203,7 +204,7 @@ export default function ClienteDetalle() {
 const ROLES_EQUIPO: { rol: ProjectTeamRole; label: string; desc: string }[] = [
   { rol: "productor", label: "Producción", desc: "Planifica, filma y revisa" },
   { rol: "editor", label: "Edición", desc: "Edita los videos" },
-  { rol: "pauta", label: "Pauta", desc: "Sube y pauta (Ezequiel o Iván)" },
+  { rol: "pauta", label: "Pauta", desc: "Sube y pauta los videos" },
   { rol: "cliente", label: "Usuarios del cliente", desc: "Aprueban y ven resultados" },
 ];
 
