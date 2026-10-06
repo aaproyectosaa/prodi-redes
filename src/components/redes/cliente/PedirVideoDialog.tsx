@@ -11,6 +11,7 @@ import { Calendar } from "@/components/ui/calendar";
 import type { Project } from "@/integrations/firebase/types";
 import { useRedes } from "@/contexts/redes-data-context";
 import { callApi } from "@/lib/redes/api";
+import { formatearFecha } from "@/lib/fecha";
 import { formatARS, hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import { planDe, usoPlan } from "@/lib/redes/planes";
 import { cn } from "@/lib/utils";
@@ -27,7 +28,7 @@ const IDEAS = [
 
 const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
-/** Date → "YYYY-MM-DD" en hora local. */
+/** Date del calendario (medianoche local del día elegido) → "YYYY-MM-DD". */
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 const OBJETIVOS = ["Que me escriban", "Que vengan al local", "Que me conozcan más", "Vender un producto puntual"];
@@ -66,8 +67,7 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
 
   const plan = planDe(cliente, planes);
   const hoy = hoyISO();
-  const limite = new Date();
-  limite.setMonth(limite.getMonth() + 3);
+  const limite = new Date(`${sumarMeses(hoy, 3)}T12:00:00`);
   // El mes sale de la fecha elegida; "cuando puedan" va al mes actual.
   const mes = fecha && fecha !== "sin_fecha" ? fecha.slice(0, 7) : mesActual();
   const siguiente = sumarMeses(mes, 1);
@@ -76,7 +76,7 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
   const entra = uso.disponibles > 0;
   const nombreMes = (m: string) => mesLabel(m).split(" ")[0].toLowerCase();
   const fechaTexto = (f: string) =>
-    new Date(`${f}T12:00:00`).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
+    formatearFecha(f, { weekday: "long", day: "numeric", month: "long" });
 
   const siguientePaso = () => {
     if (paso === 0 && titulo.trim().length < 3) {

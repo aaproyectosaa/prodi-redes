@@ -1,4 +1,5 @@
 import type { Project } from "@/integrations/firebase/types";
+import { formatearFecha, sumarDias } from "@/lib/fecha";
 import { hoyISO, mesActual, mesLabel } from "./format";
 import type { PiezaIA, Rodaje, Video } from "./types";
 
@@ -27,15 +28,13 @@ export interface Paso {
 
 function cuando(fecha: string, hora: string | null): string {
   const hoy = hoyISO();
-  const manana = new Date(`${hoy}T12:00:00`);
-  manana.setDate(manana.getDate() + 1);
-  const m = manana.toISOString().slice(0, 10);
+  const m = sumarDias(hoy, 1);
   const dia =
     fecha === hoy
       ? "hoy"
       : fecha === m
         ? "mañana"
-        : `el ${new Date(`${fecha}T12:00:00`).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}`;
+        : `el ${formatearFecha(fecha, { weekday: "long", day: "numeric", month: "long" })}`;
   return `${dia}${hora ? ` a las ${hora}` : ""}`;
 }
 
@@ -109,20 +108,10 @@ export function pasosCliente(params: {
   }
 
   const hoy = hoyISO();
-  const en7 = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+  const en7 = sumarDias(hoy, 7);
   const rodaje = rodajes
     .filter((r) => r.proyecto_id === cliente.id && r.estado === "agendado" && r.fecha >= hoy && r.fecha <= en7)
     .sort((a, b) => (a.fecha + (a.hora ?? "")).localeCompare(b.fecha + (b.hora ?? "")))[0];
-  if (!cliente.marca_archivos?.logo) {
-    out.push({
-      tipo: "marca",
-      teToca: true,
-      titulo: "Subí tu logo",
-      texto: "Con tu logo y tus colores, los videos y las piezas salen con tu identidad.",
-      accion: { label: "Subir logo", destino: "negocio" },
-    });
-  }
-
   if (rodaje) {
     const n = rodaje.video_ids.length;
     out.push({
@@ -165,6 +154,17 @@ export function pasosCliente(params: {
       titulo: `${publicados.length} video${publicados.length === 1 ? "" : "s"} ya en tus redes`,
       texto: "Están con pauta. Mirá cuánta gente los vio y cuántos mensajes te llegaron.",
       accion: { label: "Ver resultados", destino: "resultados" },
+    });
+  }
+
+  // El logo va al final: no tiene que tapar lo urgente (rodaje, plan del mes).
+  if (!cliente.marca_archivos?.logo) {
+    out.push({
+      tipo: "marca",
+      teToca: true,
+      titulo: "Subí tu logo",
+      texto: "Con tu logo y tus colores, los videos y las piezas salen con tu identidad.",
+      accion: { label: "Subir logo", destino: "negocio" },
     });
   }
 

@@ -1,4 +1,5 @@
 import type { DriveAttachmentRef, Profile, Task, UserRole } from "@/integrations/firebase/types";
+import { fechaAR, hoyAR } from "@/lib/fecha";
 
 /** Roles que pueden recibir calificación por el PM (prioridad al resolver responsable). */
 export const RATEABLE_ROLES: UserRole[] = ["productor", "editor", "disenador"];
@@ -168,13 +169,7 @@ export function emptyScoresForCriteria(
 }
 
 export function isToday(isoDate: string): boolean {
-  const d = new Date(isoDate);
-  const now = new Date();
-  return (
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  );
+  return fechaAR(isoDate) === hoyAR();
 }
 
 export function getRatingLabel(avg: number): string {

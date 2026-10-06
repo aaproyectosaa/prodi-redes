@@ -3,6 +3,7 @@
 
 import { adminDb } from "./db";
 import { renderInformeHtml } from "./informe-html";
+import { mesAR, sumarMeses } from "./fecha";
 
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
@@ -12,11 +13,9 @@ export function mesLabel(mes: string): string {
   return `${n.charAt(0).toUpperCase()}${n.slice(1)} ${y}`;
 }
 
-/** Mes anterior según hora de Argentina (UTC-3). */
+/** Mes anterior según hora de Argentina. */
 export function mesAnteriorAR(now = new Date()): string {
-  const ar = new Date(now.getTime() - 3 * 3600_000);
-  const d = new Date(Date.UTC(ar.getUTCFullYear(), ar.getUTCMonth() - 1, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  return sumarMeses(mesAR(now), -1);
 }
 
 export interface Informe {

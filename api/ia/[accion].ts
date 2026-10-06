@@ -27,6 +27,7 @@ import { uploadBufferToDrive } from "../_lib/drive-server";
 import { briefPieza, FORMATOS_PIEZA } from "../_lib/piezas";
 import { enviarAviso } from "../_lib/notify";
 import { videoDesdePedido } from "../_lib/pedidos";
+import { fechaAR, sumarDias } from "../_lib/fecha";
 import {
   comercialTexto,
   limpiarComercial,
@@ -75,10 +76,10 @@ async function contextoComercial(pid: string, rango: [string, string]): Promise<
   ]);
   return comercialTexto(m.data()?.comercial ?? null, rango, cfg.data()?.ia_enfoque ?? null);
 }
-const proximos30 = (desde = new Date()): [string, string] => [
-  desde.toISOString().slice(0, 10),
-  new Date(desde.getTime() + 30 * 86_400_000).toISOString().slice(0, 10),
-];
+const proximos30 = (desde: Date | string = new Date()): [string, string] => {
+  const d = fechaAR(desde) || fechaAR(new Date());
+  return [d, sumarDias(d, 30)];
+};
 
 async function copy(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "productor", "editor", "pauta", "diseno"]);

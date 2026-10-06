@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { useInAppNotifications } from "@/hooks/use-in-app-notifications";
 import { cn } from "@/lib/utils";
+import { formatearFecha } from "@/lib/fecha";
 
 function formatRelative(iso: string): string {
   if (!iso) return "";
@@ -20,7 +21,7 @@ function formatRelative(iso: string): string {
   if (hours < 24) return `Hace ${hours} h`;
   const days = Math.floor(hours / 24);
   if (days < 7) return `Hace ${days} d`;
-  return new Date(iso).toLocaleDateString("es-AR", {
+  return formatearFecha(iso, {
     day: "numeric",
     month: "short",
   });

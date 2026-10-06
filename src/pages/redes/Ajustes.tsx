@@ -8,6 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useAppData } from "@/contexts/app-data-context";
 import { PageShell, Section } from "@/components/redes/PageShell";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useDriveConnection } from "@/hooks/use-drive-connection";
@@ -24,7 +35,7 @@ export default function Ajustes() {
   const [dias, setDias] = useState(String(settings.dias_alerta));
   const [auto, setAuto] = useState(settings.informe_automatico);
   const [enfoque, setEnfoque] = useState(settings.ia_enfoque ?? ENFOQUE_PRODI_DEFAULT);
-  const [diaVto, setDiaVto] = useState(String(settings.dia_vencimiento ?? 10));
+  const [diaVto, setDiaVto] = useState(String(settings.dia_vencimiento ?? 5));
   const [iva, setIva] = useState(String(settings.iva_pct ?? 21));
   const [cobro, setCobro] = useState<DatosCobro>({ ...DATOS_COBRO_DEFAULT, ...(settings.cobro ?? {}) });
   const [saving, setSaving] = useState<string | null>(null);
@@ -35,7 +46,7 @@ export default function Ajustes() {
     setDias(String(settings.dias_alerta));
     setAuto(settings.informe_automatico);
     setEnfoque(settings.ia_enfoque ?? ENFOQUE_PRODI_DEFAULT);
-    setDiaVto(String(settings.dia_vencimiento ?? 10));
+    setDiaVto(String(settings.dia_vencimiento ?? 5));
     setIva(String(settings.iva_pct ?? 21));
     setCobro({ ...DATOS_COBRO_DEFAULT, ...(settings.cobro ?? {}) });
   }, [settings]);
@@ -125,13 +136,16 @@ export default function Ajustes() {
             </div>
           </Section>
 
-          <Section title="Facturación" description="Se prepara sola el 27 de cada mes. Estos datos salen en las boletas.">
+          <Section
+            title="Facturación"
+            description="El 27 de cada mes se prepara sola la boleta del mes siguiente. Vence el 5 (sin interés) y después corre un 0,5% por día. Estos datos salen en las boletas."
+          >
             <div className="space-y-3 rounded-xl border bg-card p-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Vence el día</Label>
                   <Input inputMode="numeric" value={diaVto} onChange={(e) => setDiaVto(e.target.value.replace(/\D/g, "").slice(0, 2))} />
-                  <p className="text-[11px] text-muted-foreground">del mes siguiente</p>
+                  <p className="text-[11px] text-muted-foreground">del mes que cubre la boleta (el 5)</p>
                 </div>
                 <div className="space-y-1.5">
                   <Label>IVA de las facturas (%)</Label>
@@ -158,7 +172,7 @@ export default function Ajustes() {
                 className="w-full"
                 onClick={() =>
                   void guardar("fact", {
-                    dia_vencimiento: Math.min(28, Math.max(1, Number(diaVto) || 10)),
+                    dia_vencimiento: Math.min(28, Math.max(1, Number(diaVto) || 5)),
                     iva_pct: Math.min(27, Number(iva) || 0),
                     cobro,
                   })
@@ -225,8 +239,10 @@ function PlanesEditor({ planes }: { planes: PlanRedes[] }) {
 }
 
 function PlanRow({ plan }: { plan: PlanRedes }) {
-  const { clientes } = useRedes();
-  const enUso = clientes.filter((c) => c.plan_redes_id === plan.id).length;
+  // Todos los clientes, también los pausados: si no, quedan apuntando a un plan borrado.
+  const { projects } = useAppData();
+  const enUso = projects.filter((c) => c.plan_redes_id === plan.id).length;
+  const [borrar, setBorrar] = useState(false);
   const [f, setF] = useState(plan);
   const [dirty, setDirty] = useState(false);
   useEffect(() => {
@@ -255,15 +271,40 @@ function PlanRow({ plan }: { plan: PlanRedes }) {
           variant="ghost"
           disabled={enUso > 0}
           title={enUso > 0 ? `Lo ${enUso === 1 ? "usa 1 cliente" : `usan ${enUso} clientes`}: desactivalo en vez de borrarlo` : "Eliminar plan"}
-          onClick={async () => {
-            await deleteDoc(doc(db, "planes_redes", plan.id));
-            toast.success("Plan eliminado");
-          }}
+          onClick={() => setBorrar(true)}
           aria-label="Eliminar plan"
         >
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
+      <AlertDialog open={borrar} onOpenChange={setBorrar}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar el plan {plan.nombre}?</AlertDialogTitle>
+            <AlertDialogDescription>No se puede deshacer. Si solo querés que no se ofrezca más, mejor desactivalo.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                setBorrar(false);
+                void (async () => {
+                  try {
+                    assertEditable();
+                    await deleteDoc(doc(db, "planes_redes", plan.id));
+                    toast.success("Plan eliminado");
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "No se pudo eliminar");
+                  }
+                })();
+              }}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div className="space-y-1">
           <Label className="text-xs">Videos por mes</Label>

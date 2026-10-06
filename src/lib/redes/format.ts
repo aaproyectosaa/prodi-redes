@@ -1,3 +1,5 @@
+import { fechaAR, formatearFecha, mesAR, sumarMeses } from "@/lib/fecha";
+
 const MESES = [
   "enero",
   "febrero",
@@ -13,16 +15,12 @@ const MESES = [
   "diciembre",
 ];
 
-/** Mes actual en formato YYYY-MM (hora local). */
-export function mesActual(d = new Date()): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+/** Mes actual (o del instante dado) en formato YYYY-MM, hora de AR. */
+export function mesActual(d: Date | string | number = new Date()): string {
+  return mesAR(d);
 }
 
-export function sumarMeses(mes: string, delta: number): string {
-  const [y, m] = mes.split("-").map(Number);
-  const d = new Date(y, m - 1 + delta, 1);
-  return mesActual(d);
-}
+export { sumarMeses };
 
 /** "2026-10" → "Octubre 2026" */
 export function mesLabel(mes: string, opts: { corto?: boolean } = {}): string {
@@ -49,9 +47,7 @@ export function formatNum(n: number | null | undefined): string {
 /** "2026-10-14" → "mar 14 oct" */
 export function fechaCorta(iso: string | null | undefined): string {
   if (!iso) return "—";
-  const d = iso.length === 10 ? new Date(`${iso}T12:00:00`) : new Date(iso);
-  if (isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("es-AR", {
+  return formatearFecha(iso, {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -60,9 +56,7 @@ export function fechaCorta(iso: string | null | undefined): string {
 
 export function fechaHora(iso: string | null | undefined): string {
   if (!iso) return "—";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "—";
-  return d.toLocaleString("es-AR", {
+  return formatearFecha(iso, {
     day: "numeric",
     month: "short",
     hour: "2-digit",
@@ -83,9 +77,9 @@ export function hace(iso: string | null | undefined): string {
   return dias === 1 ? "hace 1 día" : `hace ${dias} días`;
 }
 
-/** YYYY-MM-DD de hoy (local). */
-export function hoyISO(d = new Date()): string {
-  return `${mesActual(d)}-${String(d.getDate()).padStart(2, "0")}`;
+/** YYYY-MM-DD de hoy (o del instante dado) en hora de AR. */
+export function hoyISO(d: Date | string | number = new Date()): string {
+  return fechaAR(d);
 }
 
 /** 8 → "0:08", 75 → "1:15" */

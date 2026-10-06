@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { guardarComercial, useComercial, useMemoriaIA } from "@/lib/redes/planMes";
+import { sumarDias } from "@/lib/fecha";
 import { hoyISO } from "@/lib/redes/format";
 import type { ContextoComercial, ProductoComercial, TemporadaComercial } from "@/lib/redes/types";
 import { cn } from "@/lib/utils";
@@ -14,7 +15,7 @@ const nid = () => `c${Date.now().toString(36)}${Math.random().toString(36).slice
 
 /** Temporadas vigentes hoy o en los próximos 30 días. */
 export function temporadasActivas(c: ContextoComercial | undefined, hoy = hoyISO()) {
-  const en30 = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+  const en30 = sumarDias(hoy, 30);
   return (c?.temporadas ?? []).filter((t) => (!t.desde || t.desde <= en30) && (!t.hasta || t.hasta >= hoy));
 }
 
@@ -35,7 +36,7 @@ export function ContextoComercialEditor({
   compacto?: boolean;
   /** Lo carga el propio cliente desde su panel (textos en segunda persona). */
   cliente?: boolean;
-  /** Lo que ya contó de su negocio (bienvenida): se usa de punto de partida si todavía no escribió nada acá. */
+  /** Lo que ya contó de su negocio (bienvenida): se ofrece como sugerencia si todavía no escribió nada acá. */
   sugerido?: string;
 }) {
   const [guardado, setGuardado] = useComercial(proyectoId, cliente);
@@ -44,7 +45,7 @@ export function ContextoComercialEditor({
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!dirty) setC({ ...(guardado ?? {}), enfoque: guardado?.enfoque || sugerido || undefined });
+    if (!dirty) setC({ ...(guardado ?? {}) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guardado?.actualizado_at, guardado === undefined, proyectoId]);
 
@@ -79,6 +80,7 @@ export function ContextoComercialEditor({
   };
 
   const hoy = hoyISO();
+  const sugerencia = !c.enfoque?.trim() ? sugerido?.trim() : undefined;
   const vigente = (t: TemporadaComercial) => (!t.desde || t.desde <= hoy) && (!t.hasta || t.hasta >= hoy);
 
   return (
@@ -94,11 +96,18 @@ export function ContextoComercialEditor({
             onChange={(e) => set({ enfoque: e.target.value })}
             maxLength={2000}
             placeholder={
-              cliente
+              sugerencia ||
+              (cliente
                 ? "A quién le vendés, qué es lo que más te consultan y qué te diferencia de la competencia. Ej.: familias de la zona; lo que más piden es el delivery de noche; nos eligen por la masa madre."
-                : `A quién le vende ${nombre}, qué hace que le escriban y qué los diferencia de la competencia. Ej.: familias de la zona; lo que más consultan es el delivery de noche; ganamos por masa madre y horno a leña.`
+                : `A quién le vende ${nombre}, qué hace que le escriban y qué los diferencia de la competencia. Ej.: familias de la zona; lo que más consultan es el delivery de noche; ganamos por masa madre y horno a leña.`)
             }
           />
+          {/* La sugerencia no se guarda sola: al usarla queda "sin guardar" y recién con Guardar le llega a la IA. */}
+          {sugerencia && (
+            <Button type="button" variant="outline" size="sm" onClick={() => set({ enfoque: sugerencia.slice(0, 2000) })}>
+              {cliente ? "Usar lo que nos contaste" : "Usar sugerencia"}
+            </Button>
+          )}
         </div>
         <div className="space-y-1.5">
           <p className="text-sm font-semibold">{cliente ? "¿Qué querés conseguir?" : "Qué cuenta como resultado"}</p>

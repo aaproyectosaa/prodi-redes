@@ -22,7 +22,8 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState, PageShell, Section, StatCard } from "@/components/redes/PageShell";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
-import { formatARS, hoyISO, mesActual, mesLabel } from "@/lib/redes/format";
+import { sumarDias } from "@/lib/fecha";
+import { formatARS, hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import {
   MEDIOS_PAGO,
   TIPOS_OBLIGACION,
@@ -51,12 +52,6 @@ const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "s
 
 const ICONO: Record<TipoObligacion, React.ElementType> = { credito: Landmark, arca: Scale, impuesto: Receipt };
 const TIPOS: TipoObligacion[] = ["credito", "arca", "impuesto"];
-
-function sumarDias(f: string, d: number) {
-  const x = new Date(f + "T12:00:00");
-  x.setDate(x.getDate() + d);
-  return hoyISO(x);
-}
 
 /** Créditos del banco, convenios con ARCA e impuestos: cuotas, vencimientos y avisos. */
 export default function Deudas() {
@@ -446,9 +441,8 @@ function NuevaObligacion({ onClose }: { onClose: () => void }) {
   const [cantidad, setCantidad] = useState("12");
   const [yaPagadas, setYaPagadas] = useState("0");
   const [primera, setPrimera] = useState(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() + (d.getDate() > 10 ? 1 : 0), 10);
-    return hoyISO(d);
+    const hoy = hoyISO();
+    return `${sumarMeses(hoy.slice(0, 7), Number(hoy.slice(8, 10)) > 10 ? 1 : 0)}-10`;
   });
   const [guardando, setGuardando] = useState(false);
 
@@ -462,9 +456,7 @@ function NuevaObligacion({ onClose }: { onClose: () => void }) {
   const m = Number(monto.replace(/\D/g, "")) || 0;
   const cuotas = useMemo(() => {
     if (!primera) return [];
-    const [y, mm, d] = primera.split("-").map(Number);
-    const ultimo = new Date(y, mm - pagadas, 0).getDate();
-    const base = hoyISO(new Date(y, mm - 1 - pagadas, Math.min(d, ultimo)));
+    const base = sumarMeses(primera, -pagadas);
     return generarCuotas(base, n, m).map((c, i) =>
       i < pagadas ? { ...c, pagada: true, pagada_at: `${c.vence}T12:00:00.000Z`, medio: null } : c
     );

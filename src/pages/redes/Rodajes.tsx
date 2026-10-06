@@ -8,6 +8,7 @@ import { RodajeDialog } from "@/components/redes/RodajeDialog";
 import { RodajeRow } from "@/components/redes/RodajeRow";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
+import { formatearFecha } from "@/lib/fecha";
 import { hoyISO } from "@/lib/redes/format";
 import { cancelarRodaje, marcarRodajeRealizado } from "@/lib/redes/videos";
 import { canManageProduction } from "@/lib/roles";
@@ -22,7 +23,7 @@ function semanaLabel(fecha: string): string {
   if (diff > 1 && diff < 7) return "Esta semana";
   if (diff >= 7 && diff < 14) return "La semana que viene";
   if (diff < 0 && diff > -7) return "Últimos 7 días";
-  return d.toLocaleDateString("es-AR", { month: "long", year: "numeric" }).replace(/^./, (c) => c.toUpperCase());
+  return formatearFecha(fecha, { month: "long", year: "numeric" }).replace(/^./, (c) => c.toUpperCase());
 }
 
 export default function Rodajes() {

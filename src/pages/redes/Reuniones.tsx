@@ -47,14 +47,10 @@ import { useAppData } from "@/contexts/app-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { actualizarReunion, compartirMinuta, crearReunion, generarMinuta, minutaVacia } from "@/lib/redes/reuniones";
 import { chatClienteId } from "@/lib/redes/chat";
+import { aInputAR, desdeInputAR } from "@/lib/fecha";
 import { fechaHora } from "@/lib/redes/format";
 import { cn } from "@/lib/utils";
 import type { Minuta, Reunion } from "@/lib/redes/types";
-
-function aLocalInput(d: Date) {
-  const off = d.getTimezoneOffset();
-  return new Date(d.getTime() - off * 60_000).toISOString().slice(0, 16);
-}
 
 export default function Reuniones() {
   const { reuniones, clienteById } = useRedes();
@@ -154,7 +150,7 @@ function NuevaReunionDialog({ open, onOpenChange, onCreada }: { open: boolean; o
   const { user, profile } = useUserProfileContext();
   const [titulo, setTitulo] = useState("");
   const [clienteId, setClienteId] = useState("interna");
-  const [fecha, setFecha] = useState(aLocalInput(new Date()));
+  const [fecha, setFecha] = useState(aInputAR(new Date()));
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
 
@@ -162,7 +158,7 @@ function NuevaReunionDialog({ open, onOpenChange, onCreada }: { open: boolean; o
     if (open) {
       setTitulo("");
       setClienteId("interna");
-      setFecha(aLocalInput(new Date(Math.ceil(Date.now() / 1800_000) * 1800_000)));
+      setFecha(aInputAR(new Date(Math.ceil(Date.now() / 1800_000) * 1800_000)));
       setSel(new Set());
     }
   }, [open]);
@@ -190,7 +186,7 @@ function NuevaReunionDialog({ open, onOpenChange, onCreada }: { open: boolean; o
         {
           titulo: titulo || (cliente ? `Reunión con ${cliente.nombre}` : "Reunión de equipo"),
           proyecto: cliente ?? null,
-          fecha: ahora ? new Date().toISOString() : new Date(fecha).toISOString(),
+          fecha: ahora ? new Date().toISOString() : desdeInputAR(fecha),
           participantes: Array.from(sel),
           chat,
           jitsiBase: settings.jitsi_base,

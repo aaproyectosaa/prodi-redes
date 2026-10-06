@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useDriveUpload } from "@/hooks/use-drive-upload";
 import { useDriveConnection } from "@/hooks/use-drive-connection";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
+import { aInputAR } from "@/lib/fecha";
 import { enModoVista } from "@/lib/redes/vistaComo";
 import { pickMediaFiles } from "@/utils/pickMediaFiles";
 import type { Reunion } from "@/lib/redes/types";
@@ -112,7 +113,7 @@ export function Grabador({ reunion, clienteNombre }: { reunion: Reunion; cliente
   async function subir(blob: Blob) {
     setEstado("subiendo");
     const ext = blob.type.includes("ogg") ? "ogg" : blob.type.includes("mp4") ? "m4a" : "webm";
-    const file = new File([blob], `reunion-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.${ext}`, {
+    const file = new File([blob], `reunion-${aInputAR().replace(/[:T]/g, "-")}.${ext}`, {
       type: blob.type || "audio/webm",
     });
     try {

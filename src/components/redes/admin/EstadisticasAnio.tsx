@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/chart";
 import { Section } from "@/components/redes/PageShell";
 import { useRedes } from "@/contexts/redes-data-context";
+import { fechaAR, mesAR } from "@/lib/fecha";
 import { formatARS, formatNum, mesActual } from "@/lib/redes/format";
 import { planDe } from "@/lib/redes/planes";
 import {
@@ -31,7 +32,7 @@ import {
   useObligaciones,
   type TipoObligacion,
 } from "@/lib/redes/facturacion";
-import type { Video } from "@/lib/redes/types";
+import type { Cobro, Video } from "@/lib/redes/types";
 import { cn } from "@/lib/utils";
 
 const MES_CORTO = [
@@ -93,6 +94,24 @@ function useVideosDelAnio(anio: number): Video[] {
   return lista;
 }
 
+/** Cobros de un año entero (el contexto solo trae los últimos meses). Se pide con margen
+ *  porque el mes cuenta por pagado_at en hora de AR, no por created_at en UTC. */
+function useCobrosDelAnio(anio: number): Cobro[] {
+  const [lista, setLista] = useState<Cobro[]>([]);
+  useEffect(() => {
+    return onSnapshot(
+      query(
+        collection(db, "cobros"),
+        where("created_at", ">=", `${anio - 1}-12-01`),
+        where("created_at", "<", `${anio + 1}-01-02`),
+      ),
+      (s) => setLista(s.docs.map((d) => ({ id: d.id, ...d.data() }) as Cobro)),
+      () => setLista([]),
+    );
+  }, [anio]);
+  return lista;
+}
+
 interface Punto {
   m: string;
   mes: string;
@@ -117,12 +136,13 @@ export function EstadisticasAnio({ equipoActual }: { equipoActual: number }) {
   const anioActual = Number(actual.slice(0, 4));
   const [anio, setAnio] = useState(anioActual);
   const desde = `${anio}-01`;
-  const { clientes, planes, cobros } = useRedes();
+  const { clientes, planes } = useRedes();
   const { facturas } = useFacturas(desde);
   const gastos = useGastos(desde);
   const liqs = useLiquidaciones(desde);
   const obligaciones = useObligaciones();
   const videos = useVideosDelAnio(anio);
+  const cobros = useCobrosDelAnio(anio);
   const mrr = clientes.reduce((a, c) => a + planDe(c, planes).precioMensual, 0);
 
   const datos: Punto[] = useMemo(
@@ -138,12 +158,13 @@ export function EstadisticasAnio({ equipoActual }: { equipoActual: number }) {
             (c) =>
               c.tipo !== "abono" &&
               c.estado === "aprobado" &&
-              (c.pagado_at ?? c.created_at).startsWith(m),
+              mesAR(c.pagado_at ?? c.created_at) === m,
           )
           .reduce((a, c) => a + c.monto, 0);
         const estimado = m === actual && fs.length === 0;
+        // Ingresos en neto: el IVA de las boletas no es de PRODI (y el estimado con el abono ya es neto).
         const ingresos =
-          (estimado ? mrr : fs.reduce((a, f) => a + f.bruto, 0)) + extras;
+          (estimado ? mrr : fs.reduce((a, f) => a + f.neto, 0)) + extras;
         const liqMes = liqs
           .filter((l) => l.mes === m && l.estado === "pagado")
           .reduce((a, l) => a + (l.total_pagado ?? 0), 0);
@@ -163,6 +184,7 @@ export function EstadisticasAnio({ equipoActual }: { equipoActual: number }) {
         );
         const egresos =
           equipo + gastosMes + cuotas.credito + cuotas.arca + cuotas.impuesto;
+        // Deuda al cierre del mes: toda cuota sin pagar a esa fecha (vencida o no), como deudaRestante().
         const finDeMes = `${m}-31`;
         const deuda = obligaciones
           .filter((o) => o.tipo !== "impuesto")
@@ -172,8 +194,7 @@ export function EstadisticasAnio({ equipoActual }: { equipoActual: number }) {
               o.cuotas
                 .filter(
                   (c) =>
-                    c.vence > finDeMes &&
-                    !(c.pagada && (c.pagada_at ?? "") <= finDeMes),
+                    !(c.pagada && (!c.pagada_at || fechaAR(c.pagada_at) <= finDeMes)),
                 )
                 .reduce((x, c) => x + c.monto, 0),
             0,

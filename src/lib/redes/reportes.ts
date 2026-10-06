@@ -1,6 +1,7 @@
 import type { Profile } from "@/integrations/firebase/types";
 import type { Reunion, Rodaje, Video } from "./types";
 import { etapaInfo } from "./etapas";
+import { mesAR } from "@/lib/fecha";
 
 export interface Evento {
   videoId: string;
@@ -32,7 +33,7 @@ function demoras(videos: Video[], uid: string, mes: string, desde: (a: string) =
   for (const v of videos) {
     const h = [...(v.historial ?? [])].sort((a, b) => a.at.localeCompare(b.at));
     h.forEach((e, i) => {
-      if (e.by !== uid || !hasta(e.accion) || !e.at.startsWith(mes)) return;
+      if (e.by !== uid || !hasta(e.accion) || mesAR(e.at) !== mes) return;
       for (let j = i - 1; j >= 0; j--) {
         if (desde(h[j].accion)) {
           out.push(horas(h[j].at, e.at));
@@ -85,7 +86,7 @@ export function reporteUsuario(
 ): ReporteUsuario {
   const uid = perfil.id;
   const mios = todos.filter((e) => e.by === uid);
-  const delMes = mios.filter((e) => e.at.startsWith(mes));
+  const delMes = mios.filter((e) => mesAR(e.at) === mes);
   const cuenta = (f: (a: string) => boolean) => delMes.filter((e) => f(e.accion)).length;
   const kpis: Kpi[] = [];
 
@@ -147,7 +148,7 @@ export function reporteUsuario(
         { label: "Videos aprobados", valor: String(aprob) },
         { label: "Pidió cambios", valor: String(cambios) },
         { label: "Tarda en responder", valor: fh(dem), tono: dem !== null && dem > 48 ? "alerta" : "bien" },
-        { label: "Reuniones", valor: String(reuniones.filter((r) => r.participantes.includes(uid) && r.fecha.startsWith(mes)).length) }
+        { label: "Reuniones", valor: String(reuniones.filter((r) => r.participantes.includes(uid) && mesAR(r.fecha) === mes).length) }
       );
       break;
     }

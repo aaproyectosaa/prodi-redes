@@ -3,6 +3,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, Flag, LayoutGrid, Rocket, type
 import { Button } from "@/components/ui/button";
 import { useOpenVideo } from "@/components/redes/VideoCard";
 import { useRedes } from "@/contexts/redes-data-context";
+import { diaSemana, diasDelMes, formatearFecha, sumarDias } from "@/lib/fecha";
 import { hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import { cn } from "@/lib/utils";
 import type { Video } from "@/lib/redes/types";
@@ -152,15 +153,13 @@ export function CalendarioEventos({ eventos, tipos, vacio }: { eventos: EventoCa
 
   // Grilla del mes empezando el lunes.
   const celdas = useMemo(() => {
-    const [y, m] = mes.split("-").map(Number);
-    const primero = new Date(y, m - 1, 1);
-    const offset = (primero.getDay() + 6) % 7;
-    const inicio = new Date(y, m - 1, 1 - offset);
-    const total = Math.ceil((offset + new Date(y, m, 0).getDate()) / 7) * 7;
+    const primero = `${mes}-01`;
+    const offset = (diaSemana(primero) + 6) % 7;
+    const inicio = sumarDias(primero, -offset);
+    const total = Math.ceil((offset + diasDelMes(mes)) / 7) * 7;
     return Array.from({ length: total }, (_, i) => {
-      const d = new Date(inicio);
-      d.setDate(inicio.getDate() + i);
-      return { fecha: hoyISO(d), num: d.getDate(), delMes: d.getMonth() === m - 1 };
+      const fecha = sumarDias(inicio, i);
+      return { fecha, num: Number(fecha.slice(8, 10)), delMes: fecha.startsWith(mes) };
     });
   }, [mes]);
 
@@ -271,8 +270,7 @@ export function CalendarioEventos({ eventos, tipos, vacio }: { eventos: EventoCa
       <div className="rounded-2xl border bg-card p-3">
         <p className="mb-2 px-1 text-sm font-semibold">
           {dia
-            ? new Date(`${dia}T12:00:00`)
-                .toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })
+            ? formatearFecha(dia, { weekday: "long", day: "numeric", month: "long" })
                 .replace(/^./, (c) => c.toUpperCase())
             : "Elegí un día"}
         </p>

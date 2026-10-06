@@ -1,5 +1,6 @@
 import { useRedes } from "@/contexts/redes-data-context";
 import { useAppData } from "@/contexts/app-data-context";
+import { fechaAR } from "@/lib/fecha";
 import { sumarMeses } from "@/lib/redes/format";
 import { cuotasPagadasDelMes, libroDelMes, useFacturas, useGastos, useLiquidaciones, useObligaciones } from "@/lib/redes/facturacion";
 
@@ -22,7 +23,7 @@ export function useLibroMes(mes: string) {
       .map((l) => ({
         nombre: profiles.find((p) => p.id === l.uid)?.nombre ?? "Equipo",
         monto: l.total_pagado ?? 0,
-        fecha: (l.pagado_at ?? `${mes}-28`).slice(0, 10),
+        fecha: l.pagado_at ? fechaAR(l.pagado_at) : `${mes}-28`,
         detalle: l.detalle,
       })),
     cuotas: cuotasPagadasDelMes(obligaciones, mes),

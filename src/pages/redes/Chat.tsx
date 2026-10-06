@@ -34,25 +34,21 @@ import { AudioMensaje, BarraGrabando, BotonMic, useGrabadorVoz } from "@/compone
 import { crearReunion } from "@/lib/redes/reuniones";
 import { getRoleInfo } from "@/lib/roles";
 import { cn } from "@/lib/utils";
+import { fechaAR, formatearFecha, hoyAR, sumarDias } from "@/lib/fecha";
 import type { Chat as ChatT, Mensaje } from "@/lib/redes/types";
 import type { Profile } from "@/integrations/firebase/types";
 
 function horaCorta(iso: string) {
-  const d = new Date(iso);
-  const hoy = new Date();
-  if (d.toDateString() === hoy.toDateString()) {
-    return d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
-  }
-  return d.toLocaleDateString("es-AR", { day: "numeric", month: "short" });
+  if (fechaAR(iso) === hoyAR()) return formatearFecha(iso, { hour: "2-digit", minute: "2-digit" });
+  return formatearFecha(iso, { day: "numeric", month: "short" });
 }
 
 function diaLabel(iso: string) {
-  const d = new Date(iso);
-  const hoy = new Date();
-  const ayer = new Date(Date.now() - 86_400_000);
-  if (d.toDateString() === hoy.toDateString()) return "Hoy";
-  if (d.toDateString() === ayer.toDateString()) return "Ayer";
-  return d.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
+  const dia = fechaAR(iso);
+  const hoy = hoyAR();
+  if (dia === hoy) return "Hoy";
+  if (dia === sumarDias(hoy, -1)) return "Ayer";
+  return formatearFecha(iso, { weekday: "long", day: "numeric", month: "long" });
 }
 
 function ChatIcon({ chat, profiles, uid, color }: { chat: ChatT; profiles: Profile[]; uid?: string; color?: string }) {
@@ -432,7 +428,7 @@ function Conversacion({
                         <p className="whitespace-pre-wrap break-words">{m.texto}</p>
                       )}
                       <p className={cn("mt-0.5 text-right text-[10px]", mio ? "text-primary-foreground/70" : "text-muted-foreground")}>
-                        {new Date(m.at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
+                        {formatearFecha(m.at, { hour: "2-digit", minute: "2-digit" })}
                       </p>
                     </div>
                   </div>

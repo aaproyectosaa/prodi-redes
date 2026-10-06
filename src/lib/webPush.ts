@@ -99,7 +99,7 @@ export async function subscribeWebPush(userId: string): Promise<string> {
   return sub.endpoint;
 }
 
-function base64ABytes(b64: string): Uint8Array {
+function base64ABytes(b64: string): Uint8Array<ArrayBuffer> {
   const pad = "=".repeat((4 - (b64.length % 4)) % 4);
   const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
   return Uint8Array.from(raw, (c) => c.charCodeAt(0));

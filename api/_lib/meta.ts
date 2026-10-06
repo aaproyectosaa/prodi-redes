@@ -5,6 +5,7 @@
 
 import crypto from "crypto";
 import { adminDb } from "./db";
+import { fechaAR, hoyAR, sumarDias } from "./fecha";
 
 const VERSION = () => process.env.META_GRAPH_VERSION || "v23.0";
 
@@ -85,14 +86,14 @@ export async function sincronizarVideoMeta(videoId: string): Promise<ResultadosM
 export async function sincronizarTodoMeta(): Promise<{ ok: number; error: number }> {
   if (!process.env.META_ACCESS_TOKEN) return { ok: 0, error: 0 };
   const snap = await adminDb().collection("videos").where("etapa", "==", "publicado").get();
-  const limite = new Date(Date.now() - 45 * 86_400_000).toISOString().slice(0, 10);
+  const limite = sumarDias(hoyAR(), -45);
   // Pautas que terminaron hace poco (los números de Meta se siguen ajustando unos días) o sin fecha de fin
   // pero publicadas hace poco. Lo viejo no se vuelve a consultar.
   const ids = snap.docs
     .filter((d) => {
       const v = d.data();
       if (v.demo_ejemplo || (!v.meta?.ad_id && !v.meta?.campaign_id)) return false;
-      const ref = v.pauta?.fin || v.publicacion?.publicado_at?.slice(0, 10) || "";
+      const ref = v.pauta?.fin || (v.publicacion?.publicado_at ? fechaAR(v.publicacion.publicado_at) : "");
       return !!ref && ref >= limite;
     })
     .map((d) => d.id);

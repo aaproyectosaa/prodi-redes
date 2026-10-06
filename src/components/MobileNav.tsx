@@ -183,12 +183,33 @@ function useTecladoAbierto() {
         revisar();
       } else alSalir();
     };
+    // En Android, cerrar el teclado con "atrás" no saca el foco del campo: nos fijamos en el alto visible.
+    // Si vuelve a ser (casi) el completo, el teclado se cerró y la barra vuelve aunque el campo siga enfocado.
+    const vv = window.visualViewport;
+    let alto = vv?.height ?? window.innerHeight;
+    let ancho = vv?.width ?? window.innerWidth;
+    const alCambiarAlto = () => {
+      if (!vv) return;
+      // Si giró la pantalla, el alto de referencia es otro.
+      if (Math.abs(vv.width - ancho) > 1) {
+        ancho = vv.width;
+        alto = vv.height;
+      }
+      alto = Math.max(alto, vv.height);
+      if (vv.height >= alto * 0.85) {
+        clearTimeout(espera);
+        setAbierto(false);
+        document.documentElement.classList.remove("teclado-abierto");
+      } else revisar();
+    };
     document.addEventListener("focusin", alEntrar);
     document.addEventListener("focusout", alSalir);
+    vv?.addEventListener("resize", alCambiarAlto);
     return () => {
       clearTimeout(espera);
       document.removeEventListener("focusin", alEntrar);
       document.removeEventListener("focusout", alSalir);
+      vv?.removeEventListener("resize", alCambiarAlto);
       document.documentElement.classList.remove("teclado-abierto");
     };
   }, []);

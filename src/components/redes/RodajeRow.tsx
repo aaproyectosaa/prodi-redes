@@ -10,6 +10,7 @@ import { MaterialSlot } from "@/components/redes/MaterialSlot";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { useDriveUploadContext } from "@/contexts/drive-upload-context";
+import { formatearFecha } from "@/lib/fecha";
 import { fechaCorta, hoyISO } from "@/lib/redes/format";
 import { enviarAEdicion, marcarRodajeRealizado } from "@/lib/redes/videos";
 import type { Rodaje, Video } from "@/lib/redes/types";
@@ -66,7 +67,7 @@ export function RodajeRow({
       <div className="flex items-start gap-3">
         <div className="flex w-12 shrink-0 flex-col items-center rounded-lg bg-muted py-1.5">
           <span className="text-[10px] uppercase text-muted-foreground">
-            {new Date(`${rodaje.fecha}T12:00:00`).toLocaleDateString("es-AR", { month: "short" })}
+            {formatearFecha(rodaje.fecha, { month: "short" })}
           </span>
           <span className="text-lg font-bold leading-none">{Number(rodaje.fecha.slice(8))}</span>
         </div>

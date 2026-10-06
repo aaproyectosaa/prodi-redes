@@ -4,6 +4,7 @@ import { collection, doc, onSnapshot, query, updateDoc, where } from "@/lib/db";
 import { db } from "@/integrations/firebase/client";
 import { callApi } from "@/lib/redes/api";
 import { assertEditable } from "@/lib/redes/vistaComo";
+import { diaAR } from "@/lib/fecha";
 import { mesActual, sumarMeses } from "./format";
 import type { ContextoComercial, EstadoPlanMes, IdeaPlan, MemoriaIA, PlanMes } from "./types";
 
@@ -12,7 +13,7 @@ export const planMesId = (proyectoId: string, mes: string) => `${proyectoId}_${m
 
 /** Desde el 15 se arma el mes que viene; antes, el actual. */
 export function mesParaPlanificar(d = new Date()): string {
-  return d.getDate() >= 15 ? sumarMeses(mesActual(d), 1) : mesActual(d);
+  return diaAR(d) >= 15 ? sumarMeses(mesActual(d), 1) : mesActual(d);
 }
 
 export const ESTADO_PLAN: Record<EstadoPlanMes | "nada", { label: string; clase: string }> = {

@@ -1,5 +1,6 @@
 import { doc, updateDoc, arrayUnion, getDoc } from "@/lib/db";
 import { db } from "@/integrations/firebase/client";
+import { fechaAR, hoyAR } from "@/lib/fecha";
 import { ensureAccessToken } from "@/utils/drive/tokenStore";
 import { DriveAuthError } from "@/utils/drive/auth";
 import {
@@ -21,12 +22,7 @@ const ROOT_FOLDER_NAME = "Progreso";
 const MAX_CONCURRENT = 2;
 
 function formatDate(iso: string | null): string {
-  const d = iso ? new Date(iso) : new Date();
-  if (isNaN(d.getTime())) return new Date().toISOString().slice(0, 10);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  return (iso && fechaAR(iso)) || hoyAR();
 }
 
 export function genUploadLocalId(): string {
