@@ -26,6 +26,13 @@ const OPS = new Set(["union", "remove", "inc", "del", "now"]);
 export const esEspecial = (v: unknown): v is Especial =>
   !!v && typeof v === "object" && !Array.isArray(v) && OPS.has((v as { __op?: string }).__op ?? "");
 
+// Claves que tocarían el prototipo de Object (contaminación de prototipo).
+const PROHIBIDAS = new Set(["__proto__", "constructor", "prototype"]);
+export const claveProhibida = (k: string) => PROHIBIDAS.has(k);
+function exigirClave(k: string) {
+  if (PROHIBIDAS.has(k)) throw new Error(`Clave no permitida: ${k}`);
+}
+
 const esObjeto = (v: unknown): v is Data => !!v && typeof v === "object" && !Array.isArray(v) && !esEspecial(v);
 
 export const clonar = <T>(v: T): T => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
@@ -61,6 +68,7 @@ function limpiar(v: unknown): unknown {
   if (v && typeof v === "object") {
     const out: Data = {};
     for (const [k, x] of Object.entries(v)) {
+      exigirClave(k);
       const r = limpiar(x);
       if (r !== undefined) out[k] = r;
     }
@@ -76,9 +84,10 @@ export function leerRuta(obj: Data | undefined, ruta: string): unknown {
 /** Escribe en una ruta "a.b.c" creando los mapas intermedios. */
 export function escribirRuta(obj: Data, ruta: string, valor: unknown) {
   const keys = ruta.split(".");
+  keys.forEach(exigirClave);
   let o = obj;
   for (const k of keys.slice(0, -1)) {
-    if (!esObjeto(o[k])) o[k] = {};
+    if (!Object.hasOwn(o, k) || !esObjeto(o[k])) o[k] = {};
     o = o[k];
   }
   const ultima = keys[keys.length - 1];
@@ -97,7 +106,8 @@ export function aplicarUpdate(actual: Data, patch: Data): Data {
 /** set() con merge: mezcla mapas en profundidad (las listas se reemplazan). */
 function mezclar(destino: Data, origen: Data) {
   for (const [k, v] of Object.entries(origen)) {
-    if (esObjeto(v) && esObjeto(destino[k])) mezclar(destino[k], v);
+    exigirClave(k);
+    if (esObjeto(v) && Object.hasOwn(destino, k) && esObjeto(destino[k])) mezclar(destino[k], v);
     else {
       const nuevo = aplicarValor(destino[k], v);
       if (nuevo === undefined) delete destino[k];

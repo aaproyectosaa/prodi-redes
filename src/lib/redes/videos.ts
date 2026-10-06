@@ -13,6 +13,7 @@ import {
 import { db } from "@/integrations/firebase/client";
 import type { Project } from "@/integrations/firebase/types";
 import { avisar, equipoDe } from "./avisos";
+import { callApi } from "./api";
 import type {
   EtapaVideo,
   HistorialVideo,
@@ -373,70 +374,36 @@ export async function pedirCambiosInterno(
   });
 }
 
+// Aprobación del cliente: la hace el servidor (valida la etapa, suma la ronda y avisa al equipo).
 export async function aprobarCliente(
   video: Video,
-  project: Project | undefined,
-  by: string,
+  _project: Project | undefined,
+  _by: string,
   rating?: number | null,
   comentario?: string | null
 ) {
-  await moverA(
-    video,
-    "para_publicar",
-    by,
-    "Aprobado por el cliente",
-    { feedback_cliente: null, cliente_rating: rating ?? null },
-    comentario
-  );
-  void avisar({
-    destinatarios: [
-      ...(video.pauta_id ? [video.pauta_id] : equipoDe(project, "pauta")),
-      ...(video.productor_id ? [video.productor_id] : equipoDe(project, "productor")),
-    ],
-    titulo: "Video aprobado: listo para subir y pautar",
-    cuerpo: `${project?.nombre ?? "Cliente"} · ${video.titulo}`,
-    link: linkPara("/videos", video.id),
-    clave: `para_publicar:${video.id}`,
-    proyectoId: video.proyecto_id,
-    videoId: video.id,
+  await callApi("/api/publico/video-cliente", {
+    video_id: video.id,
+    decision: "aprobar",
+    rating: rating ?? null,
+    comentario: comentario ?? null,
   });
 }
 
 export async function pedirCambiosCliente(
   video: Video,
-  project: Project | undefined,
-  by: string,
+  _project: Project | undefined,
+  _by: string,
   nota: string,
   rating?: number | null,
   marcasIn: MarcaCorreccion[] = []
 ) {
-  const marcas = limpiarMarcas(marcasIn, "cliente");
-  const completo = textoConMarcas(nota, marcas);
-  await moverA(
-    video,
-    "edicion",
-    by,
-    "El cliente pidió cambios",
-    {
-      feedback_cliente: nota.trim() || "Correcciones marcadas en el video",
-      feedback_interno: null,
-      feedback_marcas: marcas.length ? marcas : null,
-      rondas: increment(1),
-      cliente_rating: rating ?? null,
-    },
-    completo
-  );
-  void avisar({
-    destinatarios: [
-      ...(video.editor_id ? [video.editor_id] : equipoDe(project, "editor")),
-      ...(video.productor_id ? [video.productor_id] : equipoDe(project, "productor")),
-    ],
-    titulo: "El cliente pidió cambios",
-    cuerpo: `${project?.nombre ?? "Cliente"} · ${video.titulo}: ${completo.slice(0, 160)}`,
-    link: linkPara("/videos", video.id),
-    clave: `cambios_cliente:${video.id}`,
-    proyectoId: video.proyecto_id,
-    videoId: video.id,
+  await callApi("/api/publico/video-cliente", {
+    video_id: video.id,
+    decision: "cambios",
+    nota: nota.trim(),
+    rating: rating ?? null,
+    marcas: limpiarMarcas(marcasIn, "cliente"),
   });
 }
 

@@ -16,8 +16,8 @@ export function extractBearerToken(req: VercelRequest): string | null {
     const match = /^Bearer\s+(.+)$/i.exec(header);
     if (match) return match[1];
   }
-  const queryToken = req.query?.token;
-  if (typeof queryToken === "string" && queryToken.length > 0) return queryToken;
+  // La sesión nunca se acepta en la URL (queda en logs, historial y Referer).
+  // Para <video> está /api/drive/media-token, que da un permiso corto por archivo.
   return null;
 }
 

@@ -129,6 +129,8 @@ export async function startOAuthFlow(): Promise<{ email: string }> {
     };
 
     const onMessage = (e: MessageEvent) => {
+      // Solo el popup que abrimos, desde nuestro propio dominio.
+      if (e.origin !== window.location.origin || e.source !== popup) return;
       const data = e.data as
         | {
             type?: string;

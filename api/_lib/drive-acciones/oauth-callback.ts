@@ -30,6 +30,9 @@ export const config = {
   maxDuration: 30,
 };
 
+const escaparHtml = (s: string) =>
+  s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
+
 function htmlResponse(opts: {
   ok: boolean;
   message: string;
@@ -60,14 +63,14 @@ function htmlResponse(opts: {
 </head>
 <body>
 <div class="card ${opts.ok ? "ok" : "err"}">
-  <h1>${opts.message}</h1>
-  ${opts.detail ? `<p>${opts.detail}</p>` : ""}
+  <h1>${escaparHtml(opts.message)}</h1>
+  ${opts.detail ? `<p>${escaparHtml(opts.detail)}</p>` : ""}
   <p style="margin-top:16px;">Podés cerrar esta ventana.</p>
 </div>
 <script>
   try {
     if (window.opener) {
-      window.opener.postMessage(${escaped}, "*");
+      window.opener.postMessage(${escaped}, window.location.origin);
     }
   } catch (_) { /* ignore */ }
   setTimeout(function() { try { window.close(); } catch(_){} }, ${
@@ -83,6 +86,11 @@ export default async function handler(
   res: VercelResponse
 ): Promise<void> {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"
+  );
 
   const code = (req.query.code as string | undefined) ?? "";
   const state = (req.query.state as string | undefined) ?? "";

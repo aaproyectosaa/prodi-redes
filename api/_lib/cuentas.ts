@@ -151,10 +151,9 @@ export async function crearUsuario(datos: { email: string; password?: string | n
 
 export async function iniciarSesion(email: string, clave: string): Promise<{ token: string; usuario: Usuario }> {
   const u = await porEmail(email);
-  // Mismo mensaje si no existe o si la clave está mal (no revela qué mails están registrados).
+  // Mismo mensaje si no existe, si todavía no creó la clave o si está mal (no revela qué mails están registrados).
   if (!u || !(await verificarClave(clave, u.clave_hash))) {
-    if (u && !u.clave_hash) throw new AuthError("auth/sin-clave", "Todavía no creaste tu contraseña. Pedile al administrador el link para crearla.");
-    throw new AuthError("auth/invalid-credential", "Mail o contraseña incorrectos");
+    throw new AuthError("auth/invalid-credential", "Mail o contraseña incorrectos. Si todavía no creaste tu contraseña, pedile al administrador el link.");
   }
   if (u.desactivado) throw new AuthError("auth/user-disabled", "Tu usuario está desactivado");
   // Si la clave vino de Firebase, se pasa al formato propio (misma contraseña, sin cerrar sesiones).

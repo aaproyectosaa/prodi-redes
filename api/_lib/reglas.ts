@@ -13,6 +13,8 @@ export interface Contexto {
   role: string;
   /** Clientes donde el usuario es "cliente" (se calcula una vez por pedido). */
   misClientes: Set<string>;
+  /** Clientes asignados a productor / editor / pauta (en cualquier rol de team_roles). */
+  misProyectos: Set<string>;
   /** Chats leídos en este pedido (para saber si es miembro). */
   chats: Map<string, Data | null>;
   ex: Pick<PoolClient, "query">;
@@ -25,7 +27,16 @@ const esAdmin = (c: Contexto) => c.role === "admin";
 const esTeam = (c: Contexto) => TEAM.includes(c.role);
 const esDiseno = (c: Contexto) => c.role === "diseno";
 const esFinanzas = (c: Contexto) => c.role === "admin" || c.role === "administracion";
-const produce = (c: Contexto) => c.role === "admin" || c.role === "productor";
+
+/** Roles del equipo que solo ven los clientes donde están asignados (como assertProjectAccess). */
+const ASIGNADOS = ["productor", "editor", "pauta"];
+/** ¿Trabaja en este cliente? Admin y diseño ven todos; el resto, solo si está en team_roles. */
+const equipoDe = (c: Contexto, pid: unknown) =>
+  esAdmin(c) || esDiseno(c) || (ASIGNADOS.includes(c.role) && typeof pid === "string" && c.misProyectos.has(pid));
+/** Admin, o productor asignado a ese cliente. */
+const produceEn = (c: Contexto, pid: unknown) => esAdmin(c) || (c.role === "productor" && equipoDe(c, pid));
+/** Campos del WhatsApp vinculado: solo los escribe el servidor (después de verificar el código). */
+const WHATSAPP_VERIFICADO = ["whatsapp_phone", "whatsapp_phone_verified"];
 const activo = (c: Contexto) => ACTIVOS.includes(c.role);
 const clienteDe = (c: Contexto, pid: unknown) => c.role === "cliente" && typeof pid === "string" && c.misClientes.has(pid);
 const soloCambia = (antes: Data | null, despues: Data | null, permitidas: string[]) =>
@@ -60,18 +71,19 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
     case "profiles":
       return esTeam(c) || esFinanzas(c) || c.uid === id;
     case "projects":
-      return esTeam(c) || esFinanzas(c) || (c.role === "cliente" && Array.isArray(d.team_roles?.cliente) && d.team_roles.cliente.includes(c.uid));
+      return equipoDe(c, id) || esFinanzas(c) || (c.role === "cliente" && Array.isArray(d.team_roles?.cliente) && d.team_roles.cliente.includes(c.uid));
     case "videos":
-      return esTeam(c) || esFinanzas(c) || clienteDe(c, d.proyecto_id);
+      return equipoDe(c, d.proyecto_id) || esFinanzas(c) || clienteDe(c, d.proyecto_id);
     case "rodajes":
-      return esTeam(c) || clienteDe(c, d.proyecto_id);
+      return equipoDe(c, d.proyecto_id) || clienteDe(c, d.proyecto_id);
     case "piezas_ia":
-      return esTeam(c) || esFinanzas(c) || clienteDe(c, d.proyecto_id);
+      return equipoDe(c, d.proyecto_id) || esFinanzas(c) || clienteDe(c, d.proyecto_id);
     case "planes_mes":
       // El cliente lo ve recién cuando producción se lo mandó.
-      return esTeam(c) || (clienteDe(c, d.proyecto_id) && d.estado !== "borrador");
+      return equipoDe(c, d.proyecto_id) || (clienteDe(c, d.proyecto_id) && d.estado !== "borrador");
     case "ia_memoria":
-      return produce(c) || esDiseno(c);
+      // ia_memoria/{cliente}
+      return produceEn(c, id) || esDiseno(c);
     case "cobros":
       return esFinanzas(c) || clienteDe(c, d.proyecto_id);
     case "facturas":
@@ -92,13 +104,12 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
       return (
         esAdmin(c) ||
         (esTeam(c) && Array.isArray(d.participantes) && d.participantes.includes(c.uid)) ||
-        (esTeam(c) && d.proyecto_id != null && produce(c)) ||
+        (d.proyecto_id != null && produceEn(c, d.proyecto_id)) ||
         (d.proyecto_id != null && clienteDe(c, d.proyecto_id))
       );
     case "in_app_notifications":
       return d.recipient_user_id === c.uid;
-    case "whatsapp_verifications":
-      return c.uid === id;
+    case "whatsapp_verifications": // código de verificación (hasheado): solo lo usa el servidor
     case "notification_queue":
       return false;
     default:
@@ -125,40 +136,35 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
   switch (base) {
     case "profiles":
       if (borra) return esAdmin(c);
-      if (crea) return c.uid === id && despues!.role === "pending";
-      return esAdmin(c) || (c.uid === id && !tocaAlguna(antes, despues, ["role", "dashboard_access", "project_permissions", "activo"]));
-    case "projects":
-      if (crea || borra) return esAdmin(c);
+      // El WhatsApp vinculado lo escribe solo el servidor (/api/usuarios/whatsapp-*).
+      if (crea) return c.uid === id && despues!.role === "pending" && !tocaAlguna(antes, despues, WHATSAPP_VERIFICADO);
       return (
         esAdmin(c) ||
-        (c.role === "productor" && soloCambia(antes, despues, ["marca", "redes", "contacto_emails", "meta"])) ||
+        (c.uid === id && !tocaAlguna(antes, despues, ["role", "dashboard_access", "project_permissions", "activo", ...WHATSAPP_VERIFICADO]))
+      );
+    case "projects":
+      if (crea || borra) return esAdmin(c);
+      // contacto_emails: ahí se mandan boletas e informes, solo lo cambia el admin.
+      return (
+        esAdmin(c) ||
+        (c.role === "productor" && equipoDe(c, id) && soloCambia(antes, despues, ["marca", "redes", "meta"])) ||
         (esFinanzas(c) && soloCambia(antes, despues, ["facturacion"]))
       );
     case "videos":
-      if (crea || borra) return produce(c);
-      return (
-        esTeam(c) ||
-        (clienteDe(c, antes!.proyecto_id) &&
-          antes!.etapa === "revision_cliente" &&
-          ["para_publicar", "edicion"].includes(despues!.etapa) &&
-          soloCambia(antes, despues, ["etapa", "etapa_desde", "updated_at", "historial", "feedback_cliente", "feedback_marcas", "rondas", "cliente_rating"]))
-      );
+      // El cliente aprueba o pide cambios solo por /api/publico/video-cliente (el servidor valida etapa, ronda e historial).
+      if (crea) return produceEn(c, despues!.proyecto_id);
+      if (borra) return produceEn(c, antes!.proyecto_id);
+      return equipoDe(c, antes!.proyecto_id) && equipoDe(c, despues!.proyecto_id);
     case "rodajes":
-      return produce(c);
+      return (crea || produceEn(c, antes!.proyecto_id)) && (borra || produceEn(c, despues!.proyecto_id));
     case "piezas_ia":
-      if (crea) return produce(c);
+      // El cliente aprueba o pide cambios solo por /api/publico/pieza-cliente.
+      if (crea) return produceEn(c, despues!.proyecto_id);
       if (borra) return esAdmin(c);
-      return (
-        produce(c) ||
-        esDiseno(c) ||
-        (clienteDe(c, antes!.proyecto_id) &&
-          antes!.estado === "para_aprobar" &&
-          ["entregada", "en_proceso"].includes(despues!.estado) &&
-          soloCambia(antes, despues, ["estado", "version_aprobada_id", "feedback_cliente", "rondas", "updated_at", "historial"]))
-      );
+      return esDiseno(c) || (produceEn(c, antes!.proyecto_id) && produceEn(c, despues!.proyecto_id));
     case "planes_mes":
       if (crea || borra) return false;
-      return produce(c) && antes!.estado === "borrador" && soloCambia(antes, despues, ["ideas", "nota_equipo", "updated_at"]);
+      return produceEn(c, antes!.proyecto_id) && antes!.estado === "borrador" && soloCambia(antes, despues, ["ideas", "nota_equipo", "updated_at"]);
     case "facturas":
       return !crea && esFinanzas(c);
     case "equipo_pagos":
@@ -181,7 +187,10 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
     case "reuniones":
       if (borra) return esAdmin(c);
       if (crea)
-        return despues!.creada_por === c.uid && (esTeam(c) || (despues!.proyecto_id != null && clienteDe(c, despues!.proyecto_id)));
+        return (
+          despues!.creada_por === c.uid &&
+          (despues!.proyecto_id == null ? esTeam(c) : equipoDe(c, despues!.proyecto_id) || clienteDe(c, despues!.proyecto_id))
+        );
       return (
         esAdmin(c) ||
         (esTeam(c) &&
@@ -193,9 +202,8 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       if (crea) return false;
       if (borra) return antes!.recipient_user_id === c.uid;
       return antes!.recipient_user_id === c.uid && soloCambia(antes, despues, ["read", "read_at"]);
-    case "whatsapp_verifications":
-      return c.uid === id;
     default:
+      // whatsapp_verifications, notification_queue, …: solo el servidor.
       return false;
   }
 }
@@ -203,14 +211,28 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
 /** Arma el contexto del pedido: rol y clientes del usuario. */
 export async function contexto(ex: Pick<PoolClient, "query">, uid: string, role: string): Promise<Contexto> {
   const misClientes = new Set<string>();
+  const misProyectos = new Set<string>();
   if (role === "cliente") {
     const r = await ex.query(
       "select id from documentos where coleccion = 'projects' and data @> jsonb_build_object('team_roles', jsonb_build_object('cliente', jsonb_build_array($1::text)))",
       [uid]
     );
     r.rows.forEach((x: { id: string }) => misClientes.add(x.id));
+  } else if (ASIGNADOS.includes(role)) {
+    // En cualquier rol del cliente (igual que assertProjectAccess).
+    const r = await ex.query(
+      `select d.id from documentos d
+        where d.coleccion = 'projects'
+          and exists (
+            select 1
+              from jsonb_each(case when jsonb_typeof(d.data->'team_roles') = 'object' then d.data->'team_roles' else '{}'::jsonb end) t
+             where jsonb_typeof(t.value) = 'array' and t.value @> jsonb_build_array($1::text)
+          )`,
+      [uid]
+    );
+    r.rows.forEach((x: { id: string }) => misProyectos.add(x.id));
   }
-  return { uid, role, misClientes, chats: new Map(), ex };
+  return { uid, role, misClientes, misProyectos, chats: new Map(), ex };
 }
 
 /** Saca los campos que solo usa el servidor (tokens cifrados de Drive, etc.). */

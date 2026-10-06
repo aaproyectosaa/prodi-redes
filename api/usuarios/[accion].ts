@@ -7,6 +7,10 @@
 // POST /api/usuarios/clave       { uid }  → link para que la persona elija contraseña
 // POST /api/usuarios/ejemplo-cargar  → carga los datos de ejemplo (mismos de la demo)
 // POST /api/usuarios/ejemplo-borrar  → los borra
+// Cualquier usuario, sobre su propio perfil:
+// POST /api/usuarios/whatsapp-codigo      { telefono }  → manda el código por WhatsApp
+// POST /api/usuarios/whatsapp-verificar   { codigo }    → si está bien, vincula el número
+// POST /api/usuarios/whatsapp-desvincular
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import crypto from "crypto";
@@ -15,6 +19,7 @@ import { adminDb } from "../_lib/db";
 import { adminAuth } from "../_lib/cuentas";
 import { appUrl, body, HttpError, requireCaller, sendError } from "../_lib/http";
 import { borrarEjemplo, cargarEjemplo } from "../_lib/ejemplo";
+import { confirmarCodigoWhatsapp, desvincularWhatsapp, pedirCodigoWhatsapp } from "../_lib/whatsapp-verificacion";
 
 export const config = { maxDuration: 60 };
 
@@ -139,8 +144,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
   try {
-    const admin = await requireCaller(req, ["admin"]);
     const accion = String(req.query.accion ?? "");
+    // WhatsApp propio: cualquier usuario activo (no solo el admin).
+    if (accion.startsWith("whatsapp-")) {
+      const yo = await requireCaller(req, ["admin", "productor", "editor", "pauta", "diseno", "administracion", "cliente"]);
+      const b = body<{ telefono?: string; codigo?: string }>(req);
+      if (accion === "whatsapp-codigo") res.status(200).json(await pedirCodigoWhatsapp(yo.uid, b.telefono));
+      else if (accion === "whatsapp-verificar") res.status(200).json(await confirmarCodigoWhatsapp(yo.uid, b.codigo));
+      else if (accion === "whatsapp-desvincular") res.status(200).json(await desvincularWhatsapp(yo.uid));
+      else res.status(404).json({ error: "Acción desconocida" });
+      return;
+    }
+    const admin = await requireCaller(req, ["admin"]);
     if (accion === "crear") res.status(200).json(await crear(req));
     else if (accion === "editar") res.status(200).json(await editar(req, admin.uid));
     else if (accion === "desactivar") res.status(200).json(await desactivar(req, admin.uid));

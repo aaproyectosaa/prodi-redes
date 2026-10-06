@@ -89,18 +89,19 @@ export async function reembolsar(paymentId: string): Promise<void> {
   });
 }
 
+/** En producción el webhook no se acepta sin MP_WEBHOOK_SECRET. */
+export const faltaSecretoWebhook = () => !process.env.MP_WEBHOOK_SECRET && process.env.VERCEL_ENV === "production";
+
 /**
- * Valida la firma del webhook (x-signature). Si no hay MP_WEBHOOK_SECRET
- * configurado, no se valida (igual se consulta el pago a la API de MP, que
- * es la fuente de verdad).
+ * Valida la firma del webhook (x-signature). Con MP_WEBHOOK_SECRET configurado, toda
+ * notificación tiene que venir firmada (también las de pagos). Sin secreto solo se deja
+ * pasar fuera de producción (local / preview), donde igual se consulta el pago a la API de MP.
  */
 export function firmaValida(headers: Record<string, unknown>, dataId: string): boolean {
   const secret = process.env.MP_WEBHOOK_SECRET;
-  if (!secret) return true;
+  if (!secret) return !faltaSecretoWebhook();
   const sig = String(headers["x-signature"] ?? "");
-  // Notificaciones viejas (IPN, ?topic=payment) no vienen firmadas. No es un riesgo:
-  // el pago siempre se vuelve a consultar a la API de Mercado Pago.
-  if (!sig) return true;
+  if (!sig) return false;
   const reqId = String(headers["x-request-id"] ?? "");
   const parts = Object.fromEntries(
     sig.split(",").map((p) => p.trim().split("=").map((s) => s.trim()) as [string, string])

@@ -33,6 +33,7 @@ import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { ETAPAS } from "@/lib/redes/etapas";
 import { formatARS, mesActual, mesLabel, sumarMeses, fechaCorta } from "@/lib/redes/format";
 import { planDe, usoPlan } from "@/lib/redes/planes";
+import { totalMensual } from "@/lib/redes/facturacion";
 import { callApi } from "@/lib/redes/api";
 import type { Project, ProjectTeamRole } from "@/integrations/firebase/types";
 import { COLORES } from "./Clientes";
@@ -46,7 +47,7 @@ export default function ClienteDetalle() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const tab = params.get("tab") ?? "resumen";
-  const { clienteById, videos, planes, cobros } = useRedes();
+  const { clienteById, videos, planes, cobros, settings } = useRedes();
   const { role } = useUserProfileContext();
   const cliente = clienteById(id);
   const [mes, setMes] = useState(mesActual());
@@ -168,7 +169,11 @@ export default function ClienteDetalle() {
           <TabsContent value="informe" className="space-y-8">
             <InformeCliente cliente={cliente} mes={mes} />
             <Section title="Débito automático del abono" description="Mercado Pago cobra el abono todos los meses con la tarjeta del cliente.">
-              <DebitoAdmin cliente={cliente} monto={planDe(cliente, planes).precioMensual} />
+              {/* El débito cobra el total de la boleta (con IVA y extras fijos), calculado igual que la boleta. */}
+              <DebitoAdmin
+                cliente={cliente}
+                monto={totalMensual({ abono: planDe(cliente, planes).precioMensual, facturacion: cliente.facturacion ?? null }, settings.iva_pct ?? 21)}
+              />
             </Section>
             <Section title="Cobros">
               {misCobros.length === 0 ? (
@@ -239,13 +244,14 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
         .map((e) => e.trim().toLowerCase())
         .filter((e) => /.+@.+\..+/.test(e));
       const data: Record<string, unknown> = {
-        contacto_emails: emails,
         marca: form.marca,
         redes: form.redes,
         meta: form.meta,
       };
       if (isAdmin) {
+        // Ahí se mandan boletas e informes: solo lo cambia el admin.
         Object.assign(data, {
+          contacto_emails: emails,
           nombre: form.nombre.trim() || cliente.nombre,
           color: form.color,
           enabled: form.enabled,
@@ -472,7 +478,7 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
             <Label className="flex items-center gap-1.5">
               <Mail className="h-3.5 w-3.5" /> Correos para el informe mensual
             </Label>
-            <Input value={form.emails} onChange={(e) => set("emails", e.target.value)} placeholder="duenio@marca.com, socio@marca.com" />
+            <Input value={form.emails} onChange={(e) => set("emails", e.target.value)} placeholder="duenio@marca.com, socio@marca.com" disabled={!isAdmin} />
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">

@@ -8,6 +8,7 @@
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { aplicarEscritura, ejecutarConsulta, enTransaccion, getPool, leerDoc, partirRuta, type Consulta, type OpEscritura } from "../_lib/db";
+import { claveProhibida } from "../_lib/docs";
 import { contexto, paraLaApp, partirColeccion, puedeEscribir, puedeLeer } from "../_lib/reglas";
 import { body, HttpError, requireCaller, sendError } from "../_lib/http";
 
@@ -24,6 +25,17 @@ interface PedidoConsulta {
 
 const COLECCION_OK = /^[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+)?$/;
 const ID_OK = /^[^/\s]{1,200}$/;
+
+/** Rechaza claves como "__proto__" en cualquier nivel (también dentro de rutas "a.b.c"). */
+function validarClaves(v: unknown, prof = 0): void {
+  if (prof > 50) throw new HttpError(400, "Datos demasiado anidados");
+  if (Array.isArray(v)) return v.forEach((x) => validarClaves(x, prof + 1));
+  if (!v || typeof v !== "object") return;
+  for (const [k, x] of Object.entries(v)) {
+    if (k.split(".").some(claveProhibida)) throw new HttpError(400, "Clave no permitida");
+    validarClaves(x, prof + 1);
+  }
+}
 
 function validarColeccion(col: unknown): string {
   if (typeof col !== "string" || !COLECCION_OK.test(col)) throw new HttpError(400, "Colección inválida");
@@ -85,6 +97,7 @@ async function escribir(req: VercelRequest) {
       if (!ID_OK.test(id)) throw new HttpError(400, "Id inválido");
       const data = o.tipo === "delete" ? {} : o.data;
       if (o.tipo !== "delete" && (!data || typeof data !== "object" || Array.isArray(data))) throw new HttpError(400, "Datos inválidos");
+      validarClaves(data);
       const op = { tipo: o.tipo, coleccion, id, data: data ?? {}, merge: !!o.merge } as OpEscritura;
       await aplicarEscritura(cli, op, async (antes, despues) => {
         if (!(await puedeEscribir(ctx, coleccion, id, antes, despues))) {

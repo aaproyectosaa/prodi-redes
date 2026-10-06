@@ -3,6 +3,9 @@
 // POST /api/publico/responder  { t, decision, nota?, rating? }     → aprueba o pide cambios
 // GET  /api/publico/media?t=…&fileId=…                             → reproduce el video final
 // POST /api/publico/link       { video_id }  (equipo)              → genera el link para mandar
+// Desde la app (con usuario; el cliente ya no puede escribir estos cambios por /api/db):
+// POST /api/publico/video-cliente  { video_id, decision, nota?, rating?, marcas?, comentario? }
+// POST /api/publico/pieza-cliente  { pieza_id, decision, nota? }
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { adminDb } from "../_lib/db";
@@ -10,6 +13,7 @@ import { appUrl, assertProjectAccess, body, HttpError, requireCaller, sendError 
 import { leerTokenAprobacion, linkAprobacion } from "../_lib/aprobacion";
 import { leerVideoPublico, responderCliente } from "../_lib/videos-server";
 import { streamDriveFile } from "../_lib/drive-stream";
+import { responderPiezaApp, responderVideoApp, type PedidoPieza, type PedidoVideo } from "../_lib/aprobar-cliente";
 
 export const config = { maxDuration: 60 };
 
@@ -64,6 +68,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     else if (accion === "responder") res.status(200).json(await responder(req));
     else if (accion === "link") res.status(200).json(await link(req));
+    else if (accion === "video-cliente") {
+      const caller = await requireCaller(req, ["admin", "productor", "cliente"]);
+      res.status(200).json(await responderVideoApp(caller, body<PedidoVideo>(req), appUrl(req)));
+    } else if (accion === "pieza-cliente") {
+      const caller = await requireCaller(req, ["admin", "cliente"]);
+      res.status(200).json(await responderPiezaApp(caller, body<PedidoPieza>(req), appUrl(req)));
+    }
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {
     sendError(res, err);

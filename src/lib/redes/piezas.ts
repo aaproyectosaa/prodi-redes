@@ -1,5 +1,5 @@
 import { assertEditable } from "@/lib/redes/vistaComo";
-import { arrayUnion, doc, increment, updateDoc } from "@/lib/db";
+import { arrayUnion, doc, updateDoc } from "@/lib/db";
 import { db } from "@/integrations/firebase/client";
 import type { DriveAttachmentRef, Project } from "@/integrations/firebase/types";
 import { avisar, equipoDe } from "./avisos";
@@ -179,42 +179,14 @@ export async function mandarAlCliente(pieza: PiezaIA, versionId: string, project
 }
 
 /** El cliente la aprueba: queda lista para descargar. */
-export async function aprobarPieza(pieza: PiezaIA, project: Project | undefined, by: string) {
-  assertEditable();
-  await updateDoc(doc(db, PIEZAS, pieza.id), {
-    estado: "entregada",
-    version_aprobada_id: pieza.version_enviada_id ?? null,
-    updated_at: now(),
-    historial: arrayUnion(evento(by, "Aprobada por el cliente")),
-  });
-  void avisar({
-    destinatarios: [DISENO],
-    titulo: "Pieza aprobada 🎉",
-    cuerpo: `${project?.nombre ?? "Cliente"} · ${formatoInfo(pieza.formato).label}`,
-    link: `/piezas?pieza=${pieza.id}`,
-    clave: `pieza_ok:${pieza.id}`,
-    proyectoId: pieza.proyecto_id,
-  });
+// (La hace el servidor: valida el estado y avisa a diseño.)
+export async function aprobarPieza(pieza: PiezaIA, _project: Project | undefined, _by: string) {
+  await callApi("/api/publico/pieza-cliente", { pieza_id: pieza.id, decision: "aprobar" });
 }
 
 /** El cliente pide cambios: vuelve a diseño con su comentario. */
-export async function pedirCambiosPieza(pieza: PiezaIA, project: Project | undefined, by: string, nota: string) {
-  assertEditable();
-  await updateDoc(doc(db, PIEZAS, pieza.id), {
-    estado: "en_proceso",
-    feedback_cliente: nota,
-    rondas: increment(1),
-    updated_at: now(),
-    historial: arrayUnion(evento(by, "El cliente pidió cambios", nota)),
-  });
-  void avisar({
-    destinatarios: [DISENO],
-    titulo: "El cliente pidió cambios en una pieza",
-    cuerpo: `${project?.nombre ?? "Cliente"}: ${nota.slice(0, 140)}`,
-    link: `/piezas?pieza=${pieza.id}`,
-    clave: `pieza_cambios:${pieza.id}`,
-    proyectoId: pieza.proyecto_id,
-  });
+export async function pedirCambiosPieza(pieza: PiezaIA, _project: Project | undefined, _by: string, nota: string) {
+  await callApi("/api/publico/pieza-cliente", { pieza_id: pieza.id, decision: "cambios", nota });
 }
 
 /** Diseño no la puede hacer: si se pagó, se devuelve el pago. */

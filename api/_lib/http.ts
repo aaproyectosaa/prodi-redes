@@ -16,12 +16,14 @@ export async function requireCaller(req: VercelRequest, roles?: Rol[]): Promise<
   const user = await requireUser(req);
   const snap = await adminDb().collection("profiles").doc(user.uid).get();
   const data = snap.exists ? snap.data() ?? {} : {};
-  if (data.activo === false) throw new HttpError(403, "Tu usuario está desactivado");
-  const role = (data.role as Rol) ?? "pending";
+  // Solo campos propios del perfil: nunca heredados del prototipo.
+  const propio = (k: string) => (Object.hasOwn(data, k) ? data[k] : undefined);
+  if (propio("activo") === false) throw new HttpError(403, "Tu usuario está desactivado");
+  const role = (propio("role") as Rol) ?? "pending";
   if (roles && !roles.includes(role)) {
     throw new HttpError(403, "No tenés permiso para esta acción");
   }
-  return { ...user, role, nombre: (data.nombre as string) ?? "" };
+  return { ...user, role, nombre: (propio("nombre") as string) ?? "" };
 }
 
 /** ¿El usuario está asignado a ese cliente (o es admin)? */
