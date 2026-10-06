@@ -1,5 +1,5 @@
 import json, urllib.request, time
-# Prueba las reglas de acceso contra el servidor (npm run local) con los datos de ejemplo (npm run db:ejemplo).
+# Prueba las reglas de acceso contra el servidor (pnpm local) con los datos de ejemplo (pnpm db:ejemplo).
 # Uso: python3 scripts/probar-seguridad.py   (opcional: BASE=https://tu-app.vercel.app python3 …)
 import os
 B=os.environ.get("BASE","http://localhost:3001")

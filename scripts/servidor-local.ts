@@ -1,6 +1,6 @@
 // Servidor local: la app ya compilada (dist/) + las funciones de /api, contra la base de DATABASE_URL.
 // Sirve para probar todo en la compu igual que en Vercel.
-// Uso: npm run build && DATABASE_URL=… AUTH_SECRET=… npm run local   → http://localhost:3001
+// Uso: pnpm build && pnpm local   → http://localhost:3001  (lee .env y encima .env.local; también se pueden pasar DATABASE_URL=… AUTH_SECRET=… a mano)
 import http from "http";
 import fs from "fs";
 import path from "path";

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Arma la demo navegable en un solo HTML (código, estilos e imágenes adentro).
-Uso: SINGLE=1 npx vite build --config vite.demo.config.ts && python3 scripts/demo-single.py
+Uso: SINGLE=1 pnpm exec vite build --config vite.demo.config.ts && python3 scripts/demo-single.py
 """
 import base64, glob, json, os, re
 

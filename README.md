@@ -12,10 +12,10 @@ Stack: React + Vite + Tailwind/shadcn · Firebase (Auth, Firestore, FCM) · Goog
 Gemini · Mercado Pago · Resend.
 
 ```bash
-npm install
-npm run dev        # usa VITE_APP_URL como proxy de /api
-npm run build
-npx vite build --config vite.demo.config.ts   # demo con datos de ejemplo → dist-demo/
+pnpm install
+pnpm dev        # usa VITE_APP_URL como proxy de /api
+pnpm build
+pnpm exec vite build --config vite.demo.config.ts   # demo con datos de ejemplo → dist-demo/
 ```
 
 Despliegue y migración: [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md).

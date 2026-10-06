@@ -3,11 +3,11 @@
 // contraseñas (siguen entrando con la misma clave).
 //
 // Uso (una sola vez, con la service account de Firebase):
-//   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json DATABASE_URL="postgresql://…" npm run migrar:firebase            → simula y cuenta
-//   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json DATABASE_URL="postgresql://…" npm run migrar:firebase -- --aplicar → copia
+//   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json DATABASE_URL="postgresql://…" pnpm migrar:firebase            → simula y cuenta
+//   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json DATABASE_URL="postgresql://…" pnpm migrar:firebase --aplicar → copia
 //
 // Se puede correr más de una vez: pisa los documentos con el mismo id (no duplica).
-// Antes: npm run db:setup (crea las tablas).
+// Antes: pnpm db:setup (crea las tablas).
 
 import { applicationDefault, cert, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";

@@ -1,5 +1,5 @@
 -- Prodi Redes · base de datos en Postgres (Neon).
--- Se puede correr las veces que quieras: no borra nada (npm run db:setup).
+-- Se puede correr las veces que quieras: no borra nada (pnpm db:setup).
 --
 -- Cada colección del sistema (clientes, videos, facturas, …) es un conjunto de documentos JSON
 -- en la tabla `documentos`. Las subcolecciones usan la ruta completa (ej. chats/<id>/mensajes).

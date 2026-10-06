@@ -1,5 +1,5 @@
 // Crea (o actualiza) las tablas en Postgres / Neon. Se puede correr las veces que quieras.
-// Uso: DATABASE_URL="postgresql://…" npm run db:setup
+// Uso: DATABASE_URL="postgresql://…" pnpm db:setup
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";

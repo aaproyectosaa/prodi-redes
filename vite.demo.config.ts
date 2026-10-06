@@ -1,5 +1,5 @@
 // Build de la demo navegable: misma app, con la base, el login, Drive y /api simulados en el navegador.
-// npx vite build --config vite.demo.config.ts  →  dist-demo/
+// pnpm exec vite build --config vite.demo.config.ts  →  dist-demo/
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";

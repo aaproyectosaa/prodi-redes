@@ -1,6 +1,6 @@
 // Crea (o vuelve a habilitar) un administrador y muestra el link para que ponga su contraseña.
 // Sirve para arrancar con una base vacía: sin esto nadie puede dar roles.
-// Uso: DATABASE_URL="postgresql://…" AUTH_SECRET=… APP_URL=https://… npm run db:admin -- lucas@somosprodi.com "Lucas Paulón"
+// Uso: DATABASE_URL="postgresql://…" AUTH_SECRET=… APP_URL=https://… pnpm db:admin lucas@somosprodi.com "Lucas Paulón"
 import { getPool } from "../api/_lib/db";
 import { crearUsuario, linkDeClave } from "../api/_lib/cuentas";
 
@@ -8,7 +8,7 @@ async function main() {
   const [email, ...resto] = process.argv.slice(2).filter((a) => a !== "--");
   const nombre = resto.join(" ").trim() || null;
   if (!email) {
-    console.error('Uso: npm run db:admin -- mail@dominio.com "Nombre y apellido"');
+    console.error('Uso: pnpm db:admin mail@dominio.com "Nombre y apellido"');
     process.exit(1);
   }
   if (!process.env.AUTH_SECRET) {
