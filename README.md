@@ -13,7 +13,7 @@ Gemini · Mercado Pago · Resend.
 
 ```bash
 pnpm install
-pnpm dev        # usa VITE_APP_URL como proxy de /api
+pnpm dev        # app y /api en http://localhost:8080 (lee .env y .env.local; usá una base de prueba)
 pnpm build
 pnpm exec vite build --config vite.demo.config.ts   # demo con datos de ejemplo → dist-demo/
 ```
