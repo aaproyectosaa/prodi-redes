@@ -7,7 +7,7 @@ type PreparingListener = (preparing: boolean) => void;
 
 let inputEl: HTMLInputElement | null = null;
 let pendingCallback: ((files: File[]) => void) | null = null;
-let preparingListeners = new Set<PreparingListener>();
+const preparingListeners = new Set<PreparingListener>();
 let preparingActive = false;
 
 export function subscribePickerPreparing(listener: PreparingListener): () => void {

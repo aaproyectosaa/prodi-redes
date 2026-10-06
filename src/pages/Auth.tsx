@@ -54,7 +54,8 @@ const Auth = () => {
       toast.success("¡Listo! Ya podés usar tu contraseña nueva.");
       window.history.replaceState(null, "", "/auth");
       navigate("/");
-    } catch (error: any) {
+    } catch (err) {
+      const error = err as { message?: string; code?: string };
       toast.error(error.message || "No se pudo guardar la contraseña");
     } finally {
       setLoading(false);
@@ -100,9 +101,10 @@ const Auth = () => {
       setPassword("");
       setConfirmPassword("");
       setInvitationCode("");
-    } catch (error: any) {
-      if (error instanceof z.ZodError) {
-        toast.error(error.errors[0].message);
+    } catch (err) {
+      const error = err as { message?: string; code?: string };
+      if (err instanceof z.ZodError) {
+        toast.error(err.errors[0].message);
       } else if (error.code === "auth/email-already-in-use") {
         toast.error("Este email ya está registrado");
       } else {
@@ -158,9 +160,10 @@ const Auth = () => {
 
       toast.success("¡Bienvenido!");
       navigate(defaultRouteForRole(role) === "/auth" ? "/" : defaultRouteForRole(role));
-    } catch (error: any) {
-      if (error instanceof z.ZodError) {
-        toast.error(error.errors[0].message);
+    } catch (err) {
+      const error = err as { message?: string; code?: string };
+      if (err instanceof z.ZodError) {
+        toast.error(err.errors[0].message);
       } else if (error.code === "auth/invalid-credential" || error.code === "auth/wrong-password" || error.code === "auth/user-not-found") {
         toast.error("Email o contraseña incorrectos");
       } else {

@@ -82,7 +82,7 @@ export function piezaDoc(proyectoId: string, by: string, mes: string, p: PedidoP
 }
 
 /** Lo que la IA tiene que saber del pedido. */
-export function briefPieza(pz: Record<string, any>): string {
+export function briefPieza(pz: Record<string, unknown>): string {
   const lineas = [
     pz.enfoque === "institucional"
       ? "Enfoque: INSTITUCIONAL (comunicar algo de la marca: un saludo, una novedad, un horario, un aviso). Cálida, clara, sin precios ni urgencia de venta."
