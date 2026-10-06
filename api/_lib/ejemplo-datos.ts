@@ -586,7 +586,7 @@ export function seed() {
     cobros,
     in_app_notifications,
     app_settings: {
-      redes: { precio_pieza_ia: 18000, precio_pieza_impresion: 28000, dias_alerta: 3, informe_automatico: true, dia_vencimiento: 10, iva_pct: 21 },
+      redes: { precio_pieza_ia: 18000, precio_pieza_impresion: 28000, dias_alerta: 3, informe_automatico: true, dia_vencimiento: 5, iva_pct: 21 },
       drive_connection: { status: "connected", email: "prodi.redes@gmail.com" },
       whatsapp_bot: { bot_enabled: true },
     },

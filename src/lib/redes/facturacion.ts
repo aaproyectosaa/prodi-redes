@@ -8,10 +8,14 @@ import { avisar, equipoDe } from "./avisos";
 import type { Project } from "@/integrations/firebase/types";
 import { toast } from "sonner";
 import { asset } from "@/lib/asset";
+import { fechaAR, hoyAR, mesAR } from "@/lib/fecha";
 import type { DatosCobro, PiezaIA, Video } from "./types";
 import {
-  nombreMesF,
+  interesMora,
+  leyendaInteres,
+  nombrePeriodo,
   planillaCSV,
+  textoMora,
   totales,
   type EstadoFactura,
   type Factura,
@@ -20,6 +24,18 @@ import {
 } from "../../../api/_lib/facturacion";
 
 export type { EstadoFactura, Factura, ItemFactura, MedioCobro };
+// Las reglas de facturación son las mismas que usa el servidor (mismo archivo): período (el 27 se
+// arma la del mes siguiente), vencimiento el 5, interés del 0,5% diario y total del débito.
+export {
+  DIA_VENCIMIENTO,
+  interesMora,
+  leyendaInteres,
+  nombrePeriodo,
+  periodoDe,
+  saldoDe,
+  textoMora,
+  totalMensual,
+} from "../../../api/_lib/facturacion";
 export type FacturaDoc = Factura & { id: string };
 
 export const ESTADO_FACTURA: Record<EstadoFactura, { label: string; clase: string }> = {
@@ -119,6 +135,7 @@ export async function emitirFacturas(lista: FacturaDoc[], _clientes?: Project[])
   return callApi<{ ok: true; emitidas: number; mails: number; sin_mail: string[] }>("/api/pagos/emitir", { ids });
 }
 
+/** Queda cobrada con el interés por mora de hoy (se guarda fijo en `interes_cobrado`). */
 export async function marcarCobrada(f: FacturaDoc, medio: MedioCobro) {
   assertEditable();
   await updateDoc(doc(db, "facturas", f.id), {
@@ -126,12 +143,13 @@ export async function marcarCobrada(f: FacturaDoc, medio: MedioCobro) {
     medio,
     cobrado_at: new Date().toISOString(),
     emitida_at: f.emitida_at ?? new Date().toISOString(),
+    interes_cobrado: interesMora(f, hoyAR()).interes,
   });
 }
 
 export async function volverAPendiente(f: FacturaDoc) {
   assertEditable();
-  await updateDoc(doc(db, "facturas", f.id), { estado: "pendiente", medio: null, cobrado_at: null });
+  await updateDoc(doc(db, "facturas", f.id), { estado: "pendiente", medio: null, cobrado_at: null, interes_cobrado: null });
 }
 
 /** Una que estaba en "no facturar" vuelve a revisión. */
@@ -162,11 +180,15 @@ const fecha = (f: string) => f.split("-").reverse().join("/");
 
 /** Texto para mandar por WhatsApp. */
 export function textoWhatsApp(f: Factura, cobro: DatosCobro): string {
+  const mora = interesMora(f, hoyAR());
   return [
-    `Hola! Te paso la ${f.tipo === "factura" ? "factura" : "boleta"} de Prodi de ${nombreMesF(f.mes)}.`,
+    `Hola! Te paso la ${f.tipo === "factura" ? "factura" : "boleta"} de Prodi de ${nombrePeriodo(f)}.`,
     ...f.items.map((i) => `• ${i.concepto}: ${ars(i.neto)}`),
     f.iva ? `IVA ${f.iva_pct}%: ${ars(f.iva)}` : "",
     `*Total: ${ars(f.bruto)}* · vence el ${fecha(f.vencimiento)}`,
+    mora.dias
+      ? `Venció hace ${mora.dias} día${mora.dias === 1 ? "" : "s"}: con el interés (0,5% por día) hoy son *${ars(mora.totalConInteres)}*.`
+      : "Después del vencimiento corre un interés del 0,5% por día.",
     f.debito ? "Se debita solo con Mercado Pago 👌" : `Podés transferir al alias *${cobro.alias}* (${cobro.banco}, a nombre de ${cobro.titular}). Mandanos el comprobante por acá. ¡Gracias!`,
   ]
     .filter(Boolean)
@@ -178,7 +200,7 @@ export function textoWhatsApp(f: Factura, cobro: DatosCobro): string {
 export function htmlBoletas(lista: Factura[], cobro: DatosCobro, logoUrl: string, imprimir = true): string {
   const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
   const f0 = lista[0];
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${lista.length === 1 ? `${f0.tipo === "factura" ? "Factura" : "Boleta"} ${esc(f0.cliente)}` : `${lista.length} boletas`} · ${nombreMesF(f0.mes)}</title>
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${lista.length === 1 ? `${f0.tipo === "factura" ? "Factura" : "Boleta"} ${esc(f0.cliente)}` : `${lista.length} boletas`} · ${nombrePeriodo(f0)}</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#fff;color:#1a1724;font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 .pag{max-width:760px;margin:0 auto;padding:40px 44px}
@@ -201,7 +223,7 @@ td{padding:10px 12px;border-bottom:1px solid #d3d0dc}.r{text-align:right;white-s
   return `<div class="pag">
 <header><img src="${logoUrl}" alt="PRODI"><div class="emp"><b>PRODI – Progreso Digital</b><br>Área administrativa · División Redes<br>Reconquista, Santa Fe</div></header>
 <h1>${f.tipo === "factura" ? "Detalle de factura" : "Boleta de pago"}${f.estado === "cobrada" ? '<span class="sello">PAGADA</span>' : ""}</h1>
-<p class="sub">Período ${nombreMesF(f.mes)}</p>
+<p class="sub">Período ${nombrePeriodo(f)}</p>
 <div class="sec"><span>01</span> Cliente</div>
 <div class="panel"><div><small>Cliente</small>${esc(f.razon_social || f.cliente)}</div><div><small>CUIT</small>${esc(f.cuit || "—")}</div>
 <div><small>Fecha</small>${fecha(f.fecha)}</div><div><small>Vence</small>${fecha(f.vencimiento)}</div></div>
@@ -217,6 +239,13 @@ ${
 <div><small>Banco</small>${esc(cobro.banco)}</div><div><small>Alias</small><b>${esc(cobro.alias)}</b></div><div style="grid-column:1/-1"><small>CBU</small>${esc(cobro.cbu)}</div></div>`
   }
 ${f.debito || f.estado === "cobrada" ? "" : '<p class="obs">Enviar el comprobante de transferencia por WhatsApp para registrar el pago.</p>'}
+${
+    f.estado === "cobrada"
+      ? f.interes_cobrado
+        ? `<p class="obs">Se cobró además ${ars(f.interes_cobrado)} de interés por mora.</p>`
+        : ""
+      : `<p class="obs">${esc(leyendaInteres(f.vencimiento))}</p>${textoMora(f, hoyAR()) ? `<p class="obs"><b>${esc(textoMora(f, hoyAR()))}</b></p>` : ""}`
+  }
 ${f.tipo === "boleta" ? '<p class="obs">Este documento es una boleta de pago y no reemplaza la factura correspondiente.</p>' : ""}
 ${f.nota && !(f.debito && f.nota.startsWith("Se cobra solo")) ? `<p class="obs">${esc(f.nota)}</p>` : ""}
 <footer><span>Progreso Digital para tu negocio</span><span>WhatsApp: ${esc(cobro.whatsapp)}</span></footer>
@@ -275,7 +304,7 @@ export const UNIDAD_POR_ROL: Record<string, { label: string; plural: string }> =
 
 /** Cuántas unidades de trabajo hizo cada persona en el mes (sale del historial). */
 export function unidadesDelMes(uid: string, role: string, mes: string, videos: Video[], piezas: PiezaIA[]): number {
-  const en = (at: string) => at.startsWith(mes);
+  const en = (at: string) => mesAR(at) === mes;
   if (role === "diseno") {
     return piezas.filter(
       (p) =>
@@ -477,18 +506,18 @@ export function libroDelMes(
   const mov: Movimiento[] = [
     ...datos.facturas
       // Lo de Mercado Pago entra por sus cobros; lo pagado por adelantado ya entró en su momento.
-      .filter((f) => f.estado === "cobrada" && f.medio !== "mercadopago" && f.medio !== "adelantado" && (f.cobrado_at ?? "").startsWith(mes))
+      .filter((f) => f.estado === "cobrada" && f.medio !== "mercadopago" && f.medio !== "adelantado" && !!f.cobrado_at && mesAR(f.cobrado_at) === mes)
       .map((f) => ({
-        fecha: (f.cobrado_at ?? f.fecha).slice(0, 10),
+        fecha: f.cobrado_at ? fechaAR(f.cobrado_at) : f.fecha.slice(0, 10),
         tipo: "Ingreso" as const,
-        concepto: `${f.tipo === "factura" ? "Factura" : "Boleta"} ${nombreMesF(f.mes)}`,
+        concepto: `${f.tipo === "factura" ? "Factura" : "Boleta"} ${nombrePeriodo(f)}${f.interes_cobrado ? " (con interés por mora)" : ""}`,
         contraparte: f.razon_social || f.cliente,
         medio: medioLabel(f.medio),
-        monto: f.bruto,
+        monto: f.bruto + (Number(f.interes_cobrado) || 0),
       })),
     ...datos.cobrosMP
-      .filter((c) => (c.pagado_at ?? c.created_at).startsWith(mes))
-      .map((c) => ({ fecha: (c.pagado_at ?? c.created_at).slice(0, 10), tipo: "Ingreso" as const, concepto: c.concepto, contraparte: c.proyecto, medio: "Mercado Pago", monto: c.monto })),
+      .filter((c) => mesAR(c.pagado_at ?? c.created_at) === mes)
+      .map((c) => ({ fecha: fechaAR(c.pagado_at ?? c.created_at), tipo: "Ingreso" as const, concepto: c.concepto, contraparte: c.proyecto, medio: "Mercado Pago", monto: c.monto })),
     ...datos.gastos
       .filter((g) => g.mes === mes)
       .map((g) => ({ fecha: g.fecha, tipo: "Egreso" as const, concepto: `${g.categoria}: ${g.concepto}`, contraparte: g.proveedor ?? "", medio: medioLabel(g.medio), monto: g.monto })),
@@ -632,14 +661,9 @@ export async function borrarObligacion(o: Obligacion) {
 /** Suma más meses a un impuesto (o cuotas a un convenio), siguiendo la última fecha. */
 export async function agregarMeses(o: Obligacion, cantidad: number) {
   const ult = [...o.cuotas].sort((a, b) => a.n - b.n).at(-1);
-  const base = ult ? generarCuotas(ult.vence, 2, ult.monto)[1].vence : hoyLocal();
+  const base = ult ? generarCuotas(ult.vence, 2, ult.monto)[1].vence : hoyAR();
   await guardarCuotas(o, [...o.cuotas, ...generarCuotas(base, cantidad, ult?.monto ?? 0, (ult?.n ?? 0) + 1)]);
 }
-
-const hoyLocal = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
 
 /** Lo que falta pagar de deuda (créditos y convenios; los impuestos son gastos del mes). */
 export function deudaRestante(lista: Obligacion[], tipo?: TipoObligacion) {
@@ -657,9 +681,9 @@ export function cuotasDelMes(lista: Obligacion[], mes: string) {
 export function cuotasPagadasDelMes(lista: Obligacion[], mes: string) {
   return lista.flatMap((o) =>
     o.cuotas
-      .filter((c) => c.pagada && (c.pagada_at ?? "").startsWith(mes))
+      .filter((c) => c.pagada && !!c.pagada_at && mesAR(c.pagada_at) === mes)
       .map((c) => ({
-        fecha: (c.pagada_at ?? c.vence).slice(0, 10),
+        fecha: c.pagada_at ? fechaAR(c.pagada_at) : c.vence,
         concepto: `${TIPOS_OBLIGACION[o.tipo].label}: ${o.nombre}${o.tipo === "impuesto" ? "" : ` (cuota ${c.n}/${o.cuotas.length})`}`,
         entidad: o.entidad ?? "",
         medio: c.medio ?? null,

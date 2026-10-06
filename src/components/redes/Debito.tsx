@@ -71,7 +71,7 @@ export function DebitoCliente({ cliente, monto, email }: { cliente: Project; mon
   );
 }
 
-/** Bloque del admin en "Informe y cobros". */
+/** Bloque del admin en "Informe y cobros". `monto`: el total de la boleta del mes (con IVA y extras). */
 export function DebitoAdmin({ cliente, monto }: { cliente: Project; monto: number }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<null | "cancelar" | "monto">(null);
@@ -80,7 +80,7 @@ export function DebitoAdmin({ cliente, monto }: { cliente: Project; monto: numbe
     setBusy(accion === "cancelar" ? "cancelar" : "monto");
     try {
       await callApi("/api/pagos/suscripcion", { proyecto_id: cliente.id, accion });
-      toast.success(accion === "cancelar" ? "Débito cancelado" : "Monto actualizado al plan actual");
+      toast.success(accion === "cancelar" ? "Débito cancelado" : "Monto actualizado al total de la boleta");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo completar");
     } finally {
@@ -98,7 +98,7 @@ export function DebitoAdmin({ cliente, monto }: { cliente: Project; monto: numbe
       )}
       {s?.estado === "activa" && monto > 0 && s.monto !== monto && (
         <p className="rounded-lg bg-warning/10 p-2 text-xs text-warning">
-          El plan ahora cuesta {formatARS(monto)} y el débito cobra {formatARS(s.monto)}.
+          La boleta del mes (con IVA y extras fijos) es de {formatARS(monto)} y el débito cobra {formatARS(s.monto)}.
         </p>
       )}
       <div className="flex flex-wrap gap-2">
@@ -169,7 +169,7 @@ function ActivarDebitoDialog({
         <DialogHeader>
           <DialogTitle>Débito automático del abono</DialogTitle>
           <DialogDescription>
-            {formatARS(monto)} por mes, con tarjeta en Mercado Pago. Se puede cancelar cuando quieras.
+            {formatARS(monto)} por mes (el total de la boleta), con tarjeta en Mercado Pago. Se puede cancelar cuando quieras.
           </DialogDescription>
         </DialogHeader>
         {link ? (

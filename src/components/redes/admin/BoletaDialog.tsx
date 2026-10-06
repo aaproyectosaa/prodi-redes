@@ -1,8 +1,7 @@
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { abrirBoleta, htmlBoletas, logoBoleta, type Factura } from "@/lib/redes/facturacion";
-import { nombreMesF } from "../../../../api/_lib/facturacion";
+import { abrirBoleta, htmlBoletas, logoBoleta, nombrePeriodo, type Factura } from "@/lib/redes/facturacion";
 import type { DatosCobro } from "@/lib/redes/types";
 
 /** La boleta tal cual le llega al cliente, con el botón para descargarla (imprimir o guardar en PDF). */
@@ -14,7 +13,7 @@ export function BoletaDialog({ f, cobro, onClose }: { f: Factura | null; cobro: 
           <>
             <DialogHeader className="text-left">
               <DialogTitle>
-                {f.tipo === "factura" ? "Factura" : "Boleta"} · {nombreMesF(f.mes)}
+                {f.tipo === "factura" ? "Factura" : "Boleta"} · {nombrePeriodo(f)}
               </DialogTitle>
               <DialogDescription>{f.razon_social || f.cliente}</DialogDescription>
             </DialogHeader>

@@ -19,6 +19,7 @@ import { ClienteTag } from "@/components/redes/ClienteTag";
 import UserAvatar from "@/components/UserAvatar";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useAppData } from "@/contexts/app-data-context";
+import { diaAR, mesAR } from "@/lib/fecha";
 import { formatARS, formatNum, hace, hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import { planDe, usoPlan } from "@/lib/redes/planes";
 import { formatoInfo } from "@/lib/redes/piezas";
@@ -26,6 +27,8 @@ import {
   ESTADO_FACTURA,
   UNIDAD_POR_ROL,
   calcularPago,
+  interesMora,
+  nombrePeriodo,
   unidadesDelMes,
   useConfigPagos,
   useFacturas,
@@ -48,7 +51,7 @@ export default function Tablero() {
   const { profiles } = useAppData();
   const mes = mesActual();
   const hoy = hoyISO();
-  const dia = new Date().getDate();
+  const dia = diaAR();
   const desde = sumarMeses(mes, -11);
   const { facturas } = useFacturas(desde);
   const cfgPagos = useConfigPagos();
@@ -60,15 +63,16 @@ export default function Tablero() {
   // Abonos según los planes (lo que se va a facturar el 27).
   const mrr = clientes.reduce((a, c) => a + planDe(c, planes).precioMensual, 0);
   const extrasDe = (m: string) =>
-    cobros.filter((c) => c.tipo !== "abono" && c.estado === "aprobado" && (c.pagado_at ?? c.created_at).startsWith(m));
+    cobros.filter((c) => c.tipo !== "abono" && c.estado === "aprobado" && mesAR(c.pagado_at ?? c.created_at) === m);
 
-  // Ingresos por mes: lo facturado (sin anuladas) + extras cobrados por Mercado Pago.
+  // Ingresos por mes: lo facturado (sin anuladas) + extras cobrados por Mercado Pago. En neto, igual
+  // que en EstadisticasAnio: el IVA de las boletas no es de PRODI (y el estimado con el abono ya es neto).
   const meses = useMemo(() => Array.from({ length: 12 }, (_, i) => sumarMeses(desde, i)), [desde]);
   const serie = meses.map((m) => {
     const fs = facturas.filter((f) => f.mes === m && f.estado !== "anulada");
     const extras = extrasDe(m).reduce((a, c) => a + c.monto, 0);
     const estimado = fs.length === 0 && m === mes;
-    const facturado = estimado ? mrr : fs.reduce((a, f) => a + f.bruto, 0);
+    const facturado = estimado ? mrr : fs.reduce((a, f) => a + f.neto, 0);
     return { m, total: facturado + extras, estimado, clientes: estimado ? clientes.length : new Set(fs.map((f) => f.proyecto_id)).size };
   });
   const actual = serie[serie.length - 1];
@@ -78,7 +82,7 @@ export default function Tablero() {
   const delMes = facturas.filter((f) => f.mes === mes && f.estado !== "anulada");
   const extrasMes = extrasDe(mes).reduce((a, c) => a + c.monto, 0);
   // Cobrado: todo lo que entró por Mercado Pago (abonos debitados y extras) + boletas cobradas por otros medios.
-  const porMP = cobros.filter((c) => c.estado === "aprobado" && (c.pagado_at ?? c.created_at).startsWith(mes)).reduce((a, c) => a + c.monto, 0);
+  const porMP = cobros.filter((c) => c.estado === "aprobado" && mesAR(c.pagado_at ?? c.created_at) === mes).reduce((a, c) => a + c.monto, 0);
   const cobrado = porMP + delMes.filter((f) => f.estado === "cobrada" && f.medio !== "mercadopago").reduce((a, f) => a + f.bruto, 0);
   const vencidas = facturas.filter((f) => f.estado === "pendiente" && f.vencimiento < hoy);
 
@@ -100,7 +104,7 @@ export default function Tablero() {
   type Pedido = { id: string; tipo: "video" | "pieza" | "extra"; clienteId: string; texto: string; monto: number | null; estado: string; at: string; ir: () => void };
   const pedidos: Pedido[] = [
     ...videos
-      .filter((v) => v.pedido_cliente && v.created_at.startsWith(mes))
+      .filter((v) => v.pedido_cliente && mesAR(v.created_at) === mes)
       .map((v) => ({
         id: v.id,
         tipo: "video" as const,
@@ -112,7 +116,7 @@ export default function Tablero() {
         ir: () => navigate(`/videos?video=${v.id}`),
       })),
     ...piezas
-      .filter((p) => p.created_at.startsWith(mes) && p.estado !== "cancelada")
+      .filter((p) => mesAR(p.created_at) === mes && p.estado !== "cancelada")
       .map((p) => ({
         id: p.id,
         tipo: "pieza" as const,
@@ -124,7 +128,7 @@ export default function Tablero() {
         ir: () => navigate(`/piezas?pieza=${p.id}`),
       })),
     ...cobros
-      .filter((c) => c.tipo === "video_extra" && c.estado === "aprobado" && c.created_at.startsWith(mes) && !(c as { pedido?: unknown }).pedido)
+      .filter((c) => c.tipo === "video_extra" && c.estado === "aprobado" && mesAR(c.created_at) === mes && !(c as { pedido?: unknown }).pedido)
       .map((c) => ({
         id: c.id,
         tipo: "extra" as const,
@@ -169,7 +173,7 @@ export default function Tablero() {
       oportunidades.push({ tipo: "dato", ir: `/clientes/${c.id}?tab=config`, texto: `${c.nombre} no tiene plan: no se le factura el 27.` });
   }
   for (const f of vencidas.slice(0, 3))
-    oportunidades.unshift({ tipo: "riesgo", ir: "/cobros", texto: `${f.cliente} tiene vencida la ${f.tipo} de ${mesLabel(f.mes).toLowerCase()} (${formatARS(f.bruto)}).` });
+    oportunidades.unshift({ tipo: "riesgo", ir: "/cobros", texto: `${f.cliente} tiene vencida la ${f.tipo} de ${nombrePeriodo(f)} (${formatARS(interesMora(f, hoy).totalConInteres)} con interés).` });
 
   const faltan27 = dia <= 27 ? 27 - dia : null;
   const paraRevisar = delMes.filter((f) => f.estado === "borrador").length;

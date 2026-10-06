@@ -37,8 +37,11 @@ import { useRedes } from "@/contexts/redes-data-context";
 import { formatARS, hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import { planDe } from "@/lib/redes/planes";
 import {
+  DIA_VENCIMIENTO,
   MEDIOS,
   anularFactura,
+  periodoDe,
+  textoMora,
   descargarPlanilla,
   emitirAClientes,
   prepararFacturacion,
@@ -91,7 +94,7 @@ export default function Cobros() {
   // y las que ya estaban armadas (el 27 se arman solas) pero no se mandaron.
   const porEmitir: PorEmitir[] = useMemo(() => {
     const ivaPct = settings.iva_pct ?? 21;
-    const dia = settings.dia_vencimiento ?? 10;
+    const dia = settings.dia_vencimiento ?? DIA_VENCIMIENTO;
     const filas: PorEmitir[] = borradores.map((f) => ({ pid: f.proyecto_id, f, doc: f }));
     for (const c of clientes) {
       if (facturas.some((f) => f.proyecto_id === c.id)) continue;
@@ -161,7 +164,7 @@ export default function Cobros() {
   return (
     <PageShell
       title="Cobros a clientes"
-      subtitle="Elegís a quién emitirle la boleta del mes y después marcás lo que te pagaron."
+      subtitle={`El 27 de ${mesLabel(mes).split(" ")[0].toLowerCase()} se emiten las boletas de ${mesLabel(periodoDe(mes)).toLowerCase()}: vencen el 5 y después corre un 0,5% de interés por día.`}
       actions={
         <>
           {vivas.length > 0 && (
@@ -169,7 +172,8 @@ export default function Cobros() {
               <FileSpreadsheet className="mr-1.5 h-4 w-4" /> Planilla
             </Button>
           )}
-          <MesNav mes={mes} setMes={setMes} max={sumarMeses(mesActual(), 1)} />
+          {/* Se navega por el mes en que se emiten (el del 27), pero se muestra el período que cubren. */}
+          <MesNav mes={mes} setMes={setMes} max={sumarMeses(mesActual(), 1)} etiqueta={(m) => `Boletas de ${mesLabel(periodoDe(m)).toLowerCase()}`} />
         </>
       }
     >
@@ -250,7 +254,10 @@ export default function Cobros() {
                     <span className="hidden text-xs text-muted-foreground sm:inline">
                       {MEDIOS.find((m) => m.value === f.medio)?.label ?? "Cobrada"}
                     </span>
-                    <span className="tabular-nums">{formatARS(f.bruto)}</span>
+                    <span className="tabular-nums">
+                      {formatARS(f.bruto)}
+                      {f.interes_cobrado ? <span className="ml-1 text-xs text-muted-foreground">+ {formatARS(f.interes_cobrado)} interés</span> : null}
+                    </span>
                     <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setVer(f)} aria-label="Ver boleta">
                       <Eye className="h-4 w-4" />
                     </Button>
@@ -347,7 +354,7 @@ function PasoEmitir({
       ) : (
         <>
           <Ayuda>
-            Tildá a quién le querés emitir la boleta de {mesLabel(mes).toLowerCase()} y tocá <b>Emitir</b>. Le llega a su panel con un aviso y una copia por mail. Tocá <b>Ver</b> para mirarla antes.
+            Tildá a quién le querés emitir la boleta de {mesLabel(periodoDe(mes)).toLowerCase()} y tocá <b>Emitir</b>. Le llega a su panel con un aviso y una copia por mail. Tocá <b>Ver</b> para mirarla antes.
           </Ayuda>
           <div className="flex flex-wrap items-center justify-between gap-2 px-1">
             <label className="flex cursor-pointer items-center gap-2.5 text-xs text-muted-foreground">
@@ -466,13 +473,15 @@ function PasoCobrar({ lista, hoy, cobro, onVer }: { lista: FacturaDoc[]; hoy: st
   return (
     <div className="space-y-3">
       <Ayuda>
-        Cuando te paguen, tocá <b>Cobrada</b> y elegí cómo pagó. Las vencidas aparecen primero. A los que deben les mandamos un recordatorio solo (2 días antes y a los 1, 7 y 15 días de vencida).
+        Cuando te paguen, tocá <b>Cobrada</b> y elegí cómo pagó. Las vencidas aparecen primero, con el interés del 0,5% por día a hoy (queda
+        guardado lo que se cobró al marcarla). A los que deben les mandamos un recordatorio solo (2 días antes y a los 1, 7 y 15 días de vencida).
       </Ayuda>
       <Seleccion lista={lista} sel={sel} setSel={setSel}>
         {elegidas.length > 0 && <MenuCobrar label={`Cobradas (${elegidas.length})`} onElegir={(m) => void cobrar(elegidas, m)} />}
       </Seleccion>
       {lista.map((f, i) => {
         const vencida = f.vencimiento < hoy;
+        const mora = textoMora(f, hoy);
         return (
           <Fila
             key={f.id}
@@ -485,6 +494,7 @@ function PasoCobrar({ lista, hoy, cobro, onVer }: { lista: FacturaDoc[]; hoy: st
               <span className={cn("text-[11px]", vencida ? "font-semibold text-destructive" : "text-muted-foreground")}>
                 {vencida ? <AlertTriangle className="mr-1 inline h-3 w-3" /> : null}
                 {vencida ? "Venció" : "Vence"} el {f.vencimiento.split("-").reverse().slice(0, 2).join("/")}
+                {mora ? <span className="block">{mora}</span> : null}
                 {(f as FacturaDoc & { mail_enviado_at?: string }).mail_enviado_at ? (
                   <span className="ml-2 text-muted-foreground">
                     <Mail className="mr-0.5 inline h-3 w-3" /> mail enviado

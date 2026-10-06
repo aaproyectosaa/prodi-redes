@@ -17,6 +17,7 @@ import { PageShell, Section } from "@/components/redes/PageShell";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useAppData } from "@/contexts/app-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
+import { diaAR, sumarDias } from "@/lib/fecha";
 import { formatARS, hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import { planDe } from "@/lib/redes/planes";
 import { useLibroMes } from "@/lib/redes/libro";
@@ -25,6 +26,7 @@ import {
   cuotasDelMes,
   deudaRestante,
   descargarLibro,
+  periodoDe,
   unidadesDelMes,
   useConfigPagos,
   useFacturas,
@@ -60,7 +62,7 @@ export default function Administracion() {
   const mes = mesActual();
   const mesAnt = sumarMeses(mes, -1);
   const hoy = hoyISO();
-  const dia = new Date().getDate();
+  const dia = diaAR();
   const { facturas } = useFacturas(sumarMeses(mes, -6));
   const gastosTodos = useGastos(mesAnt);
   const liqs = useLiquidaciones(mesAnt);
@@ -95,7 +97,7 @@ export default function Administracion() {
   const faltanFijos = gastosTodos.filter((p) => p.mes === mesAnt && p.fijo && !gastos.some((g) => g.fijo && g.concepto === p.concepto));
 
   // ---- Deudas
-  const proximas = vencimientos(obligaciones, hoyISO(new Date(Date.now() + 7 * 864e5)));
+  const proximas = vencimientos(obligaciones, sumarDias(hoy, 7));
   const vencDeudas = proximas.filter((v) => v.c.vence < hoy);
   const semana = proximas.filter((v) => v.c.vence >= hoy);
   const cuotasMes = cuotasDelMes(obligaciones, mes);
@@ -128,7 +130,8 @@ export default function Administracion() {
       id: "emitir",
       urgencia: dia >= 27 ? "alta" : "media",
       icono: Send,
-      titulo: `Emitir las boletas de ${mesCorto(mes)} (${sinEmitir} sin emitir)`,
+      // Las que se emiten el 27 de este mes cubren el mes siguiente.
+      titulo: `Emitir las boletas de ${mesCorto(periodoDe(mes))} (${sinEmitir} sin emitir)`,
       detalle: dia >= 27 ? "Hoy es día de facturar. Elegís a quién y le llega a su panel y por mail." : `Se factura el 27. Faltan ${27 - dia} días.`,
       cta: "Emitir",
       ir: "/cobros",
@@ -136,7 +139,7 @@ export default function Administracion() {
   semana.forEach((v) =>
     tareas.push({
       id: `vence-${v.o.id}-${v.c.n}`,
-      urgencia: v.c.vence <= hoyISO(new Date(Date.now() + 3 * 864e5)) ? "media" : "info",
+      urgencia: v.c.vence <= sumarDias(hoy, 3) ? "media" : "info",
       icono: CalendarClock,
       titulo: `${v.c.vence === hoy ? "Hoy vence" : `El ${ddmm(v.c.vence)} vence`} ${v.o.nombre}`,
       detalle: `${formatARS(v.c.monto)}${v.o.tipo === "impuesto" ? "" : ` · cuota ${v.c.n} de ${v.o.cuotas.length}`}`,

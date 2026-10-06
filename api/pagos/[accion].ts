@@ -9,13 +9,14 @@
 //      → si entra en el plan se crea; si no, se cobra como video extra y se crea al pagar
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { adminDb } from "../_lib/db";
+import { adminDb, aplicarEscritura, ejecutarConsulta, enTransaccion, leerDoc, type Data, type DocRef, type Query } from "../_lib/db";
 import { appUrl, assertProjectAccess, body, HttpError, requireCaller, sendError } from "../_lib/http";
 import {
   actualizarSuscripcion,
   buscarPagos,
   crearPreferencia,
   crearSuscripcion,
+  faltaSecretoWebhook,
   firmaValida,
   obtenerCobroSuscripcion,
   obtenerPago,
@@ -27,9 +28,10 @@ import { aplicarPago, estadoSuscripcion, precioAbono, proyectoDeSuscripcion, reg
 import { destinatariosDe, enviarAviso, usuariosConRol } from "../_lib/notify";
 import { FORMATOS_PIEZA, leerPedidoPieza, piezaDoc, precioPieza } from "../_lib/piezas";
 import { prepararFacturacion } from "../_lib/facturar";
-import { asuntoFactura, facturaId, mailFacturaHtml, type Factura } from "../_lib/facturacion";
+import { asuntoFactura, facturaId, mailFacturaHtml, periodoDe, saldoDe, type Factura } from "../_lib/facturacion";
 import { enviarMail } from "../_lib/informe";
 import { videoDesdePedido } from "../_lib/pedidos";
+import { hoyAR, mesAR, sumarMeses } from "../_lib/fecha";
 
 export const config = { maxDuration: 30 };
 
@@ -132,11 +134,12 @@ async function webhook(req: VercelRequest) {
   if (!id || !["payment", "subscription_preapproval", "subscription_authorized_payment"].includes(tipo)) {
     return { ok: true, ignorado: true };
   }
-  // Sin firma solo se aceptan las notificaciones viejas (IPN) de pagos; igual se consultan a la API de MP.
-  const firmado = !!req.headers["x-signature"];
-  if (!firmado && process.env.MP_WEBHOOK_SECRET && tipo !== "payment") {
-    throw new HttpError(401, "Falta la firma");
+  // En producción sin secreto no se procesa nada (Mercado Pago reintenta cuando se configure).
+  if (faltaSecretoWebhook()) {
+    console.error("[pagos] falta MP_WEBHOOK_SECRET en producción: webhook rechazado");
+    throw new HttpError(503, "Webhook sin configurar");
   }
+  // Con secreto, toda notificación (también las de pagos) tiene que venir firmada y bien.
   if (!firmaValida(req.headers as Record<string, unknown>, id)) {
     throw new HttpError(401, "Firma inválida");
   }
@@ -328,8 +331,33 @@ async function reembolsarPieza(req: VercelRequest) {
   return { ok: true };
 }
 
-/** Mes actual en Argentina (YYYY-MM). */
-const mesAR = () => new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 7);
+/**
+ * Cuenta lo usado del mes y crea el documento si entra, en una transacción con un lock por cliente
+ * y mes: el FOR UPDATE de la consulta no frena los inserts nuevos, el lock sí (dos pedidos a la vez
+ * no se pasan del plan).
+ */
+async function crearSiHayCupo(o: {
+  /** Qué se cuenta ("pieza" / "video"): va en la clave del lock junto con el cliente y el mes. */
+  tipo: string;
+  pid: string;
+  mes: string;
+  /** Lo que ya hay del mes (se filtra con `usado`). */
+  consulta: Query;
+  usado: (d: Data) => boolean;
+  /** Cupo según el cliente (se lee dentro de la transacción: los créditos extra pueden cambiar). */
+  cupo: (proyecto: Data) => number;
+  ref: DocRef;
+  data: () => Data;
+}): Promise<boolean> {
+  return enTransaccion(async (cli) => {
+    await cli.query("select pg_advisory_xact_lock(hashtext($1))", [`${o.tipo}:${o.pid}:${o.mes}`]);
+    const proyecto = (await leerDoc(cli, "projects", o.pid)) ?? {};
+    const usados = (await ejecutarConsulta(cli, o.consulta.consulta)).filter((f) => o.usado(f.data)).length;
+    if (usados >= o.cupo(proyecto)) return false;
+    await aplicarEscritura(cli, { tipo: "create", coleccion: o.ref.coleccion, id: o.ref.id, data: o.data() });
+    return true;
+  });
+}
 
 /**
  * El cliente pide una pieza gráfica. Si le quedan piezas del plan este mes, se crea y le llega
@@ -354,13 +382,16 @@ async function pedirPieza(req: VercelRequest) {
   const base = appUrl(req);
   const ref = db.collection("piezas_ia").doc();
 
-  // Se cuenta y se crea en una transacción: dos pedidos a la vez no se pasan del plan.
-  const incluida = await db.runTransaction(async (tx) => {
-    const q = await tx.get(db.collection("piezas_ia").where("proyecto_id", "==", pid).where("mes", "==", mes));
-    const usadas = q.docs.filter((d) => d.data().incluida === true && !["cancelada", "rechazada"].includes(d.data().estado)).length;
-    const entra = usadas < incluidas;
-    if (entra) tx.set(ref, piezaDoc(pid, caller.uid, mes, pedido, true, 0));
-    return entra;
+  // Se cuenta y se crea con lock: dos pedidos a la vez no se pasan del plan.
+  const incluida = await crearSiHayCupo({
+    tipo: "pieza",
+    pid,
+    mes,
+    consulta: db.collection("piezas_ia").where("proyecto_id", "==", pid).where("mes", "==", mes),
+    usado: (d) => d.incluida === true && !["cancelada", "rechazada"].includes(d.estado),
+    cupo: () => incluidas,
+    ref,
+    data: () => piezaDoc(pid, caller.uid, mes, pedido, true, 0),
   });
 
   if (incluida) {
@@ -457,11 +488,21 @@ async function emitir(req: VercelRequest) {
     const team = (p.team_roles ?? {}) as Record<string, string[]>;
     const link = `/cliente?tab=plan&factura=${id}`;
     const doc = f.tipo === "factura" ? "factura" : "boleta";
+    const ars = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n || 0);
+    const vto = f.vencimiento.split("-").reverse().slice(0, 2).join("/");
+    // Si el débito automático no cubrió todo (monto viejo en la suscripción), el cliente paga la diferencia.
+    const saldo = f.debitado ? saldoDe(f) : 0;
     await enviarAviso(
       {
         destinatarios: team.cliente ?? [],
-        titulo: `Tu ${doc} de ${MESES[Number(f.mes.slice(5)) - 1]}`,
-        cuerpo: `Total ${new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(f.bruto)}${f.debito ? " · se debita solo" : ` · vence el ${f.vencimiento.split("-").reverse().slice(0, 2).join("/")}`}`,
+        titulo: `Tu ${doc} de ${MESES[Number(periodoDe(f.mes).slice(5)) - 1]}`,
+        cuerpo: `Total ${ars(f.bruto)}${
+          saldo > 0
+            ? ` · falta pagar ${ars(saldo)}, vence el ${vto} (después, 0,5% de interés por día)`
+            : f.debito
+              ? " · se debita solo"
+              : ` · vence el ${vto} (después, 0,5% de interés por día)`
+        }`,
         link,
         clave: `factura:${id}`,
         proyectoId: f.proyecto_id,
@@ -492,15 +533,17 @@ async function emitir(req: VercelRequest) {
 async function pedirVideo(req: VercelRequest) {
   const caller = await requireCaller(req, ["cliente", "admin"]);
   const b = body<{ proyecto_id?: string; mes?: string; fecha_deseada?: string | null; titulo?: string; idea?: string; objetivo?: string }>(req);
-  // Con fecha, el mes sale de la fecha (no puede ser pasada ni a más de 4 meses).
+  // Con fecha, el mes sale de la fecha (no puede ser pasada). Con o sin fecha, el mes tiene que ser
+  // este o uno de los 3 siguientes (hora de Argentina): si no, cada mes viejo o lejano daría su cupo gratis.
   const fecha = /^\d{4}-\d{2}-\d{2}$/.test(String(b.fecha_deseada ?? "")) ? String(b.fecha_deseada) : null;
+  const mesActual = mesAR();
+  const mesTope = sumarMeses(mesActual, 3);
   if (fecha) {
-    const hoy = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
-    const tope = new Date(Date.now() + 125 * 86_400_000).toISOString().slice(0, 10);
-    if (fecha < hoy || fecha > tope) throw new HttpError(400, "Elegí una fecha entre hoy y los próximos 3 meses");
+    if (fecha < hoyAR() || fecha.slice(0, 7) > mesTope) throw new HttpError(400, "Elegí una fecha entre hoy y los próximos 3 meses");
     b.mes = fecha.slice(0, 7);
   }
   if (!b.proyecto_id || !/^\d{4}-\d{2}$/.test(String(b.mes))) throw new HttpError(400, "Datos incompletos");
+  if (String(b.mes) < mesActual || String(b.mes) > mesTope) throw new HttpError(400, "Elegí este mes o uno de los próximos 3");
   await assertProjectAccess(caller, b.proyecto_id);
   const titulo = String(b.titulo ?? "").trim().slice(0, 120);
   if (titulo.length < 3) throw new HttpError(400, "Contanos de qué se trata el video");
@@ -524,16 +567,23 @@ async function pedirVideo(req: VercelRequest) {
     if (isNaN(precioExtra)) precioExtra = Number(plan.precio_video_extra ?? 0);
   }
   incluidos = incluidos || 0;
-  const cupo = incluidos + Number(proj.creditos_extra?.[mes] ?? 0);
-  const videosMes = await db.collection("videos").where("proyecto_id", "==", b.proyecto_id).where("mes", "==", mes).get();
-  const usados = videosMes.docs.filter((d) => d.data().extra !== true).length;
   const team = (proj.team_roles ?? {}) as Record<string, string[]>;
   const base = appUrl(req);
 
-  // Entra en el plan: se crea directo y producción recibe el aviso.
-  if (usados < cupo) {
-    const ref = db.collection("videos").doc();
-    await ref.set(videoDesdePedido(b.proyecto_id, team, mes, pedido, "Pedido por el cliente"));
+  // Entra en el plan: se crea directo y producción recibe el aviso. Se cuenta y se crea con lock
+  // por cliente y mes, así dos pedidos a la vez no se pasan del cupo.
+  const ref = db.collection("videos").doc();
+  const entra = await crearSiHayCupo({
+    tipo: "video",
+    pid: b.proyecto_id,
+    mes,
+    consulta: db.collection("videos").where("proyecto_id", "==", b.proyecto_id).where("mes", "==", mes),
+    usado: (d) => d.extra !== true,
+    cupo: (p) => incluidos + Number(p.creditos_extra?.[mes] ?? 0),
+    ref,
+    data: () => videoDesdePedido(b.proyecto_id!, team, mes, pedido, "Pedido por el cliente"),
+  });
+  if (entra) {
     await enviarAviso(
       {
         destinatarios: team.productor ?? [],

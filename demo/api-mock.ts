@@ -3,7 +3,7 @@
 import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, demoStore, doc, increment, setDoc, updateDoc } from "./firestore-mock";
 import { renderInformeHtml } from "../api/_lib/informe-html";
 import { FORMATOS_PIEZA, leerPedidoPieza, piezaDoc, precioPieza } from "../api/_lib/piezas";
-import { armarFactura } from "../api/_lib/facturacion";
+import { armarFactura, totalMensual } from "../api/_lib/facturacion";
 import {
   limpiarComercial,
   aprendizajeAjuste,
@@ -46,7 +46,7 @@ async function prepararDemo(mes: string, proyectoIds: string[] | null) {
         const f = armarFactura(
           { id: p.id, nombre: p.nombre, abono, planNombre: plan?.nombre, facturacion: p.facturacion, debitoActivo: p.suscripcion?.estado === "activa", abonoDebitado: debitado },
           mes,
-          { ivaPct: settings.iva_pct ?? 21, diaVencimiento: settings.dia_vencimiento ?? 10, por: "u_lucas", hoy }
+          { ivaPct: settings.iva_pct ?? 21, diaVencimiento: settings.dia_vencimiento ?? 5, por: "u_lucas", hoy }
         );
         await setDoc(doc(db, "facturas", id), f);
         creadas++;
@@ -88,10 +88,13 @@ export async function imagenParaSubir(file: File, max = 420): Promise<{ data: st
   return { data: canvas.toDataURL("image/png"), mime: "image/png", nombre: file.name };
 }
 
+/** Lo que cobra el débito: el total de la boleta (con IVA y extras fijos), igual que en el servidor. */
 function precioAbonoDemo(pid: string): number {
   const p = demoStore.get("projects", pid);
   const plan = demoStore.get("planes_redes", p?.plan_redes_id);
-  return Number(p?.plan_redes_override?.precio_mensual ?? plan?.precio_mensual ?? 0);
+  const settings = demoStore.get("app_settings", "redes") ?? {};
+  const abono = Number(p?.plan_redes_override?.precio_mensual ?? plan?.precio_mensual ?? 0);
+  return abono > 0 ? totalMensual({ abono, facturacion: p?.facturacion ?? null }, settings.iva_pct ?? 21) : 0;
 }
 
 async function videoPublico(t: string) {

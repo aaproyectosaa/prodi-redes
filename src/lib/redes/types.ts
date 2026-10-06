@@ -366,7 +366,7 @@ export const DATOS_COBRO_DEFAULT: DatosCobro = {
 export const DEFAULT_REDES_SETTINGS: RedesSettings = {
   precio_pieza_ia: 15000,
   precio_pieza_impresion: 25000,
-  dia_vencimiento: 10,
+  dia_vencimiento: 5,
   iva_pct: 21,
   cobro: DATOS_COBRO_DEFAULT,
   dias_alerta: 3,

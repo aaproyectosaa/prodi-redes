@@ -63,6 +63,7 @@ import {
   htmlBoleta,
   marcarCobrada,
   marcarPagado,
+  nombrePeriodo,
   prepararFacturacion,
   textoWhatsApp,
   unidadesDelMes,
@@ -82,13 +83,24 @@ import { cn } from "@/lib/utils";
 const err = (e: unknown) => toast.error(e instanceof Error ? e.message : "Algo salió mal");
 
 /** Navegación de mes (◀ Octubre 2026 ▶) para las pantallas de administración. */
-export function MesNav({ mes, setMes, max }: { mes: string; setMes: (m: string) => void; max?: string }) {
+export function MesNav({
+  mes,
+  setMes,
+  max,
+  etiqueta = mesLabel,
+}: {
+  mes: string;
+  setMes: (m: string) => void;
+  max?: string;
+  /** Cómo se muestra el mes (por defecto, "Octubre 2026"). */
+  etiqueta?: (m: string) => string;
+}) {
   return (
     <div className="flex items-center gap-1 rounded-lg border p-0.5">
       <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setMes(sumarMeses(mes, -1))} aria-label="Mes anterior">
         <ChevronLeft className="h-4 w-4" />
       </Button>
-      <span className="min-w-[128px] text-center text-sm font-semibold">{mesLabel(mes)}</span>
+      <span className="min-w-[128px] text-center text-sm font-semibold">{etiqueta(mes)}</span>
       <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setMes(sumarMeses(mes, 1))} disabled={!!max && mes >= max} aria-label="Mes siguiente">
         <ChevronRight className="h-4 w-4" />
       </Button>
@@ -329,7 +341,7 @@ export function EditarFacturaDialog({ f, onClose, ivaPct }: { f: FacturaDoc | nu
       <DialogContent className="sm:max-h-[94dvh] w-[calc(100vw-1.5rem)] max-w-lg overflow-y-auto rounded-2xl">
         <DialogHeader>
           <DialogTitle>{f.cliente}</DialogTitle>
-          <DialogDescription>{mesLabel(f.mes)}</DialogDescription>
+          <DialogDescription>Período {nombrePeriodo(f)}</DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-1 rounded-xl border bg-muted/40 p-1">
           {(["boleta", "factura"] as const).map((t) => (

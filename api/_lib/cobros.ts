@@ -5,7 +5,9 @@ import { adminDb } from "./db";
 import type { PagoMP } from "./mercadopago";
 import { destinatariosDe, enviarAviso, usuariosConRol } from "./notify";
 import { marcarCobradaPorDebito } from "./facturar";
+import { totalMensual } from "./facturacion";
 import { videoDesdePedido, type PedidoVideo } from "./pedidos";
+import { mesAR } from "./fecha";
 
 const ESTADO: Record<string, string> = {
   approved: "aprobado",
@@ -160,20 +162,29 @@ const ESTADO_SUSCRIPCION: Record<string, string> = {
 
 export const estadoSuscripcion = (status: string) => ESTADO_SUSCRIPCION[status] ?? status;
 
-/** Precio del abono del cliente (ajuste propio o el del plan). */
-export async function precioAbono(proyectoId: string): Promise<{ nombre: string; plan: string; monto: number }> {
+/**
+ * Lo que tiene que cobrar el débito automático: el total de la boleta del mes (abono + extras fijos +
+ * IVA si es factura), calculado con la misma función que la boleta. `neto` es el abono solo.
+ */
+export async function precioAbono(proyectoId: string): Promise<{ nombre: string; plan: string; neto: number; monto: number }> {
   const db = adminDb();
-  const p = (await db.collection("projects").doc(proyectoId).get()).data() ?? {};
-  let monto = Number(p.plan_redes_override?.precio_mensual ?? 0);
+  const [p, settings] = await Promise.all([
+    db.collection("projects").doc(proyectoId).get().then((s) => s.data() ?? {}),
+    db.collection("app_settings").doc("redes").get().then((s) => s.data() ?? {}),
+  ]);
+  // Mismo criterio que la boleta del 27 (facturar.ts): el ajuste del cliente pisa el precio del plan.
+  let neto = Number(p.plan_redes_override?.precio_mensual ?? NaN);
   let plan = "Plan";
   if (p.plan_redes_id) {
     const pl = (await db.collection("planes_redes").doc(p.plan_redes_id).get()).data();
     if (pl) {
       plan = pl.nombre ?? plan;
-      if (!(monto > 0)) monto = Number(pl.precio_mensual ?? 0);
+      if (isNaN(neto)) neto = Number(pl.precio_mensual ?? 0);
     }
   }
-  return { nombre: p.nombre ?? "Cliente", plan, monto };
+  neto = neto || 0;
+  const monto = neto > 0 ? totalMensual({ abono: neto, facturacion: p.facturacion ?? null }, Number(settings.iva_pct ?? 21)) : 0;
+  return { nombre: p.nombre ?? "Cliente", plan, neto, monto };
 }
 
 /** Busca el cliente de una suscripción. */
@@ -194,21 +205,27 @@ export async function registrarAbono(
   const nuevo = ESTADO[datos.status];
   if (!nuevo) return "pendiente";
   const ref = db.collection("cobros").doc(`abono_${datos.paymentId}`);
-  const fecha = datos.fecha ? new Date(datos.fecha) : new Date();
-  const ar = new Date(fecha.getTime() - 3 * 3600_000);
-  const mes = `${ar.getUTCFullYear()}-${String(ar.getUTCMonth() + 1).padStart(2, "0")}`;
+  const f = datos.fecha ? new Date(datos.fecha) : new Date();
+  const fecha = isNaN(f.getTime()) ? new Date() : f;
+  // El mes del abono es el del débito, en hora de Argentina.
+  const mes = mesAR(fecha);
+  const [anio, nMes] = mes.split("-").map(Number);
   let esNuevo = false;
+  let esperado = 0;
   const pRef = db.collection("projects").doc(datos.proyectoId);
   await db.runTransaction(async (tx) => {
     esNuevo = false;
     const snap = await tx.get(ref);
     const pSnap = await tx.get(pRef);
+    // Lo que se acordó debitar: si MP cobró otra cosa, queda marcado para revisar.
+    esperado = Number(pSnap.data()?.suscripcion?.monto ?? 0) || 0;
+    const distinto = esperado > 0 && Math.abs(datos.monto - esperado) > 0.5;
     if (!snap.exists) {
       esNuevo = nuevo === "aprobado";
       tx.set(ref, {
         proyecto_id: datos.proyectoId,
         tipo: "abono",
-        concepto: `Abono ${MESES_AB[ar.getUTCMonth()]} ${ar.getUTCFullYear()} · débito automático`,
+        concepto: `Abono ${MESES_AB[nMes - 1]} ${anio} · débito automático`,
         ref_id: mes,
         cantidad: 1,
         monto: datos.monto,
@@ -217,6 +234,8 @@ export async function registrarAbono(
         mp_payment_id: datos.paymentId,
         created_by: "mercadopago",
         created_at: new Date().toISOString(),
+        ...(esperado > 0 ? { monto_esperado: esperado } : {}),
+        ...(distinto ? { monto_distinto: true } : {}),
         ...(nuevo === "aprobado" ? { pagado_at: fecha.toISOString() } : {}),
       });
     } else if (snap.data()!.estado !== nuevo && !(snap.data()!.estado === "aprobado" && nuevo !== "reembolsado")) {
@@ -230,13 +249,19 @@ export async function registrarAbono(
     }
   });
   if (esNuevo) {
-    await marcarCobradaPorDebito(datos.proyectoId, mes).catch((err) => console.warn("[abono] factura", err));
+    // Paga la última boleta emitida y pendiente del cliente (no la del mes del débito).
+    await marcarCobradaPorDebito(datos.proyectoId, datos.monto, ref.id).catch((err) => console.warn("[abono] factura", err));
     const p = (await db.collection("projects").doc(datos.proyectoId).get()).data() ?? {};
+    const distinto = esperado > 0 && Math.abs(datos.monto - esperado) > 0.5;
+    if (distinto) console.warn("[abono] monto distinto al esperado", datos.paymentId, datos.monto, esperado);
+    const ars = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n || 0);
     await enviarAviso(
       {
         destinatarios: await destinatariosDe(datos.proyectoId, [], true),
-        titulo: "Se cobró un abono",
-        cuerpo: `${p.nombre ?? "Cliente"} · débito automático`,
+        titulo: distinto ? "Se cobró un abono con otro monto" : "Se cobró un abono",
+        cuerpo: distinto
+          ? `${p.nombre ?? "Cliente"} · Mercado Pago debitó ${ars(datos.monto)} y esperábamos ${ars(esperado)}. Revisalo.`
+          : `${p.nombre ?? "Cliente"} · débito automático`,
         link: `/clientes/${datos.proyectoId}?tab=informe`,
         clave: `abono:${datos.paymentId}`,
         proyectoId: datos.proyectoId,

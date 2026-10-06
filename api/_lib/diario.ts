@@ -1,28 +1,23 @@
 // Tareas diarias (cron): aviso al cliente el día antes del rodaje (o el mismo día si se agendó tarde),
 // y recordatorios al cliente que no aprobó un video o no respondió el plan del mes en 48 h.
 
-import { FieldValue } from "./db";
+import { FieldValue, type Data } from "./db";
 import { adminDb } from "./db";
 import { enviarAviso } from "./notify";
 import { crearTokenAprobacion } from "./aprobacion";
 import { prepararFacturacion } from "./facturar";
-import { asuntoRecordatorio, mailFacturaHtml, type Factura } from "./facturacion";
+import { asuntoRecordatorio, interesMora, mailFacturaHtml, nombreMesF, periodoDe, saldoDe, type Factura } from "./facturacion";
 import { enviarMail } from "./informe";
+import { hoyAR, sumarDias } from "./fecha";
 
 const H48 = 48 * 3600_000;
 /** Máximo de recordatorios por video en revisión (después le escribe el equipo). */
 export const MAX_RECORDATORIOS = 3;
 
-/** Fecha YYYY-MM-DD en Argentina, con un corrimiento de días. */
-export function fechaAR(dias = 0, now = new Date()): string {
-  const ar = new Date(now.getTime() - 3 * 3600_000 + dias * 86_400_000);
-  return ar.toISOString().slice(0, 10);
-}
-
 export async function recordatoriosRodaje(base: string): Promise<number> {
   const db = adminDb();
-  const hoy = fechaAR(0);
-  const manana = fechaAR(1);
+  const hoy = hoyAR();
+  const manana = sumarDias(hoy, 1);
   // Mañana, y también hoy por si el rodaje se agendó o se movió después del aviso de ayer.
   const snap = await db.collection("rodajes").where("fecha", "in", [hoy, manana]).get();
   let enviados = 0;
@@ -78,14 +73,14 @@ export async function recordatoriosRodaje(base: string): Promise<number> {
 export async function recordatoriosAprobacion(base: string): Promise<number> {
   const db = adminDb();
   const limite = new Date(Date.now() - H48).toISOString();
-  const vence = (v: Record<string, any>) =>
+  const vence = (v: Data) =>
     v.etapa === "revision_cliente" &&
     !v.demo_ejemplo &&
     String(v.etapa_desde ?? "") <= limite &&
     Number(v.recordatorios_cliente ?? 0) < MAX_RECORDATORIOS &&
     (!v.recordatorio_cliente_at || String(v.recordatorio_cliente_at) <= limite);
   const snap = await db.collection("videos").where("etapa", "==", "revision_cliente").get();
-  const proyectos = new Map<string, Record<string, any>>();
+  const proyectos = new Map<string, Data>();
   let enviados = 0;
   for (const d of snap.docs) {
     if (!vence(d.data())) continue;
@@ -139,7 +134,7 @@ export async function recordatoriosAprobacion(base: string): Promise<number> {
 export async function recordatoriosPlan(base: string): Promise<number> {
   const db = adminDb();
   const limite = new Date(Date.now() - H48).toISOString();
-  const vence = (x: Record<string, any>) =>
+  const vence = (x: Data) =>
     x.estado === "enviado" &&
     !x.demo_ejemplo &&
     String(x.enviado_at ?? "") <= limite &&
@@ -176,9 +171,12 @@ export async function recordatoriosPlan(base: string): Promise<number> {
   return enviados;
 }
 
-/** El 27 de cada mes se prepara la facturación y se le avisa al super admin. */
+/**
+ * El 27 de cada mes se prepara la facturación del mes siguiente (se cobra por adelantado, vence el 5)
+ * y se le avisa al super admin. Las boletas se guardan con `mes` = el mes de hoy (ver facturacion.ts).
+ */
 export async function facturacionDel27(base: string): Promise<string> {
-  const hoy = fechaAR(0);
+  const hoy = hoyAR();
   if (hoy.slice(8) !== "27") return "no es 27";
   const mes = hoy.slice(0, 7);
   const r = await prepararFacturacion(mes, "cron");
@@ -188,7 +186,7 @@ export async function facturacionDel27(base: string): Promise<string> {
       {
         destinatarios: admins.docs.map((d) => d.id),
         titulo: "Hoy es 27: a emitir las boletas 🧾",
-        cuerpo: `Están listas las de ${r.creadas} cliente${r.creadas === 1 ? "" : "s"}. Entrá a Cobros, elegí a quién emitirle y les llega por la app y por mail.`,
+        cuerpo: `Están listas las de ${nombreMesF(periodoDe(mes))} de ${r.creadas} cliente${r.creadas === 1 ? "" : "s"} (vencen el 5). Entrá a Cobros, elegí a quién emitirle y les llega por la app y por mail.`,
         link: `/cobros?mes=${mes}`,
         clave: `facturacion:${mes}`,
       },
@@ -201,8 +199,8 @@ export async function facturacionDel27(base: string): Promise<string> {
 /** Cuotas de créditos, convenios con ARCA e impuestos: aviso 3 días antes y el día que vencen. */
 export async function vencimientosObligaciones(base: string): Promise<number> {
   const db = adminDb();
-  const hoy = fechaAR(0);
-  const en3 = fechaAR(3);
+  const hoy = hoyAR();
+  const en3 = sumarDias(hoy, 3);
   const snap = await db.collection("obligaciones").where("activa", "==", true).get();
   const avisos: { titulo: string; cuerpo: string; clave: string }[] = [];
   const ars = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n || 0);
@@ -233,14 +231,16 @@ export async function vencimientosObligaciones(base: string): Promise<number> {
  */
 export async function recordatoriosCobro(base: string): Promise<number> {
   const db = adminDb();
-  const hoy = fechaAR(0);
+  const hoy = hoyAR();
   const dias = (a: string, b: string) => Math.round((Date.parse(`${a}T12:00:00Z`) - Date.parse(`${b}T12:00:00Z`)) / 86_400_000);
   const snap = await db.collection("facturas").where("estado", "==", "pendiente").get();
   const ars = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n || 0);
   let enviados = 0;
   for (const d of snap.docs) {
     const f = d.data() as Factura & { recordatorios?: Record<string, string>; demo_ejemplo?: boolean };
-    if (f.debito || f.demo_ejemplo) continue;
+    // Con débito automático no se recuerda, salvo que haya quedado saldo (el débito no llegó al total).
+    const saldo = f.debitado ? saldoDe(f) : 0;
+    if ((f.debito && !saldo) || f.demo_ejemplo) continue;
     const atraso = dias(hoy, f.vencimiento);
     const etapa = atraso === -2 ? "antes" : atraso === 1 ? "d1" : atraso === 7 ? "d7" : atraso === 15 ? "d15" : null;
     if (!etapa || f.recordatorios?.[etapa]) continue;
@@ -249,9 +249,12 @@ export async function recordatoriosCobro(base: string): Promise<number> {
     const vencida = atraso > 0;
     const doc = f.tipo === "factura" ? "factura" : "boleta";
     const vto = f.vencimiento.split("-").reverse().slice(0, 2).join("/");
+    const que = saldo ? `El saldo de tu ${doc} (${ars(saldo)})` : `Tu ${doc} de ${ars(f.bruto)}`;
+    // Vencida: interés simple del 0,5% diario desde el día siguiente al vencimiento hasta hoy.
+    const mora = interesMora(f, hoy);
     const texto = vencida
-      ? `Tu ${doc} de ${ars(f.bruto)} venció el ${vto}. Si ya la pagaste, avisanos y la marcamos.`
-      : `Tu ${doc} de ${ars(f.bruto)} vence el ${vto}.`;
+      ? `${que} venció el ${vto}. Con ${mora.dias} día${mora.dias === 1 ? "" : "s"} de interés (0,5% por día) hoy son ${ars(mora.totalConInteres)}. Si ya la pagaste, avisanos y la marcamos.`
+      : `${que} vence el ${vto}. Pagala hasta ese día: después corre un interés del 0,5% por día.`;
     const link = `/cliente?tab=plan&factura=${d.id}`;
     const clientes = ((p.team_roles?.cliente ?? []) as string[]).filter(Boolean);
     if (clientes.length) {
@@ -260,7 +263,7 @@ export async function recordatoriosCobro(base: string): Promise<number> {
     const perfiles = clientes.length ? await Promise.all(clientes.map((u) => db.collection("profiles").doc(u).get())) : [];
     const mails = [...new Set([...((p.contacto_emails ?? []) as string[]), ...perfiles.map((x) => String(x.data()?.email ?? ""))].filter((m) => /@/.test(m)))];
     if (mails.length) {
-      await enviarMail(mails, asuntoRecordatorio(f, vencida), mailFacturaHtml(f, `${base}${link}`, base, texto)).catch((err) => console.warn("[cobro] mail", err));
+      await enviarMail(mails, asuntoRecordatorio(f, vencida), mailFacturaHtml(f, `${base}${link}`, base, texto, hoy)).catch((err) => console.warn("[cobro] mail", err));
     }
     await d.ref.update({ [`recordatorios.${etapa}`]: new Date().toISOString() });
     enviados++;

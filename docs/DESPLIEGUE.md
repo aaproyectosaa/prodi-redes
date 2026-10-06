@@ -125,6 +125,14 @@ planificado → agendado (rodaje) → edición → revisión interna → revisi�
 - Tablero y Gastos se salían de costado en el celular (una tabla ancha estiraba toda la pantalla); arreglado para todas las grillas. Notificaciones también, en celulares chicos.
 - Los cuadros de texto crecen con lo que se escribe (no queda un scroll adentro de otro).
 - En iPhone, tocar un campo ya no hace zoom y deja la pantalla corrida (letra de 16 px en los campos del celular).
+
+### Reglas de cobro (boletas, vencimiento, interés y débito)
+
+- **El 27 de cada mes se arma la boleta del mes siguiente** (el servicio se cobra por adelantado). En la base la boleta guarda `mes` = el mes en que se arma (el del 27) y el id sigue siendo `{cliente}_{mes}`; en pantallas, mails y PDF se muestra el **período** (el mes siguiente, `periodoDe` en `api/_lib/facturacion.ts`). Ej.: la armada el 27/10 es la "boleta de noviembre". "Pagó por adelantado hasta" se compara con el período.
+- **Vence el 5** del mes que cubre (Ajustes → Facturación → "Vence el día", por defecto 5; si quedó guardado 10, cambiarlo a 5). Hasta el 5 no hay interés.
+- **Interés por mora: 0,5% por día, simple, sobre el saldo**, contando cada día (hora de Argentina) desde el 6 hasta el día que se paga. No se guarda en la boleta: se calcula al vuelo (`interesMora`). Al marcarla cobrada se guarda lo cobrado en `facturas.interes_cobrado`. Se ve en Cobros, en "Mi plan" del cliente, en la boleta, en el WhatsApp de recordatorio y en los mails/avisos automáticos.
+- **El débito automático de Mercado Pago cobra el total de la boleta** (abono + extras fijos + IVA si es factura), calculado con la misma función que la boleta (`totalMensual`). Cada débito paga la **última boleta emitida y pendiente** del cliente (si no hay, el último borrador; si no hay nada, queda en `cobros` con `sin_factura: true` y lo toma la próxima boleta del 27). Si el débito no llega al total, la boleta queda pendiente con el saldo (`facturas.debitado`). Un débito no cobra interés aunque Mercado Pago lo pase después del 5.
+- **Suscripciones viejas**: las que se crearon antes cobran solo el abono neto. Para pasarlas al total: *Clientes → Informe y cobros → "Cobrar $X desde ahora"* (actualiza el monto en Mercado Pago). Lo mismo cuando cambia el precio del plan, el IVA o los extras fijos de un cliente: el sistema no lo actualiza solo.
 - Con el teclado abierto se esconde la barra de abajo (el chat queda pegado al teclado).
 - Perfil: el botón *Guardar cambios* quedaba tapado por la barra de abajo. La barra de *Subidas* a Drive tapaba la barra de abajo. Las listas de personas dentro de las ventanas ya no scrollean aparte en el celular.
 - Probado en 390 px y 360 px de ancho, con gestos táctiles, en todas las pantallas de todos los roles: sin desbordes, sin zonas trabadas, nada tapado por la barra.
@@ -135,27 +143,27 @@ planificado → agendado (rodaje) → edición → revisión interna → revisi�
    Va como `DATABASE_URL` en Vercel. ⚠️ Si la contraseña de la base anduvo por chats o mails, rotarla en Neon (*Roles → Reset password*) y usar la nueva.
 2. **Crear las tablas** (desde la compu, una vez; se puede repetir):
    ```bash
-   npm install
-   DATABASE_URL="postgresql://…" npm run db:setup
+   pnpm install
+   DATABASE_URL="postgresql://…" pnpm db:setup
    ```
 3. **Pasar los datos de Firebase** (una sola vez, con la service account):
    ```bash
-   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json DATABASE_URL="postgresql://…" npm run migrar:firebase              # simula y cuenta
-   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json DATABASE_URL="postgresql://…" npm run migrar:firebase -- --aplicar  # copia
+   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json DATABASE_URL="postgresql://…" pnpm migrar:firebase              # simula y cuenta
+   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json DATABASE_URL="postgresql://…" pnpm migrar:firebase --aplicar  # copia
    ```
    Copia todas las colecciones (con los mensajes de los chats) y los usuarios. Para que **sigan entrando con la misma contraseña**,
    cargar en Vercel los parámetros de Firebase (*Authentication → Users → ⋮ → Password hash parameters*):
    `FIREBASE_HASH_SIGNER_KEY`, `FIREBASE_HASH_SALT_SEPARATOR`, `FIREBASE_HASH_ROUNDS`, `FIREBASE_HASH_MEM_COST`.
    Al entrar por primera vez, la clave se pasa sola al formato nuevo. Si no se cargan, el admin les manda el link desde *Equipo → Link para cambiar contraseña*.
-   - Para **probar antes con datos de ejemplo** en una base vacía (no en la de producción): `DATABASE_URL="…" npm run db:ejemplo` (todos entran con la clave `prodi2026`, ej. lucas@somosprodi.com).
+   - Para **probar antes con datos de ejemplo** en una base vacía (no en la de producción): `DATABASE_URL="…" pnpm db:ejemplo` (todos entran con la clave `prodi2026`, ej. lucas@somosprodi.com).
 4. **Variables en Vercel** (ver `.env.example`):
    - Nuevas: `DATABASE_URL`, `AUTH_SECRET` (texto al azar de 32+ caracteres), `INVITATION_CODE`,
-     `VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY` + `VITE_VAPID_PUBLIC_KEY` (la misma pública) — se generan con `npx web-push generate-vapid-keys`.
+     `VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY` + `VITE_VAPID_PUBLIC_KEY` (la misma pública) — se generan con `pnpm exec web-push generate-vapid-keys`.
    - Se borran: todas las `VITE_FIREBASE_*` y `VITE_INVITATION_CODE`. `FIREBASE_SERVICE_ACCOUNT_BASE64` se puede borrar después de migrar.
    - Siguen igual: Drive (`GOOGLE_OAUTH_*`, `TOKEN_ENCRYPTION_KEY`, `OAUTH_STATE_SECRET`), `GEMINI_API_KEY`, Mercado Pago, `RESEND_API_KEY`, `CRON_SECRET`, `APROBACION_SECRET`, `APP_URL`, Meta.
 5. **Deploy** normal en Vercel. Ya no hay reglas que publicar en Firebase.
-6. **Probar en la compu antes de subir** (opcional): `npm run build`, después
-   `DATABASE_URL="…" AUTH_SECRET="…" npm run local` → http://localhost:3001 (la app y las funciones, como en Vercel).
+6. **Probar en la compu antes de subir** (opcional): `pnpm build`, después
+   `DATABASE_URL="…" AUTH_SECRET="…" pnpm local` → http://localhost:3001 (la app y las funciones, como en Vercel).
    Con datos de ejemplo cargados: `python3 scripts/probar-seguridad.py` corre las pruebas de acceso por rol.
 7. **Mercado Pago**: el webhook sigue en `https://TU-DOMINIO/api/pagos/webhook` (no cambia).
 8. **Resend**: verificar el dominio `somosprodi.com` para que salgan los mails (informes, boletas, recordatorios).
@@ -214,9 +222,9 @@ En `videos`: `guion`, `tomas`, `meta.ad_id`, `feedback_marcas`, `recordatorios_c
 
 ## 5. Demo navegable
 
-`npx vite build --config vite.demo.config.ts` genera `dist-demo/`: la misma app con datos de ejemplo,
+`pnpm exec vite build --config vite.demo.config.ts` genera `dist-demo/`: la misma app con datos de ejemplo,
 sin base ni servidor (todo simulado en el navegador; sirve para mostrar pantallas). No se despliega en producción.
-Para probar de verdad, usar `npm run local` contra una base Postgres (ver paso 6).
+Para probar de verdad, usar `pnpm local` contra una base Postgres (ver paso 6).
 
 ## 6. A futuro: publicar y pautar desde el sistema
 

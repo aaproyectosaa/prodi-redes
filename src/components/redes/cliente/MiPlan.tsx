@@ -7,10 +7,11 @@ import { Section } from "@/components/redes/PageShell";
 import { DebitoCliente } from "@/components/redes/Debito";
 import { BoletaDialog } from "@/components/redes/admin/BoletaDialog";
 import { useRedes } from "@/contexts/redes-data-context";
+import { mesAR } from "@/lib/fecha";
 import { fechaCorta, formatARS, hoyISO, mesActual, mesLabel } from "@/lib/redes/format";
 import { planDe, usoPlan } from "@/lib/redes/planes";
 import { cupoPiezas, iniciarPago } from "@/lib/redes/piezas";
-import { useFacturasCliente, type FacturaDoc } from "@/lib/redes/facturacion";
+import { interesMora, nombrePeriodo, textoMora, totalMensual, useFacturasCliente, type FacturaDoc } from "@/lib/redes/facturacion";
 import { DATOS_COBRO_DEFAULT } from "@/lib/redes/types";
 import type { Project } from "@/integrations/firebase/types";
 import { cn } from "@/lib/utils";
@@ -50,13 +51,16 @@ export function MiPlan({
   const debito = cliente.suscripcion?.estado === "activa";
 
   const debe = facturas.filter((f) => f.estado === "pendiente").sort((a, b) => a.vencimiento.localeCompare(b.vencimiento));
-  const totalDebe = debe.reduce((a, f) => a + f.bruto, 0);
+  // Lo que debe hoy: el saldo de cada boleta más el interés por mora a hoy (0,5% por día desde el 6).
+  const totalDebe = debe.reduce((a, f) => a + interesMora(f, hoy).totalConInteres, 0);
+  // El débito automático cobra el total de la boleta (con IVA y extras fijos), no solo el abono.
+  const montoDebito = totalMensual({ abono: plan.precioMensual, facturacion: cliente.facturacion ?? null }, settings.iva_pct ?? 21);
   const vencidas = debe.filter((f) => f.vencimiento < hoy);
   const anio = mes.slice(0, 4);
   const misCobros = cobros.filter((c) => c.proyecto_id === cliente.id);
   const pagadoAnio =
-    facturas.filter((f) => f.estado === "cobrada" && f.mes.startsWith(anio)).reduce((a, f) => a + f.bruto, 0) +
-    misCobros.filter((c) => c.tipo !== "abono" && c.estado === "aprobado" && (c.pagado_at ?? c.created_at).startsWith(anio)).reduce((a, c) => a + c.monto, 0);
+    facturas.filter((f) => f.estado === "cobrada" && f.mes.startsWith(anio)).reduce((a, f) => a + f.bruto + (Number(f.interes_cobrado) || 0), 0) +
+    misCobros.filter((c) => c.tipo !== "abono" && c.estado === "aprobado" && mesAR(c.pagado_at ?? c.created_at).startsWith(anio)).reduce((a, c) => a + c.monto, 0);
 
   // Boleta abierta (también desde el link del aviso o del mail: ?factura=<id>).
   const [params, setParams] = useSearchParams();
@@ -99,13 +103,14 @@ export function MiPlan({
                 <Receipt className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1">
                   <span className="block font-medium first-letter:uppercase">
-                    {f.tipo} de {mesLabel(f.mes).toLowerCase()}
+                    {f.tipo} de {nombrePeriodo(f)}
                   </span>
                   <span className={cn("block text-xs", f.vencimiento < hoy ? "font-semibold text-destructive" : "text-muted-foreground")}>
-                    {f.debito ? "Se debita sola" : `${f.vencimiento < hoy ? "Venció" : "Vence"} el ${ddmm(f.vencimiento)}`}
+                    {textoMora(f, hoy) ||
+                      (f.debito && !f.debitado ? "Se debita sola" : `Vence el ${ddmm(f.vencimiento)} · después, 0,5% de interés por día`)}
                   </span>
                 </span>
-                <span className="font-semibold tabular-nums">{formatARS(f.bruto)}</span>
+                <span className="font-semibold tabular-nums">{formatARS(interesMora(f, hoy).totalConInteres)}</span>
                 <ChevronRight className="h-4 w-4 text-muted-foreground" />
               </button>
             ))}
@@ -138,7 +143,7 @@ export function MiPlan({
           <div>
             <p className="font-semibold">Estás al día</p>
             <p className="text-sm text-muted-foreground">
-              {debito ? "Tu abono se cobra solo cada mes con el débito automático." : `La próxima boleta te llega el 27 y la pagás hasta el 10 del mes siguiente.`}
+              {debito ? "Tu abono se cobra solo cada mes con el débito automático." : `La boleta de cada mes te llega el 27 del mes anterior y la pagás hasta el 5. Después corre un interés del 0,5% por día.`}
               {pagadoAnio > 0 ? ` En ${anio} llevás pagado ${formatARS(pagadoAnio)}.` : ""}
             </p>
           </div>
@@ -181,7 +186,7 @@ export function MiPlan({
 
       {/* 3. Cómo pagás y extras */}
       <div className="grid gap-4 md:grid-cols-2">
-        <DebitoCliente cliente={cliente} monto={plan.precioMensual} email={email} />
+        <DebitoCliente cliente={cliente} monto={montoDebito} email={email} />
         <ComprarExtras clienteId={cliente.id} precio={plan.precioVideoExtra} />
       </div>
 
@@ -228,17 +233,22 @@ export function MiPlan({
 
 function FilaBoleta({ f, hoy, onClick }: { f: FacturaDoc; hoy: string; onClick: () => void }) {
   const vencida = f.estado === "pendiente" && f.vencimiento < hoy;
+  const pagada = f.estado === "cobrada";
   return (
     <button type="button" onClick={onClick} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-muted/40">
       <div className="min-w-0">
         <p className="font-medium first-letter:uppercase">
-          {f.tipo} · {mesLabel(f.mes).toLowerCase()}
+          {f.tipo} · {nombrePeriodo(f)}
         </p>
         <p className={cn("text-xs", vencida ? "font-semibold text-destructive" : "text-muted-foreground")}>
-          {f.estado === "cobrada" ? "Pagada ✓" : f.debito ? "Se debita sola" : `${vencida ? "Venció" : "Vence"} el ${ddmm(f.vencimiento)}`}
+          {pagada
+            ? `Pagada ✓${f.interes_cobrado ? ` · con ${formatARS(f.interes_cobrado)} de interés` : ""}`
+            : textoMora(f, hoy) || (f.debito && !f.debitado ? "Se debita sola" : `Vence el ${ddmm(f.vencimiento)}`)}
         </p>
       </div>
-      <span className="font-semibold tabular-nums">{formatARS(f.bruto)}</span>
+      <span className="font-semibold tabular-nums">
+        {formatARS(pagada ? f.bruto + (Number(f.interes_cobrado) || 0) : interesMora(f, hoy).totalConInteres)}
+      </span>
     </button>
   );
 }
