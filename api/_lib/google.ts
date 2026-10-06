@@ -61,15 +61,12 @@ export async function exchangeCodeForTokens(
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
   });
-  const data = (await res.json()) as
-    | (GoogleTokens & { error?: undefined })
-    | { error: string; error_description?: string };
-  if (!res.ok || "error" in data) {
-    const err = "error" in data ? data : null;
+  const data = (await res.json()) as GoogleTokens & { error?: string; error_description?: string };
+  if (!res.ok || data.error) {
     throw new GoogleAuthError(
-      err?.error_description ?? err?.error ?? "Token exchange failed",
+      data.error_description ?? data.error ?? "Token exchange failed",
       res.status,
-      err?.error
+      data.error
     );
   }
   return data;
