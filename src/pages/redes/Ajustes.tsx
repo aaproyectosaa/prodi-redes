@@ -1,0 +1,401 @@
+import { useEffect, useState } from "react";
+import { addDoc, collection, deleteDoc, doc, onSnapshot, setDoc, updateDoc } from "@/lib/db";
+import { CheckCircle2, FlaskConical, HardDrive, Loader2, Plus, Trash2, XCircle } from "lucide-react";
+import { toast } from "sonner";
+import { db } from "@/integrations/firebase/client";
+import { assertEditable } from "@/lib/redes/vistaComo";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { PageShell, Section } from "@/components/redes/PageShell";
+import { useRedes } from "@/contexts/redes-data-context";
+import { useDriveConnection } from "@/hooks/use-drive-connection";
+import { fechaHora, formatARS } from "@/lib/redes/format";
+import { callApi } from "@/lib/redes/api";
+import { Textarea } from "@/components/ui/textarea";
+import { DATOS_COBRO_DEFAULT, type DatosCobro, type PlanRedes } from "@/lib/redes/types";
+import { ENFOQUE_PRODI_DEFAULT } from "../../../api/_lib/plan-mes";
+
+export default function Ajustes() {
+  const { planes, settings } = useRedes();
+  const [precioPieza, setPrecioPieza] = useState(String(settings.precio_pieza_ia));
+  const [precioImpresion, setPrecioImpresion] = useState(String(settings.precio_pieza_impresion ?? 0));
+  const [dias, setDias] = useState(String(settings.dias_alerta));
+  const [auto, setAuto] = useState(settings.informe_automatico);
+  const [enfoque, setEnfoque] = useState(settings.ia_enfoque ?? ENFOQUE_PRODI_DEFAULT);
+  const [diaVto, setDiaVto] = useState(String(settings.dia_vencimiento ?? 10));
+  const [iva, setIva] = useState(String(settings.iva_pct ?? 21));
+  const [cobro, setCobro] = useState<DatosCobro>({ ...DATOS_COBRO_DEFAULT, ...(settings.cobro ?? {}) });
+  const [saving, setSaving] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPrecioPieza(String(settings.precio_pieza_ia));
+    setPrecioImpresion(String(settings.precio_pieza_impresion ?? 0));
+    setDias(String(settings.dias_alerta));
+    setAuto(settings.informe_automatico);
+    setEnfoque(settings.ia_enfoque ?? ENFOQUE_PRODI_DEFAULT);
+    setDiaVto(String(settings.dia_vencimiento ?? 10));
+    setIva(String(settings.iva_pct ?? 21));
+    setCobro({ ...DATOS_COBRO_DEFAULT, ...(settings.cobro ?? {}) });
+  }, [settings]);
+
+  const guardar = async (clave: string, datos: Record<string, unknown>) => {
+    setSaving(clave);
+    try {
+      assertEditable();
+      await setDoc(doc(db, "app_settings", "redes"), datos, { merge: true });
+      toast.success("Ajustes guardados");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo guardar");
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <PageShell title="Ajustes" subtitle="Planes, precios, facturación, IA y conexiones.">
+      <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
+        <div className="space-y-8">
+          <Section title="Planes" description="Videos y piezas gráficas incluidos por mes. Cada cliente tiene uno (y se puede ajustar por cliente).">
+            <PlanesEditor planes={planes} />
+          </Section>
+
+          <Section
+            title="Cómo vende Prodi (para la IA)"
+            description="La IA lo lee en todo lo que arma: plan del mes, textos, guiones y piezas. Lo de cada cliente (productos y temporadas) se carga en su ficha, pestaña Comercial."
+          >
+            <div className="space-y-3 rounded-xl border bg-card p-4">
+              <Textarea rows={8} value={enfoque} onChange={(e) => setEnfoque(e.target.value)} maxLength={3000} />
+              <div className="flex flex-wrap justify-between gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setEnfoque(ENFOQUE_PRODI_DEFAULT)}>
+                  Volver al texto original
+                </Button>
+                <Button onClick={() => void guardar("ia", { ia_enfoque: enfoque.trim() })} disabled={saving === "ia"}>
+                  {saving === "ia" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Guardar
+                </Button>
+              </div>
+            </div>
+          </Section>
+        </div>
+
+        <div className="space-y-8">
+          <Section title="Precios y alertas">
+            <div className="space-y-4 rounded-xl border bg-card p-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Pieza para redes</Label>
+                  <Input inputMode="numeric" value={precioPieza} onChange={(e) => setPrecioPieza(e.target.value.replace(/\D/g, ""))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Pieza para imprimir</Label>
+                  <Input inputMode="numeric" value={precioImpresion} onChange={(e) => setPrecioImpresion(e.target.value.replace(/\D/g, ""))} />
+                </div>
+              </div>
+              <p className="-mt-2 text-xs text-muted-foreground">
+                Se cobran con Mercado Pago cuando el cliente ya usó las piezas que incluye su plan.
+              </p>
+              <div className="space-y-1.5">
+                <Label>Días para marcar un video como trabado</Label>
+                <Input inputMode="numeric" value={dias} onChange={(e) => setDias(e.target.value.replace(/\D/g, ""))} />
+              </div>
+              <label className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Informe mensual automático</p>
+                  <p className="text-xs text-muted-foreground">El día 1 se manda a cada cliente el informe del mes anterior.</p>
+                </div>
+                <Switch checked={auto} onCheckedChange={setAuto} />
+              </label>
+              <Button
+                onClick={() =>
+                  void guardar("general", {
+                    precio_pieza_ia: Number(precioPieza) || 0,
+                    precio_pieza_impresion: Number(precioImpresion) || 0,
+                    dias_alerta: Math.max(1, Number(dias) || 3),
+                    informe_automatico: auto,
+                  })
+                }
+                disabled={saving === "general"}
+                className="w-full"
+              >
+                {saving === "general" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Guardar
+              </Button>
+            </div>
+          </Section>
+
+          <Section title="Facturación" description="Se prepara sola el 27 de cada mes. Estos datos salen en las boletas.">
+            <div className="space-y-3 rounded-xl border bg-card p-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Vence el día</Label>
+                  <Input inputMode="numeric" value={diaVto} onChange={(e) => setDiaVto(e.target.value.replace(/\D/g, "").slice(0, 2))} />
+                  <p className="text-[11px] text-muted-foreground">del mes siguiente</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>IVA de las facturas (%)</Label>
+                  <Input inputMode="numeric" value={iva} onChange={(e) => setIva(e.target.value.replace(/\D/g, "").slice(0, 2))} />
+                  <p className="text-[11px] text-muted-foreground">las boletas no llevan</p>
+                </div>
+              </div>
+              {(
+                [
+                  ["titular", "Titular"],
+                  ["cuit", "CUIT"],
+                  ["banco", "Banco"],
+                  ["alias", "Alias"],
+                  ["cbu", "CBU"],
+                  ["whatsapp", "WhatsApp para comprobantes"],
+                ] as [keyof DatosCobro, string][]
+              ).map(([k, l]) => (
+                <div key={k} className="space-y-1">
+                  <Label className="text-xs">{l}</Label>
+                  <Input value={cobro[k]} onChange={(e) => setCobro((c) => ({ ...c, [k]: e.target.value }))} />
+                </div>
+              ))}
+              <Button
+                className="w-full"
+                onClick={() =>
+                  void guardar("fact", {
+                    dia_vencimiento: Math.min(28, Math.max(1, Number(diaVto) || 10)),
+                    iva_pct: Math.min(27, Number(iva) || 0),
+                    cobro,
+                  })
+                }
+                disabled={saving === "fact"}
+              >
+                {saving === "fact" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Guardar
+              </Button>
+            </div>
+          </Section>
+
+          <Section title="Google Drive" description="Donde se guardan el crudo, los videos finales y las piezas gráficas.">
+            <DriveCard />
+          </Section>
+
+          <Section
+            title="Datos de ejemplo"
+            description="Los mismos clientes, videos, chats y cobros de la demo, para mostrar el sistema andando antes de cargar los reales."
+          >
+            <EjemploCard />
+          </Section>
+        </div>
+      </div>
+    </PageShell>
+  );
+}
+
+function PlanesEditor({ planes }: { planes: PlanRedes[] }) {
+  const [adding, setAdding] = useState(false);
+  const nuevo = async () => {
+    assertEditable();
+    setAdding(true);
+    try {
+      await addDoc(collection(db, "planes_redes"), {
+        nombre: `Plan ${planes.length + 1}`,
+        descripcion: "",
+        videos_mes: 4,
+        piezas_mes: 0,
+        precio_mensual: 0,
+        precio_video_extra: 0,
+        activo: true,
+        orden: planes.length,
+      });
+    } finally {
+      setAdding(false);
+    }
+  };
+  return (
+    <div className="space-y-3">
+      {planes.map((p) => (
+        <PlanRow key={p.id} plan={p} />
+      ))}
+      {planes.length === 0 && (
+        <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+          Todavía no hay planes. Creá los paquetes que vendés (ej. 4, 8 y 12 videos por mes).
+        </p>
+      )}
+      <Button variant="outline" onClick={nuevo} disabled={adding}>
+        <Plus className="mr-2 h-4 w-4" /> Nuevo plan
+      </Button>
+    </div>
+  );
+}
+
+function PlanRow({ plan }: { plan: PlanRedes }) {
+  const [f, setF] = useState(plan);
+  const [dirty, setDirty] = useState(false);
+  useEffect(() => {
+    if (!dirty) setF(plan);
+  }, [plan, dirty]);
+  const set = (patch: Partial<PlanRedes>) => {
+    setF((p) => ({ ...p, ...patch }));
+    setDirty(true);
+  };
+  const save = async () => {
+    assertEditable();
+    const { id, ...rest } = f;
+    await updateDoc(doc(db, "planes_redes", id), rest as Record<string, unknown>);
+    setDirty(false);
+    toast.success("Plan guardado");
+  };
+  return (
+    <div className="space-y-3 rounded-xl border bg-card p-4">
+      <div className="flex items-center gap-2">
+        <Input value={f.nombre} onChange={(e) => set({ nombre: e.target.value })} className="font-semibold" />
+        <label className="flex shrink-0 items-center gap-2 text-xs">
+          <Switch checked={f.activo} onCheckedChange={(v) => set({ activo: v })} /> Activo
+        </label>
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={async () => {
+            await deleteDoc(doc(db, "planes_redes", plan.id));
+            toast.success("Plan eliminado");
+          }}
+          aria-label="Eliminar plan"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="space-y-1">
+          <Label className="text-xs">Videos por mes</Label>
+          <Input inputMode="numeric" value={f.videos_mes} onChange={(e) => set({ videos_mes: Number(e.target.value.replace(/\D/g, "")) || 0 })} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Piezas por mes</Label>
+          <Input inputMode="numeric" value={f.piezas_mes ?? 0} onChange={(e) => set({ piezas_mes: Number(e.target.value.replace(/\D/g, "")) || 0 })} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Abono mensual</Label>
+          <Input inputMode="numeric" value={f.precio_mensual} onChange={(e) => set({ precio_mensual: Number(e.target.value.replace(/\D/g, "")) || 0 })} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Video extra</Label>
+          <Input inputMode="numeric" value={f.precio_video_extra} onChange={(e) => set({ precio_video_extra: Number(e.target.value.replace(/\D/g, "")) || 0 })} />
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          {formatARS(f.videos_mes ? f.precio_mensual / f.videos_mes : 0)} por video
+        </p>
+        {dirty && (
+          <Button size="sm" onClick={save}>
+            Guardar
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DriveCard() {
+  const { connection, status, loading, connect, disconnect, reconnect } = useDriveConnection();
+  const [busy, setBusy] = useState(false);
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    try {
+      await fn();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo completar");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="space-y-3 rounded-xl border bg-card p-4">
+      <div className="flex items-center gap-3">
+        <HardDrive className="h-5 w-5 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Verificando…</p>
+          ) : status === "connected" ? (
+            <>
+              <p className="flex items-center gap-1.5 text-sm font-medium">
+                <CheckCircle2 className="h-4 w-4 text-success" /> Conectado
+              </p>
+              <p className="truncate text-xs text-muted-foreground">{connection?.email} · carpeta “Progreso”</p>
+            </>
+          ) : (
+            <p className="flex items-center gap-1.5 text-sm font-medium">
+              <XCircle className="h-4 w-4 text-destructive" />
+              {status === "revoked" ? "La conexión venció" : "Sin conectar"}
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="flex gap-2">
+        {status === "connected" ? (
+          <Button variant="outline" size="sm" onClick={() => run(disconnect)} disabled={busy}>
+            Desconectar
+          </Button>
+        ) : (
+          <Button size="sm" onClick={() => run(status === "revoked" ? reconnect : connect)} disabled={busy}>
+            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {status === "revoked" ? "Reconectar" : "Conectar Drive"}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EjemploCard() {
+  const [estado, setEstado] = useState<{ cargado_at?: string } | null>(null);
+  const [busy, setBusy] = useState<null | "cargar" | "borrar">(null);
+  const [confirmar, setConfirmar] = useState(false);
+  useEffect(
+    () => onSnapshot(doc(db, "app_settings", "demo_ejemplo"), (snap) => setEstado(snap.exists() ? (snap.data() as { cargado_at?: string }) : null)),
+    []
+  );
+  const run = async (accion: "cargar" | "borrar") => {
+    setBusy(accion);
+    try {
+      const r = await callApi<{ documentos: number }>(`/api/usuarios/ejemplo-${accion}`);
+      toast.success(accion === "cargar" ? `Listo: se cargaron ${r.documentos} datos de ejemplo` : "Datos de ejemplo borrados");
+      setConfirmar(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo completar");
+    } finally {
+      setBusy(null);
+    }
+  };
+  const cargados = !!estado?.cargado_at;
+  return (
+    <div className="space-y-3 rounded-xl border bg-card p-4">
+      <p className="flex items-center gap-2 text-sm font-medium">
+        <FlaskConical className="h-4 w-4 text-primary" />
+        {cargados ? `Cargados el ${fechaHora(estado!.cargado_at!)}` : "No hay datos de ejemplo"}
+      </p>
+      <p className="text-xs text-muted-foreground">
+        {cargados
+          ? "Las personas de ejemplo dicen “· ejemplo” y no reciben avisos ni mails. Al borrarlos se va todo lo de esos clientes, incluido lo que se haya creado después."
+          : "Suma 5 clientes con videos en todas las etapas, rodajes, piezas, chats, reuniones y cobros. No toca tus datos reales ni la configuración."}
+      </p>
+      {!cargados ? (
+        <Button size="sm" onClick={() => run("cargar")} disabled={!!busy}>
+          {busy === "cargar" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Cargar datos de ejemplo
+        </Button>
+      ) : confirmar ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs">¿Seguro? Se borra todo lo de los clientes de ejemplo.</span>
+          <Button size="sm" variant="destructive" onClick={() => run("borrar")} disabled={!!busy}>
+            {busy === "borrar" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Sí, borrar
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setConfirmar(false)}>
+            Cancelar
+          </Button>
+        </div>
+      ) : (
+        <Button size="sm" variant="outline" onClick={() => setConfirmar(true)}>
+          Borrar datos de ejemplo
+        </Button>
+      )}
+    </div>
+  );
+}

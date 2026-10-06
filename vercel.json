@@ -1,0 +1,22 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/informes/cron",
+      "schedule": "0 12 1 * *"
+    },
+    {
+      "path": "/api/informes/diario",
+      "schedule": "0 11 * * *"
+    }
+  ]
+}

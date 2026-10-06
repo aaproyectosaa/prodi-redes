@@ -1,0 +1,60 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Generado por Vite (config Firebase embebida)
+public/firebase-messaging-sw.js
+
+# Environment & secrets (nunca commitear valores reales)
+.env
+.env.*
+!.env.example
+
+# Credenciales y claves
+scripts/service-account.json
+*_service_account*.json
+_service_account_b64.txt
+*.pem
+*.key
+*.p12
+credentials.json
+secrets.json
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# WhatsApp Bot (local / privado)
+whatsapp-bot/
+whatsapp-bot.rar
+
+# Chrome extension — config local de URL
+chrome-extension/config.js
+
+# Firestore backups
+backups/
+
+# Demo y migración
+dist-demo
+service-account.json
+
+dist-demo-single
+prodi-redes-demo.html
