@@ -14,9 +14,11 @@
     "db:setup": "node scripts/db-setup.mjs",
     "db:ejemplo": "tsx scripts/db-ejemplo.ts",
     "db:admin": "tsx scripts/db-admin.ts",
-    "migrar:firebase": "node scripts/migrar-firebase.mjs"
+    "migrar:firebase": "node scripts/migrar-firebase.mjs",
+    "arca:probar": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/arca-probar.ts"
   },
   "dependencies": {
+    "@arcasdk/core": "^2.0.2",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",

@@ -111,6 +111,7 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
       return d.recipient_user_id === c.uid;
     case "whatsapp_verifications": // código de verificación (hasheado): solo lo usa el servidor
     case "notification_queue":
+    case "arca_tickets": // ticket de acceso a ARCA (token y firma): solo el servidor
       return false;
     default:
       // Lo del sistema anterior: solo el super admin.
@@ -166,7 +167,9 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       if (crea || borra) return false;
       return produceEn(c, antes!.proyecto_id) && antes!.estado === "borrador" && soloCambia(antes, despues, ["ideas", "nota_equipo", "updated_at"]);
     case "facturas":
-      return !crea && esFinanzas(c);
+      // El CAE de ARCA lo escribe solo el servidor; una factura autorizada no se borra (se anula con nota de crédito).
+      if (borra) return esFinanzas(c) && !antes!.arca?.cae;
+      return !crea && esFinanzas(c) && !tocaAlguna(antes, despues, ["arca", "arca_en_curso_at", "arca_error"]);
     case "equipo_pagos":
     case "equipo_liquidaciones":
     case "gastos":

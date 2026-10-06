@@ -23,6 +23,20 @@ export interface ItemFactura {
   neto: number;
 }
 
+/** Lo que queda guardado en la factura cuando ARCA la autoriza (CAE). */
+export interface DatosArca {
+  cae: string;
+  cae_vto: string;
+  tipo: "A" | "B" | "C";
+  cbte_tipo: number;
+  punto_venta: number;
+  numero: number;
+  fecha: string;
+  homologacion: boolean;
+  autorizada_at: string;
+  autorizada_por: string;
+}
+
 export interface Factura {
   proyecto_id: string;
   /** Mes en que se arma (el del 27, YYYY-MM). El período facturado es el siguiente: `periodoDe(mes)`. */
@@ -55,6 +69,10 @@ export interface Factura {
   creada_at: string;
   creada_por: string;
   emitida_at?: string | null;
+  /** Factura electrónica autorizada en ARCA (solo las de tipo "factura"). Lo escribe el servidor. */
+  arca?: DatosArca | null;
+  /** Último rechazo de ARCA, para mostrarlo. */
+  arca_error?: string | null;
   demo_ejemplo?: boolean;
 }
 
@@ -158,7 +176,8 @@ export interface DatosCliente {
 
 type DatosMonto = Pick<DatosCliente, "abono" | "facturacion">;
 
-const tipoDe = (c: DatosMonto): TipoComprobante => (c.facturacion?.tipo === "factura" ? "factura" : "boleta");
+// Por defecto factura (con IVA, se autoriza en ARCA); boleta solo si el cliente lo tiene elegido.
+const tipoDe = (c: DatosMonto): TipoComprobante => (c.facturacion?.tipo === "boleta" ? "boleta" : "factura");
 
 /** Ítems de la boleta mensual: el abono y los extras fijos. */
 function itemsDe(c: DatosMonto): ItemFactura[] {

@@ -7,6 +7,8 @@
 // POST /api/pagos/suscripcion { proyecto_id, accion: "cancelar" | "actualizar_monto" }  (admin)
 // POST /api/pagos/pedir-video { proyecto_id, mes, titulo, idea?, objetivo? }  (cliente)
 //      → si entra en el plan se crea; si no, se cobra como video extra y se crea al pagar
+// POST /api/pagos/arca-autorizar { factura_id, reintentar? }  (admin/administración) → CAE de ARCA para una boleta emitida
+// POST /api/pagos/arca-estado    (admin) → prueba la conexión con ARCA
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { adminDb, aplicarEscritura, ejecutarConsulta, enTransaccion, leerDoc, type Data, type DocRef, type Query } from "../_lib/db";
@@ -32,6 +34,7 @@ import { asuntoFactura, facturaId, mailFacturaHtml, periodoDe, saldoDe, type Fac
 import { enviarMail } from "../_lib/informe";
 import { videoDesdePedido } from "../_lib/pedidos";
 import { hoyAR, mesAR, sumarMeses } from "../_lib/fecha";
+import { autorizarFactura, estadoArca } from "../_lib/arca";
 
 export const config = { maxDuration: 30 };
 
@@ -530,6 +533,18 @@ async function emitir(req: VercelRequest) {
   return { ok: true, emitidas, mails, sin_mail: sinMail, falla_mail: fallaMail };
 }
 
+async function arcaAutorizar(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "administracion"]);
+  const { factura_id, reintentar } = body<{ factura_id?: string; reintentar?: boolean }>(req);
+  if (!factura_id || !/^[^/s]{1,200}$/.test(factura_id)) throw new HttpError(400, "Falta la boleta");
+  return { ok: true, arca: await autorizarFactura(factura_id, caller.uid, { reintentar: !!reintentar }) };
+}
+
+async function arcaEstado(req: VercelRequest) {
+  await requireCaller(req, ["admin"]);
+  return { ok: true, ...(await estadoArca()) };
+}
+
 async function pedirVideo(req: VercelRequest) {
   const caller = await requireCaller(req, ["cliente", "admin"]);
   const b = body<{ proyecto_id?: string; mes?: string; fecha_deseada?: string | null; titulo?: string; idea?: string; objetivo?: string }>(req);
@@ -647,6 +662,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "pedir-pieza") res.status(200).json(await pedirPieza(req));
     else if (accion === "facturar") res.status(200).json(await facturar(req));
     else if (accion === "emitir") res.status(200).json(await emitir(req));
+    else if (accion === "arca-autorizar") res.status(200).json(await arcaAutorizar(req));
+    else if (accion === "arca-estado") res.status(200).json(await arcaEstado(req));
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {
     // Si falla el webhook respondemos error: Mercado Pago lo reintenta solo.

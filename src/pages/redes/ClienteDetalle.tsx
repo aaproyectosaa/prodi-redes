@@ -35,7 +35,7 @@ import { formatARS, mesActual, mesLabel, sumarMeses, fechaCorta } from "@/lib/re
 import { planDe, usoPlan } from "@/lib/redes/planes";
 import { totalMensual } from "@/lib/redes/facturacion";
 import { callApi } from "@/lib/redes/api";
-import type { Project, ProjectTeamRole } from "@/integrations/firebase/types";
+import { CONDICIONES_IVA, type CondicionIva, type Project, type ProjectTeamRole } from "@/integrations/firebase/types";
 import { COLORES } from "./Clientes";
 import { MarcaArchivos } from "@/components/redes/MarcaArchivos";
 import { DebitoAdmin } from "@/components/redes/Debito";
@@ -266,6 +266,7 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
             tipo: form.factTipo,
             razon_social: form.factRazon.trim() || null,
             cuit: form.factCuit.trim() || null,
+            condicion_iva: form.factCondIva || null,
             adelantado_hasta: /^\d{4}-\d{2}$/.test(form.factAdelantado) ? form.factAdelantado : null,
             extras_fijos: form.factFijos
               .filter((x) => x.concepto.trim() && Number(x.neto) > 0)
@@ -381,6 +382,23 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
                 <Input value={form.factCuit} onChange={(e) => set("factCuit", e.target.value)} placeholder="Opcional" />
               </div>
             </div>
+            {form.factTipo === "factura" && (
+              <div className="space-y-1">
+                <Label className="text-xs">Condición frente al IVA</Label>
+                <select
+                  value={form.factCondIva}
+                  onChange={(e) => set("factCondIva", e.target.value as CondicionIva | "")}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Elegí (define si la factura es A o B)</option>
+                  {Object.entries(CONDICIONES_IVA).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="space-y-1">
               <Label className="text-xs">Pagó por adelantado hasta (mes)</Label>
               <Input type="month" value={form.factAdelantado} onChange={(e) => set("factAdelantado", e.target.value)} />
@@ -530,9 +548,10 @@ function toForm(c: Project) {
     ovPrecio: o.precio_mensual != null ? String(o.precio_mensual) : "",
     ovExtra: o.precio_video_extra != null ? String(o.precio_video_extra) : "",
     ovPiezas: o.piezas_mes != null ? String(o.piezas_mes) : "",
-    factTipo: (c.facturacion?.tipo ?? "boleta") as "boleta" | "factura",
+    factTipo: (c.facturacion?.tipo ?? "factura") as "boleta" | "factura",
     factRazon: c.facturacion?.razon_social ?? "",
     factCuit: c.facturacion?.cuit ?? "",
+    factCondIva: (c.facturacion?.condicion_iva ?? "") as CondicionIva | "",
     factAdelantado: c.facturacion?.adelantado_hasta ?? "",
     factFijos: (c.facturacion?.extras_fijos ?? []).map((x) => ({ concepto: x.concepto, neto: String(x.neto) })),
     team: {

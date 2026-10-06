@@ -196,7 +196,7 @@ export function DatosFacturacionDialog({ proyectoId, onClose }: { proyectoId: st
   useEffect(() => {
     if (!c) return;
     const f = c.facturacion ?? {};
-    setTipo(f.tipo ?? "boleta");
+    setTipo(f.tipo ?? "factura");
     setRazon(f.razon_social ?? "");
     setCuit(f.cuit ?? "");
     setAdelantado(f.adelantado_hasta ?? "");

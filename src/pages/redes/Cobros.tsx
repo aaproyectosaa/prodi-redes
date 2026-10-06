@@ -122,7 +122,11 @@ export default function Cobros() {
     setPaso(p);
   };
 
-  const [ver, setVer] = useState<Factura | null>(null);
+  // Por id: así se ve en vivo lo que cambia (p. ej. el CAE de ARCA apenas se autoriza).
+  const [verId, setVerId] = useState<string | null>(null);
+  const [previa, setPrevia] = useState<Factura | null>(null); // vista previa que todavía no se guardó
+  const ver = facturas.find((x) => x.id === verId) ?? previa;
+  const abrir = (f: Factura) => ("id" in f && typeof f.id === "string" ? (setVerId(f.id), setPrevia(null)) : (setVerId(null), setPrevia(f)));
   const [editar, setEditar] = useState<FacturaDoc | null>(null);
   const [editarPid, setEditarPid] = useState<string | null>(null);
   const [datosDe, setDatosDe] = useState<string | null>(null);
@@ -232,14 +236,14 @@ export default function Cobros() {
                 mes={mes}
                 lista={porEmitir}
                 anuladas={anuladas}
-                onVer={setVer}
+                onVer={abrir}
                 onEditar={(r) => void editarFila(r)}
                 editando={editarPid}
                 onDatos={setDatosDe}
                 onEmitidas={() => ir(2)}
               />
             )}
-            {paso === 2 && <PasoCobrar lista={pendientes} hoy={hoy} cobro={cobro} onVer={setVer} />}
+            {paso === 2 && <PasoCobrar lista={pendientes} hoy={hoy} cobro={cobro} onVer={abrir} />}
           </div>
 
           {cobradas.length > 0 && (
@@ -258,7 +262,7 @@ export default function Cobros() {
                       {formatARS(f.bruto)}
                       {f.interes_cobrado ? <span className="ml-1 text-xs text-muted-foreground">+ {formatARS(f.interes_cobrado)} interés</span> : null}
                     </span>
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setVer(f)} aria-label="Ver boleta">
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setVerId(f.id)} aria-label="Ver boleta">
                       <Eye className="h-4 w-4" />
                     </Button>
                     {f.medio !== "mercadopago" && f.medio !== "adelantado" && (
@@ -281,7 +285,7 @@ export default function Cobros() {
         </div>
       )}
 
-      <BoletaDialog f={ver} cobro={cobro} onClose={() => setVer(null)} />
+      <BoletaDialog f={ver} cobro={cobro} onClose={() => (setVerId(null), setPrevia(null))} arca />
       <EditarFacturaDialog f={editar} onClose={() => setEditar(null)} ivaPct={settings.iva_pct ?? 21} />
       <DatosFacturacionDialog proyectoId={datosDe} onClose={() => setDatosDe(null)} />
     </PageShell>

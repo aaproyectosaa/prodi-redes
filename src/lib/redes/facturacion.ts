@@ -135,6 +135,16 @@ export async function emitirFacturas(lista: FacturaDoc[], _clientes?: Project[])
   return callApi<{ ok: true; emitidas: number; mails: number; sin_mail: string[] }>("/api/pagos/emitir", { ids });
 }
 
+/** Pide el CAE en ARCA (solo facturas emitidas). `reintentar` si un intento anterior quedó a medias. */
+export async function autorizarEnArca(f: FacturaDoc, reintentar = false) {
+  assertEditable();
+  return callApi<{ ok: true; arca: NonNullable<Factura["arca"]> }>("/api/pagos/arca-autorizar", { factura_id: f.id, reintentar });
+}
+
+/** "Factura A 0003-00000012" */
+export const numeroArca = (a: NonNullable<Factura["arca"]>) =>
+  `Factura ${a.tipo} ${String(a.punto_venta).padStart(4, "0")}-${String(a.numero).padStart(8, "0")}`;
+
 /** Queda cobrada con el interés por mora de hoy (se guarda fijo en `interes_cobrado`). */
 export async function marcarCobrada(f: FacturaDoc, medio: MedioCobro) {
   assertEditable();

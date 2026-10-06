@@ -59,3 +59,6 @@ service-account.json
 
 dist-demo-single
 prodi-redes-demo.html
+
+# Certificados de ARCA (clave privada)
+certs/

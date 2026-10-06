@@ -145,6 +145,15 @@ export interface ClientPortalConfig {
   comprobante?: "boleta" | "factura";
 }
 
+/** Condición del cliente frente al IVA (la pide ARCA y define la letra de la factura). */
+export type CondicionIva = "responsable_inscripto" | "monotributo" | "exento" | "consumidor_final";
+export const CONDICIONES_IVA: Record<CondicionIva, string> = {
+  responsable_inscripto: "Responsable inscripto",
+  monotributo: "Monotributista",
+  exento: "Exento",
+  consumidor_final: "Consumidor final",
+};
+
 export interface Project {
   id: string;
   nombre: string;
@@ -191,10 +200,12 @@ export interface Project {
   } | null;
   /** Cómo se le factura el día 27 (lo maneja el super admin). */
   facturacion?: {
-    /** boleta = sin IVA; factura = con IVA (se hace en ARCA). */
+    /** factura = con IVA, se autoriza en ARCA (es la opción por defecto); boleta = sin IVA, no va a ARCA. */
     tipo?: "boleta" | "factura";
     razon_social?: string | null;
     cuit?: string | null;
+    /** Condición frente al IVA (para la factura de ARCA: define si va A o B). */
+    condicion_iva?: CondicionIva | null;
     /** Ítems que se suman todos los meses (ej. "Combustible"). */
     extras_fijos?: { concepto: string; neto: number }[];
     /** Pagó por adelantado (anual, trimestral): la boleta sale como cobrada. */

@@ -126,6 +126,10 @@ planificado → agendado (rodaje) → edición → revisión interna → revisi�
 - Los cuadros de texto crecen con lo que se escribe (no queda un scroll adentro de otro).
 - En iPhone, tocar un campo ya no hace zoom y deja la pantalla corrida (letra de 16 px en los campos del celular).
 
+- Con el teclado abierto se esconde la barra de abajo (el chat queda pegado al teclado).
+- Perfil: el botón *Guardar cambios* quedaba tapado por la barra de abajo. La barra de *Subidas* a Drive tapaba la barra de abajo. Las listas de personas dentro de las ventanas ya no scrollean aparte en el celular.
+- Probado en 390 px y 360 px de ancho, con gestos táctiles, en todas las pantallas de todos los roles: sin desbordes, sin zonas trabadas, nada tapado por la barra.
+
 ### Reglas de cobro (boletas, vencimiento, interés y débito)
 
 - **El 27 de cada mes se arma la boleta del mes siguiente** (el servicio se cobra por adelantado). En la base la boleta guarda `mes` = el mes en que se arma (el del 27) y el id sigue siendo `{cliente}_{mes}`; en pantallas, mails y PDF se muestra el **período** (el mes siguiente, `periodoDe` en `api/_lib/facturacion.ts`). Ej.: la armada el 27/10 es la "boleta de noviembre". "Pagó por adelantado hasta" se compara con el período.
@@ -133,9 +137,30 @@ planificado → agendado (rodaje) → edición → revisión interna → revisi�
 - **Interés por mora: 0,5% por día, simple, sobre el saldo**, contando cada día (hora de Argentina) desde el 6 hasta el día que se paga. No se guarda en la boleta: se calcula al vuelo (`interesMora`). Al marcarla cobrada se guarda lo cobrado en `facturas.interes_cobrado`. Se ve en Cobros, en "Mi plan" del cliente, en la boleta, en el WhatsApp de recordatorio y en los mails/avisos automáticos.
 - **El débito automático de Mercado Pago cobra el total de la boleta** (abono + extras fijos + IVA si es factura), calculado con la misma función que la boleta (`totalMensual`). Cada débito paga la **última boleta emitida y pendiente** del cliente (si no hay, el último borrador; si no hay nada, queda en `cobros` con `sin_factura: true` y lo toma la próxima boleta del 27). Si el débito no llega al total, la boleta queda pendiente con el saldo (`facturas.debitado`). Un débito no cobra interés aunque Mercado Pago lo pase después del 5.
 - **Suscripciones viejas**: las que se crearon antes cobran solo el abono neto. Para pasarlas al total: *Clientes → Informe y cobros → "Cobrar $X desde ahora"* (actualiza el monto en Mercado Pago). Lo mismo cuando cambia el precio del plan, el IVA o los extras fijos de un cliente: el sistema no lo actualiza solo.
-- Con el teclado abierto se esconde la barra de abajo (el chat queda pegado al teclado).
-- Perfil: el botón *Guardar cambios* quedaba tapado por la barra de abajo. La barra de *Subidas* a Drive tapaba la barra de abajo. Las listas de personas dentro de las ventanas ya no scrollean aparte en el celular.
-- Probado en 390 px y 360 px de ancho, con gestos táctiles, en todas las pantallas de todos los roles: sin desbordes, sin zonas trabadas, nada tapado por la barra.
+
+### Factura electrónica (ARCA)
+
+Las de tipo **factura** (con IVA) se autorizan en ARCA desde *Cobros → ver la boleta → "Autorizar en ARCA"*: pide el CAE, lo guarda en `facturas.arca` (tipo, punto de venta, número, CAE y vencimiento) y desde ahí se ve también en "Mi plan" del cliente. Las **boletas** (sin IVA) no van a ARCA. **Por defecto todo cliente se factura con factura**; boleta solo si se elige en su ficha. Va directo a los web services de ARCA con `@arcasdk/core` (`api/_lib/arca.ts`): el certificado y la clave no pasan por ningún intermediario.
+
+- **Letra**: si PRODI es responsable inscripto, A para clientes responsables inscriptos o monotributistas y B para consumidores finales o exentos; si es monotributo, siempre C. Por eso cada cliente con factura necesita la **condición frente al IVA** (ficha del cliente → Facturación).
+- **Qué se factura**: el total de la boleta (sin el interés por mora), concepto *servicios*, período = el mes facturado, vencimiento del pago = el de la boleta.
+- **No se duplica**: la boleta se marca antes de pedir el CAE. Si un intento queda a medias (se cortó la conexión), hay que revisar en ARCA si salió antes de tocar "Reintentar igual". Una factura con CAE no se puede borrar: se anula con nota de crédito (todavía no está en el sistema).
+- **Ticket de acceso**: dura 12 h y ARCA no da otro mientras siga vigente, así que se guarda en la base (`arca_tickets`, solo la lee el servidor).
+
+**Homologación (prueba), una sola vez:**
+1. Clave y pedido de certificado (en Git Bash, con el CUIT del emisor sin guiones):
+   ```bash
+   mkdir -p certs && openssl genrsa -out certs/arca-homo.key 2048
+   openssl req -new -key certs/arca-homo.key -subj "/C=AR/O=PRODI/CN=prodi-homo/serialNumber=CUIT 20XXXXXXXXX" -out certs/arca-homo.csr
+   ```
+   (`certs/` está en `.gitignore`: la clave nunca se sube.)
+2. En ARCA con clave fiscal: *Administrador de Relaciones de Clave Fiscal → Adherir servicio → ARCA → WSASS - Autogestión Certificados Homologación*.
+3. En **WSASS**: *Nuevo Certificado* → nombre `prodi-homo`, pegar el contenido de `certs/arca-homo.csr` → guardar lo que devuelve como `certs/arca-homo.crt`.
+4. En **WSASS**: *Crear autorización a servicio* → el certificado `prodi-homo` y el servicio **wsfe**.
+5. En `.env.local`: `ARCA_CUIT`, `ARCA_PUNTO_VENTA=1`, `ARCA_CONDICION` y el certificado y la clave en base64 (`base64 -w0 certs/arca-homo.crt` y `base64 -w0 certs/arca-homo.key`) en `ARCA_CERT` y `ARCA_KEY`. Sin `ARCA_PRODUCCION`.
+6. `pnpm arca:probar` → tiene que mostrar los servidores de ARCA en "OK" y el último número de factura.
+
+**Producción**: lo mismo pero el certificado se pide en *Administración de Certificados Digitales* (no WSASS), se autoriza el servicio *Facturación electrónica* en el Administrador de Relaciones, se da de alta un punto de venta **RECE para aplicativo y web services** (*Administración de puntos de venta y domicilios*; PRODI usa el **2**), se cargan las variables en Vercel y `ARCA_PRODUCCION=true`.
 
 ## 2. Pasos para desplegar (versión 12, Neon)
 
@@ -162,8 +187,9 @@ planificado → agendado (rodaje) → edición → revisión interna → revisi�
    - Se borran: todas las `VITE_FIREBASE_*` y `VITE_INVITATION_CODE`. `FIREBASE_SERVICE_ACCOUNT_BASE64` se puede borrar después de migrar.
    - Siguen igual: Drive (`GOOGLE_OAUTH_*`, `TOKEN_ENCRYPTION_KEY`, `OAUTH_STATE_SECRET`), `GEMINI_API_KEY`, Mercado Pago, `RESEND_API_KEY`, `CRON_SECRET`, `APROBACION_SECRET`, `APP_URL`, Meta.
 5. **Deploy** normal en Vercel. Ya no hay reglas que publicar en Firebase.
-6. **Probar en la compu antes de subir** (opcional): `pnpm build`, después
-   `DATABASE_URL="…" AUTH_SECRET="…" pnpm local` → http://localhost:3001 (la app y las funciones, como en Vercel).
+6. **Probar en la compu antes de subir** (opcional): poné en `.env.local` la `DATABASE_URL` de una branch de Neon
+   (nunca la de producción) y corré `pnpm dev` → http://localhost:8080 (la app y las funciones de /api, como en Vercel).
+   Para probar la versión compilada: `pnpm build && pnpm local` → http://localhost:3001.
    Con datos de ejemplo cargados: `python3 scripts/probar-seguridad.py` corre las pruebas de acceso por rol.
 7. **Mercado Pago**: el webhook sigue en `https://TU-DOMINIO/api/pagos/webhook` (no cambia).
 8. **Resend**: verificar el dominio `somosprodi.com` para que salgan los mails (informes, boletas, recordatorios).
