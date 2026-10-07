@@ -208,8 +208,11 @@ export interface Project {
     condicion_iva?: CondicionIva | null;
     /** Ítems que se suman todos los meses (ej. "Combustible"). */
     extras_fijos?: { concepto: string; neto: number }[];
-    /** Pagó por adelantado (anual, trimestral): la boleta sale como cobrada. */
+    /** "Tiene pagado hasta": último mes de servicio pagado por adelantado (YYYY-MM); hasta esa boleta sale cobrada. */
     adelantado_hasta?: string | null;
+    /** Días del mes siguiente al facturado en que paga (por defecto del 1 al 5). Vence el último. */
+    pago_desde?: number | null;
+    pago_hasta?: number | null;
     /** No se le prepara la boleta sola el 27 (canje, pausa): se le factura solo eligiéndolo a mano. */
     pausada?: boolean;
     /** No mandarle recordatorios automáticos de pago. */
@@ -240,7 +243,10 @@ export interface Project {
   suscripcion?: {
     mp_preapproval_id: string;
     estado: "pendiente" | "activa" | "pausada" | "cancelada";
+    /** Lo que debita por mes (total de la boleta + comisión de Mercado Pago). */
     monto: number;
+    /** Comisión de MP (%) que ya va sumada en `monto`. Las suscripciones viejas no la tienen. */
+    comision_pct?: number | null;
     payer_email: string;
     init_point?: string | null;
     creada_at: string;

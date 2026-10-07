@@ -81,8 +81,8 @@ export default function Tablero() {
 
   const delMes = facturas.filter((f) => f.mes === mes && f.estado !== "anulada");
   const extrasMes = extrasDe(mes).reduce((a, c) => a + c.monto, 0);
-  // Cobrado: todo lo que entró por Mercado Pago (abonos debitados y extras) + boletas cobradas por otros medios.
-  const porMP = cobros.filter((c) => c.estado === "aprobado" && mesAR(c.pagado_at ?? c.created_at) === mes).reduce((a, c) => a + c.monto, 0);
+  // Cobrado: todo lo que entró por Mercado Pago (abonos debitados, sin la comisión de MP, y extras) + boletas cobradas por otros medios.
+  const porMP = cobros.filter((c) => c.estado === "aprobado" && mesAR(c.pagado_at ?? c.created_at) === mes).reduce((a, c) => a + c.monto - (Number(c.comision_mp) || 0), 0);
   const cobrado = porMP + delMes.filter((f) => f.estado === "cobrada" && f.medio !== "mercadopago").reduce((a, f) => a + f.bruto, 0);
   const vencidas = facturas.filter((f) => f.estado === "pendiente" && f.vencimiento < hoy);
 

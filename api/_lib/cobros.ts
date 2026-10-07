@@ -5,7 +5,7 @@ import { adminDb } from "./db";
 import type { PagoMP } from "./mercadopago";
 import { destinatariosDe, enviarAviso, usuariosConRol } from "./notify";
 import { marcarCobradaPorDebito } from "./facturar";
-import { totalMensual } from "./facturacion";
+import { comisionDe, comisionPct, montoDebito, totalMensual } from "./facturacion";
 import { videoDesdePedido, type PedidoVideo } from "./pedidos";
 import { mesAR } from "./fecha";
 
@@ -164,9 +164,12 @@ export const estadoSuscripcion = (status: string) => ESTADO_SUSCRIPCION[status] 
 
 /**
  * Lo que tiene que cobrar el débito automático: el total de la boleta del mes (abono + extras fijos +
- * IVA si es factura), calculado con la misma función que la boleta. `neto` es el abono solo.
+ * IVA si es factura, `total`), calculado con la misma función que la boleta, más la comisión de
+ * Mercado Pago de Ajustes (`monto`, ver `montoDebito`). `neto` es el abono solo.
  */
-export async function precioAbono(proyectoId: string): Promise<{ nombre: string; plan: string; neto: number; monto: number }> {
+export async function precioAbono(
+  proyectoId: string
+): Promise<{ nombre: string; plan: string; neto: number; total: number; monto: number; comision_pct: number }> {
   const db = adminDb();
   const [p, settings] = await Promise.all([
     db.collection("projects").doc(proyectoId).get().then((s) => s.data() ?? {}),
@@ -183,8 +186,9 @@ export async function precioAbono(proyectoId: string): Promise<{ nombre: string;
     }
   }
   neto = neto || 0;
-  const monto = neto > 0 ? totalMensual({ abono: neto, facturacion: p.facturacion ?? null }, Number(settings.iva_pct ?? 21)) : 0;
-  return { nombre: p.nombre ?? "Cliente", plan, neto, monto };
+  const total = neto > 0 ? totalMensual({ abono: neto, facturacion: p.facturacion ?? null }, Number(settings.iva_pct ?? 21)) : 0;
+  const comision_pct = comisionPct(settings.comision_mp_pct);
+  return { nombre: p.nombre ?? "Cliente", plan, neto, total, monto: montoDebito(total, comision_pct), comision_pct };
 }
 
 /** Busca el cliente de una suscripción. */
@@ -212,13 +216,17 @@ export async function registrarAbono(
   const [anio, nMes] = mes.split("-").map(Number);
   let esNuevo = false;
   let esperado = 0;
+  let comision = 0;
   const pRef = db.collection("projects").doc(datos.proyectoId);
   await db.runTransaction(async (tx) => {
     esNuevo = false;
     const snap = await tx.get(ref);
     const pSnap = await tx.get(pRef);
-    // Lo que se acordó debitar: si MP cobró otra cosa, queda marcado para revisar.
-    esperado = Number(pSnap.data()?.suscripcion?.monto ?? 0) || 0;
+    // Lo que se acordó debitar (ya con la comisión): si MP cobró otra cosa, queda marcado para revisar.
+    const sus = pSnap.data()?.suscripcion;
+    esperado = Number(sus?.monto ?? 0) || 0;
+    // Comisión de MP con la que se armó la suscripción (las viejas, sin recargo, quedan en 0).
+    comision = snap.exists ? Number(snap.data()!.comision_mp ?? 0) || 0 : comisionDe(datos.monto, Number(sus?.comision_pct ?? 0));
     const distinto = esperado > 0 && Math.abs(datos.monto - esperado) > 0.5;
     if (!snap.exists) {
       esNuevo = nuevo === "aprobado";
@@ -229,6 +237,7 @@ export async function registrarAbono(
         ref_id: mes,
         cantidad: 1,
         monto: datos.monto,
+        ...(comision ? { comision_mp: comision } : {}),
         moneda: "ARS",
         estado: nuevo,
         mp_payment_id: datos.paymentId,
@@ -250,7 +259,7 @@ export async function registrarAbono(
   });
   if (esNuevo) {
     // Paga la última boleta emitida y pendiente del cliente (no la del mes del débito).
-    await marcarCobradaPorDebito(datos.proyectoId, datos.monto, ref.id).catch((err) => console.warn("[abono] factura", err));
+    await marcarCobradaPorDebito(datos.proyectoId, datos.monto, ref.id, comision).catch((err) => console.warn("[abono] factura", err));
     const p = (await db.collection("projects").doc(datos.proyectoId).get()).data() ?? {};
     const distinto = esperado > 0 && Math.abs(datos.monto - esperado) > 0.5;
     if (distinto) console.warn("[abono] monto distinto al esperado", datos.paymentId, datos.monto, esperado);

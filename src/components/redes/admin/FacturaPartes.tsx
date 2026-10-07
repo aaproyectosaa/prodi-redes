@@ -43,10 +43,13 @@ import { PageShell, StatCard } from "@/components/redes/PageShell";
 import { ClienteTag } from "@/components/redes/ClienteTag";
 import UserAvatar from "@/components/UserAvatar";
 import { useRedes } from "@/contexts/redes-data-context";
+import { PlazoPago } from "@/components/redes/admin/PlazoPago";
+import { errorPlazo, plazoInicial, plazoParaGuardar } from "@/lib/redes/plazoPago";
 import { useAppData } from "@/contexts/app-data-context";
 import { formatARS, hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import { getRoleInfo } from "@/lib/roles";
 import {
+  DIA_VENCIMIENTO,
   ESTADO_FACTURA,
   MEDIOS,
   abrirBoleta,
@@ -183,12 +186,14 @@ export function ElegirClientes({
 }
 
 export function DatosFacturacionDialog({ proyectoId, onClose }: { proyectoId: string | null; onClose: () => void }) {
-  const { clienteById } = useRedes();
+  const { clienteById, settings } = useRedes();
   const c = clienteById(proyectoId);
+  const diaDefecto = settings.dia_vencimiento ?? DIA_VENCIMIENTO;
   const [tipo, setTipo] = useState<"boleta" | "factura">("boleta");
   const [razon, setRazon] = useState("");
   const [cuit, setCuit] = useState("");
   const [adelantado, setAdelantado] = useState("");
+  const [plazo, setPlazo] = useState({ desde: "", hasta: "" });
   const [pausada, setPausada] = useState(false);
   const [recordar, setRecordar] = useState(true);
   const [fijos, setFijos] = useState<{ concepto: string; neto: string }[]>([]);
@@ -200,17 +205,22 @@ export function DatosFacturacionDialog({ proyectoId, onClose }: { proyectoId: st
     setRazon(f.razon_social ?? "");
     setCuit(f.cuit ?? "");
     setAdelantado(f.adelantado_hasta ?? "");
+    setPlazo({ desde: plazoInicial(f.pago_desde), hasta: plazoInicial(f.pago_hasta) });
     setPausada(!!f.pausada);
     setRecordar(!f.sin_recordatorios);
     setFijos((f.extras_fijos ?? []).map((x) => ({ concepto: x.concepto, neto: String(x.neto) })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proyectoId]);
   if (!c) return null;
+  const errPlazo = errorPlazo(plazo.desde, plazo.hasta, diaDefecto);
   const guardar = async () => {
     setBusy(true);
     try {
       await guardarDatosFacturacion(c.id, {
+        // Lo que no se edita acá (ej. la condición frente al IVA) no se pierde.
+        ...(c.facturacion ?? {}),
         tipo,
+        ...plazoParaGuardar(plazo.desde, plazo.hasta, diaDefecto),
         razon_social: razon.trim() || null,
         cuit: cuit.trim() || null,
         adelantado_hasta: /^\d{4}-\d{2}$/.test(adelantado) ? adelantado : null,
@@ -233,6 +243,7 @@ export function DatosFacturacionDialog({ proyectoId, onClose }: { proyectoId: st
           <DialogTitle>Datos de facturación · {c.nombre}</DialogTitle>
           <DialogDescription>Se usan cada vez que se prepara su boleta.</DialogDescription>
         </DialogHeader>
+        <PlazoPago desde={plazo.desde} hasta={plazo.hasta} onChange={setPlazo} adelantado={adelantado} onAdelantado={setAdelantado} />
         <div className="grid grid-cols-2 gap-1 rounded-xl border bg-muted/40 p-1">
           {(["boleta", "factura"] as const).map((t) => (
             <button
@@ -254,10 +265,6 @@ export function DatosFacturacionDialog({ proyectoId, onClose }: { proyectoId: st
             <Label className="text-xs">CUIT</Label>
             <Input value={cuit} onChange={(e) => setCuit(e.target.value)} placeholder="Opcional" />
           </div>
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Pagó por adelantado hasta (mes)</Label>
-          <Input type="month" value={adelantado} onChange={(e) => setAdelantado(e.target.value)} />
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Ítems que se suman todos los meses</Label>
@@ -298,7 +305,7 @@ export function DatosFacturacionDialog({ proyectoId, onClose }: { proyectoId: st
           <Button variant="ghost" onClick={onClose}>
             Cancelar
           </Button>
-          <Button onClick={() => void guardar()} disabled={busy}>
+          <Button onClick={() => void guardar()} disabled={busy || !!errPlazo}>
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Guardar
           </Button>

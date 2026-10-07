@@ -301,6 +301,8 @@ export interface Cobro {
   ref_id: string;
   cantidad: number;
   monto: number;
+  /** Abono por débito: lo que se quedó Mercado Pago de comisión (va incluido en `monto`). */
+  comision_mp?: number | null;
   moneda: "ARS";
   estado: EstadoCobro;
   mp_preference_id?: string | null;
@@ -338,8 +340,10 @@ export interface RedesSettings {
   precio_pieza_ia: number;
   /** Precio de cada pieza para imprimir (afiche, cartel, banner) fuera del plan. */
   precio_pieza_impresion?: number;
-  /** Facturación: día del mes siguiente en que vence (por defecto 10). */
+  /** Facturación: día del mes siguiente en que vence (por defecto 5). */
   dia_vencimiento?: number;
+  /** Comisión que se queda Mercado Pago en el débito automático (% de lo cobrado, IVA incluido). Se suma al débito. */
+  comision_mp_pct?: number;
   /** IVA de las facturas (las boletas no llevan). */
   iva_pct?: number;
   /** Datos que salen en la boleta para transferir. */

@@ -168,7 +168,7 @@ export default function Cobros() {
   return (
     <PageShell
       title="Cobros a clientes"
-      subtitle={`El 27 de ${mesLabel(mes).split(" ")[0].toLowerCase()} se emiten las boletas de ${mesLabel(periodoDe(mes)).toLowerCase()}: vencen el 5 y después corre un 0,5% de interés por día.`}
+      subtitle={`Mes vencido: el 27 de ${mesLabel(mes).split(" ")[0].toLowerCase()} se emiten las boletas de ${mesLabel(periodoDe(mes)).split(" ")[0].toLowerCase()} y se pagan del 1 al ${settings.dia_vencimiento ?? DIA_VENCIMIENTO} de ${mesLabel(sumarMeses(mes, 1)).toLowerCase()} (salvo los clientes con otro plazo). Después corre un 0,5% de interés por día.`}
       actions={
         <>
           {vivas.length > 0 && (

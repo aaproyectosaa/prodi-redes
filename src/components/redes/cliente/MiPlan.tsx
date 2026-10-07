@@ -8,14 +8,15 @@ import { DebitoCliente } from "@/components/redes/Debito";
 import { BoletaDialog } from "@/components/redes/admin/BoletaDialog";
 import { useRedes } from "@/contexts/redes-data-context";
 import { mesAR } from "@/lib/fecha";
-import { fechaCorta, formatARS, hoyISO, mesActual, mesLabel } from "@/lib/redes/format";
+import { fechaCorta, formatARS, hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import { planDe, usoPlan } from "@/lib/redes/planes";
 import { cupoPiezas, iniciarPago } from "@/lib/redes/piezas";
-import { interesMora, nombrePeriodo, textoMora, totalMensual, useFacturasCliente, type FacturaDoc } from "@/lib/redes/facturacion";
+import { DIA_PAGO_DESDE, DIA_VENCIMIENTO, diaPago, interesMora, nombrePeriodo, textoMora, textoPlazoPago, totalMensual, useFacturasCliente, type FacturaDoc } from "@/lib/redes/facturacion";
 import { DATOS_COBRO_DEFAULT } from "@/lib/redes/types";
 import type { Project } from "@/integrations/firebase/types";
 import { cn } from "@/lib/utils";
 
+const nombreMes = (m: string) => mesLabel(m).split(" ")[0].toLowerCase();
 const ddmm = (f: string) => f.split("-").reverse().slice(0, 2).join("/");
 const ESTADO_PAGO: Record<string, string> = {
   aprobado: "Pagado",
@@ -49,12 +50,14 @@ export function MiPlan({
   const facturas = useFacturasCliente(cliente.id);
   const cobro = { ...DATOS_COBRO_DEFAULT, ...(settings.cobro ?? {}) };
   const debito = cliente.suscripcion?.estado === "activa";
+  const pagoHasta = diaPago(cliente.facturacion?.pago_hasta) ?? settings.dia_vencimiento ?? DIA_VENCIMIENTO;
+  const pagoDesde = Math.min(diaPago(cliente.facturacion?.pago_desde) ?? DIA_PAGO_DESDE, pagoHasta);
 
   const debe = facturas.filter((f) => f.estado === "pendiente").sort((a, b) => a.vencimiento.localeCompare(b.vencimiento));
   // Lo que debe hoy: el saldo de cada boleta más el interés por mora a hoy (0,5% por día desde el 6).
   const totalDebe = debe.reduce((a, f) => a + interesMora(f, hoy).totalConInteres, 0);
-  // El débito automático cobra el total de la boleta (con IVA y extras fijos), no solo el abono.
-  const montoDebito = totalMensual({ abono: plan.precioMensual, facturacion: cliente.facturacion ?? null }, settings.iva_pct ?? 21);
+  // El débito automático cobra el total de la boleta (con IVA y extras fijos) más la comisión de MP.
+  const totalBoleta = totalMensual({ abono: plan.precioMensual, facturacion: cliente.facturacion ?? null }, settings.iva_pct ?? 21);
   const vencidas = debe.filter((f) => f.vencimiento < hoy);
   const anio = mes.slice(0, 4);
   const misCobros = cobros.filter((c) => c.proyecto_id === cliente.id);
@@ -107,7 +110,7 @@ export function MiPlan({
                   </span>
                   <span className={cn("block text-xs", f.vencimiento < hoy ? "font-semibold text-destructive" : "text-muted-foreground")}>
                     {textoMora(f, hoy) ||
-                      (f.debito && !f.debitado ? "Se debita sola" : `Vence el ${ddmm(f.vencimiento)} · después, 0,5% de interés por día`)}
+                      (f.debito && !f.debitado ? "Se debita sola" : `${textoPlazoPago(f.vencimiento, f.pago_desde)} · después, 0,5% de interés por día`)}
                   </span>
                 </span>
                 <span className="font-semibold tabular-nums">{formatARS(interesMora(f, hoy).totalConInteres)}</span>
@@ -143,7 +146,7 @@ export function MiPlan({
           <div>
             <p className="font-semibold">Estás al día</p>
             <p className="text-sm text-muted-foreground">
-              {debito ? "Tu abono se cobra solo cada mes con el débito automático." : `La boleta de cada mes te llega el 27 del mes anterior y la pagás hasta el 5. Después corre un interés del 0,5% por día.`}
+              {debito ? "Tu abono se cobra solo cada mes con el débito automático." : `La boleta de cada mes te llega el 27 y la pagás en el mes siguiente: la de ${nombreMes(mes)}, del ${pagoDesde} al ${pagoHasta} de ${nombreMes(sumarMeses(mes, 1))}. Después corre un interés del 0,5% por día.`}
               {pagadoAnio > 0 ? ` En ${anio} llevás pagado ${formatARS(pagadoAnio)}.` : ""}
             </p>
           </div>
@@ -186,7 +189,7 @@ export function MiPlan({
 
       {/* 3. Cómo pagás y extras */}
       <div className="grid gap-4 md:grid-cols-2">
-        <DebitoCliente cliente={cliente} monto={montoDebito} email={email} />
+        <DebitoCliente cliente={cliente} monto={totalBoleta} comision={settings.comision_mp_pct} email={email} />
         <ComprarExtras clienteId={cliente.id} precio={plan.precioVideoExtra} />
       </div>
 

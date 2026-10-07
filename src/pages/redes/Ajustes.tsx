@@ -26,6 +26,7 @@ import { fechaHora, formatARS } from "@/lib/redes/format";
 import { callApi } from "@/lib/redes/api";
 import { Textarea } from "@/components/ui/textarea";
 import { DATOS_COBRO_DEFAULT, type DatosCobro, type PlanRedes } from "@/lib/redes/types";
+import { comisionPct, montoDebito } from "@/lib/redes/facturacion";
 import { ENFOQUE_PRODI_DEFAULT } from "../../../api/_lib/plan-mes";
 
 export default function Ajustes() {
@@ -37,6 +38,7 @@ export default function Ajustes() {
   const [enfoque, setEnfoque] = useState(settings.ia_enfoque ?? ENFOQUE_PRODI_DEFAULT);
   const [diaVto, setDiaVto] = useState(String(settings.dia_vencimiento ?? 5));
   const [iva, setIva] = useState(String(settings.iva_pct ?? 21));
+  const [comisionMp, setComisionMp] = useState(String(settings.comision_mp_pct ?? 0));
   const [cobro, setCobro] = useState<DatosCobro>({ ...DATOS_COBRO_DEFAULT, ...(settings.cobro ?? {}) });
   const [saving, setSaving] = useState<string | null>(null);
 
@@ -48,6 +50,7 @@ export default function Ajustes() {
     setEnfoque(settings.ia_enfoque ?? ENFOQUE_PRODI_DEFAULT);
     setDiaVto(String(settings.dia_vencimiento ?? 5));
     setIva(String(settings.iva_pct ?? 21));
+    setComisionMp(String(settings.comision_mp_pct ?? 0));
     setCobro({ ...DATOS_COBRO_DEFAULT, ...(settings.cobro ?? {}) });
   }, [settings]);
 
@@ -138,20 +141,35 @@ export default function Ajustes() {
 
           <Section
             title="Facturación"
-            description="El 27 de cada mes se prepara sola la boleta del mes siguiente. Vence el 5 (sin interés) y después corre un 0,5% por día. Estos datos salen en las boletas."
+            description="Mes vencido: el 27 de cada mes se prepara sola la boleta de ese mes y se paga del 1 al día que elijas acá (el 5) del mes siguiente. Después corre un 0,5% por día. A un cliente puntual le podés cambiar los días en su ficha. Estos datos salen en las boletas."
           >
             <div className="space-y-3 rounded-xl border bg-card p-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Vence el día</Label>
                   <Input inputMode="numeric" value={diaVto} onChange={(e) => setDiaVto(e.target.value.replace(/\D/g, "").slice(0, 2))} />
-                  <p className="text-[11px] text-muted-foreground">del mes que cubre la boleta (el 5)</p>
+                  <p className="text-[11px] text-muted-foreground">del mes siguiente al facturado (el 5)</p>
                 </div>
                 <div className="space-y-1.5">
                   <Label>IVA de las facturas (%)</Label>
                   <Input inputMode="numeric" value={iva} onChange={(e) => setIva(e.target.value.replace(/\D/g, "").slice(0, 2))} />
                   <p className="text-[11px] text-muted-foreground">las boletas no llevan</p>
                 </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Comisión de Mercado Pago en el débito automático (%)</Label>
+                <Input
+                  inputMode="decimal"
+                  className="w-28"
+                  value={comisionMp}
+                  onChange={(e) => setComisionMp(e.target.value.replace(/[^\d.,]/g, "").slice(0, 5))}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Lo que se queda Mercado Pago de cada débito, con IVA (0 = sin recargo). Se le suma al débito para que te llegue el total
+                  de la boleta: con {comisionPct(comisionMp.replace(",", ".")) || 0}%, una boleta de {formatARS(100000)} se debita{" "}
+                  {formatARS(montoDebito(100000, comisionPct(comisionMp.replace(",", "."))))}. La boleta y la factura no cambian. Los débitos
+                  ya activos siguen con su monto hasta que toques "Cobrar $X desde ahora" en la ficha del cliente.
+                </p>
               </div>
               {(
                 [
@@ -174,6 +192,7 @@ export default function Ajustes() {
                   void guardar("fact", {
                     dia_vencimiento: Math.min(28, Math.max(1, Number(diaVto) || 5)),
                     iva_pct: Math.min(27, Number(iva) || 0),
+                    comision_mp_pct: comisionPct(comisionMp.replace(",", ".")),
                     cobro,
                   })
                 }

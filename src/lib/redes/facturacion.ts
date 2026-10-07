@@ -25,15 +25,22 @@ import {
 
 export type { EstadoFactura, Factura, ItemFactura, MedioCobro };
 // Las reglas de facturación son las mismas que usa el servidor (mismo archivo): período (el 27 se
-// arma la del mes siguiente), vencimiento el 5, interés del 0,5% diario y total del débito.
+// arma la de ese mes, mes vencido), se paga del 1 al 5 del siguiente, interés del 0,5% diario y total
+// del débito (con la comisión de Mercado Pago).
 export {
+  DIA_PAGO_DESDE,
   DIA_VENCIMIENTO,
+  comisionDe,
+  comisionPct,
+  diaPago,
   interesMora,
   leyendaInteres,
+  montoDebito,
   nombrePeriodo,
   periodoDe,
   saldoDe,
   textoMora,
+  textoPlazoPago,
   totalMensual,
 } from "../../../api/_lib/facturacion";
 export type FacturaDoc = Factura & { id: string };
@@ -254,7 +261,7 @@ ${
       ? f.interes_cobrado
         ? `<p class="obs">Se cobró además ${ars(f.interes_cobrado)} de interés por mora.</p>`
         : ""
-      : `<p class="obs">${esc(leyendaInteres(f.vencimiento))}</p>${textoMora(f, hoyAR()) ? `<p class="obs"><b>${esc(textoMora(f, hoyAR()))}</b></p>` : ""}`
+      : `<p class="obs">${esc(leyendaInteres(f.vencimiento, f.pago_desde))}</p>${textoMora(f, hoyAR()) ? `<p class="obs"><b>${esc(textoMora(f, hoyAR()))}</b></p>` : ""}`
   }
 ${f.tipo === "boleta" ? '<p class="obs">Este documento es una boleta de pago y no reemplaza la factura correspondiente.</p>' : ""}
 ${f.nota && !(f.debito && f.nota.startsWith("Se cobra solo")) ? `<p class="obs">${esc(f.nota)}</p>` : ""}
@@ -505,7 +512,7 @@ export function libroDelMes(
   mes: string,
   datos: {
     facturas: Factura[];
-    cobrosMP: { concepto: string; monto: number; pagado_at?: string | null; created_at: string; proyecto: string }[];
+    cobrosMP: { concepto: string; monto: number; comision_mp?: number | null; pagado_at?: string | null; created_at: string; proyecto: string }[];
     gastos: Gasto[];
     pagosEquipo: { nombre: string; monto: number; fecha: string; detalle?: string | null }[];
     /** Cuotas de créditos, convenios e impuestos pagadas en el mes. */
@@ -527,7 +534,15 @@ export function libroDelMes(
       })),
     ...datos.cobrosMP
       .filter((c) => mesAR(c.pagado_at ?? c.created_at) === mes)
-      .map((c) => ({ fecha: fechaAR(c.pagado_at ?? c.created_at), tipo: "Ingreso" as const, concepto: c.concepto, contraparte: c.proyecto, medio: "Mercado Pago", monto: c.monto })),
+      .flatMap((c) => {
+        const fecha = fechaAR(c.pagado_at ?? c.created_at);
+        const ingreso = { fecha, tipo: "Ingreso" as const, concepto: c.concepto, contraparte: c.proyecto, medio: "Mercado Pago", monto: c.monto };
+        // La comisión que se queda MP del débito (va sumada al débito, no a la boleta).
+        const comision = Number(c.comision_mp) || 0;
+        return comision > 0
+          ? [ingreso, { fecha, tipo: "Egreso" as const, concepto: `Comisión Mercado Pago (${c.concepto})`, contraparte: "Mercado Pago", medio: "Mercado Pago", monto: comision }]
+          : [ingreso];
+      }),
     ...datos.gastos
       .filter((g) => g.mes === mes)
       .map((g) => ({ fecha: g.fecha, tipo: "Egreso" as const, concepto: `${g.categoria}: ${g.concepto}`, contraparte: g.proveedor ?? "", medio: medioLabel(g.medio), monto: g.monto })),

@@ -130,7 +130,7 @@ export default function Administracion() {
       id: "emitir",
       urgencia: dia >= 27 ? "alta" : "media",
       icono: Send,
-      // Las que se emiten el 27 de este mes cubren el mes siguiente.
+      // Las que se emiten el 27 de este mes cubren este mes (mes vencido).
       titulo: `Emitir las boletas de ${mesCorto(periodoDe(mes))} (${sinEmitir} sin emitir)`,
       detalle: dia >= 27 ? "Hoy es día de facturar. Elegís a quién y le llega a su panel y por mail." : `Se factura el 27. Faltan ${27 - dia} días.`,
       cta: "Emitir",

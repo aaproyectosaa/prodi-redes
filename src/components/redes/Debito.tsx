@@ -15,6 +15,7 @@ import {
 import type { Project } from "@/integrations/firebase/types";
 import { callApi } from "@/lib/redes/api";
 import { fechaCorta, formatARS } from "@/lib/redes/format";
+import { comisionDe, comisionPct, montoDebito } from "@/lib/redes/facturacion";
 import { cn } from "@/lib/utils";
 
 const ESTADOS = {
@@ -35,17 +36,29 @@ export function EstadoDebito({ cliente }: { cliente: Project }) {
         <Icon className="h-4 w-4" /> {e.label}
       </p>
       <p className="text-xs text-muted-foreground">
-        {formatARS(s.monto)} por mes · {s.payer_email}
+        {formatARS(s.monto)} por mes
+        {comisionPct(s.comision_pct) ? ` (incluye ${formatARS(comisionDe(s.monto, Number(s.comision_pct)))} de comisión de Mercado Pago)` : ""} ·{" "}
+        {s.payer_email}
         {s.ultimo_pago_at ? ` · último cobro ${fechaCorta(s.ultimo_pago_at)}` : ""}
       </p>
     </div>
   );
 }
 
-/** Tarjeta del cliente en "Mi plan". */
-export function DebitoCliente({ cliente, monto, email }: { cliente: Project; monto: number; email?: string }) {
+/** Lo que se debita por mes: el total de la boleta más la comisión de Mercado Pago (% de Ajustes). */
+const debitoDe = (total: number, comision?: number) => {
+  const monto = montoDebito(total, comisionPct(comision));
+  return { monto, recargo: monto - total };
+};
+
+/**
+ * Tarjeta del cliente en "Mi plan". `monto`: el total de la boleta del mes; `comision`: el % de
+ * Mercado Pago de Ajustes, que se suma al débito.
+ */
+export function DebitoCliente({ cliente, monto: total, comision, email }: { cliente: Project; monto: number; comision?: number; email?: string }) {
   const [open, setOpen] = useState(false);
   const activa = cliente.suscripcion?.estado === "activa";
+  const { monto, recargo } = debitoDe(total, comision);
   return (
     <div className="rounded-2xl border bg-card p-5">
       <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -66,16 +79,25 @@ export function DebitoCliente({ cliente, monto, email }: { cliente: Project; mon
           {formatARS(monto)}/mes
         </Button>
       )}
-      <ActivarDebitoDialog open={open} onOpenChange={setOpen} cliente={cliente} monto={monto} email={email} redirigir />
+      {!activa && monto > 0 && recargo > 0 && (
+        <p className="mt-2 text-center text-[11px] text-muted-foreground">
+          Incluye {formatARS(recargo)} de comisión de Mercado Pago. Si pagás por transferencia, no va.
+        </p>
+      )}
+      <ActivarDebitoDialog open={open} onOpenChange={setOpen} cliente={cliente} monto={monto} recargo={recargo} email={email} redirigir />
     </div>
   );
 }
 
-/** Bloque del admin en "Informe y cobros". `monto`: el total de la boleta del mes (con IVA y extras). */
-export function DebitoAdmin({ cliente, monto }: { cliente: Project; monto: number }) {
+/**
+ * Bloque del admin en "Informe y cobros". `monto`: el total de la boleta del mes (con IVA y extras);
+ * `comision`: el % de Mercado Pago de Ajustes. El débito cobra los dos (igual que `precioAbono`).
+ */
+export function DebitoAdmin({ cliente, monto: total, comision }: { cliente: Project; monto: number; comision?: number }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<null | "cancelar" | "monto">(null);
   const s = cliente.suscripcion;
+  const { monto, recargo } = debitoDe(total, comision);
   const run = async (accion: "cancelar" | "actualizar_monto") => {
     setBusy(accion === "cancelar" ? "cancelar" : "monto");
     try {
@@ -98,7 +120,14 @@ export function DebitoAdmin({ cliente, monto }: { cliente: Project; monto: numbe
       )}
       {s?.estado === "activa" && monto > 0 && s.monto !== monto && (
         <p className="rounded-lg bg-warning/10 p-2 text-xs text-warning">
-          La boleta del mes (con IVA y extras fijos) es de {formatARS(monto)} y el débito cobra {formatARS(s.monto)}.
+          La boleta del mes (con IVA y extras fijos) es de {formatARS(total)}
+          {recargo > 0 ? `; con la comisión de Mercado Pago (${formatARS(recargo)}) el débito tendría que ser de ${formatARS(monto)}` : ""} y
+          hoy cobra {formatARS(s.monto)}.
+        </p>
+      )}
+      {recargo > 0 && s?.estado !== "activa" && (
+        <p className="text-xs text-muted-foreground">
+          El débito sería de {formatARS(monto)}: la boleta ({formatARS(total)}) más {formatARS(recargo)} de comisión de Mercado Pago.
         </p>
       )}
       <div className="flex flex-wrap gap-2">
@@ -120,7 +149,7 @@ export function DebitoAdmin({ cliente, monto }: { cliente: Project; monto: numbe
           </Button>
         )}
       </div>
-      <ActivarDebitoDialog open={open} onOpenChange={setOpen} cliente={cliente} monto={monto} email={cliente.contacto_emails?.[0]} />
+      <ActivarDebitoDialog open={open} onOpenChange={setOpen} cliente={cliente} monto={monto} recargo={recargo} email={cliente.contacto_emails?.[0]} />
     </div>
   );
 }
@@ -130,6 +159,7 @@ function ActivarDebitoDialog({
   onOpenChange,
   cliente,
   monto,
+  recargo,
   email: emailInicial,
   redirigir,
 }: {
@@ -137,6 +167,8 @@ function ActivarDebitoDialog({
   onOpenChange: (v: boolean) => void;
   cliente: Project;
   monto: number;
+  /** Comisión de Mercado Pago que va incluida en `monto`. */
+  recargo: number;
   email?: string;
   /** El cliente va directo a Mercado Pago; el admin recibe el link para mandarlo. */
   redirigir?: boolean;
@@ -169,7 +201,9 @@ function ActivarDebitoDialog({
         <DialogHeader>
           <DialogTitle>Débito automático del abono</DialogTitle>
           <DialogDescription>
-            {formatARS(monto)} por mes (el total de la boleta), con tarjeta en Mercado Pago. Se puede cancelar cuando quieras.
+            {formatARS(monto)} por mes (el total de la boleta
+            {recargo > 0 ? ` más ${formatARS(recargo)} de comisión de Mercado Pago` : ""}), con tarjeta en Mercado Pago. Se puede
+            cancelar cuando quieras.
           </DialogDescription>
         </DialogHeader>
         {link ? (

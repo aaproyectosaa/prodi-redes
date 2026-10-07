@@ -220,7 +220,7 @@ async function suscribir(req: VercelRequest) {
   const actual = (await ref.get()).data()?.suscripcion;
   if (actual?.estado === "activa") throw new HttpError(409, "El débito automático ya está activo");
 
-  const { nombre, plan, monto } = await precioAbono(b.proyecto_id);
+  const { nombre, plan, monto, comision_pct } = await precioAbono(b.proyecto_id);
   if (!(monto > 0)) throw new HttpError(409, "Este cliente no tiene precio de abono cargado");
 
   // Si ya hay una pendiente con el mismo monto y mail, se reusa el link.
@@ -250,6 +250,8 @@ async function suscribir(req: VercelRequest) {
       mp_preapproval_id: s.id,
       estado: estadoSuscripcion(s.status),
       monto,
+      // Comisión de Mercado Pago que ya va sumada en `monto` (se descuenta al aplicar cada débito).
+      comision_pct,
       payer_email: email,
       init_point: s.init_point ?? null,
       creada_at: now,
@@ -274,10 +276,12 @@ async function suscripcion(req: VercelRequest) {
     return { ok: true };
   }
   if (b.accion === "actualizar_monto") {
-    const { monto } = await precioAbono(b.proyecto_id);
+    // Total de la boleta + comisión de Mercado Pago de Ajustes (las suscripciones viejas quedan con su
+    // monto hasta que se toca "Cobrar $X desde ahora").
+    const { monto, comision_pct } = await precioAbono(b.proyecto_id);
     if (!(monto > 0)) throw new HttpError(409, "El plan no tiene precio");
     await actualizarSuscripcion(actual.mp_preapproval_id, { monto });
-    await ref.update({ "suscripcion.monto": monto, "suscripcion.actualizada_at": now });
+    await ref.update({ "suscripcion.monto": monto, "suscripcion.comision_pct": comision_pct, "suscripcion.actualizada_at": now });
     return { ok: true, monto };
   }
   throw new HttpError(400, "Acción inválida");

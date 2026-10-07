@@ -8,7 +8,7 @@ import { crearTokenAprobacion } from "./aprobacion";
 import { prepararFacturacion } from "./facturar";
 import { asuntoRecordatorio, interesMora, mailFacturaHtml, nombreMesF, periodoDe, saldoDe, type Factura } from "./facturacion";
 import { enviarMail } from "./informe";
-import { hoyAR, sumarDias } from "./fecha";
+import { hoyAR, sumarDias, sumarMeses } from "./fecha";
 
 const H48 = 48 * 3600_000;
 /** Máximo de recordatorios por video en revisión (después le escribe el equipo). */
@@ -172,7 +172,7 @@ export async function recordatoriosPlan(base: string): Promise<number> {
 }
 
 /**
- * El 27 de cada mes se prepara la facturación del mes siguiente (se cobra por adelantado, vence el 5)
+ * El 27 de cada mes se prepara la facturación de ese mes (mes vencido: se paga del 1 al 5 del siguiente)
  * y se le avisa al super admin. Las boletas se guardan con `mes` = el mes de hoy (ver facturacion.ts).
  */
 export async function facturacionDel27(base: string): Promise<string> {
@@ -186,7 +186,7 @@ export async function facturacionDel27(base: string): Promise<string> {
       {
         destinatarios: admins.docs.map((d) => d.id),
         titulo: "Hoy es 27: a emitir las boletas 🧾",
-        cuerpo: `Están listas las de ${nombreMesF(periodoDe(mes))} de ${r.creadas} cliente${r.creadas === 1 ? "" : "s"} (vencen el 5). Entrá a Cobros, elegí a quién emitirle y les llega por la app y por mail.`,
+        cuerpo: `Están listas las de ${nombreMesF(periodoDe(mes))} de ${r.creadas} cliente${r.creadas === 1 ? "" : "s"} (se pagan del 1 al 5 de ${nombreMesF(sumarMeses(mes, 1)).split(" ")[0]}, o en el plazo de cada cliente). Entrá a Cobros, elegí a quién emitirle y les llega por la app y por mail.`,
         link: `/cobros?mes=${mes}`,
         clave: `facturacion:${mes}`,
       },

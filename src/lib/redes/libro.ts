@@ -16,7 +16,7 @@ export function useLibroMes(mes: string) {
     facturas,
     cobrosMP: cobros
       .filter((c) => c.estado === "aprobado")
-      .map((c) => ({ concepto: c.concepto, monto: c.monto, pagado_at: c.pagado_at, created_at: c.created_at, proyecto: clienteById(c.proyecto_id)?.nombre ?? "" })),
+      .map((c) => ({ concepto: c.concepto, monto: c.monto, comision_mp: c.comision_mp, pagado_at: c.pagado_at, created_at: c.created_at, proyecto: clienteById(c.proyecto_id)?.nombre ?? "" })),
     gastos,
     pagosEquipo: liqs
       .filter((l) => l.mes === mes && l.estado === "pagado")

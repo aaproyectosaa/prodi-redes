@@ -1,15 +1,17 @@
 // Facturación mensual de Prodi Redes (lógica pura: la usan el servidor, la app y la demo).
 //
-// Calendario: el 27 de cada mes (M) se prepara una boleta (o factura) por cliente con el abono y los
-// ítems fijos del MES SIGUIENTE (M+1): el servicio se cobra por adelantado. Vence el 5 de M+1; desde
-// el 6 corre un interés simple del 0,5% diario sobre el saldo (se calcula al vuelo, ver `interesMora`).
+// Calendario (mes vencido): el 27 de cada mes (M) se prepara una boleta (o factura) por cliente con el
+// abono y los ítems fijos de ESE MES (el servicio de M). Se paga del 1 al 5 de M+1 (o hasta el día de
+// Ajustes / el plazo propio del cliente); después corre un interés simple del 0,5% diario sobre el
+// saldo (se calcula al vuelo, ver `interesMora`). Ej.: la armada el 27/10 es la "boleta de octubre" y
+// se paga del 1 al 5 de noviembre.
 // Lucas la revisa, la emite y marca cuándo se cobró. El débito automático de Mercado Pago cobra el
-// total de la boleta (con IVA y extras fijos, ver `totalMensual`) y paga la última boleta pendiente;
-// los que pagaron por adelantado salen como cobrados.
+// total de la boleta (con IVA y extras fijos, ver `totalMensual`) más la comisión de Mercado Pago de
+// Ajustes (`montoDebito`) y paga la última boleta pendiente; los que pagaron por adelantado salen como
+// cobrados.
 //
-// Ojo con `mes`: es el mes en que se arma la boleta (el del 27), NO el período facturado. Se dejó así
-// para no romper las boletas ya guardadas (el id es `{cliente}_{mes}`). El período es `periodoDe(mes)`
-// (el mes siguiente) y es lo que se muestra en todos lados ("boleta de noviembre").
+// `mes` es el mes en que se arma (el del 27) y es también el período facturado: `periodoDe(mes)`
+// devuelve el mismo mes (se deja el helper para no tocar cada lugar que lo usa).
 
 export type TipoComprobante = "boleta" | "factura";
 export type EstadoFactura = "borrador" | "pendiente" | "cobrada" | "anulada";
@@ -39,7 +41,7 @@ export interface DatosArca {
 
 export interface Factura {
   proyecto_id: string;
-  /** Mes en que se arma (el del 27, YYYY-MM). El período facturado es el siguiente: `periodoDe(mes)`. */
+  /** Mes en que se arma (el del 27, YYYY-MM) y que se factura (mes vencido). */
   mes: string;
   cliente: string;
   tipo: TipoComprobante;
@@ -53,6 +55,8 @@ export interface Factura {
   /** YYYY-MM-DD */
   fecha: string;
   vencimiento: string;
+  /** Desde qué día del mes siguiente se puede pagar (por defecto el 1). El último día es `vencimiento`. */
+  pago_desde?: number | null;
   estado: EstadoFactura;
   debito?: boolean;
   /**
@@ -61,6 +65,8 @@ export interface Factura {
    * pendiente (ver `saldoDe`).
    */
   debitado?: number | null;
+  /** De lo debitado, lo que se quedó Mercado Pago de comisión (no cuenta para pagar la boleta). */
+  comision_mp?: number | null;
   medio?: MedioCobro | null;
   cobrado_at?: string | null;
   /** Interés por mora que se cobró al marcarla cobrada (queda fijo para el historial). */
@@ -84,22 +90,26 @@ export const nombreMesF = (mes: string) => {
 
 export const facturaId = (proyectoId: string, mes: string) => `${proyectoId}_${mes}`;
 
-/** Día del mes en que vence la boleta (del período facturado) si no hay otro en Ajustes. */
+/** Día del mes siguiente al facturado en que vence la boleta, si no hay otro en Ajustes. */
 export const DIA_VENCIMIENTO = 5;
+/** Desde qué día del mes siguiente se paga, si el cliente no tiene otro (se paga del 1 al 5). */
+export const DIA_PAGO_DESDE = 1;
+
+/** Un día de pago válido (1 a 28, para que exista en todos los meses) o null. */
+export const diaPago = (v: unknown): number | null => {
+  const n = Math.round(Number(v));
+  return v != null && v !== "" && n >= 1 && n <= 28 ? n : null;
+};
 /** Interés por mora: 0,5% diario, simple, sobre el saldo. */
 export const TASA_INTERES_DIARIO = 0.005;
 
-/** Período que cubre una boleta armada el 27 de `mes`: el mes siguiente (YYYY-MM). */
-export function periodoDe(mes: string): string {
-  const [y, m] = mes.split("-").map(Number);
-  const d = new Date(Date.UTC(y, m, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-}
+/** Período que cubre una boleta armada el 27 de `mes`: ese mismo mes (mes vencido). */
+export const periodoDe = (mes: string): string => mes;
 
-/** "noviembre 2026": el período de la boleta (no el mes en que se armó). */
+/** "octubre 2026": el período de la boleta (el mes del servicio). */
 export const nombrePeriodo = (f: Pick<Factura, "mes">) => nombreMesF(periodoDe(f.mes));
 
-/** Día `dia` del mes siguiente a `mes` (o sea, del período facturado). */
+/** Día `dia` del mes siguiente a `mes`: la boleta de octubre vence el 5 de noviembre. */
 export function vencimientoDe(mes: string, dia = DIA_VENCIMIENTO): string {
   const [y, m] = mes.split("-").map(Number);
   const d = new Date(Date.UTC(y, m, Math.min(28, Math.max(1, dia))));
@@ -113,8 +123,27 @@ export function totales(items: ItemFactura[], tipo: TipoComprobante, ivaPct: num
   return { neto, iva_pct: pct, iva, bruto: neto + iva };
 }
 
-/** Lo que falta cobrar de una boleta (el total menos lo que ya debitó Mercado Pago). */
-export const saldoDe = (f: Pick<Factura, "bruto" | "debitado">) => Math.max(0, Math.round(Number(f.bruto) - Number(f.debitado ?? 0)));
+/** Lo que falta cobrar de una boleta (el total menos lo que ya debitó Mercado Pago, sin su comisión). */
+export const saldoDe = (f: Pick<Factura, "bruto" | "debitado" | "comision_mp">) =>
+  Math.max(0, Math.round(Number(f.bruto) - Number(f.debitado ?? 0) + Number(f.comision_mp ?? 0)));
+
+/** Comisión de Mercado Pago válida (más de 0 y menos de 50%, IVA incluido) o 0. */
+export const comisionPct = (v: unknown) => {
+  const n = Number(v);
+  return n > 0 && n < 50 ? n : 0;
+};
+
+/**
+ * Lo que tiene que debitar Mercado Pago para que, después de su comisión (`pct`% de lo cobrado), a
+ * PRODI le quede el total de la boleta: total / (1 − pct/100), en pesos enteros.
+ */
+export const montoDebito = (total: number, pct: number) => {
+  const p = comisionPct(pct);
+  return p ? Math.round(total / (1 - p / 100)) : total;
+};
+
+/** Lo que se queda Mercado Pago de un débito de `monto` (con centavos). */
+export const comisionDe = (monto: number, pct: number) => Math.round(monto * comisionPct(pct)) / 100;
 
 /** Un débito "cubre" la boleta si llega al total (con medio peso de redondeo). */
 export const debitoCubre = (debitado: number, bruto: number) => debitado > 0 && debitado + 0.5 >= bruto;
@@ -133,7 +162,7 @@ const diasEntre = (desde: string, hasta: string) =>
  * guarda lo que se cobró en `interes_cobrado`.
  */
 export function interesMora(
-  f: Pick<Factura, "estado" | "bruto" | "debitado" | "vencimiento">,
+  f: Pick<Factura, "estado" | "bruto" | "debitado" | "comision_mp" | "vencimiento">,
   hoy: string
 ): { dias: number; saldo: number; interes: number; totalConInteres: number } {
   const saldo = saldoDe(f);
@@ -143,15 +172,23 @@ export function interesMora(
 }
 
 /** "Vencida hace 3 días · interés $1.500 · total $101.500" (vacío si no está vencida). */
-export function textoMora(f: Pick<Factura, "estado" | "bruto" | "debitado" | "vencimiento">, hoy: string): string {
+export function textoMora(f: Pick<Factura, "estado" | "bruto" | "debitado" | "comision_mp" | "vencimiento">, hoy: string): string {
   const m = interesMora(f, hoy);
   if (!m.dias) return "";
   return `Vencida hace ${m.dias} día${m.dias === 1 ? "" : "s"} · interés ${arsF(m.interes)} · total ${arsF(m.totalConInteres)}`;
 }
 
 /** Leyenda del vencimiento y el interés (boletas, mails y avisos). */
-export const leyendaInteres = (vencimiento: string) =>
-  `Vence el ${vencimiento.split("-").reverse().slice(0, 2).join("/")}. Después corre un interés del 0,5% por día.`;
+export const leyendaInteres = (vencimiento: string, desde?: number | null) =>
+  `${textoPlazoPago(vencimiento, desde)}. Después corre un interés del 0,5% por día.`;
+
+/** "Se paga del 01/11 al 05/11" (o "Vence el 05/11" si el plazo es de un solo día). */
+export function textoPlazoPago(vencimiento: string, desde?: number | null): string {
+  const [, m, d] = vencimiento.split("-");
+  const ini = diaPago(desde) ?? DIA_PAGO_DESDE;
+  if (ini >= Number(d)) return `Vence el ${d}/${m}`;
+  return `Se paga del ${String(ini).padStart(2, "0")}/${m} al ${d}/${m}`;
+}
 
 export interface DatosCliente {
   id: string;
@@ -166,12 +203,17 @@ export interface DatosCliente {
     cuit?: string | null;
     extras_fijos?: { concepto: string; neto: number }[];
     adelantado_hasta?: string | null;
+    /** Días del mes siguiente en que paga (por defecto del 1 al día de vencimiento de Ajustes, el 5). */
+    pago_desde?: number | null;
+    pago_hasta?: number | null;
   } | null;
   debitoActivo?: boolean;
   /** Mercado Pago ya debitó y ese débito todavía no se aplicó a ninguna boleta. */
   abonoDebitado?: boolean;
   /** Cuánto debitó (si no viene, se toma como que cubrió todo). */
   montoDebitado?: number | null;
+  /** De eso, cuánto se quedó Mercado Pago de comisión. */
+  comisionDebitada?: number | null;
 }
 
 type DatosMonto = Pick<DatosCliente, "abono" | "facturacion">;
@@ -197,12 +239,12 @@ function itemsDe(c: DatosMonto): ItemFactura[] {
 }
 
 /**
- * Total del mes con IVA y extras fijos: lo mismo que da la boleta (`armarFactura`). Es lo que cobra
- * el débito automático de Mercado Pago, así nunca queda distinto de la boleta.
+ * Total del mes con IVA y extras fijos: lo mismo que da la boleta (`armarFactura`). El débito
+ * automático cobra esto más la comisión de Mercado Pago (`montoDebito`), así a PRODI le queda la boleta.
  */
 export const totalMensual = (c: DatosMonto, ivaPct: number) => totales(itemsDe(c), tipoDe(c), ivaPct).bruto;
 
-/** Arma el borrador de un cliente: se arma el 27 de `mes` y cubre el mes siguiente. */
+/** Arma el borrador de un cliente: se arma el 27 de `mes`, cubre ese mes y se paga en el siguiente. */
 export function armarFactura(
   c: DatosCliente,
   mes: string,
@@ -211,11 +253,13 @@ export function armarFactura(
   const tipo = tipoDe(c);
   const items = itemsDe(c);
   const t = totales(items, tipo, opciones.ivaPct);
-  // "Pagó por adelantado hasta" es un mes de servicio: se compara con el período de la boleta.
+  // "Tiene pagado hasta" es un mes de servicio: se compara con el período de la boleta.
   const adelantado = !!c.facturacion?.adelantado_hasta && periodoDe(mes) <= c.facturacion.adelantado_hasta;
   // Si el débito no llega al total (suscripción con un monto viejo), el resto queda para cobrar.
+  // La comisión de Mercado Pago no paga la boleta.
   const debitado = c.abonoDebitado ? Math.round(Number(c.montoDebitado ?? t.bruto) || 0) : 0;
-  const cubre = debitoCubre(debitado, t.bruto);
+  const comision = debitado > 0 ? Math.max(0, Number(c.comisionDebitada ?? 0) || 0) : 0;
+  const cubre = debitoCubre(debitado - comision, t.bruto);
   const parcial = !adelantado && debitado > 0 && !cubre;
   const cobrada = adelantado || cubre;
   return {
@@ -228,17 +272,19 @@ export function armarFactura(
     items,
     ...t,
     fecha: opciones.hoy,
-    vencimiento: vencimientoDe(mes, opciones.diaVencimiento),
+    // Se paga el mes siguiente: del 1 al día de Ajustes (el 5), o en el plazo propio del cliente.
+    vencimiento: vencimientoDe(mes, diaPago(c.facturacion?.pago_hasta) ?? opciones.diaVencimiento),
+    pago_desde: diaPago(c.facturacion?.pago_desde) ?? DIA_PAGO_DESDE,
     estado: cobrada ? "cobrada" : "borrador",
     debito: !!c.debitoActivo,
-    ...(debitado > 0 && !adelantado ? { debitado } : {}),
+    ...(debitado > 0 && !adelantado ? { debitado, ...(comision ? { comision_mp: comision } : {}) } : {}),
     medio: adelantado ? "adelantado" : cubre ? "mercadopago" : null,
     cobrado_at: cobrada ? new Date().toISOString() : null,
     ...(cobrada ? { interes_cobrado: 0 } : {}),
     nota: adelantado
       ? `Pagado por adelantado hasta ${nombreMesF(c.facturacion!.adelantado_hasta!)}`
       : parcial
-        ? notaDebitoParcial(debitado, t.bruto - debitado)
+        ? notaDebitoParcial(debitado, saldoDe({ bruto: t.bruto, debitado, comision_mp: comision }))
         : c.debitoActivo
         ? "Se cobra solo por débito automático de Mercado Pago"
         : null,
@@ -305,16 +351,15 @@ export function mailFacturaHtml(f: Factura, link: string, baseUrl: string, aviso
       <td style="padding:10px 0;border-bottom:1px solid #EEECF5;color:#111018;font-size:14px;text-align:right;white-space:nowrap;">${arsF(i.neto)}</td></tr>`
     )
     .join("");
-  const vence = f.vencimiento.split("-").reverse().join("/");
   // Débito parcial (el débito no llegó al total): se avisa cuánto falta pagar.
   const saldo = f.debitado ? saldoDe(f) : 0;
   const mora = hoy ? interesMora(f, hoy) : null;
   const bajada =
     f.debitado && saldo > 0
-      ? `Mercado Pago ya debitó ${arsF(f.debitado)}. Falta pagar ${arsF(saldo)}. ${leyendaInteres(f.vencimiento)}`
+      ? `Mercado Pago ya debitó ${arsF(f.debitado)}${f.comision_mp ? ` (con ${arsF(f.comision_mp)} de comisión)` : ""}. Falta pagar ${arsF(saldo)}. ${leyendaInteres(f.vencimiento, f.pago_desde)}`
       : f.debito
         ? "Se cobra solo por débito automático de Mercado Pago."
-        : `Vence el ${vence}. Después corre un interés del 0,5% por día.`;
+        : leyendaInteres(f.vencimiento, f.pago_desde);
   return `<!doctype html><html lang="es"><body style="margin:0;background:#F4F2FA;font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F2FA;padding:24px 12px;"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FFFFFF;border-radius:18px;overflow:hidden;">

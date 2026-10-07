@@ -1,9 +1,9 @@
 // Prepara la facturación en Firestore (`facturas/{cliente}_{mes}`). La usan el cron del 27 y el botón
 // "Preparar facturación" del super admin. No pisa lo que ya existe. `mes` es el mes en que se arma
-// (el del 27); la boleta cubre el mes siguiente (ver `periodoDe` en facturacion.ts).
+// (el del 27) y el que se factura (mes vencido); se paga del 1 al 5 del siguiente.
 
 import { adminDb, YaExiste } from "./db";
-import { armarFactura, DIA_VENCIMIENTO, debitoCubre, facturaId, notaDebitoParcial, type DatosCliente } from "./facturacion";
+import { armarFactura, DIA_VENCIMIENTO, debitoCubre, facturaId, notaDebitoParcial, saldoDe, type DatosCliente } from "./facturacion";
 import { hoyAR } from "./fecha";
 
 export async function prepararFacturacion(
@@ -23,13 +23,14 @@ export async function prepararFacturacion(
   ]);
   const planes = new Map(planesSnap.docs.map((d) => [d.id, d.data()]));
   const settings = settingsSnap.data() ?? {};
-  const debitados = new Map<string, { monto: number; refs: (typeof sueltos.docs)[number]["ref"][] }>();
+  const debitados = new Map<string, { monto: number; comision: number; refs: (typeof sueltos.docs)[number]["ref"][] }>();
   for (const a of sueltos.docs) {
     const c = a.data();
     if (c.tipo !== "abono" || c.estado !== "aprobado") continue;
     const pid = String(c.proyecto_id);
-    const x = debitados.get(pid) ?? { monto: 0, refs: [] };
+    const x = debitados.get(pid) ?? { monto: 0, comision: 0, refs: [] };
     x.monto += Number(c.monto) || 0;
+    x.comision += Number(c.comision_mp) || 0;
     x.refs.push(a.ref);
     debitados.set(pid, x);
   }
@@ -60,6 +61,7 @@ export async function prepararFacturacion(
       debitoActivo: p.suscripcion?.estado === "activa",
       abonoDebitado: !!suelto,
       montoDebitado: suelto?.monto ?? null,
+      comisionDebitada: suelto?.comision ?? null,
     };
     const f = armarFactura(datos, mes, {
       ivaPct: Number(settings.iva_pct ?? 21),
@@ -85,12 +87,13 @@ export async function prepararFacturacion(
 
 /**
  * Cuando Mercado Pago debita, el débito paga la boleta más reciente del cliente que esté emitida y
- * sin cobrar (la del último 27), no la del mes calendario del débito. Si no hay ninguna emitida, va
- * al borrador más reciente; si no hay nada, el cobro queda `sin_factura` y lo toma la próxima boleta
- * que se arme. Se suma a lo ya debitado: si cubre el total queda cobrada; si no (suscripción con un
- * monto viejo), queda pendiente con el saldo. Devuelve el id de la boleta (o null).
+ * sin cobrar (la del último 27: un débito de principios de noviembre paga la de octubre), no la del
+ * mes calendario del débito. Si no hay ninguna emitida, va al borrador más reciente; si no hay nada,
+ * el cobro queda `sin_factura` y lo toma la próxima boleta que se arme. Se suma a lo ya debitado
+ * (y `comision` a `comision_mp`): si lo debitado sin la comisión cubre el total queda cobrada; si no
+ * (suscripción con un monto viejo), queda pendiente con el saldo. Devuelve el id de la boleta (o null).
  */
-export async function marcarCobradaPorDebito(proyectoId: string, monto: number, cobroId?: string): Promise<string | null> {
+export async function marcarCobradaPorDebito(proyectoId: string, monto: number, cobroId?: string, comision = 0): Promise<string | null> {
   const db = adminDb();
   return db.runTransaction(async (tx) => {
     const q = await tx.get(db.collection("facturas").where("proyecto_id", "==", proyectoId));
@@ -104,16 +107,19 @@ export async function marcarCobradaPorDebito(proyectoId: string, monto: number, 
     }
     const f = doc.data();
     const debitado = Math.round(Number(f.debitado ?? 0) + (Number(monto) || 0));
+    const comision_mp = Math.round((Number(f.comision_mp ?? 0) + (Number(comision) || 0)) * 100) / 100;
+    const extra = comision_mp ? { comision_mp } : {};
     const bruto = Number(f.bruto) || 0;
     if (cobroRef) tx.update(cobroRef, { factura_id: doc.id });
-    if (debitoCubre(debitado, bruto)) {
+    if (debitoCubre(debitado - comision_mp, bruto)) {
       // El débito cobra un monto fijo: no lleva interés por mora aunque llegue después del 5.
-      tx.update(doc.ref, { estado: "cobrada", medio: "mercadopago", debitado, cobrado_at: new Date().toISOString(), interes_cobrado: 0 });
+      tx.update(doc.ref, { estado: "cobrada", medio: "mercadopago", debitado, ...extra, cobrado_at: new Date().toISOString(), interes_cobrado: 0 });
       return doc.id;
     }
     // Débito parcial: no se marca cobrada. La nota automática se actualiza; la que escribió alguien, no.
     const notaAuto = !f.nota || /^(Se cobra solo por débito|Mercado Pago debitó)/.test(String(f.nota));
-    tx.update(doc.ref, { debitado, ...(notaAuto ? { nota: notaDebitoParcial(debitado, bruto - debitado) } : {}) });
+    const saldo = saldoDe({ bruto, debitado, comision_mp });
+    tx.update(doc.ref, { debitado, ...extra, ...(notaAuto ? { nota: notaDebitoParcial(debitado, saldo) } : {}) });
     return doc.id;
   });
 }

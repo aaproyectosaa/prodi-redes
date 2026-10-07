@@ -33,7 +33,9 @@ import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { ETAPAS } from "@/lib/redes/etapas";
 import { formatARS, mesActual, mesLabel, sumarMeses, fechaCorta } from "@/lib/redes/format";
 import { planDe, usoPlan } from "@/lib/redes/planes";
-import { totalMensual } from "@/lib/redes/facturacion";
+import { DIA_VENCIMIENTO, totalMensual } from "@/lib/redes/facturacion";
+import { PlazoPago } from "@/components/redes/admin/PlazoPago";
+import { errorPlazo, plazoInicial, plazoParaGuardar } from "@/lib/redes/plazoPago";
 import { callApi } from "@/lib/redes/api";
 import { CONDICIONES_IVA, type CondicionIva, type Project, type ProjectTeamRole } from "@/integrations/firebase/types";
 import { COLORES } from "./Clientes";
@@ -169,10 +171,11 @@ export default function ClienteDetalle() {
           <TabsContent value="informe" className="space-y-8">
             <InformeCliente cliente={cliente} mes={mes} />
             <Section title="Débito automático del abono" description="Mercado Pago cobra el abono todos los meses con la tarjeta del cliente.">
-              {/* El débito cobra el total de la boleta (con IVA y extras fijos), calculado igual que la boleta. */}
+              {/* El débito cobra el total de la boleta (con IVA y extras fijos) más la comisión de MP de Ajustes. */}
               <DebitoAdmin
                 cliente={cliente}
                 monto={totalMensual({ abono: planDe(cliente, planes).precioMensual, facturacion: cliente.facturacion ?? null }, settings.iva_pct ?? 21)}
+                comision={settings.comision_mp_pct}
               />
             </Section>
             <Section title="Cobros">
@@ -214,7 +217,7 @@ const ROLES_EQUIPO: { rol: ProjectTeamRole; label: string; desc: string }[] = [
 ];
 
 function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolean }) {
-  const { planes } = useRedes();
+  const { planes, settings } = useRedes();
   const { profiles } = useAppData();
   const [form, setForm] = useState(() => toForm(cliente));
   const [saving, setSaving] = useState(false);
@@ -239,6 +242,8 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
     setSaving(true);
     try {
       assertEditable();
+      const errPlazo = isAdmin ? errorPlazo(form.factPagoDesde, form.factPagoHasta, settings.dia_vencimiento ?? DIA_VENCIMIENTO) : null;
+      if (errPlazo) throw new Error(errPlazo);
       const emails = form.emails
         .split(/[,\s;]+/)
         .map((e) => e.trim().toLowerCase())
@@ -263,11 +268,14 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
             piezas_mes: form.ovPiezas === "" ? null : Number(form.ovPiezas),
           },
           facturacion: {
+            // Lo que se maneja desde Cobros (pausada, recordatorios) no se pierde.
+            ...(cliente.facturacion ?? {}),
             tipo: form.factTipo,
             razon_social: form.factRazon.trim() || null,
             cuit: form.factCuit.trim() || null,
             condicion_iva: form.factCondIva || null,
             adelantado_hasta: /^\d{4}-\d{2}$/.test(form.factAdelantado) ? form.factAdelantado : null,
+            ...plazoParaGuardar(form.factPagoDesde, form.factPagoHasta, settings.dia_vencimiento ?? DIA_VENCIMIENTO),
             extras_fijos: form.factFijos
               .filter((x) => x.concepto.trim() && Number(x.neto) > 0)
               .map((x) => ({ concepto: x.concepto.trim(), neto: Number(x.neto) })),
@@ -358,7 +366,7 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
       )}
 
       {isAdmin && (
-        <Section title="Facturación" description="Cómo se le arma la boleta el 27.">
+        <Section title="Facturación" description="Cómo se le arma la boleta el 27 y cuándo la paga.">
           <div className="space-y-3 rounded-xl border bg-card p-4">
             <div className="grid grid-cols-2 gap-1 rounded-xl border bg-muted/40 p-1">
               {(["boleta", "factura"] as const).map((t) => (
@@ -372,6 +380,13 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
                 </button>
               ))}
             </div>
+            <PlazoPago
+              desde={form.factPagoDesde}
+              hasta={form.factPagoHasta}
+              onChange={(v) => setForm((f) => ({ ...f, factPagoDesde: v.desde, factPagoHasta: v.hasta }))}
+              adelantado={form.factAdelantado}
+              onAdelantado={(m) => set("factAdelantado", m)}
+            />
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="space-y-1">
                 <Label className="text-xs">Razón social</Label>
@@ -399,11 +414,6 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
                 </select>
               </div>
             )}
-            <div className="space-y-1">
-              <Label className="text-xs">Pagó por adelantado hasta (mes)</Label>
-              <Input type="month" value={form.factAdelantado} onChange={(e) => set("factAdelantado", e.target.value)} />
-              <p className="text-[11px] text-muted-foreground">Plan anual o trimestral: hasta ese mes la boleta sale como cobrada.</p>
-            </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Ítems que se suman todos los meses</Label>
               {form.factFijos.map((x, i) => (
@@ -553,6 +563,8 @@ function toForm(c: Project) {
     factCuit: c.facturacion?.cuit ?? "",
     factCondIva: (c.facturacion?.condicion_iva ?? "") as CondicionIva | "",
     factAdelantado: c.facturacion?.adelantado_hasta ?? "",
+    factPagoDesde: plazoInicial(c.facturacion?.pago_desde),
+    factPagoHasta: plazoInicial(c.facturacion?.pago_hasta),
     factFijos: (c.facturacion?.extras_fijos ?? []).map((x) => ({ concepto: x.concepto, neto: String(x.neto) })),
     team: {
       productor: c.team_roles?.productor ?? [],
