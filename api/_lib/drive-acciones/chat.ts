@@ -29,12 +29,22 @@ const SUBIDA = /^[a-f0-9]{32}$/;
 function carpetaDelChat(chatId: string, chat: Data): string {
   if (chat.tipo === "equipo") return "Equipo Prodi";
   if (chat.tipo === "cliente") return String(chat.nombre ?? chatId).replace(/[\\/]/g, "-").slice(0, 100);
+  if (chat.tipo === "grupo") return `Grupos/${chatId}`;
   return `Privados/${chatId}`;
 }
 
 function fallo(res: VercelResponse, err: unknown) {
   if (err instanceof DriveConnectionError) {
-    if (!res.headersSent) res.status(503).json({ error: "Drive no está conectado. Avisale al admin." });
+    // La causa exacta, para que el admin sepa qué hacer.
+    const causa: Record<string, string> = {
+      no_connection: "Drive no está conectado: el admin lo conecta en Ajustes.",
+      not_connected: "Drive está desconectado: el admin lo reconecta en Ajustes.",
+      needs_reconnect: "Hay que reconectar Drive en Ajustes.",
+      refresh_revoked: "Google revocó el acceso a Drive: el admin lo reconecta en Ajustes.",
+      decrypt_failed: "No se pudo leer la conexión de Drive (revisar TOKEN_ENCRYPTION_KEY en Vercel o reconectar Drive en Ajustes).",
+    };
+    console.error("[chat] drive", err.code, err.message);
+    if (!res.headersSent) res.status(503).json({ error: causa[err.code] ?? "Drive no está disponible. Avisale al admin." });
     return;
   }
   sendError(res, err);
