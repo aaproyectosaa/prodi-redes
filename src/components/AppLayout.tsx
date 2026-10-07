@@ -7,6 +7,7 @@ import { MobileAppHeader, MobileTabBar } from "@/components/MobileNav";
 import { AvisoActivarAvisos, AvisoInstalar } from "@/components/InstalarApp";
 import { AvisoDescargarChat, InstalarChatHost } from "@/components/InstalarChat";
 import { VideoSheet } from "@/components/redes/VideoSheet";
+import { ChatDock } from "@/components/redes/chat/ChatDock";
 import { VerComoBanner } from "@/components/redes/VerComo";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { RedesDataProvider } from "@/contexts/redes-data-context";
@@ -50,6 +51,7 @@ const LayoutInner = () => {
         <AvisoActivarAvisos uid={viewingAs ? undefined : user?.uid} />
         <DriveUploadStatusBar />
         <VideoSheet />
+        <ChatDock />
       </div>
     </RedesDataProvider>
   );

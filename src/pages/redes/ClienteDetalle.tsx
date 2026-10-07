@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { doc, updateDoc } from "@/lib/db";
-import { ArrowLeft, Eye, Loader2, Mail, Plus, Send, X } from "lucide-react";
+import { ArrowLeft, Eye, Loader2, Mail, MessageCircle, Plus, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { db } from "@/integrations/firebase/client";
 import { Button } from "@/components/ui/button";
@@ -43,13 +43,15 @@ import { MarcaArchivos } from "@/components/redes/MarcaArchivos";
 import { DebitoAdmin } from "@/components/redes/Debito";
 import { cn } from "@/lib/utils";
 import { assertEditable } from "@/lib/redes/vistaComo";
+import { chatClienteId } from "@/lib/redes/chat";
+import { abrirEnDock } from "@/lib/redes/chatDock";
 
 export default function ClienteDetalle() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const tab = params.get("tab") ?? "resumen";
-  const { clienteById, videos, planes, cobros, settings } = useRedes();
+  const { clienteById, videos, planes, cobros, settings, chats } = useRedes();
   const { role } = useUserProfileContext();
   const cliente = clienteById(id);
   const [mes, setMes] = useState(mesActual());
@@ -106,6 +108,17 @@ export default function ClienteDetalle() {
             </SelectContent>
           </Select>
           <BotonArmarMes clienteId={cliente.id} />
+          {chats.some((c) => c.id === chatClienteId(cliente.id)) && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                const id = chatClienteId(cliente.id);
+                if (!abrirEnDock(id)) navigate(`/chat?c=${id}`);
+              }}
+            >
+              <MessageCircle className="mr-2 h-4 w-4" /> Chat
+            </Button>
+          )}
           <Button onClick={() => setPlanificar(true)}>
             <Plus className="mr-2 h-4 w-4" /> Planificar
           </Button>

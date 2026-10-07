@@ -18,6 +18,7 @@ import { useRedes } from "@/contexts/redes-data-context";
 import { useAppData } from "@/contexts/app-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { abrirDirecto } from "@/lib/redes/chat";
+import { abrirEnDock } from "@/lib/redes/chatDock";
 import { eventos, reporteUsuario, type ReporteUsuario } from "@/lib/redes/reportes";
 import { fechaHora, hace, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import { getRoleInfo } from "@/lib/roles";
@@ -229,7 +230,7 @@ export function ReporteDetalle() {
             onClick={async () => {
               if (!realUser) return;
               const id = await abrirDirecto(realUser.uid, perfil.id, { [realUser.uid]: "", [perfil.id]: perfil.nombre ?? "" });
-              navigate(`/chat?c=${id}`);
+              if (!abrirEnDock(id)) navigate(`/chat?c=${id}`);
             }}
           >
             <MessageCircle className="mr-2 h-4 w-4" /> Mensaje

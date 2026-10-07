@@ -164,7 +164,7 @@ const esCampoDeTexto = (el: Element | null) =>
     (el.tagName === "INPUT" && !["checkbox", "radio", "range", "color", "file", "button", "submit"].includes((el as HTMLInputElement).type)));
 
 /** Con el teclado abierto en el celular la barra de abajo se esconde (si no, queda flotando arriba del teclado). */
-function useTecladoAbierto() {
+export function useTecladoAbierto() {
   const [abierto, setAbierto] = useState(false);
   useEffect(() => {
     const revisar = () => {

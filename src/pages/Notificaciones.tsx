@@ -8,6 +8,7 @@ import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { useInAppNotifications } from "@/hooks/use-in-app-notifications";
 import { cn } from "@/lib/utils";
 import { formatearFecha } from "@/lib/fecha";
+import { abrirEnDock, chatDeLink } from "@/lib/redes/chatDock";
 
 function formatRelative(iso: string): string {
   if (!iso) return "";
@@ -48,6 +49,8 @@ const Notificaciones = () => {
 
   const handleOpen = async (id: string, link: string, read: boolean) => {
     if (!read) await markRead(id);
+    // Un aviso de chat se abre en el chat flotante (si está disponible), sin salir de acá.
+    if (abrirEnDock(chatDeLink(link))) return;
     navigate(link || "/");
   };
 
