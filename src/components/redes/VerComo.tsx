@@ -63,10 +63,17 @@ export function VerComoDialog({ open, onOpenChange }: { open: boolean; onOpenCha
   const { profiles } = useAppData();
   const { realUser } = useUserProfileContext();
   const { entrar } = useVerComo();
-  const grupos: { titulo: string; roles: string[] }[] = [
-    { titulo: "Equipo", roles: ["productor", "editor", "pauta"] },
-    { titulo: "Clientes", roles: ["cliente"] },
-  ];
+  // Todos los usuarios, también los nuevos sin rol: si no, quien recién se suma no aparece.
+  const grupoDe = (role?: string | null) => {
+    const r = normalizeRole(role as UserRole);
+    if (r === "cliente") return "Clientes";
+    if (r === "pending") return "Sin rol asignado";
+    return "Equipo";
+  };
+  const grupos: { titulo: string; roles: string[] }[] = ["Equipo", "Clientes", "Sin rol asignado"].map((titulo) => ({
+    titulo,
+    roles: [...new Set(profiles.map((p) => p.role ?? ""))].filter((r) => grupoDe(r) === titulo),
+  })).filter((g) => g.roles.length > 0);
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandInput placeholder="¿Con qué usuario querés ver el sistema?" />
