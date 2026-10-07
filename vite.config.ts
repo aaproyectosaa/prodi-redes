@@ -20,6 +20,24 @@ function apiEnDev(env: Record<string, string>): Plugin {
   };
 }
 
+/** La app "Prodi Chat" (/chat-app…) usa chat-app.html: su manifest y sus íconos de iPhone. Como el rewrite de vercel.json. */
+const esChatApp = (url = "") => /^\/chat-app(\/|\?|$)/.test(url);
+function chatAppHtml(): Plugin {
+  const reescribir = (req: { url?: string }, _res: unknown, next: () => void) => {
+    if (esChatApp(req.url)) req.url = "/chat-app.html" + (req.url!.includes("?") ? req.url!.slice(req.url!.indexOf("?")) : "");
+    next();
+  };
+  return {
+    name: "prodi-chat-app-html",
+    configureServer(server) {
+      server.middlewares.use(reescribir);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(reescribir);
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -32,7 +50,16 @@ export default defineConfig(({ mode }) => {
       port: 8080,
       proxy: apiProxyTarget ? { "/api": { target: apiProxyTarget, changeOrigin: true } } : undefined,
     },
-    plugins: [react(), !apiProxyTarget && apiEnDev(env)],
+    plugins: [react(), chatAppHtml(), !apiProxyTarget && apiEnDev(env)],
+    build: {
+      rollupOptions: {
+        // Dos páginas con el mismo código: el sistema (index.html) y la app de chats (chat-app.html).
+        input: {
+          main: path.resolve(__dirname, "index.html"),
+          chat: path.resolve(__dirname, "chat-app.html"),
+        },
+      },
+    },
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

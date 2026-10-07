@@ -31,7 +31,9 @@ const servidor = http.createServer(async (req, res) => {
     // Archivos de la app; cualquier otra ruta es la app (index.html), como en vercel.json.
     const url = new URL(req.url || "/", `http://${req.headers.host}`);
     let archivo = path.join(DIST, decodeURIComponent(url.pathname));
-    if (!archivo.startsWith(DIST) || !fs.existsSync(archivo) || fs.statSync(archivo).isDirectory()) archivo = path.join(DIST, "index.html");
+    // La app "Prodi Chat" tiene su propia página (su manifest y sus íconos).
+    if (/^\/chat-app(\/|$)/.test(url.pathname)) archivo = path.join(DIST, "chat-app.html");
+    else if (!archivo.startsWith(DIST) || !fs.existsSync(archivo) || fs.statSync(archivo).isDirectory()) archivo = path.join(DIST, "index.html");
     res.writeHead(200, { "Content-Type": TIPOS[path.extname(archivo)] || "application/octet-stream" });
     fs.createReadStream(archivo).pipe(res);
   } catch (err) {

@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { usePendientes } from "@/hooks/use-pendientes";
 import { VerComoBoton } from "@/components/redes/VerComo";
 import { BotonInstalar } from "@/components/InstalarApp";
+import { BotonInstalarChat } from "@/components/InstalarChat";
 import type { Profile, UserRole } from "@/integrations/firebase/types";
 import { TituloSeccion, useSeccionesPlegables } from "@/components/SeccionNav";
 
@@ -169,6 +170,7 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
       <div className="space-y-0.5 border-t border-border p-2">
         <VerComoBoton collapsed={collapsed} />
         <BotonInstalar collapsed={collapsed} />
+        <BotonInstalarChat collapsed={collapsed} />
         {itemBtn(
           { label: "Avisos", icon: Bell, path: "/notificaciones" },
           location.pathname === "/notificaciones",

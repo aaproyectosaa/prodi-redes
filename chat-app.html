@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es" class="dark" data-app="chat">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <title>Prodi Chat</title>
+    <meta name="description" content="Los chats con el equipo de Prodi" />
+    <meta name="author" content="Prodi" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- iPhone toma el nombre y el ícono de acá al "Agregar a inicio" (por eso esta página aparte de index.html). -->
+    <meta name="apple-mobile-web-app-title" content="Prodi Chat" />
+    <link rel="manifest" href="/manifest-chat.webmanifest" />
+    <link rel="icon" type="image/png" href="/icons/icon-chat-192.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon-chat.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <meta property="og:title" content="Prodi Chat" />
+    <meta property="og:description" content="Los chats con el equipo de Prodi" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/icons/icon-chat-512.png" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Mismo service worker que el sistema (alcance "/"): avisos y pantalla sin conexión también acá.
+      if ("serviceWorker" in navigator) {
+        addEventListener("load", function () {
+          navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(function () {});
+        });
+      }
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

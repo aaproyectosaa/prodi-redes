@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/chat-app",
+      "destination": "/chat-app.html"
+    },
+    {
+      "source": "/chat-app/:path*",
+      "destination": "/chat-app.html"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

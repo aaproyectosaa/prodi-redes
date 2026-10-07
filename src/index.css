@@ -146,6 +146,10 @@ All colors MUST be HSL.
 html.teclado-abierto {
   --alto-barra: env(safe-area-inset-bottom, 0px);
 }
+/* Prodi Chat no tiene barra de abajo. */
+html.modo-chat {
+  --alto-barra: env(safe-area-inset-bottom, 0px);
+}
 @media (min-width: 768px) {
   :root,
   html.teclado-abierto {

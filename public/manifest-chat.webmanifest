@@ -1,0 +1,24 @@
+{
+  "id": "/chat-app",
+  "name": "Prodi Chat",
+  "short_name": "Prodi Chat",
+  "description": "Los chats con el equipo de Prodi, en una app aparte.",
+  "start_url": "/chat-app",
+  "scope": "/chat-app",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "lang": "es-AR",
+  "dir": "ltr",
+  "categories": ["business", "social", "productivity"],
+  "icons": [
+    { "src": "/icons/icon-chat-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-chat-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-chat-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Tareas", "short_name": "Tareas", "url": "/chat-app?tareas=1", "icons": [{ "src": "/icons/icon-chat-192.png", "sizes": "192x192" }] }
+  ]
+}

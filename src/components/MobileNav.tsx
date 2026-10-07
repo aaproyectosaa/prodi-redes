@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { usePendientes } from "@/hooks/use-pendientes";
 import { VerComoBoton } from "@/components/redes/VerComo";
 import { BotonInstalar } from "@/components/InstalarApp";
+import { BotonInstalarChat } from "@/components/InstalarChat";
 import type { Profile, UserRole } from "@/integrations/firebase/types";
 import { TituloSeccion, useSeccionesPlegables } from "@/components/SeccionNav";
 
@@ -130,6 +131,7 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
           <div className="space-y-0.5 border-t p-3 safe-area-pb" onClick={() => setOpen(false)}>
             <VerComoBoton />
             <BotonInstalar className="h-10 gap-3 text-foreground" />
+            <BotonInstalarChat className="h-10 gap-3 text-foreground" />
             <button
               type="button"
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
