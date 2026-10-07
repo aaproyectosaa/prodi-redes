@@ -93,11 +93,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
   try {
-    const caller = await requireCaller(req, ["admin", "productor", "editor", "pauta", "diseno", "administracion", "cliente"]);
+    const caller = await requireCaller(req, ["admin", "productor", "editor", "pauta", "diseno", "administracion", "cliente", "contacto"]);
     const b = body<Body>(req);
     // Mensajes del chat (de cualquiera): a los miembros, con el texto que arma el servidor. Así también
-    // funcionan los privados y los grupos, que no son de un cliente.
-    if (caller.role === "cliente" || String(b.clave ?? "").startsWith("chat:")) {
+    // funcionan los privados y los grupos, que no son de un cliente. Los contactos (solo chat), igual que el cliente.
+    if (caller.role === "cliente" || caller.role === "contacto" || String(b.clave ?? "").startsWith("chat:")) {
       // El cliente no arma avisos a mano (salen también por correo con la marca de Prodi): solo los de
       // chat y reuniones, con el texto que arma el servidor y a quienes corresponde.
       const aviso = await avisoDelCliente(caller, b);

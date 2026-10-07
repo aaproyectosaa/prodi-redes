@@ -40,6 +40,7 @@ import { callApi } from "@/lib/redes/api";
 import { CONDICIONES_IVA, type CondicionIva, type Project, type ProjectTeamRole } from "@/integrations/firebase/types";
 import { COLORES } from "./Clientes";
 import { MarcaArchivos } from "@/components/redes/MarcaArchivos";
+import { ContactosCliente } from "@/components/redes/ContactosCliente";
 import { DebitoAdmin } from "@/components/redes/Debito";
 import { cn } from "@/lib/utils";
 import { assertEditable } from "@/lib/redes/vistaComo";
@@ -486,6 +487,8 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
           </div>
         </Section>
       )}
+
+      <ContactosCliente cliente={cliente} />
 
       <Section title="Marca" description="La IA usa esto para escribir copys y diseñar piezas.">
         <div className="space-y-3 rounded-xl border bg-card p-4">

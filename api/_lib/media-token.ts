@@ -68,6 +68,8 @@ async function enChatDe(uid: string, fileId: string): Promise<boolean> {
  */
 export async function puedeVerArchivo(caller: Caller, fileId: string): Promise<boolean> {
   if (GLOBALES.includes(caller.role)) return true;
+  // Contacto (solo chat): únicamente los archivos mandados en sus chats.
+  if (caller.role === "contacto") return enChatDe(caller.uid, fileId);
   if (!ASIGNABLES.includes(caller.role)) return false;
   if (await enChatDe(caller.uid, fileId)) return true;
   const ref = [{ drive_file_id: fileId }];

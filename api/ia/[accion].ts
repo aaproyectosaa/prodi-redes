@@ -739,7 +739,8 @@ async function memoriaNotas(req: VercelRequest) {
 
 /** @prodi en el chat: el pedido lo valida y lo ejecuta el servidor. */
 async function chatAsistente(req: VercelRequest) {
-  const caller = await requireCaller(req, ["admin", "productor", "editor", "pauta", "diseno", "administracion", "cliente"]);
+  // Contacto (solo chat): @prodi le contesta y le deja tareas a gente del chat; reuniones y "recordar" no (ver chat-asistente.ts).
+  const caller = await requireCaller(req, ["admin", "productor", "editor", "pauta", "diseno", "administracion", "cliente", "contacto"]);
   const b = body<{ chat_id?: string; mensaje_id?: string }>(req);
   return atenderMencion(caller, b.chat_id, b.mensaje_id, appUrl(req));
 }

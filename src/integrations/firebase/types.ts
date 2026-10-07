@@ -17,6 +17,7 @@ export type UserRole =
   | "diseno" // Diseño gráfico (Karen): arma las piezas de todos los clientes, con IA de apoyo
   | "administracion" // Administración: facturación, cobros, pagos al equipo y gastos
   | "cliente"
+  | "contacto" // Contacto de un cliente que usa solo Prodi Chat (proyecto_id = su cliente)
   // Roles del modelo anterior. Se leen para no romper datos viejos, pero ya
   // no se asignan: un usuario con alguno de estos queda "pendiente" hasta que
   // el admin le asigne un rol nuevo.
@@ -62,6 +63,10 @@ export interface Profile {
   activo?: boolean;
   /** Cuándo el cliente vio (o cerró) la guía de bienvenida. */
   guia_cliente_at?: string | null;
+  /** Contacto (solo chat): el cliente al que pertenece, cargo y teléfono. */
+  proyecto_id?: string | null;
+  cargo?: string | null;
+  telefono?: string | null;
 }
 
 /** Roles operativos asignables por proyecto (distintos del rol global del perfil). */

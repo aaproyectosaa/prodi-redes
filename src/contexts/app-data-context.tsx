@@ -26,7 +26,8 @@ const AppDataContext = createContext<AppDataContextValue | null>(null);
  */
 export function AppDataProvider({ children }: { children: ReactNode }) {
   const { user, role } = useUserProfileContext();
-  const esCliente = role === "cliente";
+  // Los contactos (solo chat) igual: solo su perfil y las fotos de quienes chatean con ellos.
+  const esCliente = role === "cliente" || role === "contacto";
   const [projects, setProjects] = useState<Project[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);

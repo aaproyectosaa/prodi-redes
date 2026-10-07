@@ -26,6 +26,7 @@ import { useAppData } from "@/contexts/app-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import {
   cambiarAdmin,
+  contactosDe,
   crearGrupo,
   editarChat,
   esAdminDelGrupo,
@@ -65,30 +66,48 @@ export function useContactos(): Persona[] {
   const uid = user?.uid;
   return useMemo(() => {
     if (!uid) return [];
-    if (role === "cliente") {
+    // Clientes y contactos (solo chat): la gente con la que ya comparten un chat (el equipo del cliente y su empresa).
+    if (role === "cliente" || role === "contacto") {
+      const contactos = contactosDe(chats);
       const m = new Map<string, string>();
       for (const c of chats) for (const id of c.miembros) if (id !== uid && id !== PRODI_ID && !m.has(id)) m.set(id, c.nombres?.[id] ?? "");
       return [...m]
         .filter(([, n]) => n)
-        .map(([id, nombre]) => ({ id, nombre, profile: { id, nombre, email: "" } as Profile, etiqueta: "" }))
+        .map(([id, nombre]) => ({ id, nombre, profile: { id, nombre, email: "" } as Profile, etiqueta: contactos.has(id) ? "Contacto" : "" }))
         .sort((a, b) => a.nombre.localeCompare(b.nombre));
     }
     const todos = role === "admin" || role === "diseno";
     const asignado = ["productor", "editor", "pauta"].includes(role ?? "");
-    const misClientes = new Set(
-      projects
-        .filter((p) => todos || (asignado && Object.values(p.team_roles ?? {}).some((ids) => Array.isArray(ids) && ids.includes(uid))))
-        .flatMap((p) => p.team_roles?.cliente ?? [])
+    const misProyectos = projects.filter(
+      (p) => todos || (asignado && Object.values(p.team_roles ?? {}).some((ids) => Array.isArray(ids) && ids.includes(uid)))
     );
+    const misClientes = new Set(misProyectos.flatMap((p) => p.team_roles?.cliente ?? []));
+    const misIds = new Set(misProyectos.map((p) => p.id));
     return profiles
       .filter((p) => p.id !== uid && p.role && !LEGADO.includes(p.role) && p.activo !== false && p.nombre?.trim())
-      .filter((p) => p.role !== "cliente" || misClientes.has(p.id))
+      .filter((p) => (p.role === "cliente" ? misClientes.has(p.id) : p.role === "contacto" ? !!p.proyecto_id && misIds.has(p.proyecto_id) : true))
       .map((p) => {
+        if (p.role === "contacto") {
+          const de = projects.find((x) => x.id === p.proyecto_id)?.nombre;
+          return { id: p.id, nombre: p.nombre, profile: p, etiqueta: de ? `Contacto · ${de}` : "Contacto" };
+        }
         const de = p.role === "cliente" ? projects.find((x) => x.team_roles?.cliente?.includes(p.id))?.nombre : undefined;
         return { id: p.id, nombre: p.nombre, profile: p, etiqueta: de ? `Cliente · ${de}` : getRoleInfo(p.role).label };
       })
       .sort((a, b) => a.nombre.localeCompare(b.nombre));
   }, [chats, profiles, projects, uid, role]);
+}
+
+/** Marca de "Contacto" (persona de un cliente que usa solo Prodi Chat). */
+export function EtiquetaContacto({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn("rounded bg-amber-500/15 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400", className)}
+      title="Contacto del cliente: usa solo Prodi Chat"
+    >
+      Contacto
+    </span>
+  );
 }
 
 /** Lista para elegir personas (con buscador). */
@@ -308,10 +327,12 @@ export function InfoChat({
   onSalio: () => void;
 }) {
   const { profiles } = useAppData();
+  const { chats } = useRedes();
   const { user, role, profile } = useUserProfileContext();
   const uid = user?.uid;
   const yo = profile?.nombre ?? "";
-  const contactos = useContactos();
+  const personas = useContactos();
+  const contactos = useMemo(() => contactosDe(chats), [chats]);
   const esGrupo = chat.tipo === "grupo";
   const admin = esAdminDelGrupo(chat, uid, role);
   const editaFoto = puedeEditarChat(chat, uid, role);
@@ -340,7 +361,7 @@ export function InfoChat({
     }
   };
 
-  const disponibles = contactos.filter((p) => !chat.miembros.includes(p.id));
+  const disponibles = personas.filter((p) => !chat.miembros.includes(p.id));
 
   return (
     <>
@@ -418,8 +439,11 @@ export function InfoChat({
                   <li key={id} className="flex items-center gap-3 px-3 py-2">
                     <UserAvatar profile={p} size="sm" className="h-8 w-8" />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">{id === uid ? `${p.nombre} (vos)` : p.nombre}</span>
-                      {p.role && <span className="block truncate text-xs text-muted-foreground">{getRoleInfo(p.role).label}</span>}
+                      <span className="flex items-center gap-1.5">
+                        <span className="truncate text-sm font-medium">{id === uid ? `${p.nombre} (vos)` : p.nombre}</span>
+                        {(p.role === "contacto" || contactos.has(id)) && <EtiquetaContacto className="shrink-0" />}
+                      </span>
+                      {p.role && p.role !== "contacto" && <span className="block truncate text-xs text-muted-foreground">{getRoleInfo(p.role).label}</span>}
                     </span>
                     {esAdm && (
                       <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">

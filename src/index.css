@@ -230,15 +230,33 @@ html.modo-chat {
   border-bottom-color: hsl(var(--border));
 }
 
-/* Alto de la pantalla de la app. En el iPhone el teclado no achica la pantalla (100dvh sigue igual) y tapa la caja
-   de escribir: mientras está abierto, --alto-app es el alto visible (lo pone useAltoVisible). */
+/* Caja de la app: fija y del tamaño de la pantalla (top/bottom 0, sin depender de 100dvh). En el iPhone el teclado
+   no achica la pantalla y Safari corre la parte visible: mientras está abierto, la caja sigue a la parte visible
+   (--arriba-app = offsetTop, --alto-app = alto visible; los pone useAltoVisible). */
 .alto-app {
-  height: var(--alto-app, 100dvh);
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: var(--arriba-app, 0px);
+  bottom: 0;
 }
-@supports not (height: 100dvh) {
-  .alto-app {
-    height: var(--alto-app, 100vh);
-  }
+html.teclado-ios .alto-app {
+  bottom: auto;
+  height: var(--alto-app);
+}
+/* Con la app montada el documento no scrollea (scrollea lo de adentro); así Safari no arrastra la página entera. */
+html.vista-fija,
+html.vista-fija body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+/* Con el teclado abierto no hace falta dejar la franja de la barra de inicio del iPhone. */
+:root {
+  --abajo-seguro: env(safe-area-inset-bottom, 0px);
+}
+html.teclado-ios {
+  --alto-barra: 0px;
+  --abajo-seguro: 0px;
 }
 
 /* Celular apaisado: el notch queda a un costado. */

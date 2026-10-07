@@ -43,9 +43,12 @@ export async function sincronizarChats(projects: Project[], profiles: Profile[],
     } else if (
       !mismo(actual.miembros, data.miembros) ||
       actual.nombre !== data.nombre ||
-      JSON.stringify(actual.nombres ?? {}) !== JSON.stringify(nombres)
+      JSON.stringify(actual.nombres ?? {}) !== JSON.stringify(nombres) ||
+      (data.contactos && !mismo(actual.contactos ?? [], data.contactos))
     ) {
-      tareas.push(updateDoc(doc(db, CHATS, id), { miembros: data.miembros, nombre: data.nombre, nombres }));
+      tareas.push(
+        updateDoc(doc(db, CHATS, id), { miembros: data.miembros, nombre: data.nombre, nombres, ...(data.contactos ? { contactos: data.contactos } : {}) })
+      );
     }
   };
 
@@ -53,12 +56,21 @@ export async function sincronizarChats(projects: Project[], profiles: Profile[],
   for (const p of projects) {
     if (p.enabled === false) continue;
     const t = p.team_roles ?? {};
+    // Contactos (solo chat) del cliente: están en su grupo; `contactos` deja que todos los vean marcados.
+    const contactos = profiles.filter((x) => x.role === "contacto" && x.activo !== false && x.proyecto_id === p.id).map((x) => x.id).sort();
     const miembros = Array.from(
-      new Set([...(t.productor ?? []), ...(t.editor ?? []), ...(t.pauta ?? []), ...(t.cliente ?? []), ...admins])
+      new Set([...(t.productor ?? []), ...(t.editor ?? []), ...(t.pauta ?? []), ...(t.cliente ?? []), ...contactos, ...admins])
     );
-    asegurar(chatClienteId(p.id), { tipo: "cliente", proyecto_id: p.id, nombre: p.nombre, miembros });
+    asegurar(chatClienteId(p.id), { tipo: "cliente", proyecto_id: p.id, nombre: p.nombre, miembros, contactos });
   }
   await Promise.allSettled(tareas);
+}
+
+/** Contactos (solo chat) que conoce este usuario: salen de los grupos de cada cliente (chat.contactos). */
+export function contactosDe(chats: Chat[]): Set<string> {
+  const s = new Set<string>();
+  for (const c of chats) for (const id of c.contactos ?? []) s.add(id);
+  return s;
 }
 
 /** Abre (o crea) la conversación privada entre dos personas. */
@@ -204,7 +216,7 @@ export function noLeido(chat: Chat, uid: string | undefined): boolean {
 /** Nombre a mostrar de una conversación para este usuario. */
 export function tituloChat(chat: Chat, uid: string | undefined, profiles: Profile[], role?: string): string {
   if (chat.tipo === "equipo") return "Equipo Prodi";
-  if (chat.tipo === "cliente") return role === "cliente" ? `Prodi · ${chat.nombre ?? ""}` : chat.nombre ?? "Cliente";
+  if (chat.tipo === "cliente") return role === "cliente" || role === "contacto" ? `Prodi · ${chat.nombre ?? ""}` : chat.nombre ?? "Cliente";
   if (chat.tipo === "grupo") return chat.nombre ?? "Grupo";
   const otro = chat.miembros.find((m) => m !== uid) ?? "";
   return profiles.find((p) => p.id === otro)?.nombre ?? chat.nombres?.[otro] ?? "Conversación";

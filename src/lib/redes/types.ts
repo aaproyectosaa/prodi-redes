@@ -396,6 +396,8 @@ export interface Chat {
   ultimo: { texto: string; by: string; at: string } | null;
   /** Nombres de los miembros (los clientes no pueden leer los perfiles del equipo). */
   nombres?: Record<string, string>;
+  /** Grupo de un cliente: quiénes son contactos (solo chat), para marcarlos aunque no se lean sus perfiles. */
+  contactos?: string[];
   /** Última lectura de cada miembro: { uid: ISO } */
   leido: Record<string, string>;
   created_at: string;

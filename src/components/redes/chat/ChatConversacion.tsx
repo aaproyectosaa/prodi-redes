@@ -1,16 +1,16 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { collection, limit, onSnapshot, orderBy, query } from "@/lib/db";
-import { ArrowLeft, Camera, Check, CheckCheck, FileText, Loader2, Paperclip, Send, Sparkles, Upload, Video } from "lucide-react";
+import { ArrowLeft, Camera, Check, CheckCheck, FileText, Info, Loader2, Paperclip, Send, Sparkles, Upload, Video } from "lucide-react";
 import { toast } from "sonner";
 import { db } from "@/integrations/firebase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import UserAvatar from "@/components/UserAvatar";
 import { useRedes } from "@/contexts/redes-data-context";
 import {
+  contactosDe,
   enviarAudio,
   enviarMensaje,
   lecturasDe,
@@ -25,7 +25,8 @@ import { limpiarSubidasListas, subirArchivosChat, useSubidasChat, CHAT_MAX_MB } 
 import { AudioMensaje, BarraGrabando, BotonMic, useGrabadorVoz } from "@/components/redes/chat/Voz";
 import { ArchivoMensaje, SubidaBurbuja } from "@/components/redes/chat/Archivo";
 import { ChatIcon } from "@/components/redes/chat/ChatIcon";
-import { InfoChat } from "@/components/redes/chat/Grupos";
+import { EtiquetaContacto, InfoChat } from "@/components/redes/chat/Grupos";
+import { Cabecitas, InfoMensaje, vistosHasta } from "@/components/redes/chat/InfoMensaje";
 import { CamaraDialog, camaraDelSistema } from "@/components/redes/chat/Camara";
 import { comprimirFoto } from "@/lib/imagen";
 import { crearReunion } from "@/lib/redes/reuniones";
@@ -98,45 +99,34 @@ function estadoVisto(chat: ChatT, m: Mensaje, uid: string) {
 /**
  * Estado de un mensaje propio (como WhatsApp): ✓ enviado, ✓✓ lo vio alguien, ✓✓ remarcado: lo vieron todos.
  * Sale de la última lectura de cada miembro (chat.leido): no se escribe nada por mensaje.
- * Tocándolo se ve quién lo vio y cuándo.
+ * Tocando la hora se abre "Info del mensaje" (quién lo vio y cuándo).
  */
-function Visto({ chat, m, uid, nombreDe }: { chat: ChatT; m: Mensaje; uid: string; nombreDe: (id: string) => string }) {
+function Visto({ chat, m, uid }: { chat: ChatT; m: Mensaje; uid: string }) {
   const { lecturas, vieron, todos, resumen } = estadoVisto(chat, m, uid);
   if (!lecturas.length) return null;
   const Icono = vieron.length ? CheckCheck : Check;
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={cn("inline-flex items-center rounded-sm", todos ? "text-primary-foreground" : "text-primary-foreground/60")}
-          aria-label={resumen}
-          title={resumen}
-        >
-          <Icono className="h-3.5 w-3.5" strokeWidth={todos ? 3 : 2} />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-64 p-0">
-        <p className="border-b px-3 py-2 text-xs font-semibold">{resumen}</p>
-        <ul className="max-h-60 overflow-y-auto py-1 text-sm">
-          {[...lecturas]
-            .sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""))
-            .map((l) => (
-              <li key={l.uid} className="flex items-center justify-between gap-3 px-3 py-1.5">
-                <span className="truncate">{nombreDe(l.uid)}</span>
-                {l.at ? (
-                  <span className="inline-flex shrink-0 items-center gap-1 text-xs text-primary">
-                    <CheckCheck className="h-3.5 w-3.5" /> {cuando(l.at)}
-                  </span>
-                ) : (
-                  <span className="shrink-0 text-xs text-muted-foreground">Sin ver</span>
-                )}
-              </li>
-            ))}
-        </ul>
-      </PopoverContent>
-    </Popover>
+    <span className={cn("inline-flex items-center", todos ? "text-primary-foreground" : "text-primary-foreground/60")} title={resumen}>
+      <Icono className="h-3.5 w-3.5" strokeWidth={todos ? 3 : 2} aria-label={resumen} />
+    </span>
   );
+}
+
+/** Mantener apretado (celular) abre la info del mensaje. Moverse (scroll) lo cancela. */
+function alMantenerApretado(t: MutableRefObject<ReturnType<typeof setTimeout> | undefined>, alMantener: () => void) {
+  const cancelar = () => clearTimeout(t.current);
+  return {
+    onTouchStart: () => {
+      cancelar();
+      t.current = setTimeout(() => {
+        navigator.vibrate?.(10);
+        alMantener();
+      }, 500);
+    },
+    onTouchMove: cancelar,
+    onTouchEnd: cancelar,
+    onTouchCancel: cancelar,
+  };
 }
 
 /** Debajo del último mensaje propio: "✓✓ Visto 14:32" / "Visto por 3 de 5", en violeta Prodi. */
@@ -183,7 +173,7 @@ export function ChatConversacion({
   /** Cuántos mensajes sin leer tiene (el chat flotante lo muestra en la burbuja minimizada). */
   onSinLeer?: (n: number) => void;
 }) {
-  const { clienteById } = useRedes();
+  const { clienteById, chats } = useRedes();
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
   const [cargando, setCargando] = useState(true);
   const [texto, setTexto] = useState("");
@@ -200,6 +190,10 @@ export function ChatConversacion({
   const capturaVideo = useRef<HTMLInputElement>(null);
   const [camara, setCamara] = useState(false);
   const [info, setInfo] = useState(false);
+  const [infoMsg, setInfoMsg] = useState<Mensaje | null>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  const pegadoAbajo = useRef(true);
+  const tMantener = useRef<ReturnType<typeof setTimeout>>();
   const enCelular = camaraDelSistema();
   const subidas = useSubidasChat(chat.id);
   // El texto de ayuda de la caja se acorta si no entra en una línea (celulares angostos, chat flotante).
@@ -275,6 +269,27 @@ export function ChatConversacion({
     void marcarLeido(chat, uid);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mensajes.length, chat.id, subidas.length, pensando, activa]);
+
+  // Si se achica la lista (se abre el teclado) estando abajo de todo, se sigue viendo lo último.
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const alScroll = () => {
+      pegadoAbajo.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    };
+    const abajo = () => {
+      if (pegadoAbajo.current) el.scrollTop = el.scrollHeight;
+    };
+    el.addEventListener("scroll", alScroll, { passive: true });
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(abajo) : null;
+    ro?.observe(el);
+    window.addEventListener("teclado-ios", abajo);
+    return () => {
+      el.removeEventListener("scroll", alScroll);
+      ro?.disconnect();
+      window.removeEventListener("teclado-ios", abajo);
+    };
+  }, []);
 
   const leidoHasta = chat.leido?.[uid] ?? "";
   const sinLeer = noLeido(chat, uid)
@@ -355,10 +370,21 @@ export function ChatConversacion({
   const perfilDe = (id: string): Profile | undefined =>
     profiles.find((p) => p.id === id) ?? (chat.nombres?.[id] ? ({ id, nombre: chat.nombres[id], email: "" } as Profile) : undefined);
   const nombreDe = (id: string, fallback?: string) => perfilDe(id)?.nombre || fallback || "Usuario";
+  const contactos = contactosDe(chats);
+  /** "Contacto" (solo chat) o el rol; los clientes no leen perfiles ajenos: ahí solo se sabe si es contacto. */
+  const etiquetaPersona = (id: string) => {
+    const r = perfilDe(id)?.role;
+    return r === "contacto" || contactos.has(id) ? "Contacto" : r ? getRoleInfo(r).label : "";
+  };
   const miembros = chat.miembros.map(perfilDe).filter(Boolean) as Profile[];
 
   let ultimoDia = "";
   const ultimoMio = [...mensajes].reverse().find((m) => m.by === uid && m.tipo !== "sistema")?.id;
+  // Grupos: caritas de quién leyó hasta dónde (como Messenger), debajo del último mensaje que vio cada uno.
+  const vistos = useMemo(
+    () => (chat.tipo === "directo" ? new Map<string, string[]>() : vistosHasta(chat, mensajes, uid)),
+    [chat, mensajes, uid]
+  );
 
   return (
     <div
@@ -385,7 +411,7 @@ export function ChatConversacion({
           <p className="text-xs text-muted-foreground">Fotos, videos, PDF o documentos · hasta {CHAT_MAX_MB} MB</p>
         </div>
       )}
-      <header className={cn("flex items-center border-b", compacto ? "gap-2 px-2 py-2" : "gap-3 px-3 py-2.5 md:px-5")}>
+      <header className={cn("flex shrink-0 items-center border-b", compacto ? "gap-2 px-2 py-2" : "gap-3 px-3 py-2.5 md:px-5")}>
         <button
           type="button"
           onClick={onBack}
@@ -410,12 +436,13 @@ export function ChatConversacion({
             <span className="block truncate font-semibold">{tituloChat(chat, uid, profiles, role)}</span>
             <span className="block truncate text-xs text-muted-foreground">
               {chat.tipo === "directo"
-                ? getRoleInfo(perfilDe(chat.miembros.find((m) => m !== uid) ?? "")?.role).label
+                ? etiquetaPersona(chat.miembros.find((m) => m !== uid) ?? "")
                 : miembros.map((m) => m.nombre?.split(" ")[0]).join(", ")}
             </span>
           </span>
         </button>
-        {(role !== "cliente" || chat.proyecto_id) &&
+        {/* Los contactos (solo chat) no arman reuniones: las crea el equipo o el cliente. */}
+        {role !== "contacto" && (role !== "cliente" || chat.proyecto_id) &&
           (compacto ? (
             <Button
               size="icon"
@@ -437,7 +464,7 @@ export function ChatConversacion({
         {acciones}
       </header>
 
-      <div className={cn("min-h-0 flex-1 overflow-y-auto px-3", compacto ? "py-3" : "py-4 md:px-6")}>
+      <div ref={scroller} className={cn("min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3", compacto ? "py-3" : "py-4 md:px-6")}>
         {cargando ? (
           <div className="flex justify-center py-10">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -472,7 +499,18 @@ export function ChatConversacion({
                   {mostrarDia && (
                     <p className="my-3 text-center text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{dia}</p>
                   )}
-                  <div className={cn("flex items-end gap-2", mio ? "justify-end" : "justify-start", !agrupado && "mt-2")}>
+                  <div className={cn("group/msj flex items-end gap-2", mio ? "justify-end" : "justify-start", !agrupado && "mt-2")}>
+                    {mio && (
+                      <button
+                        type="button"
+                        onClick={() => setInfoMsg(m)}
+                        className="mb-1 hidden h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground opacity-0 hover:bg-muted focus-visible:opacity-100 group-hover/msj:opacity-100 md:flex"
+                        aria-label="Info del mensaje"
+                        title="Info del mensaje"
+                      >
+                        <Info className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                     {!mio && (chat.tipo !== "directo" || bot) && (
                       <div className="w-7 shrink-0">
                         {!agrupado &&
@@ -486,8 +524,9 @@ export function ChatConversacion({
                       </div>
                     )}
                     <div
+                      {...alMantenerApretado(tMantener, () => setInfoMsg(m))}
                       className={cn(
-                        "min-w-0 rounded-2xl px-3.5 py-2 text-sm shadow-sm", compacto ? "max-w-[85%]" : "max-w-[82%] sm:max-w-[70%]",
+                        "min-w-0 rounded-2xl px-3.5 py-2 text-sm shadow-sm [-webkit-touch-callout:none]", compacto ? "max-w-[85%]" : "max-w-[82%] sm:max-w-[70%]",
                         mio
                           ? "rounded-br-md bg-primary text-primary-foreground"
                           : bot
@@ -501,7 +540,10 @@ export function ChatConversacion({
                         </p>
                       ) : (
                         !mio && !agrupado && chat.tipo !== "directo" && (
-                          <p className="mb-0.5 text-[11px] font-semibold text-primary">{nombreDe(m.by, m.by_nombre)}</p>
+                          <p className="mb-0.5 flex items-center gap-1.5 text-[11px] font-semibold text-primary">
+                            {nombreDe(m.by, m.by_nombre)}
+                            {etiquetaPersona(m.by) === "Contacto" && <EtiquetaContacto />}
+                          </p>
                         )
                       )}
                       {m.tipo === "archivo" && m.archivo ? (
@@ -573,18 +615,35 @@ export function ChatConversacion({
                             : m.texto}
                         </p>
                       )}
-                      <p
+                      <button
+                        type="button"
+                        onClick={() => setInfoMsg(m)}
                         className={cn(
-                          "mt-0.5 flex items-center justify-end gap-1 text-[10px]",
+                          "ml-auto mt-0.5 flex items-center justify-end gap-1 rounded-sm text-[10px]",
                           mio ? "text-primary-foreground/70" : "text-muted-foreground"
                         )}
+                        aria-label="Info del mensaje"
                       >
                         {hora(m.at)}
-                        {mio && <Visto chat={chat} m={m} uid={uid} nombreDe={(id) => nombreDe(id)} />}
-                      </p>
+                        {mio && <Visto chat={chat} m={m} uid={uid} />}
+                      </button>
                     </div>
+                    {!mio && (
+                      <button
+                        type="button"
+                        onClick={() => setInfoMsg(m)}
+                        className="mb-1 hidden h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground opacity-0 hover:bg-muted focus-visible:opacity-100 group-hover/msj:opacity-100 md:flex"
+                        aria-label="Info del mensaje"
+                        title="Info del mensaje"
+                      >
+                        <Info className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                   {mio && m.id === ultimoMio && <VistoLinea chat={chat} m={m} uid={uid} />}
+                  {vistos.has(m.id) && (
+                    <Cabecitas ids={vistos.get(m.id)!} perfilDe={perfilDe} mio={mio} onClick={() => setInfoMsg(m)} />
+                  )}
                 </div>
               );
             })}
@@ -613,10 +672,10 @@ export function ChatConversacion({
       <footer
         // Abajo: aire + la barra del celular (o la barra de inicio del iPhone si la barra está escondida).
         className={cn(
-          "border-t bg-background p-2 min-[380px]:p-3",
+          "shrink-0 border-t bg-background p-2 min-[380px]:p-3",
           !compacto && "pb-[calc(var(--alto-barra)+0.5rem)] min-[380px]:pb-[calc(var(--alto-barra)+0.75rem)] md:pb-3"
         )}
-        style={compacto ? { paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" } : undefined}
+        style={compacto ? { paddingBottom: "calc(0.75rem + var(--abajo-seguro))" } : undefined}
       >
         <div className="mx-auto flex max-w-3xl items-end gap-1 min-[380px]:gap-2">
           {voz.grabando ? (
@@ -783,6 +842,7 @@ export function ChatConversacion({
       </footer>
       {!enCelular && <CamaraDialog open={camara} onOpenChange={setCamara} onFoto={(f) => mandarArchivos([f])} />}
       {chat.tipo !== "directo" && <InfoChat chat={chat} open={info} onOpenChange={setInfo} onSalio={onBack} />}
+      <InfoMensaje chat={chat} m={infoMsg} uid={uid} perfilDe={perfilDe} onOpenChange={(v) => !v && setInfoMsg(null)} />
     </div>
   );
 }

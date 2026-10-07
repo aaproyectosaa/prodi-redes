@@ -55,7 +55,7 @@ function Caja({
         "fixed flex flex-col overflow-hidden bg-background outline-none",
         escritorio
           ? "bottom-0 z-40 h-[min(560px,calc(100dvh-4rem))] max-w-[calc(100vw-2rem)] rounded-t-xl border border-b-0 shadow-2xl"
-          : "alto-app seguro-costados inset-x-0 top-0 z-50 safe-area-pt",
+          : "alto-app seguro-costados z-50 safe-area-pt",
         // Se ve al instante al abrir (para poder enfocarlo) y se oculta recién al terminar la animación.
         desplegado
           ? "visible translate-y-0 opacity-100 [transition:transform_200ms,opacity_200ms]"

@@ -90,7 +90,7 @@ export default function Equipo() {
     .filter((p) => !q || `${p.nombre} ${p.email}`.toLowerCase().includes(q.toLowerCase()))
     .filter((p) => {
       if (filtro === "equipo") return ["admin", "productor", "editor", "pauta", "diseno", "administracion"].includes(p.role ?? "");
-      if (filtro === "cliente") return p.role === "cliente";
+      if (filtro === "cliente") return p.role === "cliente" || p.role === "contacto";
       if (filtro === "pendientes") return esPendiente(p);
       if (filtro === "inactivos") return p.activo === false;
       return true;

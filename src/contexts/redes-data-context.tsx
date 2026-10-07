@@ -129,6 +129,8 @@ export function RedesDataProvider({ children }: { children: ReactNode }) {
   const finanzas = isAdmin || role === "administracion";
   const global = finanzas || role === "diseno";
   const activo = !!uid && !!role && role !== "pending";
+  // Contacto (solo chat): no ve nada del sistema, solo sus chats.
+  const soloChat = role === "contacto";
 
   const clientes = useMemo(() => {
     const enabled = projects.filter(isProjectEnabled);
@@ -143,7 +145,7 @@ export function RedesDataProvider({ children }: { children: ReactNode }) {
   }, [projects, global, uid]);
 
   const scope: string[] | "all" = global ? "all" : clientes.map((c) => c.id);
-  const conVideos = activo && role !== "diseno";
+  const conVideos = activo && role !== "diseno" && !soloChat;
   const desdeMes = sumarMeses(mesActual(), -(MESES_EN_VIVO - 1));
   const porProyecto = role === "cliente";
 
@@ -165,7 +167,7 @@ export function RedesDataProvider({ children }: { children: ReactNode }) {
   );
   const piezasQ = useScopedCollection<PiezaIA>(
     "piezas_ia",
-    activo && role !== "editor" && role !== "pauta",
+    activo && role !== "editor" && role !== "pauta" && !soloChat,
     scope,
     [where("created_at", ">=", `${desdeMes}-01`)],
     desdeMes,
@@ -235,7 +237,7 @@ export function RedesDataProvider({ children }: { children: ReactNode }) {
   const [reunionesRaw, setReunionesRaw] = useState<Reunion[]>([]);
   const clienteIdsKey = clientes.map((c) => c.id).join(",");
   useEffect(() => {
-    if (!activo || !uid) {
+    if (!activo || !uid || soloChat) {
       setReunionesRaw([]);
       return;
     }
@@ -259,7 +261,7 @@ export function RedesDataProvider({ children }: { children: ReactNode }) {
     }
     return () => subs.forEach((u) => u());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activo, uid, isAdmin, role, clienteIdsKey, desdeMes]);
+  }, [activo, uid, isAdmin, role, clienteIdsKey, desdeMes, soloChat]);
   const reuniones = useMemo(
     () => [...reunionesRaw].sort((a, b) => b.fecha.localeCompare(a.fecha)),
     [reunionesRaw]

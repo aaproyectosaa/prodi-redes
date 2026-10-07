@@ -15,7 +15,8 @@ import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { RedesDataProvider } from "@/contexts/redes-data-context";
 import { useInAppNotifications } from "@/hooks/use-in-app-notifications";
 import { useTheme } from "@/hooks/use-theme";
-import { getRoleInfo } from "@/lib/roles";
+import { esContacto, getRoleInfo } from "@/lib/roles";
+import { toast } from "sonner";
 import { useAltoVisible } from "@/hooks/use-alto-visible";
 import {
   abrirEnSistema,
@@ -36,8 +37,11 @@ import {
 export function ModoChat({ children }: { children: ReactNode }) {
   const { pathname, search, hash } = useLocation();
   const navigate = useNavigate();
-  const activo = enModoChat(pathname);
-  const destino = activo && !esRutaChatApp(pathname) ? rutaEnChatApp(pathname, search) : null;
+  const { user, role } = useUserProfileContext();
+  // Los contactos (solo chat) no entran al sistema: todo los lleva a Prodi Chat, en cualquier ventana.
+  const soloChat = !!user && esContacto(role);
+  const activo = enModoChat(pathname) || soloChat;
+  const destino = activo && !esRutaChatApp(pathname) ? rutaEnChatApp(pathname, search) ?? (soloChat ? CHAT_APP : null) : null;
   const fuera = activo && !esRutaChatApp(pathname) && !destino ? pathname + search + hash : null;
   const [pendiente, setPendiente] = useState<string | null>(null);
 
@@ -66,11 +70,12 @@ export function ModoChat({ children }: { children: ReactNode }) {
       if (rutaEnChatApp(url.pathname, url.search)) return;
       e.preventDefault();
       e.stopPropagation();
-      abrirEnSistema(url.pathname + url.search + url.hash);
+      if (soloChat) toast.info("Eso es del sistema de Prodi: con tu usuario tenés solo el chat.");
+      else abrirEnSistema(url.pathname + url.search + url.hash);
     };
     document.addEventListener("click", alTocar, true);
     return () => document.removeEventListener("click", alTocar, true);
-  }, [activo]);
+  }, [activo, soloChat]);
 
   return (
     <>
@@ -178,6 +183,7 @@ function ChatAppHeader() {
             <button type="button" onClick={() => go(CHAT_APP_AVISOS)} className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm hover:bg-accent">
               <Bell className="h-4 w-4" /> Avisos y notificaciones
             </button>
+            {!esContacto(role) && (
             <button
               type="button"
               onClick={() => {
@@ -188,6 +194,7 @@ function ChatAppHeader() {
             >
               <ExternalLink className="h-4 w-4 shrink-0" /> Abrir Prodi (sistema completo)
             </button>
+            )}
           </nav>
           <div className="space-y-0.5 border-t p-3" onClick={() => setOpen(false)}>
             <BotonInstalarChat className="h-10 gap-3 text-foreground" />

@@ -83,8 +83,21 @@ export const getRoleInfo = (role: UserRole | undefined): RoleInfo => {
   if (role && LEGACY_LABELS[role]) {
     return { ...PENDING_ROLE, label: LEGACY_LABELS[role]! };
   }
+  if (role === "contacto") return CONTACTO_ROLE;
   return ROLES.find((r) => r.value === role) ?? PENDING_ROLE;
 };
+
+/**
+ * Contacto de un cliente que usa solo Prodi Chat (no entra al sistema). Pertenece a un cliente (profile.proyecto_id).
+ * No está en ROLES: no se asigna desde Equipo, lo crean el super admin o la producción del cliente desde su ficha.
+ */
+export const CONTACTO_ROLE: RoleInfo = {
+  value: "contacto",
+  label: "Contacto (solo chat)",
+  description: "Persona de un cliente que usa solo Prodi Chat: chatea con el equipo asignado y con la gente de su empresa.",
+};
+
+export const esContacto = (role: UserRole | string | undefined | null) => role === "contacto";
 
 /** Roles internos del equipo (no clientes). */
 export const TEAM_ROLES: UserRole[] = ["admin", "productor", "editor", "pauta", "diseno", "administracion"];
@@ -118,6 +131,8 @@ export const defaultRouteForRole = (role: UserRole | undefined): string => {
       return "/administracion";
     case "cliente":
       return "/cliente";
+    case "contacto":
+      return "/chat-app";
     default:
       return "/auth";
   }

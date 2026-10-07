@@ -19,6 +19,7 @@ import { BotonInstalar } from "@/components/InstalarApp";
 import { BotonInstalarChat } from "@/components/InstalarChat";
 import type { Profile, UserRole } from "@/integrations/firebase/types";
 import { TituloSeccion, useSeccionesPlegables } from "@/components/SeccionNav";
+import { esCampoDeTexto } from "@/hooks/use-alto-visible";
 
 interface Props {
   profile?: Profile;
@@ -162,12 +163,6 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
     </>
   );
 };
-
-const esCampoDeTexto = (el: Element | null) =>
-  !!el &&
-  (el.tagName === "TEXTAREA" ||
-    (el as HTMLElement).isContentEditable ||
-    (el.tagName === "INPUT" && !["checkbox", "radio", "range", "color", "file", "button", "submit"].includes((el as HTMLInputElement).type)));
 
 /** Con el teclado abierto en el celular la barra de abajo se esconde (si no, queda flotando arriba del teclado). */
 export function useTecladoAbierto() {

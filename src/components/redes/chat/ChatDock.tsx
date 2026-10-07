@@ -443,7 +443,7 @@ export function ChatDock() {
                   "fixed flex items-center justify-center bg-background",
                   escritorio
                     ? "bottom-0 z-40 h-[min(560px,calc(100dvh-4rem))] max-w-[calc(100vw-2rem)] rounded-t-xl border border-b-0 shadow-2xl"
-                    : "alto-app inset-x-0 top-0 z-50"
+                    : "alto-app z-50"
                 )}
               >
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />

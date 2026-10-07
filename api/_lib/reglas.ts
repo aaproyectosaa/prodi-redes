@@ -25,6 +25,12 @@ export interface Contexto {
 const TEAM = ["admin", "productor", "editor", "pauta", "diseno"];
 const ACTIVOS = [...TEAM, "administracion", "cliente"];
 
+/**
+ * Contacto (solo chat): persona de un cliente que usa solo Prodi Chat. No lee nada del sistema (clientes, videos,
+ * facturas, reuniones…): solo los chats donde es miembro, sus mensajes y audios, las fotos y nombres de quienes
+ * chatean con él, sus tareas y sus avisos. Puede abrir privados y armar grupos solo con gente con la que ya comparte un chat.
+ */
+const esContacto = (c: Contexto) => c.role === "contacto";
 const esAdmin = (c: Contexto) => c.role === "admin";
 const esTeam = (c: Contexto) => TEAM.includes(c.role);
 const esDiseno = (c: Contexto) => c.role === "diseno";
@@ -109,16 +115,19 @@ async function puedenSumarse(c: Contexto, ids: string[]): Promise<boolean> {
   if (!ids.length) return true;
   if (ids.length > MAX_MIEMBROS_GRUPO) return false;
   const r = await c.ex.query(
-    "select id, data->>'role' as role, data->>'activo' as activo from documentos where coleccion = 'profiles' and id = any($1::text[])",
+    "select id, data->>'role' as role, data->>'activo' as activo, data->>'proyecto_id' as pid from documentos where coleccion = 'profiles' and id = any($1::text[])",
     [ids]
   );
-  const filas = r.rows as { id: string; role: string | null; activo: string | null }[];
-  if (filas.length !== new Set(ids).size || filas.some((f) => !ACTIVOS.includes(f.role ?? "") || f.activo === "false")) return false;
+  const filas = r.rows as { id: string; role: string | null; activo: string | null; pid: string | null }[];
+  if (filas.length !== new Set(ids).size || filas.some((f) => !(ACTIVOS.includes(f.role ?? "") || f.role === "contacto") || f.activo === "false"))
+    return false;
   if (esAdmin(c)) return true;
-  if (c.role === "cliente") {
+  if (c.role === "cliente" || esContacto(c)) {
     const comp = await companeros(c);
     return ids.every((id) => comp.has(id));
   }
+  // Contactos (solo chat): el equipo los suma si trabaja en ese cliente.
+  if (filas.some((f) => f.role === "contacto" && !(esTeam(c) && equipoDe(c, f.pid)))) return false;
   const clientes = filas.filter((f) => f.role === "cliente").map((f) => f.id);
   if (!clientes.length) return true;
   if (!esTeam(c)) return false;
@@ -129,6 +138,51 @@ async function puedenSumarse(c: Contexto, ids: string[]): Promise<boolean> {
   const permitidos = new Set<string>();
   for (const x of p.rows as { id: string; cl: unknown }[]) if (equipoDe(c, x.id)) lista(x.cl).forEach((u) => permitidos.add(u));
   return clientes.every((id) => permitidos.has(id));
+}
+
+/** chat_prefs/{uid}: archivados, fijados, etiquetas y a qué chat va cada una (de cada persona, nadie más lo ve). */
+const MAX_FIJADOS = 5;
+const MAX_ETIQUETAS = 30;
+function prefsValidas(d: Data): boolean {
+  const corto = (x: unknown, max = 200) => typeof x === "string" && x.length > 0 && x.length <= max;
+  const ids = (v: unknown, max: number) => Array.isArray(v) && v.length <= max && v.every((x) => corto(x));
+  if (!Object.keys(d).every((k) => ["archivados", "fijados", "etiquetas", "asignaciones", "updated_at"].includes(k))) return false;
+  if (d.archivados !== undefined && !ids(d.archivados, 2000)) return false;
+  if (d.fijados !== undefined && !ids(d.fijados, MAX_FIJADOS)) return false;
+  if (
+    d.etiquetas !== undefined &&
+    !(
+      Array.isArray(d.etiquetas) &&
+      d.etiquetas.length <= MAX_ETIQUETAS &&
+      d.etiquetas.every(
+        (e: unknown) =>
+          !!e &&
+          typeof e === "object" &&
+          Object.keys(e).every((k) => ["id", "nombre", "color"].includes(k)) &&
+          corto((e as Data).id, 40) &&
+          corto((e as Data).nombre, 30) &&
+          typeof (e as Data).color === "string" &&
+          /^#[0-9a-f]{6}$/i.test((e as Data).color)
+      )
+    )
+  )
+    return false;
+  if (d.asignaciones !== undefined) {
+    const a = d.asignaciones;
+    if (!a || typeof a !== "object" || Array.isArray(a)) return false;
+    const filas = Object.entries(a as Data);
+    if (filas.length > 2000 || !filas.every(([k, v]) => corto(k) && ids(v, MAX_ETIQUETAS))) return false;
+  }
+  return d.updated_at === undefined || typeof d.updated_at === "string";
+}
+
+/** Privado con alguien: si es un contacto (solo chat), solo quien ya chatea con él o el equipo de su cliente. */
+async function puedenSumarseSiContacto(c: Contexto, otro: string): Promise<boolean> {
+  const r = await c.ex.query("select data->>'role' as role, data->>'proyecto_id' as pid from documentos where coleccion = 'profiles' and id = $1", [otro]);
+  const f = r.rows[0] as { role: string | null; pid: string | null } | undefined;
+  if (f?.role !== "contacto") return true;
+  if (esTeam(c) && equipoDe(c, f.pid)) return true;
+  return (await companeros(c)).has(otro);
 }
 
 /** "chats/abc/mensajes" → { base: "chats", padreId: "abc", sub: "mensajes" } */
@@ -147,7 +201,7 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
     return esAdmin(c);
   }
   // Documentos que no existen: se puede saber que no existen (así la app espera a que aparezcan).
-  if (d === null) return activo(c) || id === c.uid;
+  if (d === null) return activo(c) || esContacto(c) || id === c.uid;
   switch (base) {
     case "profiles":
       return esTeam(c) || esFinanzas(c) || c.uid === id;
@@ -178,6 +232,8 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
     case "app_settings":
       // whatsapp_bot: configuración del bot de WhatsApp (eliminado), ya no se expone.
       if (base === "app_settings" && id === "whatsapp_bot") return false;
+      // El contacto (solo chat) lee solo los ajustes del chat (sala de videollamadas).
+      if (esContacto(c)) return base === "app_settings" && id === "redes";
       return activo(c);
     case "informes":
       return esAdmin(c);
@@ -192,9 +248,11 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
       );
     case "avatares":
       // Foto de perfil: el equipo ve todas; el cliente, la de quienes comparten un chat con él.
-      return esTeam(c) || esFinanzas(c) || id === c.uid || (c.role === "cliente" && (await companeros(c)).has(id));
+      return esTeam(c) || esFinanzas(c) || id === c.uid || ((c.role === "cliente" || esContacto(c)) && (await companeros(c)).has(id));
     case "in_app_notifications":
       return d.recipient_user_id === c.uid;
+    case "chat_prefs":
+      return id === c.uid;
     case "tareas":
       // Las ven quienes las tienen asignadas, quien las pidió y el admin.
       return esAdmin(c) || d.creada_por === c.uid || (Array.isArray(d.asignados) && d.asignados.includes(c.uid));
@@ -285,9 +343,16 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       if (borra) return esAdmin(c);
       if (crea) {
         if (esAdmin(c)) return true;
-        if (!activo(c)) return false;
-        if (despues!.tipo === "directo")
-          return Array.isArray(despues!.miembros) && despues!.miembros.includes(c.uid) && despues!.miembros.length === 2;
+        if (!activo(c) && !esContacto(c)) return false;
+        if (despues!.tipo === "directo") {
+          const ok = Array.isArray(despues!.miembros) && despues!.miembros.includes(c.uid) && despues!.miembros.length === 2;
+          if (!ok) return false;
+          // El contacto solo abre privados con gente con la que ya comparte un chat (equipo del cliente y su empresa).
+          // Y nadie abre un privado con un contacto que no conoce (el equipo, solo si trabaja en ese cliente).
+          const otro = lista(despues!.miembros).find((m) => m !== c.uid) ?? "";
+          if (esContacto(c)) return (await companeros(c)).has(otro);
+          return puedenSumarseSiContacto(c, otro);
+        }
         // Grupo nuevo: quien lo crea queda como único admin; solo con gente que puede sumar.
         if (despues!.tipo === "grupo") {
           const miembros = lista(despues!.miembros);
@@ -347,6 +412,9 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       const asignada = Array.isArray(antes!.asignados) && antes!.asignados.includes(c.uid);
       return (suya || asignada) && soloCambia(antes, despues, ["hecha", "hecha_at", "hecha_por"]);
     }
+    case "chat_prefs":
+      // Solo las propias (ni el super admin toca las de otro).
+      return c.uid === id && (borra || prefsValidas(despues!));
     case "in_app_notifications":
       if (crea) return false;
       if (borra) return antes!.recipient_user_id === c.uid;

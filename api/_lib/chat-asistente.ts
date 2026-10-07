@@ -104,7 +104,7 @@ export function resolverPersona(texto: string, personas: Persona[], yo: Persona)
 
 /** A quién puede sumar: los miembros del chat y, si es del equipo, todo el equipo activo. */
 async function alcanzables(caller: Caller, chat: Data & { miembros: string[] }): Promise<Persona[]> {
-  const snap = await adminDb().collection("profiles").where("role", "in", [...TEAM, "cliente"]).get();
+  const snap = await adminDb().collection("profiles").where("role", "in", [...TEAM, "cliente", "contacto"]).get();
   const esTeam = TEAM.includes(caller.role);
   return snap.docs
     .map((d) => ({ id: d.id, ...(d.data() ?? {}) }) as Data & { id: string })
@@ -238,6 +238,17 @@ Español rioplatense con voseo.`;
     }
     if (duda) {
       out.push({ texto: duda });
+      continue;
+    }
+
+    // Contacto (solo chat): no agenda reuniones ni guarda datos del cliente; eso lo hace el equipo o el cliente.
+    if (caller.role === "contacto" && (tipo === "crear_reunion" || tipo === "recordar")) {
+      out.push({
+        texto:
+          tipo === "crear_reunion"
+            ? "Las reuniones las agenda el equipo de Prodi. Pedíselo acá en el chat y la arman."
+            : "Eso lo anota el equipo de Prodi. Contáselo acá en el chat.",
+      });
       continue;
     }
 
