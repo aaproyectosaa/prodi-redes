@@ -28,7 +28,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(({ classNa
 
   React.useLayoutEffect(() => {
     if (autoAlto && propio.current) ajustar(propio.current);
-  }, [autoAlto, props.value]);
+  }, [autoAlto, props.value, props.placeholder]);
 
   React.useEffect(() => {
     const el = propio.current;

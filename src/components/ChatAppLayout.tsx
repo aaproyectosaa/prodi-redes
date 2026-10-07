@@ -16,6 +16,7 @@ import { RedesDataProvider } from "@/contexts/redes-data-context";
 import { useInAppNotifications } from "@/hooks/use-in-app-notifications";
 import { useTheme } from "@/hooks/use-theme";
 import { getRoleInfo } from "@/lib/roles";
+import { useAltoVisible } from "@/hooks/use-alto-visible";
 import {
   abrirEnSistema,
   CHAT_APP,
@@ -136,7 +137,7 @@ function ChatAppHeader() {
             <button
               type="button"
               onClick={() => navigate(CHAT_APP_AVISOS)}
-              className="relative flex h-9 w-9 items-center justify-center rounded-full hover:bg-accent"
+              className="relative flex h-10 w-10 items-center justify-center rounded-full hover:bg-accent"
               aria-label="Avisos"
             >
               <Bell className="h-5 w-5" />
@@ -149,7 +150,7 @@ function ChatAppHeader() {
             <button
               type="button"
               onClick={() => setOpen(true)}
-              className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-accent"
+              className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-accent"
               aria-label="Menú"
             >
               <Menu className="h-5 w-5" />
@@ -183,12 +184,12 @@ function ChatAppHeader() {
                 setOpen(false);
                 abrirEnSistema("/");
               }}
-              className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm hover:bg-accent"
+              className="flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-accent"
             >
-              <ExternalLink className="h-4 w-4" /> Abrir Prodi (sistema completo)
+              <ExternalLink className="h-4 w-4 shrink-0" /> Abrir Prodi (sistema completo)
             </button>
           </nav>
-          <div className="space-y-0.5 border-t p-3 safe-area-pb" onClick={() => setOpen(false)}>
+          <div className="space-y-0.5 border-t p-3" onClick={() => setOpen(false)}>
             <BotonInstalarChat className="h-10 gap-3 text-foreground" />
             <button
               type="button"
@@ -222,6 +223,7 @@ export function ChatAppLayout() {
   const { user, authChecked, viewingAs } = useUserProfileContext();
   // En el celular, con una conversación abierta, la conversación ocupa toda la pantalla (tiene su propio "atrás").
   const conversacion = pathname.replace(/\/$/, "") === CHAT_APP && new URLSearchParams(search).has("c");
+  useAltoVisible();
 
   useEffect(() => {
     if (authChecked && !user) navigate(CHAT_APP_INGRESAR, { replace: true });
@@ -238,7 +240,7 @@ export function ChatAppLayout() {
 
   return (
     <RedesDataProvider>
-      <div className="flex h-dvh flex-col overflow-hidden bg-background">
+      <div className="alto-app seguro-costados flex flex-col overflow-hidden bg-background">
         <div className={conversacion ? "hidden md:block" : undefined}>
           <ChatAppHeader />
           <BarraInstalarChat />

@@ -14,7 +14,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { isNavItemActive } from "@/components/AppSidebar";
 import { cn } from "@/lib/utils";
 import { usePendientes } from "@/hooks/use-pendientes";
-import { VerComoBoton } from "@/components/redes/VerComo";
+import { VerComoBoton, VerComoDialog } from "@/components/redes/VerComo";
 import { BotonInstalar } from "@/components/InstalarApp";
 import { BotonInstalarChat } from "@/components/InstalarChat";
 import type { Profile, UserRole } from "@/integrations/firebase/types";
@@ -31,6 +31,7 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
   const location = useLocation();
   const { theme, setTheme } = useTheme();
   const [open, setOpen] = useState(false);
+  const [verComo, setVerComo] = useState(false);
   const { unreadCount } = useInAppNotifications(profile?.id);
   const sections = navForRole(role);
   const plegables = useSeccionesPlegables();
@@ -43,8 +44,11 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
 
   return (
     <>
-      <header className="safe-area-pt sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-background/90 px-4 backdrop-blur md:hidden">
-        <button type="button" onClick={() => navigate("/")} className="flex items-center gap-2">
+      {/* El alto de la barra de estado del iPhone va como padding aparte: si lo descontara de los h-14, logo y
+          botones quedarían apretados y se saldrían por abajo, encima del aviso que sigue. */}
+      <header className="safe-area-pt sticky top-0 z-30 shrink-0 border-b bg-background/90 backdrop-blur md:hidden">
+        <div className="flex h-14 items-center justify-between px-4">
+        <button type="button" onClick={() => navigate("/")} className="flex h-10 items-center gap-2">
           <img src={asset("/brand/logo-horizontal-blanco.png")} alt="Prodi" className="hidden h-5 w-auto dark:block" />
           <img src={asset("/brand/logo-horizontal-negro.png")} alt="Prodi" className="h-5 w-auto dark:hidden" />
         </button>
@@ -52,7 +56,7 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
           <button
             type="button"
             onClick={() => navigate("/notificaciones")}
-            className="relative flex h-9 w-9 items-center justify-center rounded-full hover:bg-accent"
+            className="relative flex h-10 w-10 items-center justify-center rounded-full hover:bg-accent"
             aria-label="Avisos"
           >
             <Bell className="h-5 w-5" />
@@ -65,11 +69,12 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-accent"
+            className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-accent"
             aria-label="Menú"
           >
             <Menu className="h-5 w-5" />
           </button>
+        </div>
         </div>
       </header>
 
@@ -128,8 +133,8 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
               </div>
             ))}
           </nav>
-          <div className="space-y-0.5 border-t p-3 safe-area-pb" onClick={() => setOpen(false)}>
-            <VerComoBoton />
+          <div className="space-y-0.5 border-t p-3" onClick={() => setOpen(false)}>
+            <VerComoBoton onAbrir={() => setVerComo(true)} />
             <BotonInstalar className="h-10 gap-3 text-foreground" />
             <BotonInstalarChat className="h-10 gap-3 text-foreground" />
             <button
@@ -153,6 +158,7 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
           </div>
         </SheetContent>
       </Sheet>
+      <VerComoDialog open={verComo} onOpenChange={setVerComo} />
     </>
   );
 };
@@ -230,7 +236,7 @@ export const MobileTabBar = ({ role }: { role?: UserRole }) => {
     .slice(0, 4);
   if (items.length === 0 || teclado) return null;
   return (
-    <nav className="safe-area-pb fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 backdrop-blur md:hidden">
+    <nav className="safe-area-pb seguro-costados fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 backdrop-blur md:hidden">
       <div className="grid" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
         {items.map((item) => {
           const Icon = item.icon;

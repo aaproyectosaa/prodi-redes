@@ -127,7 +127,7 @@ export function ChatDock() {
             onClick={() => dock.abrir()}
             aria-label={etiqueta}
             aria-expanded={false}
-            className="fixed bottom-4 right-4 z-40 flex h-12 max-w-[16rem] items-center gap-2 rounded-full bg-primary pl-2 pr-4 text-primary-foreground shadow-lg shadow-primary/40 ring-1 ring-white/20 transition-all hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/50"
+            className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-40 flex h-12 max-w-[16rem] items-center gap-2 rounded-full bg-primary pl-2 pr-4 text-primary-foreground shadow-lg shadow-primary/40 ring-1 ring-white/20 transition-all hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/50"
           >
             {chat ? (
               <ChatIcon chat={chat} profiles={profiles} uid={user?.uid} color={clienteById(chat.proyecto_id)?.color} className="h-8 w-8 ring-2 ring-white/30" />
@@ -149,7 +149,7 @@ export function ChatDock() {
               aria-expanded={false}
               // Por encima de la barra de abajo y de las barras de "Guardar" que quedan pegadas abajo.
               style={{ bottom: "calc(var(--alto-barra) + 4.75rem)" }}
-              className="fixed right-3 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95"
+              className="fixed right-[calc(0.75rem+env(safe-area-inset-right))] z-30 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95"
             >
               <MessageCircle className="h-5 w-5" />
               {badge && <span className="absolute -right-1 -top-1">{badge}</span>}
@@ -173,7 +173,7 @@ export function ChatDock() {
             "fixed flex flex-col overflow-hidden bg-background outline-none",
             escritorio
               ? "bottom-0 right-4 z-40 h-[min(560px,calc(100dvh-4rem))] w-[380px] max-w-[calc(100vw-2rem)] rounded-t-xl border border-b-0 shadow-2xl"
-              : "inset-0 z-50 safe-area-pt",
+              : "alto-app seguro-costados inset-x-0 top-0 z-50 safe-area-pt",
             // Se ve al instante al abrir (para poder enfocarlo) y se oculta recién al terminar la animación.
             desplegado
               ? "visible translate-y-0 opacity-100 [transition:transform_200ms,opacity_200ms]"

@@ -82,7 +82,7 @@ export function ChatLista({
               size="sm"
               variant="outline"
               onClick={onTareas}
-              className={cn("relative", compacto && "h-8 px-2")}
+              className={cn("relative", compacto && "h-10 w-10 px-0 md:h-8 md:w-auto md:px-2")}
               aria-label="Tareas"
               title="Tareas"
             >
@@ -98,7 +98,7 @@ export function ChatLista({
               size="sm"
               variant="outline"
               onClick={() => setNuevo(true)}
-              className={cn(compacto && "h-8 px-2")}
+              className={cn(compacto && "h-10 w-10 px-0 md:h-8 md:w-auto md:px-2")}
               aria-label="Nueva conversación"
               title="Nueva conversación"
             >
@@ -120,7 +120,7 @@ export function ChatLista({
           />
         </div>
       </div>
-      <div className={cn("min-h-0 flex-1 overflow-y-auto", !compacto && "pb-mobile-nav md:pb-0")}>
+      <div className={cn("min-h-0 flex-1 overflow-y-auto", compacto ? "safe-area-pb" : "pb-mobile-nav md:pb-0")}>
         {lista.length === 0 && (
           <p className="p-6 text-center text-sm text-muted-foreground">
             Todavía no hay conversaciones. Los grupos de cada cliente se crean solos cuando el admin asigna el equipo.

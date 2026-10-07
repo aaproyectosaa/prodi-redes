@@ -179,7 +179,7 @@ const Auth = () => {
   };
 
   return (
-    <div className="dark relative flex min-h-dvh items-center justify-center overflow-hidden bg-black p-4 text-foreground">
+    <div className="dark relative flex min-h-dvh items-center justify-center overflow-hidden bg-black p-4 pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-[max(1rem,env(safe-area-inset-top))] text-foreground">
       <div
         aria-hidden
         className="pointer-events-none absolute -top-40 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-prodi/25 blur-[120px]"

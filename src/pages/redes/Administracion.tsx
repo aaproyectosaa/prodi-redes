@@ -295,15 +295,15 @@ export default function Administracion() {
             </Button>
           }
         >
-          <div className="grid grid-cols-3 divide-x rounded-2xl border bg-card">
+          <div className="grid grid-cols-1 divide-y rounded-2xl border bg-card lg:grid-cols-3 lg:divide-x lg:divide-y-0">
             {[
               { l: "Entró", v: ingresos, c: "text-emerald-600 dark:text-emerald-400" },
               { l: "Salió", v: egresos, c: "" },
               { l: "Quedó", v: ingresos - egresos, c: ingresos - egresos < 0 ? "text-destructive" : "" },
             ].map((x) => (
-              <div key={x.l} className="p-4">
+              <div key={x.l} className="flex items-baseline justify-between gap-3 px-4 py-3 lg:block lg:p-4">
                 <p className="text-xs text-muted-foreground">{x.l}</p>
-                <p className={cn("mt-1 text-lg font-bold tabular-nums sm:text-2xl", x.c)}>{formatARS(x.v)}</p>
+                <p className={cn("text-lg font-bold tabular-nums sm:text-2xl lg:mt-1", x.c)}>{formatARS(x.v)}</p>
               </div>
             ))}
           </div>

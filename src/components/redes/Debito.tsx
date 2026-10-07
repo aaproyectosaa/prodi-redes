@@ -74,7 +74,7 @@ export function DebitoCliente({ cliente, monto: total, comision, email }: { clie
         </p>
       )}
       {!activa && monto > 0 && (
-        <Button className="mt-4 w-full" onClick={() => setOpen(true)}>
+        <Button className="mt-4 h-auto min-h-10 w-full whitespace-normal py-2 text-center" onClick={() => setOpen(true)}>
           {cliente.suscripcion?.estado === "pendiente" ? "Terminar de activar" : "Activar débito automático"} ·{" "}
           {formatARS(monto)}/mes
         </Button>

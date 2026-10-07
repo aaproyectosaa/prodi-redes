@@ -52,13 +52,15 @@ export default function Aprobar() {
   };
 
   return (
-    <div className="min-h-dvh bg-background text-foreground">
-      <header className="flex h-14 items-center justify-center border-b">
-        <img src={asset("/brand/logo-horizontal-blanco.png")} alt="Prodi" className="hidden h-5 w-auto dark:block" />
-        <img src={asset("/brand/logo-horizontal-negro.png")} alt="Prodi" className="h-5 w-auto dark:hidden" />
+    <div className="seguro-costados min-h-dvh bg-background text-foreground">
+      <header className="safe-area-pt border-b">
+        <div className="flex h-14 items-center justify-center">
+          <img src={asset("/brand/logo-horizontal-blanco.png")} alt="Prodi" className="hidden h-5 w-auto dark:block" />
+          <img src={asset("/brand/logo-horizontal-negro.png")} alt="Prodi" className="h-5 w-auto dark:hidden" />
+        </div>
       </header>
 
-      <main className="mx-auto w-full max-w-xl px-4 pb-16 pt-6">
+      <main className="mx-auto w-full max-w-xl px-4 pb-[calc(4rem+env(safe-area-inset-bottom))] pt-6">
         {!video && !error && (
           <div className="flex justify-center py-24">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

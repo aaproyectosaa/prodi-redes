@@ -213,12 +213,12 @@ export function ReporteDetalle() {
   return (
     <PageShell
       title={
-        <span className="flex items-center gap-3">
-          <button type="button" onClick={() => navigate("/reportes")} className="text-muted-foreground hover:text-foreground" aria-label="Volver">
+        <span className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <button type="button" onClick={() => navigate("/reportes")} className="-ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground" aria-label="Volver">
             <ArrowLeft className="h-5 w-5" />
           </button>
           <UserAvatar profile={perfil} size="md" />
-          {perfil.nombre}
+          <span className="min-w-0 break-words">{perfil.nombre}</span>
         </span>
       }
       subtitle={`${getRoleInfo(perfil.role).label} · ${r.ultimaActividad ? `última actividad ${hace(r.ultimaActividad)}` : "sin actividad registrada"}`}

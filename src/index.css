@@ -189,3 +189,60 @@ html.modo-chat {
 [role="dialog"] .barra-guardar {
   bottom: 0;
 }
+
+/* App instalada en el iPhone (viewport-fit=cover + barra de estado translúcida): la página se dibuja debajo de la
+   barra de estado, del notch y de la barra de inicio. Las hojas laterales dejan esa franja libre con un borde
+   transparente (pinta el mismo fondo y no pisa el padding que ponga cada hoja; la X queda debajo). */
+.hoja-segura-derecha,
+.hoja-segura-izquierda,
+.hoja-segura-arriba,
+.hoja-segura-abajo {
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+}
+.hoja-segura-derecha,
+.hoja-segura-izquierda,
+.hoja-segura-arriba {
+  border-top-width: env(safe-area-inset-top, 0px);
+}
+.hoja-segura-derecha,
+.hoja-segura-izquierda,
+.hoja-segura-abajo {
+  border-bottom-width: env(safe-area-inset-bottom, 0px);
+}
+.hoja-segura-derecha {
+  border-right: env(safe-area-inset-right, 0px) solid transparent;
+}
+.hoja-segura-izquierda {
+  border-left: env(safe-area-inset-left, 0px) solid transparent;
+}
+.hoja-segura-arriba,
+.hoja-segura-abajo {
+  border-left: env(safe-area-inset-left, 0px) solid transparent;
+  border-right: env(safe-area-inset-right, 0px) solid transparent;
+}
+/* La hoja de abajo conserva su línea de arriba visible. */
+.hoja-segura-abajo {
+  border-top-color: hsl(var(--border));
+}
+/* La de arriba, su línea de abajo. */
+.hoja-segura-arriba {
+  border-bottom-color: hsl(var(--border));
+}
+
+/* Alto de la pantalla de la app. En el iPhone el teclado no achica la pantalla (100dvh sigue igual) y tapa la caja
+   de escribir: mientras está abierto, --alto-app es el alto visible (lo pone useAltoVisible). */
+.alto-app {
+  height: var(--alto-app, 100dvh);
+}
+@supports not (height: 100dvh) {
+  .alto-app {
+    height: var(--alto-app, 100vh);
+  }
+}
+
+/* Celular apaisado: el notch queda a un costado. */
+.seguro-costados {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}

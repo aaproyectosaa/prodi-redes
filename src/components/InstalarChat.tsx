@@ -201,19 +201,20 @@ export function BotonInstalarChat({ collapsed, className }: { collapsed?: boolea
  * Aviso en el sistema, solo en celulares: "Descargá Prodi Chat". Se cierra y no vuelve en este equipo,
  * y no aparece si Prodi Chat ya se abrió como app acá.
  */
-export function AvisoDescargarChat() {
+export function AvisoDescargarChat({ oculto }: { oculto?: boolean }) {
   const [visible, setVisible] = useState(
     () => plataforma() !== "compu" && !enModoChat() && !chatAppInstalada() && !avisoChatCerrado()
   );
-  if (!visible) return null;
+  if (!visible || oculto) return null;
   return (
-    <div className="flex items-center gap-3 border-b bg-primary/10 px-4 py-2.5 md:hidden">
-      <img src={asset("/icons/icon-chat-192.png")} alt="" className="h-9 w-9 shrink-0 rounded-xl" />
+    // Va en el flujo, debajo del encabezado (no flota encima de nada).
+    <div className="flex shrink-0 items-center gap-2 border-b bg-primary/10 px-3 py-2 min-[360px]:gap-3 min-[360px]:px-4 md:hidden">
+      <img src={asset("/icons/icon-chat-192.png")} alt="" className="hidden h-9 w-9 shrink-0 rounded-xl min-[360px]:block" />
       <button type="button" onClick={() => abrirInstalarChat()} className="min-w-0 flex-1 text-left">
-        <p className="text-sm font-semibold leading-tight">Descargá Prodi Chat</p>
-        <p className="truncate text-xs text-muted-foreground">Tus chats en una app aparte, con avisos.</p>
+        <p className="truncate text-sm font-semibold leading-tight">Descargá Prodi Chat</p>
+        <p className="hidden truncate text-xs text-muted-foreground min-[360px]:block">Tus chats en una app aparte, con avisos.</p>
       </button>
-      <Button size="sm" onClick={() => abrirInstalarChat()}>
+      <Button size="sm" className="shrink-0" onClick={() => abrirInstalarChat()}>
         Instalar
       </Button>
       <button
@@ -222,7 +223,7 @@ export function AvisoDescargarChat() {
           cerrarAvisoChat();
           setVisible(false);
         }}
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent"
+        className="-mr-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent"
         aria-label="Cerrar"
       >
         <X className="h-4 w-4" />
@@ -245,12 +246,12 @@ export function BarraInstalarChat() {
   });
   if (app.instalada || cerrada) return null;
   return (
-    <div className="flex items-center gap-3 border-b bg-primary/10 px-4 py-2">
+    <div className="flex shrink-0 items-center gap-2 border-b bg-primary/10 px-3 py-1.5 min-[360px]:gap-3 min-[360px]:px-4">
       <Download className="h-4 w-4 shrink-0 text-primary" />
       <button type="button" onClick={() => abrirInstalarChat()} className="min-w-0 flex-1 truncate text-left text-sm">
 <b>Instalá Prodi Chat</b> <span className="text-muted-foreground">como app</span>
       </button>
-      <Button size="sm" onClick={() => (app.directa ? void app.instalar() : abrirInstalarChat())}>
+      <Button size="sm" className="shrink-0" onClick={() => (app.directa ? void app.instalar() : abrirInstalarChat())}>
         Instalar
       </Button>
       <button
@@ -263,7 +264,7 @@ export function BarraInstalarChat() {
           }
           setCerrada(true);
         }}
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent"
+        className="-mr-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent"
         aria-label="Cerrar"
       >
         <X className="h-4 w-4" />

@@ -81,12 +81,12 @@ export default function ClienteDetalle() {
   return (
     <PageShell
       title={
-        <span className="flex items-center gap-3">
-          <button type="button" onClick={() => navigate("/clientes")} className="text-muted-foreground hover:text-foreground" aria-label="Volver">
+        <span className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <button type="button" onClick={() => navigate("/clientes")} className="-ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground" aria-label="Volver">
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <span className="h-3 w-3 rounded-full" style={{ backgroundColor: cliente.color || "#6F40FC" }} />
-          {cliente.nombre}
+          <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: cliente.color || "#6F40FC" }} />
+          <span className="min-w-0 break-words">{cliente.nombre}</span>
         </span>
       }
       subtitle={`${plan.nombre} · ${plan.videosMes} videos/mes${isAdmin ? ` · ${formatARS(plan.precioMensual)}` : ""}`}

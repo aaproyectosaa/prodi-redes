@@ -551,7 +551,7 @@ export function EstadisticasAnio({ equipoActual }: { equipoActual: number }) {
               titulo="Cómo baja la deuda"
               detalle="Lo que queda por pagar de créditos y convenios al cierre de cada mes (incluye lo que viene)."
             >
-              <div className="mb-3 grid grid-cols-3 gap-2 text-xs">
+              <div className="mb-3 grid grid-cols-1 gap-2 text-xs min-[380px]:grid-cols-3">
                 {[
                   { l: "Créditos", v: deudaPorTipo("credito") },
                   { l: "Convenio ARCA", v: deudaPorTipo("arca") },
@@ -666,7 +666,7 @@ function Kpi({
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <p
         className={cn(
-          "mt-1.5 text-xl font-bold tabular-nums tracking-tight sm:text-2xl",
+          "mt-1.5 text-[length:clamp(1rem,calc((50vw-3.5rem)/6.4),1.25rem)] font-bold tabular-nums tracking-tight [overflow-wrap:anywhere] sm:text-2xl",
           tono === "mal" && "text-destructive",
         )}
       >

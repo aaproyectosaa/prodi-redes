@@ -106,7 +106,11 @@ export function VerComoDialog({ open, onOpenChange }: { open: boolean; onOpenCha
   );
 }
 
-export function VerComoBoton({ collapsed = false }: { collapsed?: boolean }) {
+/**
+ * `onAbrir`: el buscador lo monta quien llama (el menú del celular se cierra al tocar y, si el buscador
+ * estuviera adentro, se cerraría con él).
+ */
+export function VerComoBoton({ collapsed = false, onAbrir }: { collapsed?: boolean; onAbrir?: () => void }) {
   const { realRole, viewingAs } = useUserProfileContext();
   const [open, setOpen] = useState(false);
   if (realRole !== "admin" || viewingAs) return null;
@@ -114,7 +118,7 @@ export function VerComoBoton({ collapsed = false }: { collapsed?: boolean }) {
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => (onAbrir ? onAbrir() : setOpen(true))}
         title="Ver el sistema como otro usuario"
         className={`flex h-9 w-full items-center gap-2.5 rounded-lg text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground ${
           collapsed ? "justify-center" : "px-3"
@@ -123,7 +127,7 @@ export function VerComoBoton({ collapsed = false }: { collapsed?: boolean }) {
         <Eye className="h-4 w-4" />
         {!collapsed && <span>Ver como…</span>}
       </button>
-      <VerComoDialog open={open} onOpenChange={setOpen} />
+      {!onAbrir && <VerComoDialog open={open} onOpenChange={setOpen} />}
     </>
   );
 }

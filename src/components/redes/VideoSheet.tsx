@@ -580,7 +580,7 @@ function ActionBar({ children }: { children: React.ReactNode }) {
   const items = (Array.isArray(children) ? children : [children]).flat().filter(Boolean);
   if (items.length === 0) return null;
   return (
-    <div className="flex flex-wrap justify-end gap-2 border-t bg-card/95 px-5 py-3 backdrop-blur safe-area-pb">
+    <div className="flex flex-wrap justify-end gap-2 border-t bg-card/95 px-5 py-3 backdrop-blur">
       {children}
     </div>
   );

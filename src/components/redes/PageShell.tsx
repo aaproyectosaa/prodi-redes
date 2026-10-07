@@ -114,7 +114,7 @@ export function StatCard({
     <Comp
       onClick={onClick}
       className={cn(
-        "rounded-xl border bg-card p-4 text-left transition-colors",
+        "min-w-0 rounded-xl border bg-card p-4 text-left transition-colors",
         onClick && "hover:border-primary/50",
         toneCls
       )}
@@ -123,7 +123,8 @@ export function StatCard({
         <p className="text-xs font-medium text-muted-foreground">{label}</p>
         {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
       </div>
-      <p className="mt-2 text-2xl font-bold tabular-nums tracking-tight">{value}</p>
+      {/* En el celular (dos tarjetas por fila) la letra se achica con la pantalla para que el monto entre en una línea. */}
+      <p className="mt-2 text-[length:clamp(1rem,calc((50vw-3.5rem)/6.4),1.5rem)] font-bold tabular-nums tracking-tight [overflow-wrap:anywhere] sm:text-2xl">{value}</p>
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </Comp>
   );

@@ -13,7 +13,7 @@ import { TareasSheet } from "@/components/redes/chat/Tareas";
 
 function Accion({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
   return (
-    <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-muted-foreground" onClick={onClick} aria-label={label} title={label}>
+    <Button size="icon" variant="ghost" className="h-10 w-10 shrink-0 text-muted-foreground md:h-8 md:w-8" onClick={onClick} aria-label={label} title={label}>
       {children}
     </Button>
   );

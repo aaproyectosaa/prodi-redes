@@ -94,7 +94,7 @@ export function RecorteFoto({
           <DialogDescription>Arrastrá para mover y usá el zoom para acercar.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col items-center gap-4">
-          <div className="relative h-64 w-64 max-w-full">
+          <div className="relative aspect-square w-64 max-w-full">
             {!img && (
               <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-muted">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

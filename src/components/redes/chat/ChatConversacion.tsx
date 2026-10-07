@@ -59,6 +59,18 @@ function mencionEnCurso(texto: string, cursor: number): { desde: number } | null
   return { desde: cursor - m[2].length - 1 };
 }
 
+/** Texto de ayuda de la caja de escribir, del más completo al más corto: se usa el primero que entra en una línea. */
+const AYUDAS_CAJA = ["Escribí un mensaje · @prodi para pedirle algo", "Mensaje · @prodi", "Mensaje"];
+let medidor: CanvasRenderingContext2D | null = null;
+function ayudaQueEntra(el: HTMLTextAreaElement): string {
+  const s = getComputedStyle(el);
+  const libre = el.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight) - 4;
+  medidor ??= document.createElement("canvas").getContext("2d");
+  if (!medidor || libre <= 0) return AYUDAS_CAJA[AYUDAS_CAJA.length - 1];
+  medidor.font = `${s.fontWeight} ${s.fontSize} ${s.fontFamily}`;
+  return AYUDAS_CAJA.find((t) => medidor!.measureText(t).width <= libre) ?? AYUDAS_CAJA[AYUDAS_CAJA.length - 1];
+}
+
 const hora = (iso: string) => formatearFecha(iso, { hour: "2-digit", minute: "2-digit" });
 const cuando = (iso: string) =>
   fechaAR(iso) === hoyAR() ? hora(iso) : formatearFecha(iso, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -186,6 +198,8 @@ export function ChatConversacion({
   const [info, setInfo] = useState(false);
   const enCelular = camaraDelSistema();
   const subidas = useSubidasChat(chat.id);
+  // El texto de ayuda de la caja se acorta si no entra en una línea (celulares angostos, chat flotante).
+  const [ayudaCaja, setAyudaCaja] = useState(AYUDAS_CAJA[0]);
 
   // Cuando aparece el mensaje que escribió el servidor, se saca la burbuja de "subiendo".
   useEffect(() => {
@@ -277,6 +291,14 @@ export function ChatConversacion({
   };
 
   const voz = useGrabadorVoz();
+  // La caja se vuelve a montar al terminar de grabar un audio: ahí se vuelve a medir.
+  useEffect(() => {
+    const el = caja.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setAyudaCaja(ayudaQueEntra(el)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [voz.grabando]);
   const enviarVoz = async () => {
     const r = await voz.detener();
     if (!r) return;
@@ -351,7 +373,7 @@ export function ChatConversacion({
         <button
           type="button"
           onClick={onBack}
-          className={cn("rounded-full p-1.5 hover:bg-muted", !compacto && "md:hidden")}
+          className={cn("-m-1 shrink-0 rounded-full p-2.5 hover:bg-muted md:m-0 md:p-1.5", !compacto && "md:hidden")}
           aria-label={compacto ? "Volver a la lista de chats" : "Volver"}
         >
           <ArrowLeft className="h-5 w-5" />
@@ -384,7 +406,7 @@ export function ChatConversacion({
               variant="ghost"
               onClick={videollamada}
               disabled={llamando}
-              className="h-8 w-8 shrink-0 text-primary"
+              className="h-10 w-10 shrink-0 text-primary md:h-8 md:w-8"
               aria-label="Videollamada"
               title="Videollamada"
             >
@@ -449,7 +471,7 @@ export function ChatConversacion({
                     )}
                     <div
                       className={cn(
-                        "rounded-2xl px-3.5 py-2 text-sm shadow-sm", compacto ? "max-w-[85%]" : "max-w-[82%] sm:max-w-[70%]",
+                        "min-w-0 rounded-2xl px-3.5 py-2 text-sm shadow-sm", compacto ? "max-w-[85%]" : "max-w-[82%] sm:max-w-[70%]",
                         mio
                           ? "rounded-br-md bg-primary text-primary-foreground"
                           : bot
@@ -469,11 +491,11 @@ export function ChatConversacion({
                       {m.tipo === "archivo" && m.archivo ? (
                         <div className="space-y-1">
                           <ArchivoMensaje archivo={m.archivo} mio={mio} />
-                          {m.leyenda && <p className="whitespace-pre-wrap break-words pt-0.5">{m.leyenda}</p>}
+                          {m.leyenda && <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] pt-0.5">{m.leyenda}</p>}
                         </div>
                       ) : bot ? (
                         <div className="space-y-2">
-                          <p className="whitespace-pre-wrap break-words">{m.texto}</p>
+                          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{m.texto}</p>
                           {m.link &&
                             (m.link.startsWith("/chat?tareas") ? (
                               <button
@@ -516,12 +538,12 @@ export function ChatConversacion({
                           <p className="flex items-center gap-1.5 text-xs font-semibold opacity-80">
                             <FileText className="h-3.5 w-3.5" /> Minuta de reunión
                           </p>
-                          <p className="whitespace-pre-wrap">{m.texto}</p>
+                          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{m.texto}</p>
                         </div>
                       ) : m.tipo === "audio" && m.audio ? (
                         <AudioMensaje chatId={chat.id} audio={m.audio} mio={mio} />
                       ) : (
-                        <p className="whitespace-pre-wrap break-words">
+                        <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                           {mencionaProdi(m.texto)
                             ? m.texto.split(/(@prodi\b)/i).map((p, j) =>
                                 /^@prodi$/i.test(p) ? (
@@ -573,10 +595,14 @@ export function ChatConversacion({
       </div>
 
       <footer
-        className={cn("border-t bg-background p-3", !compacto && "pb-mobile-nav md:pb-3")}
+        // Abajo: aire + la barra del celular (o la barra de inicio del iPhone si la barra está escondida).
+        className={cn(
+          "border-t bg-background p-2 min-[380px]:p-3",
+          !compacto && "pb-[calc(var(--alto-barra)+0.5rem)] min-[380px]:pb-[calc(var(--alto-barra)+0.75rem)] md:pb-3"
+        )}
         style={compacto ? { paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" } : undefined}
       >
-        <div className="mx-auto flex max-w-3xl items-end gap-2">
+        <div className="mx-auto flex max-w-3xl items-end gap-1 min-[380px]:gap-2">
           {voz.grabando ? (
             <BarraGrabando
               seg={voz.seg}
@@ -649,7 +675,7 @@ export function ChatConversacion({
                   type="button"
                   size="icon"
                   variant="ghost"
-                  className="-ml-2 h-11 w-11 shrink-0 rounded-full text-muted-foreground"
+                  className="-ml-1 h-11 w-11 shrink-0 rounded-full text-muted-foreground min-[380px]:-ml-2"
                   aria-label="Cámara"
                   title="Sacar foto o grabar video"
                 >
@@ -667,7 +693,7 @@ export function ChatConversacion({
               type="button"
               size="icon"
               variant="ghost"
-              className="-ml-2 h-11 w-11 shrink-0 rounded-full text-muted-foreground"
+              className="-ml-1 h-11 w-11 shrink-0 rounded-full text-muted-foreground min-[380px]:-ml-2"
               onClick={() => setCamara(true)}
               aria-label="Sacar foto"
               title="Sacar foto con la cámara"
@@ -723,8 +749,8 @@ export function ChatConversacion({
                 mandarArchivos(files);
               }}
               rows={1}
-              placeholder="Escribí un mensaje · @prodi para pedirle algo"
-              className="max-h-40 min-h-[44px] resize-none rounded-2xl"
+              placeholder={ayudaCaja}
+              className="max-h-36 min-h-[44px] resize-none rounded-2xl"
             />
           </div>
           {/* Sin texto escrito: micrófono para mandar un audio (como en WhatsApp). */}
