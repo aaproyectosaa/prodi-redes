@@ -2,9 +2,10 @@
 
 // ---- App instalable: se activa enseguida y muestra una pantalla propia sin conexión ----
 const OFFLINE_CACHE = 'prodi-offline-v2';
+const OFFLINE_ARCHIVOS = ['/offline.html', '/icons/icon-192.png'];
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(OFFLINE_CACHE).then((c) => c.addAll(['/offline.html', '/icons/icon-192.png'])).then(() => self.skipWaiting())
+    caches.open(OFFLINE_CACHE).then((c) => c.addAll(OFFLINE_ARCHIVOS)).then(() => self.skipWaiting())
   );
 });
 self.addEventListener('activate', (event) => {
@@ -12,10 +13,17 @@ self.addEventListener('activate', (event) => {
 });
 // Solo las pantallas (navegación): siempre de la red, así cada deploy se ve al toque.
 self.addEventListener('fetch', (event) => {
-  if (event.request.mode !== 'navigate') return;
-  event.respondWith(
-    fetch(event.request).catch(() => caches.match('/offline.html').then((r) => r || Response.error()))
-  );
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match('/offline.html').then((r) => r || Response.error()))
+    );
+    return;
+  }
+  // Lo que usa la pantalla sin conexión (el logo): de la red y, si no hay, de la caché.
+  const url = new URL(event.request.url);
+  if (url.origin === self.location.origin && OFFLINE_ARCHIVOS.includes(url.pathname)) {
+    event.respondWith(fetch(event.request).catch(() => caches.match(url.pathname).then((r) => r || Response.error())));
+  }
 });
 
 // ---- Avisos push ----

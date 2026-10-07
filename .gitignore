@@ -14,6 +14,7 @@ dist-ssr
 
 # Configuración local de Claude Code
 .claude/settings.local.json
+.claude/launch.json
 
 
 # Environment & secrets (nunca commitear valores reales)
@@ -62,3 +63,7 @@ prodi-redes-demo.html
 
 # Certificados de ARCA (clave privada)
 certs/
+
+# Base local de desarrollo (pnpm db:local) y usuarios de prueba
+.pglite/
+usuarios-locales.txt

@@ -11,11 +11,13 @@
     "preview": "vite preview",
     "migrar": "node scripts/migrar-redes.mjs",
     "local": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/servidor-local.ts",
-    "db:setup": "node scripts/db-setup.mjs",
-    "db:ejemplo": "tsx scripts/db-ejemplo.ts",
+    "db:setup": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/db-setup.mjs",
+    "db:ejemplo": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/db-ejemplo.ts",
     "db:admin": "tsx scripts/db-admin.ts",
     "migrar:firebase": "node scripts/migrar-firebase.mjs",
-    "arca:probar": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/arca-probar.ts"
+    "arca:probar": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/arca-probar.ts",
+    "db:local": "pglite-server --db=.pglite --port=5433 --max-connections=10",
+    "db:usuario": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/db-usuario.ts"
   },
   "dependencies": {
     "@arcasdk/core": "^2.0.2",
@@ -76,6 +78,8 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite-socket": "^0.2.11",
     "@eslint/js": "^9.32.0",
     "@tailwindcss/typography": "^0.5.16",
     "@types/node": "^22.19.19",
