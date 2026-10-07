@@ -126,9 +126,9 @@ export function ChatDock() {
             onClick={() => dock.abrir()}
             aria-label={etiqueta}
             aria-expanded={false}
-            className="fixed bottom-4 right-4 z-40 flex h-12 max-w-[16rem] items-center gap-2 rounded-full border bg-background pl-2 pr-3 shadow-lg transition-colors hover:bg-accent"
+            className="fixed bottom-4 right-4 z-40 flex h-12 max-w-[16rem] items-center gap-2 rounded-full bg-primary pl-2 pr-4 text-primary-foreground shadow-lg shadow-primary/40 ring-1 ring-white/20 transition-all hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/50"
           >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20 text-primary-foreground">
               <MessageCircle className="h-4 w-4" />
             </span>
             <span className="truncate text-sm font-semibold">{titulo}</span>
