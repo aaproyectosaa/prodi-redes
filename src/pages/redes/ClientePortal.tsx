@@ -32,23 +32,26 @@ import { PedirVideoDialog } from "@/components/redes/cliente/PedirVideoDialog";
 import { PlanMesCliente } from "@/components/redes/cliente/PlanMesCliente";
 import { usePlanMes } from "@/lib/redes/planMes";
 import { MiPlan } from "@/components/redes/cliente/MiPlan";
+import { MaterialCliente } from "@/components/redes/cliente/MaterialCliente";
 import { ContextoComercialEditor } from "@/components/redes/ContextoComercial";
 import { cn } from "@/lib/utils";
 import { DATOS_COBRO_DEFAULT } from "@/lib/redes/types";
 import { SelectorVista, VistaCalendario, useVista } from "@/components/redes/VistaCalendario";
 import { faltaMarca, pasosCliente, resumenMarca } from "@/lib/redes/proximoPaso";
 
-type Tab = "inicio" | "resultados" | "piezas" | "plan" | "negocio";
+type Tab = "inicio" | "resultados" | "piezas" | "material" | "plan" | "negocio";
 
 const TITULOS: Partial<Record<Tab, string>> = {
   resultados: "Resultados",
   piezas: "Piezas gráficas",
+  material: "Material",
   plan: "Mi plan",
   negocio: "Mi negocio",
 };
 const SUBTITULOS: Partial<Record<Tab, string>> = {
   resultados: "Qué lograron tus videos con la pauta.",
   piezas: "Posteos, historias, afiches, carteles y banners con tu marca.",
+  material: "Todo lo que filmamos y lo que ya está editado, para ver y descargar.",
   plan: "Si estás al día, qué incluye tu plan, cuánto usaste y tus boletas.",
   negocio: "Tu marca y lo que vendés: con esto armamos tus videos y piezas.",
 };
@@ -349,6 +352,10 @@ export default function ClientePortal() {
           )}
           {misPiezas.length === 0 && <PrimeraPieza onEmpezar={() => setPiezaOpen(true)} tieneLogo={!!cliente.marca_archivos?.logo} onMarca={() => setTab("negocio")} />}
           <PiezaAprobarDialog pieza={misPiezas.find((p) => p.id === piezaVer) ?? null} onClose={() => setPiezaVer(null)} />
+        </TabsContent>
+
+        <TabsContent value="material">
+          <MaterialCliente videos={mios} piezas={misPiezas} />
         </TabsContent>
 
         <TabsContent value="plan">

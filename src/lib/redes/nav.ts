@@ -19,6 +19,7 @@ import {
   HandCoins,
   Landmark,
   Store,
+  FolderOpen,
 } from "lucide-react";
 import type { UserRole } from "@/integrations/firebase/types";
 
@@ -130,6 +131,7 @@ export function navForRole(role: UserRole | undefined): NavSection[] {
             { label: "Resultados", icon: TrendingUp, path: "/cliente?tab=resultados", mobile: true },
             { label: "Piezas gráficas", icon: ImageIcon, path: "/cliente?tab=piezas", mobile: true },
             { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
+            { label: "Material", icon: FolderOpen, path: "/cliente?tab=material" },
             { label: "Mi plan", icon: CreditCard, path: "/cliente?tab=plan" },
             { label: "Mi negocio", icon: Store, path: "/cliente?tab=negocio" },
           ],
