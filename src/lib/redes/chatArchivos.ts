@@ -26,6 +26,8 @@ export interface SubidaChat {
   /** Vista previa local de las fotos mientras suben. */
   previa?: string;
   leyenda?: string;
+  /** Va como documento (archivo original para bajar), aunque sea una foto. */
+  documento?: boolean;
   /** Id del mensaje que escribió el servidor (para sacar la burbuja cuando aparece). */
   mensajeId?: string;
   file: File;
@@ -76,7 +78,7 @@ export function validarArchivoChat(f: File): string | null {
   return null;
 }
 
-export function subirArchivosChat(chatId: string, files: File[], leyenda?: string) {
+export function subirArchivosChat(chatId: string, files: File[], leyenda?: string, documento = false) {
   assertEditable();
   files.slice(0, 10).forEach((f, i) => {
     const err = validarArchivoChat(f);
@@ -93,7 +95,8 @@ export function subirArchivosChat(chatId: string, files: File[], leyenda?: strin
       mime,
       progreso: 0,
       estado: "subiendo",
-      previa: mime.startsWith("image/") ? URL.createObjectURL(f) : undefined,
+      previa: mime.startsWith("image/") && !documento ? URL.createObjectURL(f) : undefined,
+      documento: documento || undefined,
       // La leyenda va con el primero.
       leyenda: i === 0 ? leyenda?.trim() || undefined : undefined,
       file: f,
@@ -131,7 +134,7 @@ async function correr(s: SubidaChat) {
     }
     let r: { id: string };
     try {
-      r = await callApi<{ id: string }>("/api/drive/chat-archivo", { chat_id: s.chatId, subida, texto: s.leyenda ?? "" });
+      r = await callApi<{ id: string }>("/api/drive/chat-archivo", { chat_id: s.chatId, subida, texto: s.leyenda ?? "", documento: !!s.documento });
     } catch (e) {
       throw errSubida ?? e;
     }

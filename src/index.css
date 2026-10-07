@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Imágenes con transparencia (PNG sin fondo): cuadritos claros, como en un editor de imágenes. */
+.fondo-transparencia {
+  background-color: #ffffff;
+  background-image: linear-gradient(45deg, #e5e5ea 25%, transparent 25%), linear-gradient(-45deg, #e5e5ea 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #e5e5ea 75%), linear-gradient(-45deg, transparent 75%, #e5e5ea 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+
 /* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
 All colors MUST be HSL.
 */

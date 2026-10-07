@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { collection, limit, onSnapshot, orderBy, query } from "@/lib/db";
-import { ArrowLeft, Camera, Check, CheckCheck, FileText, Info, Loader2, Paperclip, Send, Sparkles, Upload, Video } from "lucide-react";
+import { ArrowLeft, Camera, Check, CheckCheck, FileText, Image as ImageIcon, Info, Loader2, Paperclip, Send, Sparkles, Upload, Video } from "lucide-react";
 import { toast } from "sonner";
 import { db } from "@/integrations/firebase/client";
 import { Button } from "@/components/ui/button";
@@ -185,6 +185,7 @@ export function ChatConversacion({
   const fin = useRef<HTMLDivElement>(null);
   const caja = useRef<HTMLTextAreaElement>(null);
   const elegirArchivo = useRef<HTMLInputElement>(null);
+  const elegirDocumento = useRef<HTMLInputElement>(null);
   const capturaFoto = useRef<HTMLInputElement>(null);
   const capturaSelfie = useRef<HTMLInputElement>(null);
   const capturaVideo = useRef<HTMLInputElement>(null);
@@ -698,17 +699,49 @@ export function ChatConversacion({
               e.target.value = "";
             }}
           />
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="h-11 w-11 shrink-0 rounded-full text-muted-foreground"
-            onClick={() => elegirArchivo.current?.click()}
-            aria-label="Adjuntar archivo"
-            title={`Adjuntar foto, video o documento (hasta ${CHAT_MAX_MB} MB)`}
-          >
-            <Paperclip className="h-5 w-5" />
-          </Button>
+          {/* Como documento: llega el archivo original para bajar (sin vista previa), también si es una foto. */}
+          <input
+            ref={elegirDocumento}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              const files = Array.from(e.target.files ?? []);
+              e.target.value = "";
+              if (!files.length) return;
+              try {
+                subirArchivosChat(chat.id, files, undefined, true);
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "No se pudo mandar");
+              }
+            }}
+          />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-11 w-11 shrink-0 rounded-full text-muted-foreground"
+                aria-label="Adjuntar archivo"
+                title={`Adjuntar foto, video o documento (hasta ${CHAT_MAX_MB} MB)`}
+              >
+                <Paperclip className="h-5 w-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="top" className="w-60">
+              <DropdownMenuItem onSelect={() => elegirArchivo.current?.click()}>
+                <ImageIcon className="mr-2 h-4 w-4" /> Fotos y videos
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => elegirDocumento.current?.click()}>
+                <FileText className="mr-2 h-4 w-4" />
+                <span>
+                  Documento
+                  <span className="block text-xs text-muted-foreground">Archivo original, sin comprimir</span>
+                </span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {/* Cámara: en el celular, la del sistema (foto, selfie o video); en la compu, un diálogo con vista previa. */}
           <input
             ref={capturaFoto}

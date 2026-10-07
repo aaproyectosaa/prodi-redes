@@ -109,10 +109,11 @@ export async function chatArchivo(req: VercelRequest, res: VercelResponse) {
   }
   try {
     const caller = await requireCaller(req, ROLES);
-    const b = body<{ chat_id?: string; subida?: string; texto?: string }>(req);
+    const b = body<{ chat_id?: string; subida?: string; texto?: string; documento?: boolean }>(req);
     const chat = await chatDeMiembro(b.chat_id, caller.uid);
     const chatId = String(b.chat_id);
     const subida = String(b.subida ?? "");
+    const documento = b.documento === true;
     if (!SUBIDA.test(subida)) throw new HttpError(400, "Subida inválida");
 
     const { accessToken } = await getAppDriveAccessToken();
@@ -126,7 +127,7 @@ export async function chatArchivo(req: VercelRequest, res: VercelResponse) {
     if (f.appProperties?.prodi_chat !== chatId || f.appProperties?.prodi_by !== caller.uid) throw new HttpError(403, "Este archivo no es de este chat");
 
     const mime = String(f.mimeType || "application/octet-stream");
-    const tipo = mime.startsWith("image/") ? "📷 Foto" : mime.startsWith("video/") ? "🎬 Video" : `📎 ${f.name}`;
+    const tipo = documento ? `📎 ${f.name}` : mime.startsWith("image/") ? "📷 Foto" : mime.startsWith("video/") ? "🎬 Video" : `📎 ${f.name}`;
     const texto = String(b.texto ?? "").trim().slice(0, 2000);
     const at = new Date().toISOString();
     const resumen = texto ? `${tipo} · ${texto}` : tipo;
@@ -141,7 +142,7 @@ export async function chatArchivo(req: VercelRequest, res: VercelResponse) {
         tipo: "archivo",
         link: null,
         reunion_id: null,
-        archivo: { drive_file_id: f.id, name: f.name, mime_type: mime, size: Number(f.size ?? 0) },
+        archivo: { drive_file_id: f.id, name: f.name, mime_type: mime, size: Number(f.size ?? 0), ...(documento ? { documento: true } : {}) },
       },
       `f_${subida}`
     );

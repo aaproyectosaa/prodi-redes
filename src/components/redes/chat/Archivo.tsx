@@ -41,7 +41,7 @@ const IMG_EN_LINEA = /^image\/(png|jpeg|webp|gif|avif)$/;
 /** Archivo de un mensaje: foto en línea, video con el reproductor de siempre, el resto como tarjeta para bajar. */
 export function ArchivoMensaje({ archivo, mio }: { archivo: ArchivoChat; mio: boolean }) {
   const mime = archivo.mime_type || "";
-  if (IMG_EN_LINEA.test(mime)) return <Imagen archivo={archivo} mio={mio} />;
+  if (IMG_EN_LINEA.test(mime) && !archivo.documento) return <Imagen archivo={archivo} mio={mio} />;
   if (mime.startsWith("video/")) return <VideoChat archivo={archivo} />;
   return <Tarjeta archivo={archivo} mio={mio} />;
 }
@@ -60,16 +60,18 @@ function Imagen({ archivo, mio }: { archivo: ArchivoChat; mio: boolean }) {
     };
   }, [archivo.drive_file_id]);
   if (error) return <Tarjeta archivo={archivo} mio={mio} />;
+  // PNG/WebP/GIF pueden ser transparentes: sobre cuadritos claros se ven tal cual (no sobre el globo oscuro).
+  const transparente = /png|webp|gif/i.test(archivo.mime_type);
   return (
     <>
       <button
         type="button"
         onClick={() => url && setGrande(true)}
-        className="-mx-1.5 -mt-0.5 block overflow-hidden rounded-xl bg-black/5"
+        className={cn("-mx-1.5 -mt-0.5 block overflow-hidden rounded-xl", transparente ? "fondo-transparencia" : "bg-black/5")}
         aria-label={`Ver ${archivo.name}`}
       >
         {url ? (
-          <img src={url} alt={archivo.name} loading="lazy" onError={() => setError(true)} className="max-h-72 w-full min-w-[160px] object-cover" />
+          <img src={url} alt={archivo.name} loading="lazy" onError={() => setError(true)} className={cn("max-h-72 w-full min-w-[160px]", transparente ? "object-contain" : "object-cover")} />
         ) : (
           <div className="flex h-44 w-56 max-w-full items-center justify-center">
             <Loader2 className="h-5 w-5 animate-spin opacity-60" />
@@ -79,7 +81,7 @@ function Imagen({ archivo, mio }: { archivo: ArchivoChat; mio: boolean }) {
       <Dialog open={grande} onOpenChange={setGrande}>
         <DialogContent className="max-w-[min(96vw,1100px)] border-0 bg-black/95 p-2">
           <DialogTitle className="sr-only">{archivo.name}</DialogTitle>
-          {url && <img src={url} alt={archivo.name} className="mx-auto max-h-[80vh] w-auto rounded-md object-contain" />}
+          {url && <img src={url} alt={archivo.name} className={cn("mx-auto max-h-[80vh] w-auto rounded-md object-contain", transparente && "fondo-transparencia")} />}
           <div className="flex items-center justify-between gap-2 px-1 pt-1 text-xs text-white/80">
             <span className="truncate">{archivo.name}</span>
             <button type="button" onClick={() => void descargar(archivo).catch(() => toast.error("No se pudo descargar"))} className="inline-flex items-center gap-1 hover:text-white">

@@ -419,6 +419,8 @@ export interface ArchivoChat {
   name: string;
   mime_type: string;
   size: number;
+  /** Mandado "como documento": se muestra como archivo para bajar (original, sin vista previa). */
+  documento?: boolean;
 }
 
 export interface Mensaje {
