@@ -28,17 +28,12 @@ import { useUserRole } from "@/hooks/use-user-role";
 import { RoleBadge } from "@/components/RoleBadge";
 import { getRoleInfo } from "@/lib/roles";
 import { PageHeader } from "@/components/PageHeader";
-import {
-  WhatsAppNotificationSettings,
-  whatsappSettingsFromProfile,
-  type WhatsAppUserSettings,
-} from "@/components/WhatsAppNotificationSettings";
 import { PushNotificationSettings } from "@/components/PushNotificationSettings";
+import { AvisosCorreoSonidoSettings } from "@/components/AvisosCorreoSonidoSettings";
 import {
   ChangePasswordForm,
   userHasPasswordProvider,
 } from "@/components/ChangePasswordForm";
-import { useWhatsAppBotSettings } from "@/hooks/use-whatsapp-bot-settings";
 import { cn } from "@/lib/utils";
 
 const AVATAR_COLORS = [
@@ -101,14 +96,8 @@ const Profile = () => {
   const [tab, setTab] = useState<ProfileTab>("cuenta");
   const { role } = useUserRole(user?.uid);
   const roleInfo = role ? getRoleInfo(role) : undefined;
-  const { settings: botSettings } = useWhatsAppBotSettings();
-  const [whatsappSettings, setWhatsappSettings] = useState<WhatsAppUserSettings>({
-    whatsapp_enabled: false,
-    whatsapp_phone: "",
-    whatsapp_phone_verified: false,
-    whatsapp_notifications: {},
-  });
   const [pushEnabled, setPushEnabled] = useState(false);
+  const [emailAvisos, setEmailAvisos] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -134,8 +123,8 @@ const Profile = () => {
         if (data.theme && data.theme !== theme) {
           setTheme(data.theme as "light" | "dark");
         }
-        setWhatsappSettings(whatsappSettingsFromProfile(data));
         setPushEnabled(Boolean(data.push_enabled));
+        setEmailAvisos(data.email_avisos !== false);
       }
     } catch (error) {
       console.error("Error al cargar perfil:", error);
@@ -168,8 +157,6 @@ const Profile = () => {
     }
     setSaving(true);
     try {
-      const phoneOk =
-        whatsappSettings.whatsapp_phone_verified && !!whatsappSettings.whatsapp_phone;
       const profileRef = doc(db, "profiles", user.uid);
       await setDoc(
         profileRef,
@@ -179,7 +166,6 @@ const Profile = () => {
           nombre: nombre.trim(),
           email: user.email,
           theme,
-          whatsapp_enabled: phoneOk,
         },
         { merge: true }
       );
@@ -202,9 +188,6 @@ const Profile = () => {
       .toUpperCase()
       .slice(0, 2);
   };
-
-  const whatsappLinked =
-    whatsappSettings.whatsapp_phone_verified && !!whatsappSettings.whatsapp_phone;
 
   if (loading) {
     return (
@@ -450,17 +433,17 @@ const Profile = () => {
                   variant="outline"
                   className={cn(
                     "gap-1 font-normal",
-                    whatsappLinked
+                    emailAvisos
                       ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5"
                       : "text-muted-foreground"
                   )}
                 >
-                  {whatsappLinked ? (
+                  {emailAvisos ? (
                     <CheckCircle2 className="w-3 h-3" />
                   ) : (
                     <Bell className="w-3 h-3" />
                   )}
-                  WhatsApp {whatsappLinked ? "vinculado" : "sin vincular"}
+                  Correo {emailAvisos ? "activo" : "apagado"}
                 </Badge>
                 <Badge
                   variant="outline"
@@ -481,16 +464,16 @@ const Profile = () => {
               </div>
 
               <p className="text-sm text-muted-foreground leading-relaxed px-0.5">
-                Los avisos te avisan cuando hay algo para revisar. Podés usar el
-                teléfono, WhatsApp, o ambos.
+                Te avisamos cuando hay algo para vos: en la app, en el teléfono
+                (push) y por correo. Las reuniones y tareas con fecha te llegan
+                además como invitación de Google Calendar.
               </p>
 
-              <WhatsAppNotificationSettings
+              <AvisosCorreoSonidoSettings
                 userId={user!.uid}
-                role={role}
-                botSettings={botSettings}
-                value={whatsappSettings}
-                onChange={setWhatsappSettings}
+                email={user?.email}
+                emailAvisos={emailAvisos}
+                onEmailAvisosChange={setEmailAvisos}
               />
               <PushNotificationSettings
                 userId={user!.uid}

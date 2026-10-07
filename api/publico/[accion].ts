@@ -1,4 +1,4 @@
-// Aprobación del cliente sin entrar al sistema (link firmado que llega por WhatsApp).
+// Aprobación del cliente sin entrar al sistema (link firmado que le llega en el aviso).
 // POST /api/publico/video      { t }                               → datos del video
 // POST /api/publico/responder  { t, decision, nota?, rating? }     → aprueba o pide cambios
 // GET  /api/publico/media?t=…&fileId=…                             → reproduce el video final

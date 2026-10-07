@@ -5,18 +5,17 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { DriveUploadStatusBar } from "@/components/DriveUploadStatusBar";
 import { MobileAppHeader, MobileTabBar } from "@/components/MobileNav";
 import { AvisoActivarAvisos, AvisoInstalar } from "@/components/InstalarApp";
+import { AvisoDescargarChat, InstalarChatHost } from "@/components/InstalarChat";
 import { VideoSheet } from "@/components/redes/VideoSheet";
 import { VerComoBanner } from "@/components/redes/VerComo";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { RedesDataProvider } from "@/contexts/redes-data-context";
 import { SidebarExtrasProvider, useSidebarExtras } from "@/hooks/use-sidebar-extras";
-import { useSyncAppBaseUrl } from "@/hooks/use-sync-app-base-url";
 
 const LayoutInner = () => {
   const navigate = useNavigate();
   const { user, authChecked, profile, role, viewingAs } = useUserProfileContext();
   const { extras } = useSidebarExtras();
-  useSyncAppBaseUrl(role === "admin");
 
   useEffect(() => {
     if (authChecked && !user) navigate("/auth", { replace: true });
@@ -40,12 +39,14 @@ const LayoutInner = () => {
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <VerComoBanner />
           <MobileAppHeader profile={profile} role={role} />
+          <AvisoDescargarChat />
           <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
             <Outlet />
           </main>
         </div>
         <MobileTabBar role={role} />
         <AvisoInstalar />
+        <InstalarChatHost />
         <AvisoActivarAvisos uid={viewingAs ? undefined : user?.uid} />
         <DriveUploadStatusBar />
         <VideoSheet />

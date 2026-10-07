@@ -195,18 +195,18 @@ export function descargarPlanilla(lista: Factura[], mes: string) {
 const ars = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n);
 const fecha = (f: string) => f.split("-").reverse().join("/");
 
-/** Texto para mandar por WhatsApp. */
-export function textoWhatsApp(f: Factura, cobro: DatosCobro): string {
+/** Texto del recordatorio de pago (para copiar y mandar por el chat o por mail). */
+export function textoCobro(f: Factura, cobro: DatosCobro): string {
   const mora = interesMora(f, hoyAR());
   return [
     `Hola! Te paso la ${f.tipo === "factura" ? "factura" : "boleta"} de Prodi de ${nombrePeriodo(f)}.`,
     ...f.items.map((i) => `• ${i.concepto}: ${ars(i.neto)}`),
     f.iva ? `IVA ${f.iva_pct}%: ${ars(f.iva)}` : "",
-    `*Total: ${ars(f.bruto)}* · vence el ${fecha(f.vencimiento)}`,
+    `Total: ${ars(f.bruto)} · vence el ${fecha(f.vencimiento)}`,
     mora.dias
-      ? `Venció hace ${mora.dias} día${mora.dias === 1 ? "" : "s"}: con el interés (0,5% por día) hoy son *${ars(mora.totalConInteres)}*.`
+      ? `Venció hace ${mora.dias} día${mora.dias === 1 ? "" : "s"}: con el interés (0,5% por día) hoy son ${ars(mora.totalConInteres)}.`
       : "Después del vencimiento corre un interés del 0,5% por día.",
-    f.debito ? "Se debita solo con Mercado Pago 👌" : `Podés transferir al alias *${cobro.alias}* (${cobro.banco}, a nombre de ${cobro.titular}). Mandanos el comprobante por acá. ¡Gracias!`,
+    f.debito ? "Se debita solo con Mercado Pago 👌" : `Podés transferir al alias ${cobro.alias} (${cobro.banco}, a nombre de ${cobro.titular}). Mandanos el comprobante por el chat de Prodi${cobro.email ? ` o a ${cobro.email}` : ""}. ¡Gracias!`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -255,7 +255,7 @@ ${
       : `<div class="panel"><div><small>Titular</small>${esc(cobro.titular)}</div><div><small>CUIT</small>${esc(cobro.cuit)}</div>
 <div><small>Banco</small>${esc(cobro.banco)}</div><div><small>Alias</small><b>${esc(cobro.alias)}</b></div><div style="grid-column:1/-1"><small>CBU</small>${esc(cobro.cbu)}</div></div>`
   }
-${f.debito || f.estado === "cobrada" ? "" : '<p class="obs">Enviar el comprobante de transferencia por WhatsApp para registrar el pago.</p>'}
+${f.debito || f.estado === "cobrada" ? "" : `<p class="obs">Enviá el comprobante de transferencia por el chat de Prodi${cobro.email ? ` o a ${esc(cobro.email)}` : ""} para registrar el pago.</p>`}
 ${
     f.estado === "cobrada"
       ? f.interes_cobrado
@@ -265,7 +265,7 @@ ${
   }
 ${f.tipo === "boleta" ? '<p class="obs">Este documento es una boleta de pago y no reemplaza la factura correspondiente.</p>' : ""}
 ${f.nota && !(f.debito && f.nota.startsWith("Se cobra solo")) ? `<p class="obs">${esc(f.nota)}</p>` : ""}
-<footer><span>Progreso Digital para tu negocio</span><span>WhatsApp: ${esc(cobro.whatsapp)}</span></footer>
+<footer><span>Progreso Digital para tu negocio</span><span>${cobro.email ? `Comprobantes: ${esc(cobro.email)}` : ""}</span></footer>
 </div>`;
 }).join("")}${imprimir ? "<script>window.onload=()=>setTimeout(()=>window.print(),300)</script>" : ""}</body></html>`;
 }

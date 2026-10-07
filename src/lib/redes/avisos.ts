@@ -16,7 +16,7 @@ export interface Aviso {
 }
 
 /**
- * Envía un aviso in-app + push (+ WhatsApp si el usuario lo activó).
+ * Envía un aviso in-app + push (si lo activó) + correo (salvo que lo haya apagado).
  * Nunca rompe el flujo: si falla, solo lo registra en consola.
  */
 export async function avisar(aviso: Aviso): Promise<void> {

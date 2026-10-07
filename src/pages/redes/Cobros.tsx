@@ -9,7 +9,7 @@ import {
   FileSpreadsheet,
   Loader2,
   Mail,
-  MessageCircle,
+  Copy,
   MoreHorizontal,
   Pencil,
   Receipt,
@@ -47,7 +47,7 @@ import {
   prepararFacturacion,
   marcarCobrada,
   reactivarFactura,
-  textoWhatsApp,
+  textoCobro,
   useFacturas,
   volverAPendiente,
   type Factura,
@@ -514,10 +514,10 @@ function PasoCobrar({ lista, hoy, cobro, onVer }: { lista: FacturaDoc[]; hoy: st
               size="sm"
               variant="ghost"
               className="h-8 px-2"
-              onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(textoWhatsApp(f, cobro))}`, "_blank", "noopener")}
-              title="Recordarle por WhatsApp"
+              onClick={() => void navigator.clipboard.writeText(textoCobro(f, cobro)).then(() => toast.success("Recordatorio copiado"), () => toast.error("No se pudo copiar"))}
+              title="Copiar el texto del recordatorio de pago"
             >
-              <MessageCircle className="mr-1 h-3.5 w-3.5" /> Recordar
+              <Copy className="mr-1 h-3.5 w-3.5" /> Recordatorio
             </Button>
             <MenuCobrar label="Cobrada" onElegir={(m) => void cobrar([f], m)} />
           </Fila>

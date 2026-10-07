@@ -89,3 +89,50 @@ export async function enviarMail(to: string[], asunto: string, html: string): Pr
     throw new Error(`No se pudo enviar el mail: ${j?.message ?? res.status}`);
   }
 }
+
+export interface MailLote {
+  to: string;
+  asunto: string;
+  html: string;
+}
+
+/**
+ * Varios mails en un solo pedido a Resend (/emails/batch, hasta 100 por pedido; los lotes van de a 3 en paralelo).
+ * Nunca tira: si falla, lo deja en el log. Sin RESEND_API_KEY no hace nada.
+ */
+export async function enviarMailsLote(mails: MailLote[]): Promise<number> {
+  const key = process.env.RESEND_API_KEY;
+  if (!mails.length) return 0;
+  if (!key) {
+    console.warn("[mail] Falta RESEND_API_KEY: no se mandan los avisos por correo");
+    return 0;
+  }
+  const from = process.env.INFORME_FROM || "Prodi <informes@somosprodi.com>";
+  const replyTo = process.env.INFORME_REPLY_TO || undefined;
+  const lotes: MailLote[][] = [];
+  for (let i = 0; i < mails.length; i += 100) lotes.push(mails.slice(i, i + 100));
+  let enviados = 0;
+  for (let i = 0; i < lotes.length; i += 3) {
+    await Promise.all(
+      lotes.slice(i, i + 3).map(async (lote) => {
+        try {
+          const res = await fetch("https://api.resend.com/emails/batch", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+            body: JSON.stringify(lote.map((m) => ({ from, to: [m.to], subject: m.asunto, html: m.html, reply_to: replyTo }))),
+            signal: AbortSignal.timeout(10_000),
+          });
+          if (!res.ok) {
+            const j: any = await res.json().catch(() => ({}));
+            console.warn("[mail] lote rechazado", res.status, j?.message ?? "");
+            return;
+          }
+          enviados += lote.length;
+        } catch (err) {
+          console.warn("[mail] lote falló", err);
+        }
+      })
+    );
+  }
+  return enviados;
+}

@@ -65,7 +65,6 @@ import {
   marcarCobrada,
   marcarPagado,
   prepararFacturacion,
-  textoWhatsApp,
   unidadesDelMes,
   useConfigPagos,
   useFacturas,

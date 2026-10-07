@@ -17,6 +17,15 @@ import {
   deleteInAppNotification,
   deleteAllInAppNotifications,
 } from "@/lib/inAppNotifications";
+import { sonarProdi } from "@/lib/sonido";
+import { enModoVista } from "@/lib/redes/vistaComo";
+
+/**
+ * Avisos ya vistos (id + fecha), compartido entre todas las instancias del hook (barra lateral, menú,
+ * página de avisos): así el sonido sale una sola vez por aviso nuevo y nunca por los que ya estaban.
+ */
+const vistos = new Set<string>();
+const usuariosCargados = new Set<string>();
 
 /** Avisos del sistema anterior (tareas, PM, CM…): se limpian solos. */
 function isObsoleteNotification(data: { type?: string }): boolean {
@@ -76,6 +85,19 @@ export function useInAppNotifications(userId: string | undefined) {
         list.sort((a, b) =>
           (b.created_at || "").localeCompare(a.created_at || "")
         );
+        // Sonido: solo por avisos sin leer que llegaron recién (nunca en la primera carga).
+        const primera = !usuariosCargados.has(userId);
+        usuariosCargados.add(userId);
+        const hace2min = new Date(Date.now() - 2 * 60_000).toISOString();
+        let nuevo = false;
+        for (const n of list) {
+          const k = `${n.id}:${n.available_at}`;
+          if (vistos.has(k)) continue;
+          vistos.add(k);
+          if (!primera && !n.read && (n.available_at || "") >= hace2min) nuevo = true;
+        }
+        if (nuevo && !enModoVista()) sonarProdi();
+
         setItems(list);
         setLoading(false);
 

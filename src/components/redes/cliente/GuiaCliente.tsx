@@ -32,12 +32,12 @@ const CAMINO: { icon: LucideIcon; titulo: string; texto: string; vos?: boolean }
   { icon: Lightbulb, titulo: "Idea", texto: "Charlamos qué querés mostrar este mes y armamos las ideas.", vos: true },
   { icon: CalendarDays, titulo: "Filmación", texto: "Vamos a tu local un día y filmamos todos los videos juntos." },
   { icon: Clapperboard, titulo: "Edición", texto: "Los editamos y los revisa nuestro equipo." },
-  { icon: CheckCircle2, titulo: "Tu OK", texto: "Te llega cada video por WhatsApp: lo aprobás o pedís cambios.", vos: true },
+  { icon: CheckCircle2, titulo: "Tu OK", texto: "Te avisamos de cada video en la app y por mail: lo aprobás o pedís cambios.", vos: true },
   { icon: Rocket, titulo: "En redes", texto: "Lo publicamos con pauta y ves los resultados acá." },
 ];
 
 const TAREAS: { icon: LucideIcon; titulo: string; texto: string }[] = [
-  { icon: CheckCircle2, titulo: "Aprobar los videos", texto: "Te avisamos por WhatsApp. Un toque y listo." },
+  { icon: CheckCircle2, titulo: "Aprobar los videos", texto: "Te avisamos en la app y por mail. Un toque y listo." },
   { icon: MessageCircle, titulo: "Contarnos tus ideas", texto: "Promos, productos, novedades: escribinos por el chat." },
   { icon: TrendingUp, titulo: "Mirar los resultados", texto: "Cuánta gente vio tus videos y cuántos mensajes te llegaron." },
 ];

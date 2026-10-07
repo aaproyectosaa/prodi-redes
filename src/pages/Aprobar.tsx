@@ -19,7 +19,7 @@ interface VideoPublico {
 }
 
 /**
- * Página pública: el cliente abre el link que le llega por WhatsApp, mira el
+ * Página pública: el cliente abre el link que le llega en el aviso, mira el
  * video y lo aprueba o pide cambios. No necesita usuario ni contraseña.
  */
 export default function Aprobar() {
@@ -103,7 +103,7 @@ export default function Aprobar() {
                         ? "Estamos haciendo los cambios que pediste"
                         : "Este video todavía está en proceso"
                   }
-                  texto="Te avisamos por WhatsApp cuando haya algo nuevo para ver."
+                  texto="Te avisamos por mail cuando haya algo nuevo para ver."
                 />
               </div>
             )}

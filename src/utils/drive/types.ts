@@ -13,6 +13,10 @@ export interface DriveConnection {
   disconnected_at?: string;
   last_used_at: string;
   last_error?: string;
+  /** Permisos que dio Google al conectar (separados por espacio). */
+  scopes?: string;
+  /** Si la conexión incluye Google Calendar. */
+  calendario?: boolean;
 }
 
 export interface DriveAttachment {

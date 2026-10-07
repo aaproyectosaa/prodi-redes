@@ -10,7 +10,12 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { aplicarEscritura, ejecutarConsulta, enTransaccion, getPool, leerDoc, partirRuta, type Consulta, type OpEscritura } from "../_lib/db";
 import { claveProhibida } from "../_lib/docs";
 import { contexto, paraLaApp, partirColeccion, puedeEscribir, puedeLeer } from "../_lib/reglas";
-import { body, HttpError, requireCaller, sendError } from "../_lib/http";
+import { appUrl, body, HttpError, requireCaller, sendError } from "../_lib/http";
+import { sincronizarCalendario } from "../_lib/calendario";
+import type { Data } from "../_lib/db";
+
+/** Colecciones con fecha que van a Google Calendar (se ponen al día después de guardar). */
+const CON_CALENDARIO = new Set(["reuniones", "tareas"]);
 
 const MAX_CONSULTAS = 40;
 const MAX_OPS = 450;
@@ -88,6 +93,7 @@ async function escribir(req: VercelRequest) {
   const caller = await requireCaller(req);
   const { ops } = body<{ ops?: PedidoOp[] }>(req);
   if (!Array.isArray(ops) || !ops.length || ops.length > MAX_OPS) throw new HttpError(400, "Escrituras inválidas");
+  const calendario = new Map<string, { coleccion: "reuniones" | "tareas"; id: string; antes: Data | null }>();
   await enTransaccion(async (cli) => {
     const ctx = await contexto(cli, caller.uid, caller.role);
     for (const o of ops) {
@@ -103,9 +109,16 @@ async function escribir(req: VercelRequest) {
         if (!(await puedeEscribir(ctx, coleccion, id, antes, despues))) {
           throw new HttpError(403, `No tenés permiso para ${despues ? (antes ? "modificar" : "crear") : "borrar"} esto (${partirColeccion(coleccion).base})`);
         }
+        const clave = `${coleccion}/${id}`;
+        if (CON_CALENDARIO.has(coleccion) && !calendario.has(clave)) calendario.set(clave, { coleccion: coleccion as "reuniones" | "tareas", id, antes });
       });
     }
   });
+  // Google Calendar: después de guardar (si falla, solo queda en el log; si no cambió nada que importe, no llama a Google).
+  if (calendario.size) {
+    const base = appUrl(req);
+    await Promise.all([...calendario.values()].slice(0, 10).map((x) => sincronizarCalendario(x.coleccion, x.id, base, x.antes)));
+  }
   return { ok: true };
 }
 

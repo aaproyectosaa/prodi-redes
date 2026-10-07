@@ -142,7 +142,7 @@ export function pasosCliente(params: {
       tipo: "en_produccion",
       teToca: false,
       titulo: editando ? `Estamos editando ${editando} video${editando === 1 ? "" : "s"}` : "Tus videos están en camino",
-      texto: "No tenés que hacer nada por ahora. Te avisamos por WhatsApp apenas haya algo para ver.",
+      texto: "No tenés que hacer nada por ahora. Te avisamos en la app y por mail apenas haya algo para ver.",
     });
   }
 

@@ -135,7 +135,7 @@ export function MiPlan({
               </div>
               <p className="mt-1.5 text-xs text-muted-foreground">
                 {[cobro.titular && `A nombre de ${cobro.titular}`, cobro.banco].filter(Boolean).join(" · ")}
-                {cobro.titular || cobro.banco ? ". " : ""}Cuando pagues, avisanos por el chat o por WhatsApp.
+                {cobro.titular || cobro.banco ? ". " : ""}Cuando pagues, avisanos por el chat.
               </p>
             </div>
           )}

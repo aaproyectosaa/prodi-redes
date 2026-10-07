@@ -460,7 +460,7 @@ async function facturar(req: VercelRequest) {
 }
 
 /**
- * Emite boletas: el cliente la ve en su panel, le llega el aviso (app, push, WhatsApp)
+ * Emite boletas: el cliente la ve en su panel, le llega el aviso (app, push, correo)
  * y un duplicado por correo con el botón para verla y descargarla desde el sistema.
  */
 async function emitir(req: VercelRequest) {

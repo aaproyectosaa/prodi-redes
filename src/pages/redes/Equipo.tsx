@@ -281,7 +281,7 @@ export default function Equipo() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{credenciales?.titulo}</DialogTitle>
-            <DialogDescription>Mandáselo por WhatsApp. No lo vas a poder ver de nuevo.</DialogDescription>
+            <DialogDescription>Pasáselo por un medio privado. No lo vas a poder ver de nuevo.</DialogDescription>
           </DialogHeader>
           <pre className="whitespace-pre-wrap break-all rounded-lg border bg-muted/40 p-3 text-sm">{credenciales?.texto}</pre>
           <DialogFooter>

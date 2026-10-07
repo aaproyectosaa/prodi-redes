@@ -12,6 +12,8 @@ import NotFound from "./pages/NotFound";
 import PendingRoleGate from "./components/PendingRoleGate";
 import { RequireRole } from "./components/RequireRole";
 import { AppProviders } from "./contexts/app-providers";
+import { useUserProfileContext } from "./contexts/user-profile-context";
+import { ChatAppLayout, ModoChat } from "./components/ChatAppLayout";
 
 const Profile = lazy(() => import("./pages/Profile"));
 const Notificaciones = lazy(() => import("./pages/Notificaciones"));
@@ -52,6 +54,14 @@ const AVideos = () => {
   return <Navigate to={`/videos${search}`} replace />;
 };
 
+/** En Prodi Chat, el chat para cualquier rol asignado (los pendientes ven el aviso de PendingRoleGate). */
+const ChatSoloConRol = () => {
+  const { role, loading } = useUserProfileContext();
+  if (loading || !role) return <Cargando />;
+  if (role === "pending") return null;
+  return <Chat />;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider defaultTheme="dark" storageKey="ui-theme">
@@ -62,9 +72,10 @@ const App = () => (
           <AppProviders>
             <PendingRoleGate />
             <Suspense fallback={<Cargando />}>
+            <ModoChat>
             <Routes>
               <Route path="/auth" element={<Auth />} />
-              {/* Público: el cliente aprueba desde el link de WhatsApp sin entrar al sistema */}
+              {/* Público: el cliente aprueba desde el link del aviso sin entrar al sistema */}
               <Route path="/aprobar/:token" element={<Aprobar />} />
 
               <Route element={<AppLayout />}>
@@ -107,8 +118,18 @@ const App = () => (
                 ))}
               </Route>
 
+              {/* Prodi Chat: la app aparte con solo los chats (chat-app.html, manifest-chat.webmanifest) */}
+              <Route path="/chat-app/ingresar" element={<Auth />} />
+              <Route element={<ChatAppLayout />}>
+                <Route path="/chat-app" element={<ChatSoloConRol />} />
+                <Route path="/chat-app/perfil" element={<Profile />} />
+                <Route path="/chat-app/avisos" element={<Notificaciones />} />
+                <Route path="/chat-app/*" element={<Navigate to="/chat-app" replace />} />
+              </Route>
+
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </ModoChat>
             </Suspense>
           </AppProviders>
         </Router>

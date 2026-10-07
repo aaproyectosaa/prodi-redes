@@ -22,7 +22,7 @@ export async function recordatoriosRodaje(base: string): Promise<number> {
   const snap = await db.collection("rodajes").where("fecha", "in", [hoy, manana]).get();
   let enviados = 0;
   for (const d of snap.docs) {
-    // Se marca antes de mandar: si la función se corta a la mitad, no se repite el WhatsApp.
+    // Se marca antes de mandar: si la función se corta a la mitad, no se repite el aviso.
     const tomado = await db.runTransaction(async (tx) => {
       const r = (await tx.get(d.ref)).data();
       if (!r || r.demo_ejemplo || r.estado !== "agendado" || r.recordatorio_at) return null;
@@ -89,7 +89,7 @@ export async function recordatoriosAprobacion(base: string): Promise<number> {
     const p = proyectos.get(pid)!;
     const team = (p.team_roles ?? {}) as Record<string, string[]>;
     if (p.enabled === false || !(team.cliente ?? []).length) continue;
-    // Se marca antes de mandar: si la función se corta, no se repite el WhatsApp.
+    // Se marca antes de mandar: si la función se corta, no se repite el aviso.
     const v = await db.runTransaction(async (tx) => {
       const x = (await tx.get(d.ref)).data();
       if (!x || !vence(x)) return null;
@@ -226,7 +226,7 @@ export async function vencimientosObligaciones(base: string): Promise<number> {
 
 /**
  * Recordatorio automático de cobro a los clientes que deben: 2 días antes del vencimiento y a los
- * 1, 7 y 15 días de vencida. Les llega en la app (y WhatsApp si lo tienen activado) y por mail.
+ * 1, 7 y 15 días de vencida. Les llega en la app (y push si lo tienen activado) y por mail.
  * No se manda a los que pagan con débito automático ni a los que tienen "sin recordatorios".
  */
 export async function recordatoriosCobro(base: string): Promise<number> {

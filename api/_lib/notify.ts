@@ -1,8 +1,10 @@
-// Avisos: in-app + push (Web Push) + cola de WhatsApp. Usado por /api/avisos y
-// por los procesos del servidor (pagos, informes).
+// Avisos: in-app + push (Web Push) + correo. Usado por /api/avisos y por los procesos del servidor
+// (pagos, informes, chat, tareas, cron diario).
 
 import { adminDb } from "./db";
 import { enviarPush } from "./push";
+import { enviarMailsLote, type MailLote } from "./informe";
+import { mailAvisoHtml } from "./mail-aviso";
 
 export interface AvisoServer {
   destinatarios: string[];
@@ -12,19 +14,33 @@ export interface AvisoServer {
   clave: string;
   proyectoId?: string | null;
   videoId?: string | null;
+  /** false: no mandar el correo genérico (el evento ya manda su propio mail). */
+  mail?: boolean;
 }
 
 const IN_APP = "in_app_notifications";
+/** Avisos que ya mandan su mail propio (boleta emitida, recordatorio de cobro): no se duplica el correo. */
+const CON_MAIL_PROPIO = ["factura:", "cobro:"];
+const MAIL_OK = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function enviarAviso(aviso: AvisoServer, baseUrl: string): Promise<void> {
   const db = adminDb();
   const now = new Date().toISOString();
   const destinatarios = Array.from(new Set(aviso.destinatarios.filter(Boolean))).slice(0, 50);
+  let conMail = aviso.mail !== false && !CON_MAIL_PROPIO.some((p) => aviso.clave.startsWith(p));
+  // Reunión o tarea que ya está en Google Calendar: la invitación de Google ya es el correo.
+  const cal = /^(reunion|tarea):([^:/]+)$/.exec(aviso.clave);
+  if (conMail && cal) {
+    const d = await db.collection(cal[1] === "reunion" ? "reuniones" : "tareas").doc(cal[2]).get().catch(() => null);
+    if (d?.data()?.google_event_id) conMail = false;
+  }
+  const mails: MailLote[] = [];
 
   await Promise.all(
     destinatarios.map(async (uid) => {
       const dedupe = `${aviso.clave}:${uid}`;
       // 1) In-app (dedupe: si hay uno sin leer con la misma clave, se actualiza)
+      let yaSinLeer = false;
       try {
         const existing = await db
           .collection(IN_APP)
@@ -33,6 +49,7 @@ export async function enviarAviso(aviso: AvisoServer, baseUrl: string): Promise<
           .limit(3)
           .get();
         const unread = existing.docs.find((d) => d.data().read !== true);
+        yaSinLeer = !!unread;
         const data = {
           type: "prodi",
           recipient_user_id: uid,
@@ -51,7 +68,7 @@ export async function enviarAviso(aviso: AvisoServer, baseUrl: string): Promise<
         console.warn("[aviso] in-app falló", dedupe, err);
       }
 
-      // 2) Push y WhatsApp según el perfil
+      // 2) Push y correo según el perfil
       try {
         const snap = await db.collection("profiles").doc(uid).get();
         const p = snap.data() ?? {};
@@ -59,34 +76,32 @@ export async function enviarAviso(aviso: AvisoServer, baseUrl: string): Promise<
 
         if (p.push_enabled) await enviarPush(uid, { title: aviso.titulo, body: aviso.cuerpo, url, tag: dedupe });
 
-        const phone = String(p.whatsapp_phone ?? "").replace(/\D/g, "");
-        if (p.whatsapp_enabled && phone && p.whatsapp_phone_verified !== false) {
-          // El bot de WhatsApp lee esta cola. Para type "prodi_aviso" debe
-          // mandar payload.text tal cual (ver docs/DESPLIEGUE.md).
-          await db.collection("notification_queue").add({
-            type: "prodi_aviso",
-            task_id: aviso.videoId ?? null,
-            recipient_user_id: uid,
-            phone,
-            send_whatsapp: true,
-            send_push: false,
-            payload: {
-              text: `*${aviso.titulo}*\n${aviso.cuerpo}\n${url}`,
-              title: aviso.titulo,
-              body: aviso.cuerpo,
-              url,
-            },
-            dedupe_key: dedupe,
-            scheduled_at: now,
-            status: "pending",
-            created_at: now,
+        // Correo: uno por aviso nuevo. Si ya tenía uno sin leer con la misma clave (ej. varios mensajes
+        // del mismo chat), no se repite: el primero ya le llegó y todavía no lo abrió.
+        const email = String(p.email ?? "").trim().toLowerCase();
+        if (
+          conMail &&
+          !yaSinLeer &&
+          p.email_avisos !== false &&
+          p.activo !== false &&
+          !p.demo_ejemplo &&
+          MAIL_OK.test(email) &&
+          !email.endsWith("@prodi.local")
+        ) {
+          mails.push({
+            to: email,
+            asunto: aviso.titulo,
+            html: mailAvisoHtml({ titulo: aviso.titulo, cuerpo: aviso.cuerpo, link: url, baseUrl, nombre: String(p.nombre ?? "") }),
           });
         }
       } catch (err) {
-        console.warn("[aviso] push/whatsapp falló", dedupe, err);
+        console.warn("[aviso] push falló", dedupe, err);
       }
     })
   );
+
+  // 3) Correos: después de guardar todo, en un solo pedido a Resend. Si falla, solo queda en el log.
+  if (mails.length) await enviarMailsLote(mails).catch((err) => console.warn("[aviso] correo falló", aviso.clave, err));
 }
 
 /** IDs de admins + equipo de un rol en un cliente. */

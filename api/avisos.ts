@@ -1,4 +1,4 @@
-// POST /api/avisos — aviso in-app + push + WhatsApp a uno o más usuarios.
+// POST /api/avisos — aviso in-app + push + correo a uno o más usuarios.
 // Lo llama la app cuando un video cambia de etapa. El cliente solo puede mandar los de chat y reuniones.
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
@@ -96,7 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const caller = await requireCaller(req, ["admin", "productor", "editor", "pauta", "diseno", "administracion", "cliente"]);
     const b = body<Body>(req);
     if (caller.role === "cliente") {
-      // El cliente no arma avisos a mano (salen también por el WhatsApp de Prodi): solo los de
+      // El cliente no arma avisos a mano (salen también por correo con la marca de Prodi): solo los de
       // chat y reuniones, con el texto que arma el servidor y a quienes corresponde.
       const aviso = await avisoDelCliente(caller, b);
       if (aviso.destinatarios.length) await enviarAviso(aviso, appUrl(req));

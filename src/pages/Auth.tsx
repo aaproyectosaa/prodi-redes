@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { asset } from "@/lib/asset";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { auth, db } from "@/integrations/firebase/client";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, usarLinkDeClave } from "@/lib/auth";
 import { doc, setDoc, getDoc } from "@/lib/db";
@@ -14,6 +14,8 @@ import { defaultRouteForRole } from "@/lib/roles";
 import type { UserRole } from "@/integrations/firebase/types";
 import { useTheme } from "@/hooks/use-theme";
 import { AvisoInstalar, BotonInstalar } from "@/components/InstalarApp";
+import { BotonInstalarChat, InstalarChatHost } from "@/components/InstalarChat";
+import { CHAT_APP, CHAT_APP_INGRESAR, esRutaChatApp } from "@/lib/chatApp";
 
 const registerSchema = z.object({
   nombre: z.string().min(2, "El nombre debe tener al menos 2 caracteres").max(100),
@@ -40,6 +42,8 @@ const Auth = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [invitationCode, setInvitationCode] = useState("");
   const navigate = useNavigate();
+  // Entrando desde Prodi Chat (/chat-app/ingresar): después de ingresar se vuelve a los chats.
+  const enChat = esRutaChatApp(useLocation().pathname);
   const { setTheme } = useTheme();
   // Link para crear o cambiar la contraseña: /auth?clave=<token>
   const linkClave = new URLSearchParams(window.location.search).get("clave");
@@ -52,8 +56,8 @@ const Auth = () => {
     try {
       await usarLinkDeClave(linkClave!, password);
       toast.success("¡Listo! Ya podés usar tu contraseña nueva.");
-      window.history.replaceState(null, "", "/auth");
-      navigate("/");
+      window.history.replaceState(null, "", enChat ? CHAT_APP_INGRESAR : "/auth");
+      navigate(enChat ? CHAT_APP : "/");
     } catch (err) {
       const error = err as { message?: string; code?: string };
       toast.error(error.message || "No se pudo guardar la contraseña");
@@ -159,7 +163,7 @@ const Auth = () => {
       }
 
       toast.success("¡Bienvenido!");
-      navigate(defaultRouteForRole(role) === "/auth" ? "/" : defaultRouteForRole(role));
+      navigate(enChat ? CHAT_APP : defaultRouteForRole(role) === "/auth" ? "/" : defaultRouteForRole(role));
     } catch (err) {
       const error = err as { message?: string; code?: string };
       if (err instanceof z.ZodError) {
@@ -188,13 +192,15 @@ const Auth = () => {
             className="mb-4 h-10 w-auto"
           />
           <CardTitle className="text-xl">
-            {linkClave ? "Creá tu contraseña" : isLogin ? "Ingresar al gestor" : "Crear cuenta"}
+            {linkClave ? "Creá tu contraseña" : isLogin ? (enChat ? "Ingresar a Prodi Chat" : "Ingresar al gestor") : "Crear cuenta"}
           </CardTitle>
           <CardDescription className="text-zinc-400">
             {linkClave
               ? "Elegí una contraseña de al menos 6 caracteres."
               : isLogin
-                ? "Producción de videos y pauta"
+                ? enChat
+                  ? "Tus chats con el equipo de Prodi"
+                  : "Producción de videos y pauta"
                 : "Necesitás el código de invitación del equipo"}
           </CardDescription>
         </CardHeader>
@@ -300,11 +306,11 @@ const Auth = () => {
           </>
           )}
           <div className="mt-3 border-t pt-3">
-            <BotonInstalar className="justify-center" />
+            {enChat ? <BotonInstalarChat className="justify-center" /> : <BotonInstalar className="justify-center" />}
           </div>
         </CardContent>
       </Card>
-      <AvisoInstalar />
+      {enChat ? <InstalarChatHost /> : <AvisoInstalar />}
     </div>
   );
 };

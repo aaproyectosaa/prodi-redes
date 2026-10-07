@@ -68,7 +68,6 @@ import {
   marcarPagado,
   nombrePeriodo,
   prepararFacturacion,
-  textoWhatsApp,
   unidadesDelMes,
   useConfigPagos,
   useFacturas,

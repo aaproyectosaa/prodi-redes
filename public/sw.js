@@ -50,6 +50,9 @@ self.addEventListener('push', (event) => {
         icon: '/icons/icon-192.png',
         badge: '/icons/icon-192.png',
         tag: data.tag || undefined,
+        // Con el sonido del sistema (la web no permite sonidos propios en las notificaciones).
+        silent: false,
+        renotify: !!data.tag,
         data: { url },
       });
     })()
@@ -61,7 +64,22 @@ self.addEventListener('notificationclick', (event) => {
   const url = (event.notification.data && event.notification.data.url) || '/';
   event.waitUntil(
     (async () => {
-      const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const ventanas = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const enChatApp = (c) => new URL(c.url).pathname.startsWith('/chat-app');
+      const destino = new URL(url, self.location.origin);
+      // Avisos de chat: si Prodi Chat está abierta, ahí (/chat?c=x → /chat-app?c=x).
+      if (destino.pathname === '/chat' || destino.pathname.startsWith('/chat/')) {
+        const chat = ventanas.find(enChatApp);
+        if (chat && 'focus' in chat) {
+          await chat.focus();
+          try {
+            await chat.navigate('/chat-app' + destino.search);
+          } catch (_) {}
+          return;
+        }
+      }
+      // El resto, en el sistema: nunca dentro de la app de chats (si solo está esa, se abre otra ventana).
+      const allClients = ventanas.filter((c) => !enChatApp(c));
       for (const client of allClients) {
         if ('focus' in client) {
           await client.focus();

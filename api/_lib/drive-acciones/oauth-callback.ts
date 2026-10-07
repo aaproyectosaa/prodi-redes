@@ -180,8 +180,11 @@ export default async function handler(
           last_error: null,
           // Encrypted refresh token (server-only field).
           refresh_token_enc: encrypted,
+          // Permisos que dio Google (Ajustes avisa si falta el de Calendar).
+          scopes: tokens.scope ?? "",
+          calendario: String(tokens.scope ?? "").split(/\s+/).includes("https://www.googleapis.com/auth/calendar.events"),
           // Auth flow version, lets us migrate cleanly later.
-          auth_version: 2,
+          auth_version: 3,
         },
         { merge: true }
       );
@@ -189,8 +192,8 @@ export default async function handler(
     res.status(200).send(
       htmlResponse({
         ok: true,
-        message: "Drive conectado",
-        detail: userInfo.email,
+        message: "Google conectado",
+        detail: `${userInfo.email}${String(tokens.scope ?? "").includes("calendar.events") ? " · Drive y Calendar" : " · solo Drive (falta permitir Calendar)"}`,
       })
     );
   } catch (err) {

@@ -561,8 +561,8 @@ function RecordatorioCliente({ video }: { video: Video }) {
       <BellRing className="mt-px h-3.5 w-3.5 shrink-0 text-primary" />
       <span>
         {n === 0
-          ? "Si el cliente no lo aprueba en 48 h, le mandamos solos un recordatorio por WhatsApp con el link para aprobar."
-          : `Le recordamos ${n === 1 ? "1 vez" : `${n} veces`} por WhatsApp (el último ${hace(video.recordatorio_cliente_at)}). ${
+          ? "Si el cliente no lo aprueba en 48 h, le mandamos solos un recordatorio (app, push y correo) con el link para aprobar."
+          : `Le recordamos ${n === 1 ? "1 vez" : `${n} veces`} (app, push y correo; el último ${hace(video.recordatorio_cliente_at)}). ${
               n >= 3 ? "Ya no le mandamos más: escribile o llamalo." : "Si sigue sin responder, le avisamos de nuevo en 48 h."
             }`}
       </span>
@@ -823,8 +823,8 @@ function LinkClienteDialog({ video, open, onOpenChange }: { video: Video; open: 
                 <Copy className="mr-2 h-4 w-4" /> Copiar mensaje
               </Button>
               <Button asChild>
-                <a href={`https://wa.me/?text=${encodeURIComponent(texto)}`} target="_blank" rel="noreferrer">
-                  <Send className="mr-2 h-4 w-4" /> WhatsApp
+                <a href={`mailto:?subject=${encodeURIComponent(`Video para aprobar: ${video.titulo}`)}&body=${encodeURIComponent(texto)}`}>
+                  <Send className="mr-2 h-4 w-4" /> Mandar por mail
                 </a>
               </Button>
             </div>

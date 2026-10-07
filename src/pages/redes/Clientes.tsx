@@ -1,14 +1,13 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { addDoc, collection } from "@/lib/db";
-import { Building2, Copy, Loader2, MessageCircle, Plus } from "lucide-react";
+import { Building2, Copy, Loader2, Mail, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { callApi } from "@/lib/redes/api";
-import { resolveClientAppOrigin } from "@/lib/whatsappNotifications";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +33,8 @@ import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { formatARS, hoyISO, mesActual } from "@/lib/redes/format";
 import { planDe, usoPlan } from "@/lib/redes/planes";
 
+/** Dirección de la app para el mensaje de bienvenida (VITE_APP_URL o la de esta pestaña). */
+const urlApp = () => (import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/$/, "");
 const COLORES = ["#6F40FC", "#22C55E", "#F59E0B", "#EF4444", "#06B6D4", "#EC4899", "#84CC16", "#F97316", "#3B82F6", "#A855F7"];
 
 export default function Clientes() {
@@ -114,7 +115,6 @@ interface Alta {
   usuario: string | null;
   email: string | null;
   password: string | null;
-  whatsapp: string;
   pid: string;
 }
 
@@ -127,7 +127,7 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   const [planId, setPlanId] = useState<string>("");
   const [color, setColor] = useState(COLORES[0]);
   const [equipo, setEquipo] = useState<Record<"productor" | "editor" | "pauta", string>>({ productor: "", editor: "", pauta: "" });
-  const [contacto, setContacto] = useState({ nombre: "", email: "", whatsapp: "" });
+  const [contacto, setContacto] = useState({ nombre: "", email: "" });
   const [tipo, setTipo] = useState<"boleta" | "factura">("boleta");
   const [saving, setSaving] = useState(false);
   const [alta, setAlta] = useState<Alta | null>(null);
@@ -137,7 +137,7 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     setPlanId("");
     setColor(COLORES[0]);
     setEquipo({ productor: "", editor: "", pauta: "" });
-    setContacto({ nombre: "", email: "", whatsapp: "" });
+    setContacto({ nombre: "", email: "" });
     setTipo("boleta");
     setAlta(null);
   };
@@ -184,7 +184,7 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
           toast.error(`El cliente se creó, pero no su usuario: ${e instanceof Error ? e.message : "error"}`);
         }
       }
-      setAlta({ nombre: nombre.trim(), usuario: contacto.nombre.trim() || null, email: email || null, password, whatsapp: contacto.whatsapp, pid: ref.id });
+      setAlta({ nombre: nombre.trim(), usuario: contacto.nombre.trim() || null, email: email || null, password, pid: ref.id });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo crear");
     } finally {
@@ -194,7 +194,6 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
 
   if (alta) {
     const mensaje = mensajeBienvenida(alta, planes.find((p) => p.id === planId));
-    const tel = alta.whatsapp.replace(/\D/g, "");
     return (
       <Dialog open={open} onOpenChange={cerrar}>
         <DialogContent className="sm:max-h-[94dvh] max-w-lg overflow-y-auto">
@@ -212,12 +211,13 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
             >
               <Copy className="mr-1.5 h-4 w-4" /> Copiar
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => window.open(`https://wa.me/${tel}?text=${encodeURIComponent(mensaje)}`, "_blank", "noopener")}
-            >
-              <MessageCircle className="mr-1.5 h-4 w-4" /> Mandar por WhatsApp
-            </Button>
+            {alta.email && (
+              <Button variant="outline" asChild>
+                <a href={`mailto:${alta.email}?subject=${encodeURIComponent("Bienvenidos a Prodi")}&body=${encodeURIComponent(mensaje)}`}>
+                  <Mail className="mr-1.5 h-4 w-4" /> Mandar por mail
+                </a>
+              </Button>
+            )}
           </div>
           <DialogFooter>
             <Button
@@ -338,14 +338,10 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                 <Input id="nc-contacto" value={contacto.nombre} onChange={(e) => setContacto((c) => ({ ...c, nombre: e.target.value }))} placeholder="Ej.: Martín Gómez" />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="nc-wa">WhatsApp</Label>
-                <Input id="nc-wa" inputMode="tel" value={contacto.whatsapp} onChange={(e) => setContacto((c) => ({ ...c, whatsapp: e.target.value }))} placeholder="Ej.: 3482 123456" />
+                <Label htmlFor="nc-mail">Mail</Label>
+                <Input id="nc-mail" type="email" value={contacto.email} onChange={(e) => setContacto((c) => ({ ...c, email: e.target.value }))} placeholder="Con este mail entra a su panel y le llegan las boletas" />
+                {!emailOk && <p className="text-xs text-destructive">Revisá el mail</p>}
               </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="nc-mail">Mail</Label>
-              <Input id="nc-mail" type="email" value={contacto.email} onChange={(e) => setContacto((c) => ({ ...c, email: e.target.value }))} placeholder="Con este mail entra a su panel y le llegan las boletas" />
-              {!emailOk && <p className="text-xs text-destructive">Revisá el mail</p>}
             </div>
           </div>
         </div>
@@ -365,7 +361,7 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
 
 function mensajeBienvenida(a: Alta, plan?: { nombre: string; videos_mes: number; piezas_mes?: number }) {
   const hola = a.usuario ? `¡Hola ${a.usuario.split(" ")[0]}!` : "¡Hola!";
-  const url = resolveClientAppOrigin();
+  const url = urlApp();
   return [
     `${hola} Bienvenidos a Prodi 🙌`,
     "",

@@ -31,7 +31,7 @@ export async function cargarEjemplo(adminUid: string): Promise<{ documentos: num
         if (id === adminUid) continue; // el perfil real no se pisa
         data.nombre = `${data.nombre} · ejemplo`;
         data.email = `ejemplo+${id}@prodi.local`;
-        data.whatsapp_enabled = false;
+        data.email_avisos = false;
         data.push_enabled = false;
       }
       if (col === "projects") data.contacto_emails = []; // que el informe no le llegue a nadie

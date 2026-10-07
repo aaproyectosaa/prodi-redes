@@ -24,9 +24,6 @@ export type UserRole =
   | "pm"
   | "disenador";
 
-/** Preferencias individuales de avisos por WhatsApp (override del default del rol). */
-export type WhatsAppNotificationPreferences = Partial<Record<string, boolean>>;
-
 export interface Profile {
   id: string;
   nombre: string;
@@ -47,14 +44,8 @@ export interface Profile {
   task_list_access?: boolean;
   /** Acceso a /projects en el menú lateral. Por defecto según rol (admin/cm/pm). */
   projects_access?: boolean;
-  /** Teléfono WhatsApp en formato E.164 (+54911...). */
-  whatsapp_phone?: string;
-  /** Número confirmado con código por WhatsApp (una sola vez al vincular). */
-  whatsapp_phone_verified?: boolean;
-  /** Si el usuario activó recibir avisos por WhatsApp. */
-  whatsapp_enabled?: boolean;
-  /** Preferencias por tipo de aviso. */
-  whatsapp_notifications?: WhatsAppNotificationPreferences;
+  /** Avisos por correo (todo lo que llega a la app). Default: sí (solo false los apaga). */
+  email_avisos?: boolean;
   /** Si el usuario activó avisos push en el navegador / PWA (Android e iOS). */
   push_enabled?: boolean;
   /** Tokens FCM Web Push (varios dispositivos). */

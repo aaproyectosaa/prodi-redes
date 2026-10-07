@@ -186,6 +186,8 @@ export interface MemoriaIA {
   ejemplos?: { mes: string; at: string; tipo: string }[];
   actualizado_at?: string;
   comercial?: ContextoComercial;
+  /** Lo que la IA sacó de los chats del cliente (resumen diario o "@prodi acordate que …"). */
+  chat_notas?: { texto: string; fuente: "chat"; at: string; chat_id: string; por?: string | null }[];
 }
 
 /** Lo que vende el cliente y cómo le conseguimos consultas (lo usa la IA). Va en ia_memoria/{cliente}. */
@@ -332,7 +334,8 @@ export interface DatosCobro {
   banco: string;
   alias: string;
   cbu: string;
-  whatsapp: string;
+  /** Mail para mandar comprobantes (opcional: sale en la boleta). */
+  email?: string;
 }
 
 export interface RedesSettings {
@@ -364,7 +367,7 @@ export const DATOS_COBRO_DEFAULT: DatosCobro = {
   banco: "Banco Galicia",
   alias: "prodiredes",
   cbu: "0070345930004013137772",
-  whatsapp: "+54 9 3482 61-8443",
+  email: "",
 };
 
 export const DEFAULT_REDES_SETTINGS: RedesSettings = {
@@ -398,7 +401,16 @@ export interface Chat {
   created_at: string;
 }
 
-export type TipoMensaje = "texto" | "llamada" | "minuta" | "sistema" | "audio";
+/** "archivo" y "bot" (respuestas de @prodi) solo los escribe el servidor. */
+export type TipoMensaje = "texto" | "llamada" | "minuta" | "sistema" | "audio" | "archivo" | "bot";
+
+/** Archivo mandado por el chat (está en Drive; se ve con /api/drive/media-token si sos miembro del chat). */
+export interface ArchivoChat {
+  drive_file_id: string;
+  name: string;
+  mime_type: string;
+  size: number;
+}
 
 export interface Mensaje {
   id: string;
@@ -411,6 +423,32 @@ export interface Mensaje {
   reunion_id?: string | null;
   /** Mensaje de voz: el audio está en chats/{chat}/audios/{id} (se baja al reproducirlo). */
   audio?: { id: string; mime: string; duracion: number } | null;
+  archivo?: ArchivoChat | null;
+  /** Texto que acompaña al archivo. */
+  leyenda?: string | null;
+  /** Respuestas de @prodi: texto del botón del link. */
+  link_texto?: string | null;
+  tarea_id?: string | null;
+}
+
+/** Tareas que deja @prodi ("recordale a Lucía que mande el guion el viernes"). */
+export interface Tarea {
+  id: string;
+  titulo: string;
+  asignados: string[];
+  /** YYYY-MM-DD o null. */
+  vence: string | null;
+  /** Día del vencimiento en ISO (00:00 AR → 00:00 AR del día siguiente). */
+  vence_inicio?: string | null;
+  vence_fin?: string | null;
+  hecha: boolean;
+  hecha_at?: string | null;
+  hecha_por?: string | null;
+  creada_por: string;
+  creada_por_nombre?: string;
+  chat_id: string | null;
+  proyecto_id: string | null;
+  created_at: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -439,6 +477,9 @@ export interface Reunion {
   chat_id: string | null;
   /** ISO de inicio */
   fecha: string;
+  /** ISO de fin y duración (las que crea @prodi los tienen). */
+  fin?: string | null;
+  duracion_min?: number | null;
   /** Link de la videollamada (Jitsi Meet, gratis). */
   link: string;
   participantes: string[];

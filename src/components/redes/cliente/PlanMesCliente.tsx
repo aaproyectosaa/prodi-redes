@@ -80,7 +80,7 @@ export function PlanMesCliente({
             <DialogDescription className="max-w-sm">
               {listo.aprobadas > 0 && `Ya pusimos en marcha ${listo.aprobadas === 1 ? "1 video" : `${listo.aprobadas} videos`}. `}
               {listo.cambios > 0 && `Ajustamos ${listo.cambios === 1 ? "la idea que nos marcaste" : "las ideas que nos marcaste"} y te avisamos. `}
-              Te vamos contando cada paso por acá y por WhatsApp.
+              Te vamos contando cada paso por acá y por mail.
             </DialogDescription>
             <Button className="mt-2" onClick={() => onOpenChange(false)}>
               Listo

@@ -99,7 +99,7 @@ export function PushNotificationSettings({
           <div>
             <h3 className="text-sm font-semibold">Avisos en el teléfono</h3>
             <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-              Mismos avisos que WhatsApp. Al tocarlos se abre la tarea.
+              Los mismos avisos de la app, en el celular o la compu. Al tocarlos se abre lo que corresponde.
             </p>
           </div>
         </div>

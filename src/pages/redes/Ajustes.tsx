@@ -178,12 +178,12 @@ export default function Ajustes() {
                   ["banco", "Banco"],
                   ["alias", "Alias"],
                   ["cbu", "CBU"],
-                  ["whatsapp", "WhatsApp para comprobantes"],
+                  ["email", "Mail para comprobantes (opcional)"],
                 ] as [keyof DatosCobro, string][]
               ).map(([k, l]) => (
                 <div key={k} className="space-y-1">
                   <Label className="text-xs">{l}</Label>
-                  <Input value={cobro[k]} onChange={(e) => setCobro((c) => ({ ...c, [k]: e.target.value }))} />
+                  <Input value={cobro[k] ?? ""} onChange={(e) => setCobro((c) => ({ ...c, [k]: e.target.value }))} />
                 </div>
               ))}
               <Button
@@ -204,7 +204,7 @@ export default function Ajustes() {
             </div>
           </Section>
 
-          <Section title="Google Drive" description="Donde se guardan el crudo, los videos finales y las piezas gráficas.">
+          <Section title="Google Drive y Calendar" description="Drive guarda el crudo, los videos finales y las piezas gráficas. Calendar agenda las reuniones y las tareas con fecha.">
             <DriveCard />
           </Section>
 
@@ -359,6 +359,8 @@ function PlanRow({ plan }: { plan: PlanRedes }) {
 function DriveCard() {
   const { connection, status, loading, connect, disconnect, reconnect } = useDriveConnection();
   const [busy, setBusy] = useState(false);
+  // Conexiones de antes de Calendar: hay que reconectar una vez para dar el permiso nuevo.
+  const sinCalendario = status === "connected" && !(connection?.scopes ?? "").includes("calendar.events");
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     try {
@@ -381,7 +383,9 @@ function DriveCard() {
               <p className="flex items-center gap-1.5 text-sm font-medium">
                 <CheckCircle2 className="h-4 w-4 text-success" /> Conectado
               </p>
-              <p className="truncate text-xs text-muted-foreground">{connection?.email} · carpeta “Progreso”</p>
+              <p className="truncate text-xs text-muted-foreground">
+                {connection?.email} · carpeta “Progreso”{sinCalendario ? "" : " · Google Calendar"}
+              </p>
             </>
           ) : (
             <p className="flex items-center gap-1.5 text-sm font-medium">
@@ -391,15 +395,32 @@ function DriveCard() {
           )}
         </div>
       </div>
-      <div className="flex gap-2">
+      {sinCalendario && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-800 dark:text-amber-300">
+          <p className="font-medium">Falta permitir Google Calendar</p>
+          <p className="mt-0.5">
+            Las reuniones y las tareas con fecha se agendan solas en el calendario de esta cuenta y les llega la invitación a
+            cada participante. Para eso tocá “Reconectar con Calendar” y aceptá el permiso nuevo (una sola vez).
+          </p>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2">
         {status === "connected" ? (
-          <Button variant="outline" size="sm" onClick={() => run(disconnect)} disabled={busy}>
-            Desconectar
-          </Button>
+          <>
+            {sinCalendario && (
+              <Button size="sm" onClick={() => run(reconnect)} disabled={busy}>
+                {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Reconectar con Calendar
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => run(disconnect)} disabled={busy}>
+              Desconectar
+            </Button>
+          </>
         ) : (
           <Button size="sm" onClick={() => run(status === "revoked" ? reconnect : connect)} disabled={busy}>
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {status === "revoked" ? "Reconectar" : "Conectar Drive"}
+            {status === "revoked" ? "Reconectar" : "Conectar Google"}
           </Button>
         )}
       </div>

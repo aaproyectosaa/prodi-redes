@@ -190,7 +190,7 @@ export function buildAuthUrl(params: {
   url.searchParams.set("response_type", "code");
   url.searchParams.set(
     "scope",
-    "https://www.googleapis.com/auth/drive.file openid email profile"
+    "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events openid email profile"
   );
   url.searchParams.set("access_type", "offline");
   url.searchParams.set("prompt", "consent");
