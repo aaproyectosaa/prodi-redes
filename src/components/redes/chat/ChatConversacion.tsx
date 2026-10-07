@@ -24,6 +24,7 @@ import { ChatIcon } from "@/components/redes/chat/ChatLista";
 import { crearReunion } from "@/lib/redes/reuniones";
 import { getRoleInfo } from "@/lib/roles";
 import { cn } from "@/lib/utils";
+import { chatEnPantalla } from "@/lib/redes/chatDock";
 import { fechaAR, formatearFecha, hoyAR, sumarDias } from "@/lib/fecha";
 import type { Chat as ChatT, Mensaje } from "@/lib/redes/types";
 import type { Profile } from "@/integrations/firebase/types";
@@ -141,6 +142,13 @@ export function ChatConversacion({
       }
     );
   }, [chat.id]);
+
+  // Mientras se ve, sus avisos no muestran cartel ni suenan (ya estás leyendo).
+  useEffect(() => {
+    if (!activa) return;
+    chatEnPantalla.entrar(chat.id);
+    return () => chatEnPantalla.salir(chat.id);
+  }, [activa, chat.id]);
 
   useEffect(() => {
     if (!activa) return;

@@ -57,6 +57,19 @@ export const dock = {
   },
 };
 
+// Conversaciones a la vista ahora mismo (página /chat o chat flotante abierto).
+const enPantalla = new Set<string>();
+export const chatEnPantalla = {
+  entrar: (id: string) => void enPantalla.add(id),
+  salir: (id: string) => void enPantalla.delete(id),
+};
+
+/** ¿El aviso es de un chat que ya se está mirando? Entonces no hace falta cartel ni sonido. */
+export function avisoDeChatVisible(link: string | null | undefined): boolean {
+  const id = chatDeLink(link);
+  return !!id && enPantalla.has(id) && document.visibilityState === "visible";
+}
+
 /** Id del chat de un link del sistema ("/chat?c=…"), o null. */
 export function chatDeLink(link: string | null | undefined): string | null {
   if (!link) return null;

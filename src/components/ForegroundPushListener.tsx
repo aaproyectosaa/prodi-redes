@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 import { listenForegroundPush } from "@/lib/webPush";
 import { prepararSonido, sonarProdi } from "@/lib/sonido";
-import { abrirEnDock, chatDeLink } from "@/lib/redes/chatDock";
+import { abrirEnDock, avisoDeChatVisible, chatDeLink } from "@/lib/redes/chatDock";
 
 /** Muestra toast (con el sonido de Prodi) si llega un push con la app abierta (Android/desktop). */
 export function ForegroundPushListener() {
@@ -10,6 +10,8 @@ export function ForegroundPushListener() {
     // El navegador deja sonar recién después del primer toque: se desbloquea acá.
     prepararSonido();
     return listenForegroundPush(({ title, body, url }) => {
+      // Mensaje del chat que ya tenés abierto: no hace falta cartel (taparía el cuadro de escribir).
+      if (avisoDeChatVisible(url)) return;
       sonarProdi();
       toast(title, {
         description: body,

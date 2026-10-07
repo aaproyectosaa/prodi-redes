@@ -18,6 +18,7 @@ import {
   deleteAllInAppNotifications,
 } from "@/lib/inAppNotifications";
 import { sonarProdi } from "@/lib/sonido";
+import { avisoDeChatVisible } from "@/lib/redes/chatDock";
 import { enModoVista } from "@/lib/redes/vistaComo";
 
 /**
@@ -94,7 +95,7 @@ export function useInAppNotifications(userId: string | undefined) {
           const k = `${n.id}:${n.available_at}`;
           if (vistos.has(k)) continue;
           vistos.add(k);
-          if (!primera && !n.read && (n.available_at || "") >= hace2min) nuevo = true;
+          if (!primera && !n.read && (n.available_at || "") >= hace2min && !avisoDeChatVisible(n.link)) nuevo = true;
         }
         if (nuevo && !enModoVista()) sonarProdi();
 
