@@ -385,7 +385,7 @@ export const DEFAULT_REDES_SETTINGS: RedesSettings = {
 // Chat interno
 // ---------------------------------------------------------------------------
 
-export type TipoChat = "equipo" | "cliente" | "directo";
+export type TipoChat = "equipo" | "cliente" | "directo" | "grupo";
 
 export interface Chat {
   id: string;
@@ -399,6 +399,13 @@ export interface Chat {
   /** Última lectura de cada miembro: { uid: ISO } */
   leido: Record<string, string>;
   created_at: string;
+  /** Foto del chat (JPEG cuadrado chico en data URL). Grupos, "equipo" y los de cada cliente. */
+  foto?: string | null;
+  /** Grupos armados por los usuarios: quiénes los administran y cómo se ven sin foto. */
+  admins?: string[];
+  creado_por?: string;
+  emoji?: string | null;
+  color?: string | null;
 }
 
 /** "archivo" y "bot" (respuestas de @prodi) solo los escribe el servidor. */

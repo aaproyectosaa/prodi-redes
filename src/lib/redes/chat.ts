@@ -5,6 +5,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  writeBatch,
 } from "@/lib/db";
 import { db } from "@/integrations/firebase/client";
 import type { Profile, Project } from "@/integrations/firebase/types";
@@ -204,6 +205,179 @@ export function noLeido(chat: Chat, uid: string | undefined): boolean {
 export function tituloChat(chat: Chat, uid: string | undefined, profiles: Profile[], role?: string): string {
   if (chat.tipo === "equipo") return "Equipo Prodi";
   if (chat.tipo === "cliente") return role === "cliente" ? `Prodi · ${chat.nombre ?? ""}` : chat.nombre ?? "Cliente";
+  if (chat.tipo === "grupo") return chat.nombre ?? "Grupo";
   const otro = chat.miembros.find((m) => m !== uid) ?? "";
   return profiles.find((p) => p.id === otro)?.nombre ?? chat.nombres?.[otro] ?? "Conversación";
+}
+
+// ---------------------------------------------------------------------------
+// Grupos armados por los usuarios (tipo "grupo")
+// ---------------------------------------------------------------------------
+
+export const esAdminDelGrupo = (chat: Chat, uid: string | undefined, role?: string) =>
+  role === "admin" || (chat.tipo === "grupo" && !!uid && (chat.admins ?? []).includes(uid));
+
+/** ¿Puede cambiar la foto? Grupos: sus admins; "equipo" y los de cada cliente: el super admin. */
+export const puedeEditarChat = (chat: Chat, uid: string | undefined, role?: string) =>
+  chat.tipo === "directo" ? false : esAdminDelGrupo(chat, uid, role);
+
+const listaNombres = (ns: string[]) =>
+  ns.length <= 1 ? ns.join("") : `${ns.slice(0, -1).join(", ")} y ${ns[ns.length - 1]}`;
+const primerNombre = (n: string | undefined) => (n ?? "").trim().split(" ")[0] || "alguien";
+
+type Lote = ReturnType<typeof writeBatch>;
+
+/** Mensaje de sistema ("Lucas sumó a Ana") + último mensaje del chat, en el mismo lote. */
+function sistema(lote: Lote, chatId: string, by: string, remitente: string, texto: string, at = now()) {
+  lote.set(doc(collection(db, CHATS, chatId, "mensajes")), {
+    texto,
+    by,
+    at,
+    tipo: "sistema",
+    by_nombre: remitente,
+    link: null,
+    reunion_id: null,
+  } satisfies Omit<Mensaje, "id">);
+  return { ultimo: { texto, by, at }, [`leido.${by}`]: at };
+}
+
+export interface DatosGrupo {
+  nombre: string;
+  foto?: string | null;
+  emoji?: string | null;
+  color?: string | null;
+}
+
+export async function crearGrupo(uid: string, remitente: string, datos: DatosGrupo, miembros: Record<string, string>): Promise<string> {
+  assertEditable();
+  const nombre = datos.nombre.trim().slice(0, 80);
+  if (!nombre) throw new Error("Ponele un nombre al grupo");
+  const ids = Array.from(new Set([uid, ...Object.keys(miembros)]));
+  if (ids.length < 2) throw new Error("Elegí al menos una persona");
+  const ref = doc(collection(db, CHATS));
+  const at = now();
+  const texto = `creó el grupo «${nombre}»`;
+  const lote = writeBatch(db);
+  lote.set(ref, {
+    tipo: "grupo",
+    proyecto_id: null,
+    nombre,
+    miembros: ids,
+    admins: [uid],
+    creado_por: uid,
+    nombres: { ...miembros, [uid]: remitente },
+    foto: datos.foto || null,
+    emoji: datos.emoji || null,
+    color: datos.color || null,
+    ultimo: { texto, by: uid, at },
+    leido: { [uid]: at },
+    created_at: at,
+  });
+  sistema(lote, ref.id, uid, remitente, texto, at);
+  await lote.commit();
+  void avisar({
+    destinatarios: ids.filter((m) => m !== uid),
+    titulo: nombre,
+    cuerpo: `${remitente} te sumó al grupo`,
+    link: `/chat?c=${ref.id}`,
+    clave: `chat:${ref.id}`,
+  });
+  return ref.id;
+}
+
+/** Nombre, foto, emoji o color (admins del grupo; en "equipo" y los de clientes, solo la foto y el super admin). */
+export async function editarChat(chat: Chat, uid: string, remitente: string, cambios: Partial<DatosGrupo>) {
+  assertEditable();
+  const patch: Record<string, unknown> = {};
+  if (cambios.nombre !== undefined && chat.tipo === "grupo") {
+    const n = cambios.nombre.trim().slice(0, 80);
+    if (!n) throw new Error("Ponele un nombre al grupo");
+    if (n !== chat.nombre) patch.nombre = n;
+  }
+  if (cambios.foto !== undefined) patch.foto = cambios.foto || null;
+  if (chat.tipo === "grupo") {
+    if (cambios.emoji !== undefined) patch.emoji = cambios.emoji || null;
+    if (cambios.color !== undefined) patch.color = cambios.color || null;
+  }
+  if (!Object.keys(patch).length) return;
+  const lote = writeBatch(db);
+  const texto = patch.nombre ? `cambió el nombre a «${patch.nombre}»` : patch.foto !== undefined ? (patch.foto ? "cambió la foto" : "sacó la foto") : "";
+  const extra = texto ? sistema(lote, chat.id, uid, remitente, texto) : {};
+  lote.update(doc(db, CHATS, chat.id), { ...patch, ...extra });
+  await lote.commit();
+}
+
+/** Suma personas al grupo (admins del grupo o super admin). */
+export async function sumarAlGrupo(chat: Chat, uid: string, remitente: string, nuevos: Record<string, string>) {
+  assertEditable();
+  const ids = Object.keys(nuevos).filter((id) => !chat.miembros.includes(id));
+  if (!ids.length) return;
+  const lote = writeBatch(db);
+  const extra = sistema(lote, chat.id, uid, remitente, `sumó a ${listaNombres(ids.map((id) => primerNombre(nuevos[id])))}`);
+  lote.update(doc(db, CHATS, chat.id), {
+    miembros: [...chat.miembros, ...ids],
+    nombres: { ...(chat.nombres ?? {}), ...nuevos },
+    ...extra,
+  });
+  await lote.commit();
+  void avisar({
+    destinatarios: ids,
+    titulo: chat.nombre ?? "Grupo",
+    cuerpo: `${remitente} te sumó al grupo`,
+    link: `/chat?c=${chat.id}`,
+    clave: `chat:${chat.id}`,
+  });
+}
+
+/** Saca a alguien del grupo (admins del grupo o super admin). */
+export async function sacarDelGrupo(chat: Chat, uid: string, remitente: string, quien: string, nombreQuien: string) {
+  assertEditable();
+  const lote = writeBatch(db);
+  const extra = sistema(lote, chat.id, uid, remitente, `sacó a ${primerNombre(nombreQuien)}`);
+  lote.update(doc(db, CHATS, chat.id), {
+    miembros: chat.miembros.filter((m) => m !== quien),
+    admins: (chat.admins ?? []).filter((a) => a !== quien),
+    ...extra,
+  });
+  await lote.commit();
+}
+
+/** Hace (o deja de hacer) admin del grupo a alguien. */
+export async function cambiarAdmin(chat: Chat, quien: string, admin: boolean) {
+  assertEditable();
+  const actuales = chat.admins ?? [];
+  const admins = admin ? Array.from(new Set([...actuales, quien])) : actuales.filter((a) => a !== quien);
+  if (!admins.length) throw new Error("El grupo tiene que tener al menos un admin");
+  await updateDoc(doc(db, CHATS, chat.id), { admins });
+}
+
+/** Salir del grupo. Si eras el último admin, queda como admin el que sigue en la lista. */
+export async function salirDelGrupo(chat: Chat, uid: string, remitente: string) {
+  assertEditable();
+  const quedan = chat.miembros.filter((m) => m !== uid);
+  let admins = (chat.admins ?? []).filter((a) => a !== uid && quedan.includes(a));
+  if (!admins.length && quedan.length) admins = [quedan[0]];
+  const lote = writeBatch(db);
+  const extra = sistema(lote, chat.id, uid, remitente, "salió del grupo");
+  lote.update(doc(db, CHATS, chat.id), { miembros: quedan, admins, ...extra });
+  await lote.commit();
+}
+
+// ---------------------------------------------------------------------------
+// Visto: sale de la última lectura de cada miembro (chat.leido), sin escribir nada por mensaje.
+// ---------------------------------------------------------------------------
+
+export interface Lectura {
+  uid: string;
+  at: string | null;
+}
+
+/** Quiénes (de los demás miembros) leyeron hasta este mensaje y cuándo. */
+export function lecturasDe(chat: Chat, msgAt: string, uid: string): Lectura[] {
+  return chat.miembros
+    .filter((m) => m !== uid)
+    .map((m) => {
+      const l = chat.leido?.[m];
+      return { uid: m, at: l && l >= msgAt ? l : null };
+    });
 }

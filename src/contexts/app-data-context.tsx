@@ -10,6 +10,7 @@ import { db } from "@/integrations/firebase/client";
 import type { Profile, Project } from "@/integrations/firebase/types";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { setNotificationAppData } from "@/lib/notificationAppData";
+import { AVATARES, setAvatares } from "@/lib/avatares";
 
 interface AppDataContextValue {
   projects: Project[];
@@ -79,9 +80,25 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       () => setProfilesLoading(false)
     );
 
+    // Fotos de perfil del equipo para los clientes (no leen esos perfiles; el servidor les da
+    // solo las de quienes comparten un chat con ellos).
+    const unsubAvatares = esCliente
+      ? onSnapshot(
+          collection(db, AVATARES),
+          (snap) =>
+            setAvatares(
+              Object.fromEntries(
+                snap.docs.map((d) => [d.id, String(d.data()?.img ?? "")] as const).filter(([, v]) => v)
+              )
+            ),
+          () => undefined
+        )
+      : () => setAvatares({});
+
     return () => {
       unsubProjects();
       unsubProfiles();
+      unsubAvatares();
     };
   }, [user?.uid, esCliente, role]);
 

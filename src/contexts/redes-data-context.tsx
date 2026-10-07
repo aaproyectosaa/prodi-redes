@@ -21,6 +21,7 @@ import { useAppData } from "@/contexts/app-data-context";
 import { isProjectEnabled } from "@/lib/projectEnabled";
 import { mesActual, sumarMeses } from "@/lib/redes/format";
 import { noLeido, sincronizarChats } from "@/lib/redes/chat";
+import { sincronizarAvatares } from "@/lib/avatares";
 import {
   DEFAULT_REDES_SETTINGS,
   type Chat,
@@ -222,6 +223,13 @@ export function RedesDataProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncKey, isAdmin, viewingAs, appLoading]);
+
+  // Y copia a avatares/ las fotos de perfil (así los clientes ven la del equipo), una vez por sesión.
+  useEffect(() => {
+    if (!isAdmin || viewingAs || appLoading || profiles.length === 0) return;
+    const t = window.setTimeout(() => void sincronizarAvatares(profiles), 3000);
+    return () => window.clearTimeout(t);
+  }, [isAdmin, viewingAs, appLoading, profiles]);
 
   // ---- Reuniones ----
   const [reunionesRaw, setReunionesRaw] = useState<Reunion[]>([]);

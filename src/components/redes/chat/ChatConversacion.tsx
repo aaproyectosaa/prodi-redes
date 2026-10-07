@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { collection, limit, onSnapshot, orderBy, query } from "@/lib/db";
-import { ArrowLeft, FileText, Loader2, Paperclip, Send, Sparkles, Upload, Video } from "lucide-react";
+import { ArrowLeft, Camera, Check, CheckCheck, FileText, Loader2, Paperclip, Send, Sparkles, Upload, Video } from "lucide-react";
 import { toast } from "sonner";
 import { db } from "@/integrations/firebase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import UserAvatar from "@/components/UserAvatar";
 import { useRedes } from "@/contexts/redes-data-context";
 import {
   enviarAudio,
   enviarMensaje,
+  lecturasDe,
   marcarLeido,
   mencionaProdi,
   pedirAProdi,
@@ -20,7 +23,10 @@ import {
 import { limpiarSubidasListas, subirArchivosChat, useSubidasChat, CHAT_MAX_MB } from "@/lib/redes/chatArchivos";
 import { AudioMensaje, BarraGrabando, BotonMic, useGrabadorVoz } from "@/components/redes/chat/Voz";
 import { ArchivoMensaje, SubidaBurbuja } from "@/components/redes/chat/Archivo";
-import { ChatIcon } from "@/components/redes/chat/ChatLista";
+import { ChatIcon } from "@/components/redes/chat/ChatIcon";
+import { InfoChat } from "@/components/redes/chat/Grupos";
+import { CamaraDialog, camaraDelSistema } from "@/components/redes/chat/Camara";
+import { comprimirFoto } from "@/lib/imagen";
 import { crearReunion } from "@/lib/redes/reuniones";
 import { getRoleInfo } from "@/lib/roles";
 import { cn } from "@/lib/utils";
@@ -51,6 +57,84 @@ function mencionEnCurso(texto: string, cursor: number): { desde: number } | null
   const m = /(^|\s)@([a-záéíóú]*)$/i.exec(texto.slice(0, cursor));
   if (!m || !"prodi".startsWith(m[2].toLowerCase())) return null;
   return { desde: cursor - m[2].length - 1 };
+}
+
+const hora = (iso: string) => formatearFecha(iso, { hour: "2-digit", minute: "2-digit" });
+const cuando = (iso: string) =>
+  fechaAR(iso) === hoyAR() ? hora(iso) : formatearFecha(iso, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+/** Quiénes vieron el mensaje y el texto corto ("Visto 14:32", "Visto por 3 de 5"). */
+function estadoVisto(chat: ChatT, m: Mensaje, uid: string) {
+  const lecturas = lecturasDe(chat, m.at, uid);
+  const vieron = lecturas.filter((l) => l.at);
+  const todos = lecturas.length > 0 && vieron.length === lecturas.length;
+  const ultimaVista = vieron.map((l) => l.at!).sort()[0];
+  const resumen =
+    chat.tipo === "directo"
+      ? todos
+        ? `Visto ${cuando(ultimaVista)}`
+        : "Enviado"
+      : todos
+        ? "Visto por todos"
+        : vieron.length
+          ? `Visto por ${vieron.length} de ${lecturas.length}`
+          : "Enviado";
+  return { lecturas, vieron, todos, resumen };
+}
+
+/**
+ * Estado de un mensaje propio (como WhatsApp): ✓ enviado, ✓✓ lo vio alguien, ✓✓ remarcado: lo vieron todos.
+ * Sale de la última lectura de cada miembro (chat.leido): no se escribe nada por mensaje.
+ * Tocándolo se ve quién lo vio y cuándo.
+ */
+function Visto({ chat, m, uid, nombreDe }: { chat: ChatT; m: Mensaje; uid: string; nombreDe: (id: string) => string }) {
+  const { lecturas, vieron, todos, resumen } = estadoVisto(chat, m, uid);
+  if (!lecturas.length) return null;
+  const Icono = vieron.length ? CheckCheck : Check;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn("inline-flex items-center rounded-sm", todos ? "text-primary-foreground" : "text-primary-foreground/60")}
+          aria-label={resumen}
+          title={resumen}
+        >
+          <Icono className="h-3.5 w-3.5" strokeWidth={todos ? 3 : 2} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-64 p-0">
+        <p className="border-b px-3 py-2 text-xs font-semibold">{resumen}</p>
+        <ul className="max-h-60 overflow-y-auto py-1 text-sm">
+          {[...lecturas]
+            .sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""))
+            .map((l) => (
+              <li key={l.uid} className="flex items-center justify-between gap-3 px-3 py-1.5">
+                <span className="truncate">{nombreDe(l.uid)}</span>
+                {l.at ? (
+                  <span className="inline-flex shrink-0 items-center gap-1 text-xs text-primary">
+                    <CheckCheck className="h-3.5 w-3.5" /> {cuando(l.at)}
+                  </span>
+                ) : (
+                  <span className="shrink-0 text-xs text-muted-foreground">Sin ver</span>
+                )}
+              </li>
+            ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** Debajo del último mensaje propio: "✓✓ Visto 14:32" / "Visto por 3 de 5", en violeta Prodi. */
+function VistoLinea({ chat, m, uid }: { chat: ChatT; m: Mensaje; uid: string }) {
+  const { vieron, resumen } = estadoVisto(chat, m, uid);
+  if (!vieron.length) return null;
+  return (
+    <p className="mt-0.5 flex items-center justify-end gap-1 pr-1 text-[11px] font-medium text-primary">
+      <CheckCheck className="h-3.5 w-3.5" /> {resumen}
+    </p>
+  );
 }
 
 export function ChatConversacion({
@@ -95,6 +179,12 @@ export function ChatConversacion({
   const fin = useRef<HTMLDivElement>(null);
   const caja = useRef<HTMLTextAreaElement>(null);
   const elegirArchivo = useRef<HTMLInputElement>(null);
+  const capturaFoto = useRef<HTMLInputElement>(null);
+  const capturaSelfie = useRef<HTMLInputElement>(null);
+  const capturaVideo = useRef<HTMLInputElement>(null);
+  const [camara, setCamara] = useState(false);
+  const [info, setInfo] = useState(false);
+  const enCelular = camaraDelSistema();
   const subidas = useSubidasChat(chat.id);
 
   // Cuando aparece el mensaje que escribió el servidor, se saca la burbuja de "subiendo".
@@ -109,6 +199,13 @@ export function ChatConversacion({
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo mandar");
     }
+  };
+
+  // Fotos sacadas con la cámara: se achican (máx. 2560 px, JPEG) para que suban rápido.
+  const mandarCaptura = async (files: File[]) => {
+    if (!files.length) return;
+    const listos = await Promise.all(files.map((f) => (f.type.startsWith("image/") ? comprimirFoto(f) : Promise.resolve(f))));
+    mandarArchivos(listos);
   };
 
   const usarMencion = () => {
@@ -223,6 +320,7 @@ export function ChatConversacion({
   const miembros = chat.miembros.map(perfilDe).filter(Boolean) as Profile[];
 
   let ultimoDia = "";
+  const ultimoMio = [...mensajes].reverse().find((m) => m.by === uid && m.tipo !== "sistema")?.id;
 
   return (
     <div
@@ -258,15 +356,27 @@ export function ChatConversacion({
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <ChatIcon chat={chat} profiles={profiles} uid={uid} color={color} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold">{tituloChat(chat, uid, profiles, role)}</p>
-          <p className="truncate text-xs text-muted-foreground">
-            {chat.tipo === "directo"
-              ? getRoleInfo(perfilDe(chat.miembros.find((m) => m !== uid) ?? "")?.role).label
-              : miembros.map((m) => m.nombre?.split(" ")[0]).join(", ")}
-          </p>
-        </div>
+        <button
+          type="button"
+          onClick={() => chat.tipo !== "directo" && setInfo(true)}
+          className={cn(
+            "flex min-w-0 flex-1 items-center rounded-lg text-left",
+            compacto ? "gap-2" : "gap-3",
+            chat.tipo !== "directo" && "hover:bg-muted/50"
+          )}
+          title={chat.tipo !== "directo" ? "Ver miembros y datos del grupo" : undefined}
+          disabled={chat.tipo === "directo"}
+        >
+          <ChatIcon chat={chat} profiles={profiles} uid={uid} color={color} />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-semibold">{tituloChat(chat, uid, profiles, role)}</span>
+            <span className="block truncate text-xs text-muted-foreground">
+              {chat.tipo === "directo"
+                ? getRoleInfo(perfilDe(chat.miembros.find((m) => m !== uid) ?? "")?.role).label
+                : miembros.map((m) => m.nombre?.split(" ")[0]).join(", ")}
+            </span>
+          </span>
+        </button>
         {(role !== "cliente" || chat.proyecto_id) &&
           (compacto ? (
             <Button
@@ -305,7 +415,20 @@ export function ChatConversacion({
               const mostrarDia = dia !== ultimoDia;
               ultimoDia = dia;
               const prev = mensajes[i - 1];
-              const agrupado = prev && prev.by === m.by && !mostrarDia && new Date(m.at).getTime() - new Date(prev.at).getTime() < 5 * 60_000;
+              const agrupado =
+                prev && prev.tipo !== "sistema" && prev.by === m.by && !mostrarDia && new Date(m.at).getTime() - new Date(prev.at).getTime() < 5 * 60_000;
+              // Avisos del grupo ("Lucas sumó a Ana"): al medio, sin burbuja.
+              if (m.tipo === "sistema")
+                return (
+                  <div key={m.id}>
+                    {mostrarDia && (
+                      <p className="my-3 text-center text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{dia}</p>
+                    )}
+                    <p className="mx-auto my-2 w-fit max-w-[90%] rounded-full bg-muted px-3 py-1 text-center text-xs text-muted-foreground">
+                      {mio ? "Vos" : nombreDe(m.by, m.by_nombre).split(" ")[0]} {m.texto}
+                    </p>
+                  </div>
+                );
               return (
                 <div key={m.id}>
                   {mostrarDia && (
@@ -412,11 +535,18 @@ export function ChatConversacion({
                             : m.texto}
                         </p>
                       )}
-                      <p className={cn("mt-0.5 text-right text-[10px]", mio ? "text-primary-foreground/70" : "text-muted-foreground")}>
-                        {formatearFecha(m.at, { hour: "2-digit", minute: "2-digit" })}
+                      <p
+                        className={cn(
+                          "mt-0.5 flex items-center justify-end gap-1 text-[10px]",
+                          mio ? "text-primary-foreground/70" : "text-muted-foreground"
+                        )}
+                      >
+                        {hora(m.at)}
+                        {mio && <Visto chat={chat} m={m} uid={uid} nombreDe={(id) => nombreDe(id)} />}
                       </p>
                     </div>
                   </div>
+                  {mio && m.id === ultimoMio && <VistoLinea chat={chat} m={m} uid={uid} />}
                 </div>
               );
             })}
@@ -478,6 +608,73 @@ export function ChatConversacion({
           >
             <Paperclip className="h-5 w-5" />
           </Button>
+          {/* Cámara: en el celular, la del sistema (foto, selfie o video); en la compu, un diálogo con vista previa. */}
+          <input
+            ref={capturaFoto}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              void mandarCaptura(Array.from(e.target.files ?? []));
+              e.target.value = "";
+            }}
+          />
+          <input
+            ref={capturaSelfie}
+            type="file"
+            accept="image/*"
+            capture="user"
+            className="hidden"
+            onChange={(e) => {
+              void mandarCaptura(Array.from(e.target.files ?? []));
+              e.target.value = "";
+            }}
+          />
+          <input
+            ref={capturaVideo}
+            type="file"
+            accept="video/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              mandarArchivos(Array.from(e.target.files ?? []));
+              e.target.value = "";
+            }}
+          />
+          {enCelular ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="-ml-2 h-11 w-11 shrink-0 rounded-full text-muted-foreground"
+                  aria-label="Cámara"
+                  title="Sacar foto o grabar video"
+                >
+                  <Camera className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" side="top">
+                <DropdownMenuItem onSelect={() => capturaFoto.current?.click()}>Sacar foto</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => capturaSelfie.current?.click()}>Selfie</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => capturaVideo.current?.click()}>Grabar video</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="-ml-2 h-11 w-11 shrink-0 rounded-full text-muted-foreground"
+              onClick={() => setCamara(true)}
+              aria-label="Sacar foto"
+              title="Sacar foto con la cámara"
+            >
+              <Camera className="h-5 w-5" />
+            </Button>
+          )}
           <div className="relative min-w-0 flex-1">
             {sugerir && (
               <button
@@ -542,6 +739,8 @@ export function ChatConversacion({
           )}
         </div>
       </footer>
+      {!enCelular && <CamaraDialog open={camara} onOpenChange={setCamara} onFoto={(f) => mandarArchivos([f])} />}
+      {chat.tipo !== "directo" && <InfoChat chat={chat} open={info} onOpenChange={setInfo} onSalio={onBack} />}
     </div>
   );
 }

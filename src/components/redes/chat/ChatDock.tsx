@@ -7,6 +7,7 @@ import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTecladoAbierto } from "@/components/MobileNav";
 import { tituloChat } from "@/lib/redes/chat";
+import { ChatIcon } from "./ChatIcon";
 import { abrirEnDock, chatDeLink, dock, useChatDock } from "@/lib/redes/chatDock";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +23,7 @@ const ROLES_CHAT = ["admin", "productor", "editor", "pauta", "diseno", "administ
 export function ChatDock() {
   const { pathname, search } = useLocation();
   const { user, role, viewingAs } = useUserProfileContext();
-  const { chats, chatsNoLeidos } = useRedes();
+  const { chats, chatsNoLeidos, clienteById } = useRedes();
   const { profiles } = useAppData();
   const estado = useChatDock();
   const escritorio = !useIsMobile();
@@ -128,9 +129,13 @@ export function ChatDock() {
             aria-expanded={false}
             className="fixed bottom-4 right-4 z-40 flex h-12 max-w-[16rem] items-center gap-2 rounded-full bg-primary pl-2 pr-4 text-primary-foreground shadow-lg shadow-primary/40 ring-1 ring-white/20 transition-all hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/50"
           >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20 text-primary-foreground">
-              <MessageCircle className="h-4 w-4" />
-            </span>
+            {chat ? (
+              <ChatIcon chat={chat} profiles={profiles} uid={user?.uid} color={clienteById(chat.proyecto_id)?.color} className="h-8 w-8 ring-2 ring-white/30" />
+            ) : (
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/20 text-primary-foreground">
+                <MessageCircle className="h-4 w-4" />
+              </span>
+            )}
             <span className="truncate text-sm font-semibold">{titulo}</span>
             {badge}
           </button>

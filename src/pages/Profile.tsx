@@ -35,6 +35,8 @@ import {
   userHasPasswordProvider,
 } from "@/components/ChangePasswordForm";
 import { cn } from "@/lib/utils";
+import { RecorteFoto } from "@/components/RecorteFoto";
+import { AVATAR_LADO, AVATAR_MAX, guardarFotoPerfil } from "@/lib/avatares";
 
 const AVATAR_COLORS = [
   "#ef4444",
@@ -133,18 +135,24 @@ const Profile = () => {
     setLoading(false);
   };
 
+  // Cualquier foto (también HEIC en Safari): se encuadra, se achica a un JPEG cuadrado y se guarda al toque.
+  const [fotoElegida, setFotoElegida] = useState<File | null>(null);
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 700 * 1024) {
-        toast.error("La imagen debe ser menor a 700 KB (se guarda dentro del perfil)");
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProfileImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    e.target.value = "";
+    if (file) setFotoElegida(file);
+  };
+
+  const guardarFoto = async (img: string) => {
+    if (!user) return;
+    try {
+      await guardarFotoPerfil(user.uid, img);
+      setProfileImage(img);
+      setFotoElegida(null);
+      toast.success(img ? "Foto actualizada" : "Foto quitada");
+    } catch (error) {
+      console.error("Error al guardar la foto:", error);
+      toast.error("No se pudo guardar la foto");
     }
   };
 
@@ -161,7 +169,6 @@ const Profile = () => {
       await setDoc(
         profileRef,
         {
-          profileImage,
           avatarColor,
           nombre: nombre.trim(),
           email: user.email,
@@ -247,7 +254,7 @@ const Profile = () => {
                   }
                 >
                   {profileImage ? (
-                    <AvatarImage src={profileImage} alt={nombre} />
+                    <AvatarImage src={profileImage} alt={nombre} className="object-cover" />
                   ) : (
                     <AvatarFallback
                       style={{ backgroundColor: avatarColor }}
@@ -269,9 +276,17 @@ const Profile = () => {
                 <input
                   id="image-upload"
                   type="file"
-                  accept="image/*"
+                  accept="image/*,.heic,.heif"
                   onChange={handleImageUpload}
                   className="hidden"
+                />
+                <RecorteFoto
+                  file={fotoElegida}
+                  titulo="Tu foto de perfil"
+                  lado={AVATAR_LADO}
+                  maxChars={AVATAR_MAX}
+                  onListo={guardarFoto}
+                  onCancelar={() => setFotoElegida(null)}
                 />
               </div>
 
@@ -308,7 +323,7 @@ const Profile = () => {
                       variant="ghost"
                       size="sm"
                       className="h-8 gap-1.5 text-xs text-muted-foreground"
-                      onClick={() => setProfileImage("")}
+                      onClick={() => void guardarFoto("")}
                     >
                       <X className="w-3 h-3" />
                       Quitar

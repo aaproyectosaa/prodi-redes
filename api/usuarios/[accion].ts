@@ -113,8 +113,11 @@ async function eliminar(req: VercelRequest, adminUid: string) {
   // Sacarlo de los grupos de chat.
   const chats = await db.collection("chats").where("miembros", "array-contains", b.uid).get();
   const batch = db.batch();
-  chats.docs.forEach((c) => batch.update(c.ref, { miembros: FieldValue.arrayRemove(b.uid) }));
+  chats.docs.forEach((c) =>
+    batch.update(c.ref, c.data()?.tipo === "grupo" ? { miembros: FieldValue.arrayRemove(b.uid), admins: FieldValue.arrayRemove(b.uid) } : { miembros: FieldValue.arrayRemove(b.uid) })
+  );
   batch.delete(db.collection("profiles").doc(b.uid));
+  batch.delete(db.collection("avatares").doc(b.uid));
   await batch.commit();
   await adminAuth()
     .deleteUser(b.uid)
