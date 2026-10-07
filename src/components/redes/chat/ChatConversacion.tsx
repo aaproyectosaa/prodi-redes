@@ -16,6 +16,7 @@ import {
   lecturasDe,
   marcarLeido,
   mencionaProdi,
+  noLeido,
   pedirAProdi,
   PRODI_ID,
   tituloChat,
@@ -162,6 +163,7 @@ export function ChatConversacion({
   activa = true,
   compacto,
   acciones,
+  onSinLeer,
 }: {
   chat: ChatT;
   uid: string;
@@ -178,6 +180,8 @@ export function ChatConversacion({
   compacto?: boolean;
   /** Botones extra en el encabezado (minimizar, pantalla completa, cerrar). */
   acciones?: ReactNode;
+  /** Cuántos mensajes sin leer tiene (el chat flotante lo muestra en la burbuja minimizada). */
+  onSinLeer?: (n: number) => void;
 }) {
   const { clienteById } = useRedes();
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
@@ -261,12 +265,24 @@ export function ChatConversacion({
     return () => chatEnPantalla.salir(chat.id);
   }, [activa, chat.id]);
 
+  // Al volver a desplegarla sin nada nuevo, queda donde estaba.
+  const visto = useRef("");
   useEffect(() => {
     if (!activa) return;
-    fin.current?.scrollIntoView({ block: "end" });
+    const ahora = `${chat.id}|${mensajes.length}|${subidas.length}|${pensando}`;
+    if (ahora !== visto.current) fin.current?.scrollIntoView({ block: "end" });
+    visto.current = ahora;
     void marcarLeido(chat, uid);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mensajes.length, chat.id, subidas.length, pensando, activa]);
+
+  const leidoHasta = chat.leido?.[uid] ?? "";
+  const sinLeer = noLeido(chat, uid)
+    ? mensajes.filter((m) => m.by !== uid && m.tipo !== "sistema" && m.at > leidoHasta).length || 1
+    : 0;
+  useEffect(() => {
+    if (!cargando) onSinLeer?.(sinLeer);
+  }, [sinLeer, cargando, onSinLeer]);
 
   const enviar = async () => {
     const t = texto.trim();
