@@ -35,8 +35,13 @@ const equipoDe = (c: Contexto, pid: unknown) =>
   esAdmin(c) || esDiseno(c) || (ASIGNADOS.includes(c.role) && typeof pid === "string" && c.misProyectos.has(pid));
 /** Admin, o productor asignado a ese cliente. */
 const produceEn = (c: Contexto, pid: unknown) => esAdmin(c) || (c.role === "productor" && equipoDe(c, pid));
-/** Campos del WhatsApp vinculado: solo los escribe el servidor (después de verificar el código). */
-const WHATSAPP_VERIFICADO = ["whatsapp_phone", "whatsapp_phone_verified"];
+/** Campos del WhatsApp (ya no se usa): nadie los escribe desde la app. */
+const WHATSAPP = ["whatsapp_phone", "whatsapp_phone_verified", "whatsapp_enabled", "whatsapp_notifications"];
+/** Evento de Google Calendar: lo escribe solo el servidor (api/_lib/calendario.ts). */
+const CALENDARIO = ["google_event_id", "google_event_hash"];
+/** ¿Pone o cambia alguno de estos campos? (borrarlos sí se puede: un set completo sin ellos no se rechaza). */
+const escribeAlguna = (antes: Data | null, despues: Data | null, campos: string[]) =>
+  !!despues && campos.some((k) => despues[k] !== undefined && JSON.stringify(despues[k]) !== JSON.stringify(antes?.[k]));
 const activo = (c: Contexto) => ACTIVOS.includes(c.role);
 const clienteDe = (c: Contexto, pid: unknown) => c.role === "cliente" && typeof pid === "string" && c.misClientes.has(pid);
 const soloCambia = (antes: Data | null, despues: Data | null, permitidas: string[]) =>
@@ -95,6 +100,8 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
       return esFinanzas(c);
     case "planes_redes":
     case "app_settings":
+      // whatsapp_bot: configuración del bot de WhatsApp (eliminado), ya no se expone.
+      if (base === "app_settings" && id === "whatsapp_bot") return false;
       return activo(c);
     case "informes":
       return esAdmin(c);
@@ -109,6 +116,10 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
       );
     case "in_app_notifications":
       return d.recipient_user_id === c.uid;
+    case "tareas":
+      // Las ven quienes las tienen asignadas, quien las pidió y el admin.
+      return esAdmin(c) || d.creada_por === c.uid || (Array.isArray(d.asignados) && d.asignados.includes(c.uid));
+    case "prodi_pedidos": // pedidos a @prodi (límite por minuto): solo el servidor
     case "whatsapp_verifications": // código de verificación (hasheado): solo lo usa el servidor
     case "notification_queue":
     case "arca_tickets": // ticket de acceso a ARCA (token y firma): solo el servidor
@@ -127,6 +138,10 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
 
   if (sub) {
     if (base !== "chats" || !(sub === "mensajes" || sub === "audios")) return false;
+    // Archivos y respuestas de @prodi: solo los escribe el servidor (ni el admin desde la app).
+    // Un mensaje con `archivo` le da acceso al archivo a todo el chat (api/_lib/media-token.ts).
+    const delServidor = (d: Data | null) => !!d && (d.archivo != null || d.tipo === "archivo" || d.tipo === "bot" || d.by === "prodi");
+    if (sub === "mensajes" && (delServidor(despues) || (delServidor(antes) && !(borra && esAdmin(c))))) return false;
     if (esAdmin(c)) return true;
     if (!crea || borra) return false;
     if (!(await miembroDelChat(c, padreId!)) || despues!.by !== c.uid) return false;
@@ -137,11 +152,12 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
   switch (base) {
     case "profiles":
       if (borra) return esAdmin(c);
-      // El WhatsApp vinculado lo escribe solo el servidor (/api/usuarios/whatsapp-*).
-      if (crea) return c.uid === id && despues!.role === "pending" && !tocaAlguna(antes, despues, WHATSAPP_VERIFICADO);
+      // Los campos del WhatsApp (eliminado) no se escriben más.
+      if (escribeAlguna(antes, despues, WHATSAPP)) return false;
+      if (crea) return c.uid === id && despues!.role === "pending";
       return (
         esAdmin(c) ||
-        (c.uid === id && !tocaAlguna(antes, despues, ["role", "dashboard_access", "project_permissions", "activo", ...WHATSAPP_VERIFICADO]))
+        (c.uid === id && !tocaAlguna(antes, despues, ["role", "dashboard_access", "project_permissions", "activo"]))
       );
     case "projects":
       if (crea || borra) return esAdmin(c);
@@ -178,7 +194,7 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
     case "planes_redes":
       return esAdmin(c);
     case "app_settings":
-      return esAdmin(c) && id !== "drive_connection";
+      return esAdmin(c) && id !== "drive_connection" && id !== "whatsapp_bot";
     case "chats":
       if (borra) return esAdmin(c);
       if (crea)
@@ -189,6 +205,8 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       return esAdmin(c) || (Array.isArray(antes!.miembros) && antes!.miembros.includes(c.uid) && soloCambia(antes, despues, ["ultimo", "leido"]));
     case "reuniones":
       if (borra) return esAdmin(c);
+      // El evento de Google Calendar lo guarda solo el servidor.
+      if (escribeAlguna(antes, despues, CALENDARIO)) return false;
       if (crea)
         return (
           despues!.creada_por === c.uid &&
@@ -201,12 +219,20 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
           antes!.participantes.includes(c.uid) &&
           !tocaAlguna(antes, despues, ["participantes", "proyecto_id", "creada_por"]))
       );
+    case "tareas": {
+      // Las crea el servidor (@prodi). Desde la app: marcarlas hechas (asignados o quien la pidió) y borrarlas (quien la pidió o el admin).
+      if (crea) return false;
+      const suya = esAdmin(c) || antes!.creada_por === c.uid;
+      if (borra) return suya;
+      const asignada = Array.isArray(antes!.asignados) && antes!.asignados.includes(c.uid);
+      return (suya || asignada) && soloCambia(antes, despues, ["hecha", "hecha_at", "hecha_por"]);
+    }
     case "in_app_notifications":
       if (crea) return false;
       if (borra) return antes!.recipient_user_id === c.uid;
       return antes!.recipient_user_id === c.uid && soloCambia(antes, despues, ["read", "read_at"]);
     default:
-      // whatsapp_verifications, notification_queue, …: solo el servidor.
+      // whatsapp_verifications, notification_queue (restos del WhatsApp), …: solo el servidor.
       return false;
   }
 }

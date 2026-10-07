@@ -153,3 +153,7 @@ export function useComercial(proyectoId: string, viaServidor: boolean): [Context
 
 export const guardarNotasIA = (proyectoId: string, notas: string) =>
   callApi("/api/ia/memoria-notas", { proyecto_id: proyectoId, notas });
+
+/** Saca un dato que la IA aprendió del chat del cliente. */
+export const quitarNotaChat = (proyectoId: string, texto: string) =>
+  callApi("/api/ia/memoria-chat-quitar", { proyecto_id: proyectoId, texto });

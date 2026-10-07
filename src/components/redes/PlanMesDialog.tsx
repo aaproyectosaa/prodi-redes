@@ -8,6 +8,7 @@ import {
   ExternalLink,
   Lightbulb,
   Loader2,
+  MessageCircle,
   MessageSquareWarning,
   Plus,
   RefreshCw,
@@ -37,6 +38,7 @@ import {
   guardarBorrador,
   guardarNotasIA,
   mesParaPlanificar,
+  quitarNotaChat,
   rehacerIdea,
   useMemoriaIA,
   usePlanesDelMes,
@@ -659,6 +661,32 @@ function PanelMemoria({ proyectoId, nombre }: { proyectoId: string; nombre: stri
           <p className="text-xs text-muted-foreground">
             Aprende cada vez que revisás un plan (qué dejás, qué cambiás, qué sacás) y cada vez que el cliente responde.
           </p>
+        )}
+        {!!m?.chat_notas?.length && (
+          <div className="space-y-1.5">
+            <p className="flex items-center gap-1.5 text-xs font-medium">
+              <MessageCircle className="h-3.5 w-3.5 text-primary" /> Del chat con el cliente
+            </p>
+            <ul className="space-y-1">
+              {[...m.chat_notas].reverse().map((n) => (
+                <li key={`${n.at}_${n.texto}`} className="flex items-start gap-2 text-sm">
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/40" />
+                  <span className="flex-1">
+                    {n.texto} <span className="text-[11px] text-muted-foreground">· {n.at.split("-").reverse().slice(0, 2).join("/")}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void quitarNotaChat(proyectoId, n.texto).catch(err)}
+                    className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive"
+                    aria-label="Quitar este dato"
+                    title="Quitar (si quedó mal o ya no vale)"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         <div className="space-y-1.5">
           <p className="text-xs font-medium">Indicaciones fijas para la IA</p>

@@ -15,6 +15,8 @@
 // POST /api/ia/memoria-notas { proyecto_id, notas } → indicaciones fijas del equipo para la IA
 // POST /api/ia/comercial-guardar { proyecto_id, comercial } → enfoque, productos y temporadas del cliente (también el cliente)
 // POST /api/ia/comercial-ver { proyecto_id } → solo el contexto comercial (para el panel del cliente)
+// POST /api/ia/chat-asistente { chat_id, mensaje_id } → @prodi en el chat (ver api/_lib/chat-asistente.ts)
+// POST /api/ia/memoria-chat-quitar { proyecto_id, texto } → saca un dato que la IA aprendió del chat
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { FieldValue } from "../_lib/db";
@@ -28,6 +30,7 @@ import { briefPieza, FORMATOS_PIEZA } from "../_lib/piezas";
 import { enviarAviso } from "../_lib/notify";
 import { videoDesdePedido } from "../_lib/pedidos";
 import { fechaAR, sumarDias } from "../_lib/fecha";
+import { atenderMencion } from "../_lib/chat-asistente";
 import {
   comercialTexto,
   limpiarComercial,
@@ -38,6 +41,7 @@ import {
   ESQUEMA_PLAN,
   ESQUEMA_RESUMEN,
   ideasDesdeIA,
+  notasChatTexto,
   limpiarIdeas,
   nombreMes,
   promptPlan,
@@ -67,14 +71,19 @@ function marcaTexto(p: Record<string, any>): string {
     .join("\n");
 }
 
-/** Enfoque comercial de Prodi + productos y temporadas del cliente vigentes en esas fechas. */
-async function contextoComercial(pid: string, rango: [string, string]): Promise<string> {
+/**
+ * Enfoque comercial de Prodi + productos y temporadas del cliente vigentes en esas fechas
+ * + lo que se aprendió de su chat (el plan del mes ya lo lee con la memoria: `conChat = false`).
+ */
+async function contextoComercial(pid: string, rango: [string, string], conChat = true): Promise<string> {
   const db = adminDb();
   const [m, cfg] = await Promise.all([
     db.collection("ia_memoria").doc(pid).get(),
     db.collection("app_settings").doc("redes").get(),
   ]);
-  return comercialTexto(m.data()?.comercial ?? null, rango, cfg.data()?.ia_enfoque ?? null);
+  const base = comercialTexto(m.data()?.comercial ?? null, rango, cfg.data()?.ia_enfoque ?? null);
+  const chat = conChat ? notasChatTexto(m.data()?.chat_notas, 15) : "";
+  return chat ? `${base}\n\n${chat}` : base;
 }
 const proximos30 = (desde: Date | string = new Date()): [string, string] => {
   const d = fechaAR(desde) || fechaAR(new Date());
@@ -474,7 +483,7 @@ async function planMes(req: VercelRequest) {
     .map((v) => ({ titulo: v.titulo, idea: v.idea, mensajes: v.resultados?.mensajes ?? null, mes: v.mes }));
   const ctx = {
     marca: marcaTexto(proj),
-    comercial: await contextoComercial(pid, rangoMes(mes)),
+    comercial: await contextoComercial(pid, rangoMes(mes), false),
     mes,
     memoria,
     historial,
@@ -728,6 +737,28 @@ async function memoriaNotas(req: VercelRequest) {
   return { ok: true };
 }
 
+/** @prodi en el chat: el pedido lo valida y lo ejecuta el servidor. */
+async function chatAsistente(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "productor", "editor", "pauta", "diseno", "administracion", "cliente"]);
+  const b = body<{ chat_id?: string; mensaje_id?: string }>(req);
+  return atenderMencion(caller, b.chat_id, b.mensaje_id, appUrl(req));
+}
+
+/** Saca un dato aprendido del chat (si quedó mal o ya no vale). */
+async function memoriaChatQuitar(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "productor"]);
+  const b = body<{ proyecto_id?: string; texto?: string }>(req);
+  if (!b.proyecto_id || !b.texto) throw new HttpError(400, "Faltan datos");
+  await assertProjectAccess(caller, b.proyecto_id);
+  const ref = adminDb().collection("ia_memoria").doc(b.proyecto_id);
+  await adminDb().runTransaction(async (tx) => {
+    const m = (await tx.get(ref)).data() ?? {};
+    const notas = ((m.chat_notas ?? []) as { texto: string }[]).filter((n) => n.texto !== b.texto);
+    tx.set(ref, { chat_notas: notas }, { merge: true });
+  });
+  return { ok: true };
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
@@ -751,6 +782,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "comercial-guardar") res.status(200).json(await comercialGuardar(req));
     else if (accion === "marca-colores") res.status(200).json(await marcaColores(req));
     else if (accion === "comercial-ver") res.status(200).json(await comercialVer(req));
+    else if (accion === "chat-asistente") res.status(200).json(await chatAsistente(req));
+    else if (accion === "memoria-chat-quitar") res.status(200).json(await memoriaChatQuitar(req));
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {
     sendError(res, err);

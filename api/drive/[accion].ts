@@ -1,8 +1,10 @@
 // Google Drive: las rutas de antes en una sola función (el plan de Vercel permite 12).
 // /api/drive/start-auth · oauth-callback · access-token · media-token · media · disconnect  (mismas URLs que antes)
+// /api/drive/chat-subida · chat-archivo  (archivos del chat, ver _lib/drive-acciones/chat.ts)
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import accessToken from "../_lib/drive-acciones/access-token";
+import { chatArchivo, chatSubida } from "../_lib/drive-acciones/chat";
 import disconnect from "../_lib/drive-acciones/disconnect";
 import media from "../_lib/drive-acciones/media";
 import mediaToken from "../_lib/drive-acciones/media-token";
@@ -13,6 +15,8 @@ export const config = { maxDuration: 60 };
 
 const ACCIONES: Record<string, (req: VercelRequest, res: VercelResponse) => Promise<unknown> | unknown> = {
   "access-token": accessToken,
+  "chat-archivo": chatArchivo,
+  "chat-subida": chatSubida,
   disconnect,
   media,
   "media-token": mediaToken,

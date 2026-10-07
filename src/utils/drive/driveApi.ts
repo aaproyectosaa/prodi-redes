@@ -350,6 +350,23 @@ export async function uploadFileResumable(params: {
     throw new DriveApiError("Sesión de upload sin Location", 0);
   }
 
+  const meta = await subirASesion({ sessionUri, file, mime, onProgress, signal });
+  return meta ?? findUploadedFileByName(file.name, folderId, accessToken);
+}
+
+/**
+ * Sube el archivo en chunks a una sesión resumable ya abierta (por la app o por el servidor,
+ * como en el chat). Devuelve la metadata si Drive la manda en la respuesta final.
+ */
+export async function subirASesion(params: {
+  sessionUri: string;
+  file: File;
+  mime: string;
+  onProgress?: (pct: number) => void;
+  signal?: AbortSignal;
+}): Promise<UploadedFileMeta | null> {
+  const { sessionUri, file, mime, onProgress, signal } = params;
+  const totalSize = file.size;
   let offset = 0;
 
   while (offset < totalSize) {
@@ -380,16 +397,13 @@ export async function uploadFileResumable(params: {
       if (onProgress) onProgress(100);
 
       try {
-        const parsed = parseDriveUploadResponse(result.body);
-        if (parsed) return parsed;
+        return parseDriveUploadResponse(result.body);
       } catch (err) {
         throw new DriveApiError(
           err instanceof Error ? err.message : "Respuesta inválida de Drive",
           result.status
         );
       }
-
-      return findUploadedFileByName(file.name, folderId, accessToken);
     }
 
     let msg = `Upload failed (${result.status})`;
@@ -402,7 +416,7 @@ export async function uploadFileResumable(params: {
     throw new DriveApiError(msg, result.status);
   }
 
-  return findUploadedFileByName(file.name, folderId, accessToken);
+  return null;
 }
 
 /** Firestore no acepta campos con valor `undefined` dentro de arrayUnion. */

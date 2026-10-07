@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { collection, limit, onSnapshot, orderBy, query } from "@/lib/db";
 import {
   ArrowLeft,
   FileText,
+  ListTodo,
   Loader2,
   MessageCircle,
+  Paperclip,
   Plus,
   Search,
   Send,
+  Sparkles,
+  Upload,
   Users,
   Video,
 } from "lucide-react";
@@ -29,8 +33,22 @@ import UserAvatar from "@/components/UserAvatar";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useAppData } from "@/contexts/app-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
-import { abrirDirecto, enviarAudio, enviarMensaje, marcarLeido, noLeido, tituloChat } from "@/lib/redes/chat";
+import {
+  abrirDirecto,
+  enviarAudio,
+  enviarMensaje,
+  marcarLeido,
+  mencionaProdi,
+  noLeido,
+  pedirAProdi,
+  PRODI_ID,
+  tituloChat,
+} from "@/lib/redes/chat";
+import { limpiarSubidasListas, subirArchivosChat, useSubidasChat, CHAT_MAX_MB } from "@/lib/redes/chatArchivos";
+import { useTareas } from "@/lib/redes/tareas";
 import { AudioMensaje, BarraGrabando, BotonMic, useGrabadorVoz } from "@/components/redes/chat/Voz";
+import { ArchivoMensaje, SubidaBurbuja } from "@/components/redes/chat/Archivo";
+import { TareasSheet } from "@/components/redes/chat/Tareas";
 import { crearReunion } from "@/lib/redes/reuniones";
 import { getRoleInfo } from "@/lib/roles";
 import { cn } from "@/lib/utils";
@@ -76,12 +94,21 @@ export default function Chat() {
   const activo = chats.find((c) => c.id === activoId) ?? null;
   const [q, setQ] = useState("");
   const [nuevo, setNuevo] = useState(false);
+  const tareas = useTareas(uid);
+  const verTareas = params.get("tareas") === "1";
 
   const abrir = (id: string | null) => {
     const next = new URLSearchParams(params);
     if (id) next.set("c", id);
     else next.delete("c");
+    next.delete("tareas");
     setParams(next, { replace: !!activoId });
+  };
+  const setVerTareas = (v: boolean) => {
+    const next = new URLSearchParams(params);
+    if (v) next.set("tareas", "1");
+    else next.delete("tareas");
+    setParams(next, { replace: true });
   };
 
   // En escritorio, abrir la primera conversación si no hay ninguna elegida.
@@ -118,9 +145,20 @@ export default function Chat() {
         <div className="space-y-3 border-b p-4">
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-bold">Chat</h1>
-            <Button size="sm" variant="outline" onClick={() => setNuevo(true)}>
-              <Plus className="mr-1 h-4 w-4" /> Nuevo
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => setVerTareas(true)} className="relative" aria-label="Tareas">
+                <ListTodo className="h-4 w-4 sm:mr-1" />
+                <span className="hidden sm:inline">Tareas</span>
+                {tareas.pendientes > 0 && (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                    {tareas.pendientes}
+                  </span>
+                )}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setNuevo(true)}>
+                <Plus className="mr-1 h-4 w-4" /> Nuevo
+              </Button>
+            </div>
           </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -156,7 +194,7 @@ export default function Chat() {
                   <div className="flex items-center gap-2">
                     <p className={cn("truncate text-xs", unread ? "text-foreground" : "text-muted-foreground")}>
                       {c.ultimo
-                        ? `${c.ultimo.by === uid ? "Vos: " : c.tipo !== "directo" ? `${(profiles.find((p) => p.id === c.ultimo!.by)?.nombre ?? c.nombres?.[c.ultimo.by] ?? "").split(" ")[0]}: ` : ""}${c.ultimo.texto}`
+                        ? `${c.ultimo.by === uid ? "Vos: " : c.ultimo.by === PRODI_ID ? "Prodi: " : c.tipo !== "directo" ? `${(profiles.find((p) => p.id === c.ultimo!.by)?.nombre ?? c.nombres?.[c.ultimo.by] ?? "").split(" ")[0]}: ` : ""}${c.ultimo.texto}`
                         : c.tipo === "cliente"
                           ? "Grupo del cliente con el equipo"
                           : "Sin mensajes"}
@@ -181,6 +219,7 @@ export default function Chat() {
             profiles={profiles}
             role={role}
             onBack={() => abrir(null)}
+            onTareas={() => setVerTareas(true)}
             jitsiBase={settings.jitsi_base}
             color={clienteById(activo.proyecto_id)?.color}
           />
@@ -220,8 +259,36 @@ export default function Chat() {
           </CommandGroup>
         </CommandList>
       </CommandDialog>
+
+      {uid && (
+        <TareasSheet
+          open={verTareas}
+          onOpenChange={setVerTareas}
+          uid={uid}
+          profiles={profiles}
+          mias={tareas.mias}
+          pedidas={tareas.pedidas}
+          onIrAlChat={(id) => abrir(id)}
+        />
+      )}
     </div>
   );
+}
+
+/** Avatar de Prodi, el asistente (distinto de las personas). */
+function AvatarProdi() {
+  return (
+    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#6F40FC] to-[#E040A0] text-white shadow-sm">
+      <Sparkles className="h-3.5 w-3.5" />
+    </div>
+  );
+}
+
+/** Lo que se está escribiendo justo antes del cursor termina en "@pr…": se sugiere @prodi. */
+function mencionEnCurso(texto: string, cursor: number): { desde: number } | null {
+  const m = /(^|\s)@([a-záéíóú]*)$/i.exec(texto.slice(0, cursor));
+  if (!m || !"prodi".startsWith(m[2].toLowerCase())) return null;
+  return { desde: cursor - m[2].length - 1 };
 }
 
 function Conversacion({
@@ -231,6 +298,7 @@ function Conversacion({
   profiles,
   role,
   onBack,
+  onTareas,
   jitsiBase,
   color,
 }: {
@@ -240,6 +308,7 @@ function Conversacion({
   profiles: Profile[];
   role?: string;
   onBack: () => void;
+  onTareas: () => void;
   jitsiBase?: string;
   color?: string;
 }) {
@@ -249,7 +318,40 @@ function Conversacion({
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [llamando, setLlamando] = useState(false);
+  const [pensando, setPensando] = useState(false);
+  const [arrastrando, setArrastrando] = useState(false);
+  const [sugerir, setSugerir] = useState<{ desde: number } | null>(null);
   const fin = useRef<HTMLDivElement>(null);
+  const caja = useRef<HTMLTextAreaElement>(null);
+  const elegirArchivo = useRef<HTMLInputElement>(null);
+  const subidas = useSubidasChat(chat.id);
+
+  // Cuando aparece el mensaje que escribió el servidor, se saca la burbuja de "subiendo".
+  useEffect(() => {
+    if (subidas.some((s) => s.estado === "listo")) limpiarSubidasListas(new Set(mensajes.map((m) => m.id)));
+  }, [mensajes, subidas]);
+
+  const mandarArchivos = (files: File[]) => {
+    if (!files.length) return;
+    try {
+      subirArchivosChat(chat.id, files);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo mandar");
+    }
+  };
+
+  const usarMencion = () => {
+    if (!sugerir) return;
+    const cursor = caja.current?.selectionStart ?? texto.length;
+    const nuevo = `${texto.slice(0, sugerir.desde)}@prodi ${texto.slice(cursor)}`;
+    setTexto(nuevo);
+    setSugerir(null);
+    requestAnimationFrame(() => {
+      const pos = sugerir.desde + 7;
+      caja.current?.focus();
+      caja.current?.setSelectionRange(pos, pos);
+    });
+  };
 
   useEffect(() => {
     setCargando(true);
@@ -274,15 +376,23 @@ function Conversacion({
     fin.current?.scrollIntoView({ block: "end" });
     void marcarLeido(chat, uid);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mensajes.length, chat.id]);
+  }, [mensajes.length, chat.id, subidas.length, pensando]);
 
   const enviar = async () => {
     const t = texto.trim();
     if (!t) return;
     setEnviando(true);
+    setSugerir(null);
     try {
-      await enviarMensaje(chat, uid, t, { remitente: nombre });
+      const id = await enviarMensaje(chat, uid, t, { remitente: nombre });
       setTexto("");
+      // @prodi: el servidor lo procesa y contesta en el chat.
+      if (mencionaProdi(t)) {
+        setPensando(true);
+        pedirAProdi(chat.id, id)
+          .catch((err) => toast.error(err instanceof Error ? err.message : "Prodi no pudo responder"))
+          .finally(() => setTimeout(() => setPensando(false), 1500));
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo enviar");
     } finally {
@@ -336,7 +446,30 @@ function Conversacion({
   let ultimoDia = "";
 
   return (
-    <>
+    <div
+      className="relative flex min-h-0 flex-1 flex-col"
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        setArrastrando(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setArrastrando(false);
+      }}
+      onDrop={(e) => {
+        if (!e.dataTransfer.files.length) return;
+        e.preventDefault();
+        setArrastrando(false);
+        mandarArchivos(Array.from(e.dataTransfer.files));
+      }}
+    >
+      {arrastrando && (
+        <div className="pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary bg-background/90 text-primary">
+          <Upload className="h-8 w-8" />
+          <p className="text-sm font-semibold">Soltá para mandar al chat</p>
+          <p className="text-xs text-muted-foreground">Fotos, videos, PDF o documentos · hasta {CHAT_MAX_MB} MB</p>
+        </div>
+      )}
       <header className="flex items-center gap-3 border-b px-3 py-2.5 md:px-5">
         <button type="button" onClick={onBack} className="rounded-full p-1.5 hover:bg-muted md:hidden" aria-label="Volver">
           <ArrowLeft className="h-5 w-5" />
@@ -363,12 +496,13 @@ function Conversacion({
           <div className="flex justify-center py-10">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
-        ) : mensajes.length === 0 ? (
+        ) : mensajes.length === 0 && !subidas.length ? (
           <p className="py-10 text-center text-sm text-muted-foreground">Escribí el primer mensaje.</p>
         ) : (
           <div className="mx-auto flex max-w-3xl flex-col gap-1.5">
             {mensajes.map((m, i) => {
               const mio = m.by === uid;
+              const bot = m.by === PRODI_ID;
               const dia = diaLabel(m.at);
               const mostrarDia = dia !== ultimoDia;
               ultimoDia = dia;
@@ -380,23 +514,64 @@ function Conversacion({
                     <p className="my-3 text-center text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{dia}</p>
                   )}
                   <div className={cn("flex items-end gap-2", mio ? "justify-end" : "justify-start", !agrupado && "mt-2")}>
-                    {!mio && chat.tipo !== "directo" && (
+                    {!mio && (chat.tipo !== "directo" || bot) && (
                       <div className="w-7 shrink-0">
-                        {!agrupado && (perfilDe(m.by) || m.by_nombre) && (
-                          <UserAvatar profile={perfilDe(m.by) ?? ({ id: m.by, nombre: m.by_nombre, email: "" } as Profile)} size="sm" />
-                        )}
+                        {!agrupado &&
+                          (bot ? (
+                            <AvatarProdi />
+                          ) : (
+                            (perfilDe(m.by) || m.by_nombre) && (
+                              <UserAvatar profile={perfilDe(m.by) ?? ({ id: m.by, nombre: m.by_nombre, email: "" } as Profile)} size="sm" />
+                            )
+                          ))}
                       </div>
                     )}
                     <div
                       className={cn(
                         "max-w-[82%] rounded-2xl px-3.5 py-2 text-sm shadow-sm sm:max-w-[70%]",
-                        mio ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md bg-card border"
+                        mio
+                          ? "rounded-br-md bg-primary text-primary-foreground"
+                          : bot
+                            ? "rounded-bl-md border border-[#6F40FC]/30 bg-gradient-to-br from-[#6F40FC]/[0.07] to-[#E040A0]/[0.07]"
+                            : "rounded-bl-md bg-card border"
                       )}
                     >
-                      {!mio && !agrupado && chat.tipo !== "directo" && (
-                        <p className="mb-0.5 text-[11px] font-semibold text-primary">{nombreDe(m.by, m.by_nombre)}</p>
+                      {bot && !agrupado ? (
+                        <p className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-[#6F40FC]">
+                          Prodi <span className="rounded bg-[#6F40FC]/10 px-1 text-[9px] uppercase tracking-wider">asistente</span>
+                        </p>
+                      ) : (
+                        !mio && !agrupado && chat.tipo !== "directo" && (
+                          <p className="mb-0.5 text-[11px] font-semibold text-primary">{nombreDe(m.by, m.by_nombre)}</p>
+                        )
                       )}
-                      {m.tipo === "llamada" ? (
+                      {m.tipo === "archivo" && m.archivo ? (
+                        <div className="space-y-1">
+                          <ArchivoMensaje archivo={m.archivo} mio={mio} />
+                          {m.leyenda && <p className="whitespace-pre-wrap break-words pt-0.5">{m.leyenda}</p>}
+                        </div>
+                      ) : bot ? (
+                        <div className="space-y-2">
+                          <p className="whitespace-pre-wrap break-words">{m.texto}</p>
+                          {m.link &&
+                            (m.link.startsWith("/chat?tareas") ? (
+                              <button
+                                type="button"
+                                onClick={onTareas}
+                                className="inline-flex items-center gap-1.5 rounded-full bg-[#6F40FC] px-3 py-1 text-xs font-semibold text-white"
+                              >
+                                {m.link_texto || "Ver"}
+                              </button>
+                            ) : (
+                              <Link
+                                to={m.link}
+                                className="inline-flex items-center gap-1.5 rounded-full bg-[#6F40FC] px-3 py-1 text-xs font-semibold text-white"
+                              >
+                                {m.link_texto || "Ver"}
+                              </Link>
+                            ))}
+                        </div>
+                      ) : m.tipo === "llamada" ? (
                         <div className="space-y-2">
                           <p className="flex items-center gap-1.5 font-medium">
                             <Video className="h-4 w-4" /> {m.texto}
@@ -425,7 +600,19 @@ function Conversacion({
                       ) : m.tipo === "audio" && m.audio ? (
                         <AudioMensaje chatId={chat.id} audio={m.audio} mio={mio} />
                       ) : (
-                        <p className="whitespace-pre-wrap break-words">{m.texto}</p>
+                        <p className="whitespace-pre-wrap break-words">
+                          {mencionaProdi(m.texto)
+                            ? m.texto.split(/(@prodi\b)/i).map((p, j) =>
+                                /^@prodi$/i.test(p) ? (
+                                  <span key={j} className={cn("rounded px-0.5 font-semibold", mio ? "bg-white/20" : "bg-[#6F40FC]/10 text-[#6F40FC]")}>
+                                    {p}
+                                  </span>
+                                ) : (
+                                  p
+                                )
+                              )
+                            : m.texto}
+                        </p>
                       )}
                       <p className={cn("mt-0.5 text-right text-[10px]", mio ? "text-primary-foreground/70" : "text-muted-foreground")}>
                         {formatearFecha(m.at, { hour: "2-digit", minute: "2-digit" })}
@@ -435,6 +622,23 @@ function Conversacion({
                 </div>
               );
             })}
+            {subidas.length > 0 && (
+              <div className="mt-2 flex flex-col gap-1.5">
+                {subidas.map((s) => (
+                  <SubidaBurbuja key={s.id} s={s} />
+                ))}
+              </div>
+            )}
+            {pensando && (
+              <div className="mt-2 flex items-end gap-2">
+                <AvatarProdi />
+                <div className="rounded-2xl rounded-bl-md border border-[#6F40FC]/30 bg-[#6F40FC]/[0.06] px-3.5 py-2 text-sm text-[#6F40FC]">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Prodi está pensando…
+                  </span>
+                </div>
+              </div>
+            )}
             <div ref={fin} />
           </div>
         )}
@@ -452,19 +656,78 @@ function Conversacion({
             />
           ) : (
           <>
-          <Textarea
-            value={texto}
-            onChange={(e) => setTexto(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                void enviar();
-              }
+          <input
+            ref={elegirArchivo}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              mandarArchivos(Array.from(e.target.files ?? []));
+              e.target.value = "";
             }}
-            rows={1}
-            placeholder="Escribí un mensaje"
-            className="max-h-40 min-h-[44px] resize-none rounded-2xl"
           />
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-11 w-11 shrink-0 rounded-full text-muted-foreground"
+            onClick={() => elegirArchivo.current?.click()}
+            aria-label="Adjuntar archivo"
+            title={`Adjuntar foto, video o documento (hasta ${CHAT_MAX_MB} MB)`}
+          >
+            <Paperclip className="h-5 w-5" />
+          </Button>
+          <div className="relative min-w-0 flex-1">
+            {sugerir && (
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  usarMencion();
+                }}
+                className="absolute bottom-full left-0 z-10 mb-2 flex w-full max-w-sm items-center gap-2.5 rounded-xl border bg-popover p-2 text-left shadow-lg"
+              >
+                <AvatarProdi />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold">@prodi</span>
+                  <span className="block truncate text-xs text-muted-foreground">Asistente: agenda reuniones, deja tareas, recuerda cosas del cliente</span>
+                </span>
+              </button>
+            )}
+            <Textarea
+              ref={caja}
+              value={texto}
+              onChange={(e) => {
+                setTexto(e.target.value);
+                setSugerir(mencionEnCurso(e.target.value, e.target.selectionStart ?? e.target.value.length));
+              }}
+              onKeyDown={(e) => {
+                if (sugerir && (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey))) {
+                  e.preventDefault();
+                  usarMencion();
+                  return;
+                }
+                if (sugerir && e.key === "Escape") {
+                  setSugerir(null);
+                  return;
+                }
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  void enviar();
+                }
+              }}
+              onBlur={() => setSugerir(null)}
+              onPaste={(e) => {
+                const files = Array.from(e.clipboardData.files ?? []);
+                if (!files.length) return;
+                e.preventDefault();
+                mandarArchivos(files);
+              }}
+              rows={1}
+              placeholder="Escribí un mensaje · @prodi para pedirle algo"
+              className="max-h-40 min-h-[44px] resize-none rounded-2xl"
+            />
+          </div>
           {/* Sin texto escrito: micrófono para mandar un audio (como en WhatsApp). */}
           {texto.trim() ? (
             <Button size="icon" className="h-11 w-11 shrink-0 rounded-full" onClick={enviar} disabled={enviando} aria-label="Enviar">
@@ -477,6 +740,6 @@ function Conversacion({
           )}
         </div>
       </footer>
-    </>
+    </div>
   );
 }

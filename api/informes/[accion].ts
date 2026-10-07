@@ -1,7 +1,8 @@
 // POST /api/informes/enviar  { proyecto_id, mes, solo_vista }  (admin)
 // GET  /api/informes/cron    (Vercel Cron, día 1 de cada mes)
 // GET  /api/informes/diario  (Vercel Cron, todos los días: resultados de Meta, aviso de rodaje
-//                              y recordatorios al cliente que no aprobó en 48 h)
+//                              y recordatorios al cliente que no aprobó en 48 h;
+//                              también: la IA aprende de los chats de clientes y avisa las tareas que vencen hoy)
 // POST /api/informes/meta    { video_id }  (equipo) → trae ya los resultados de Meta
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
@@ -11,6 +12,8 @@ import { construirInforme, enviarMail, mesAnteriorAR } from "../_lib/informe";
 import { sincronizarTodoMeta, sincronizarVideoMeta } from "../_lib/meta";
 import { facturacionDel27, recordatoriosCobro, vencimientosObligaciones, recordatoriosAprobacion, recordatoriosPlan, recordatoriosRodaje } from "../_lib/diario";
 import { assertProjectAccess } from "../_lib/http";
+import { aprenderDeChats } from "../_lib/chat-memoria";
+import { recordatoriosTareas } from "../_lib/tareas";
 
 export const config = { maxDuration: 120 };
 
@@ -57,7 +60,7 @@ async function meta(req: VercelRequest) {
 async function diario(req: VercelRequest) {
   assertCron(req);
   const base = appUrl(req);
-  const [metaRes, rodajes, aprobar, planes, facturacion, vencimientos, cobros] = await Promise.all([
+  const [metaRes, rodajes, aprobar, planes, facturacion, vencimientos, cobros, chats, tareas] = await Promise.all([
     sincronizarTodoMeta().catch((err) => ({ error: String(err) })),
     recordatoriosRodaje(base).catch((err) => `error: ${err}`),
     recordatoriosAprobacion(base).catch((err) => `error: ${err}`),
@@ -65,10 +68,13 @@ async function diario(req: VercelRequest) {
     facturacionDel27(base).catch((err) => `error: ${err}`),
     vencimientosObligaciones(base).catch((err) => `error: ${err}`),
     recordatoriosCobro(base).catch((err) => `error: ${err}`),
+    // La IA aprende de los grupos de cada cliente (solo lo nuevo desde ayer).
+    aprenderDeChats().catch((err) => `error: ${err}`),
+    recordatoriosTareas(base).catch((err) => `error: ${err}`),
   ]);
   // Lo borrado se anota unos días para que las pantallas abiertas se enteren; después se limpia.
   await getPool().query("delete from borrados where borrado < now() - interval '7 days'").catch(() => undefined);
-  return { ok: true, meta: metaRes, recordatorios_rodaje: rodajes, recordatorios_aprobar: aprobar, recordatorios_plan: planes, facturacion, vencimientos, recordatorios_cobro: cobros };
+  return { ok: true, meta: metaRes, recordatorios_rodaje: rodajes, recordatorios_aprobar: aprobar, recordatorios_plan: planes, facturacion, vencimientos, recordatorios_cobro: cobros, aprendizaje_chats: chats, tareas };
 }
 
 async function cron(req: VercelRequest) {

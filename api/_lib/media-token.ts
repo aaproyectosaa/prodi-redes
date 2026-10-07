@@ -42,12 +42,34 @@ export function validarTokenMedia(token: unknown, fileId: string): void {
 }
 
 /**
- * ¿Puede ver este archivo? Tiene que estar en un video, pieza, reunión o en la marca de un cliente
+ * ¿Se mandó en un chat donde está esta persona? Los mensajes con `archivo` solo los escribe el servidor
+ * (/api/drive/chat-archivo), así que nadie puede "colgar" en un chat un archivo ajeno para verlo.
+ */
+async function enChatDe(uid: string, fileId: string): Promise<boolean> {
+  const r = await getPool().query(
+    `select distinct split_part(coleccion, '/', 2) as chat
+       from documentos
+      where coleccion like 'chats/%/mensajes' and data @> $1::jsonb
+      limit 20`,
+    [JSON.stringify({ archivo: { drive_file_id: fileId } })]
+  );
+  const chats = (r.rows as { chat: string }[]).map((x) => x.chat);
+  if (!chats.length) return false;
+  const m = await getPool().query(
+    "select 1 from documentos where coleccion = 'chats' and id = any($1::text[]) and data->'miembros' @> jsonb_build_array($2::text) limit 1",
+    [chats, uid]
+  );
+  return m.rows.length > 0;
+}
+
+/**
+ * ¿Puede ver este archivo? Tiene que estar en un video, pieza, reunión, en un chat del que es miembro o en la marca de un cliente
  * al que tenga acceso. Una sola consulta (usa el índice GIN de `data`).
  */
 export async function puedeVerArchivo(caller: Caller, fileId: string): Promise<boolean> {
   if (GLOBALES.includes(caller.role)) return true;
   if (!ASIGNABLES.includes(caller.role)) return false;
+  if (await enChatDe(caller.uid, fileId)) return true;
   const ref = [{ drive_file_id: fileId }];
   const r = await getPool().query(
     `select coleccion, id, data->>'proyecto_id' as pid, data->'participantes' as participantes

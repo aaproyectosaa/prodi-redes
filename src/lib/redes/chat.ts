@@ -9,6 +9,7 @@ import {
 import { db } from "@/integrations/firebase/client";
 import type { Profile, Project } from "@/integrations/firebase/types";
 import { avisar } from "./avisos";
+import { callApi } from "./api";
 import { assertEditable, enModoVista } from "./vistaComo";
 import type { Chat, Mensaje, TipoMensaje } from "./types";
 
@@ -97,7 +98,7 @@ export async function enviarMensaje(
     link: opts.link ?? null,
     reunion_id: opts.reunion_id ?? null,
   };
-  await addDoc(collection(db, CHATS, chat.id, "mensajes"), msg);
+  const ref = await addDoc(collection(db, CHATS, chat.id, "mensajes"), msg);
   await updateDoc(doc(db, CHATS, chat.id), {
     ultimo: { texto: msg.texto.slice(0, 140), by, at },
     [`leido.${by}`]: at,
@@ -110,6 +111,19 @@ export async function enviarMensaje(
     clave: `chat:${chat.id}`,
     proyectoId: chat.proyecto_id,
   });
+  return ref.id;
+}
+
+// ---------------------------------------------------------------------------
+// @prodi: el asistente (lo procesa el servidor: api/_lib/chat-asistente.ts)
+// ---------------------------------------------------------------------------
+
+export const PRODI_ID = "prodi";
+export const mencionaProdi = (texto: string) => /(^|[\s(])@prodi\b/i.test(texto);
+
+/** Después de guardar el mensaje: Prodi lo lee y contesta en el chat. */
+export function pedirAProdi(chatId: string, mensajeId: string) {
+  return callApi<{ ok: true }>("/api/ia/chat-asistente", { chat_id: chatId, mensaje_id: mensajeId });
 }
 
 export const AUDIO_MAX_SEG = 180;

@@ -35,12 +35,37 @@ export interface EjemploMemoria {
   nota_cliente?: string | null;
 }
 
+/** Dato del cliente que salió del chat (lo resume el cron diario o "@prodi acordate que …"). */
+export interface NotaChat {
+  texto: string;
+  fuente: "chat";
+  /** YYYY-MM-DD (AR) de cuándo se anotó. */
+  at: string;
+  chat_id: string;
+  /** Quién lo pidió con "@prodi acordate" (null: lo sacó el resumen diario). */
+  por?: string | null;
+}
+
 export interface MemoriaIA {
   resumen?: string;
   notas_equipo?: string;
   ejemplos?: EjemploMemoria[];
   actualizado_at?: string;
   comercial?: ContextoComercial;
+  /** Lo aprendido de los chats del cliente (máx. 40, lo más nuevo al final). */
+  chat_notas?: NotaChat[];
+  /** Hasta qué mensaje se leyó cada chat: { chatId: ISO }. */
+  chat_cursor?: Record<string, string>;
+}
+
+/** Datos del chat para el prompt (los más nuevos). */
+export function notasChatTexto(notas: NotaChat[] | null | undefined, max = 25): string {
+  const n = (notas ?? []).slice(-max);
+  if (!n.length) return "";
+  const corta = (f: string) => f.split("-").reverse().slice(0, 2).join("/");
+  return `Datos y preferencias del cliente que salieron del chat con el equipo (tenelos en cuenta; lo más nuevo manda):\n${n
+    .map((x) => `- ${x.texto} (${corta(x.at)})`)
+    .join("\n")}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -190,6 +215,8 @@ export function memoriaTexto(m: MemoriaIA | null | undefined): string {
   const partes: string[] = [];
   if (m.resumen) partes.push(`Lo que ya aprendiste de este cliente:\n${m.resumen}`);
   if (m.notas_equipo) partes.push(`Indicaciones del equipo de Prodi (respetalas siempre):\n${m.notas_equipo}`);
+  const chat = notasChatTexto(m.chat_notas);
+  if (chat) partes.push(chat);
   const ej = (m.ejemplos ?? []).slice(-6);
   if (ej.length) {
     const lineas: string[] = [];
@@ -371,7 +398,7 @@ Con los datos de abajo, escribí lo que aprendiste sobre qué ideas de video le 
 
 ${marca}
 
-${memoriaTexto({ ...m, resumen: m.resumen ? `(resumen anterior, actualizalo)\n${m.resumen}` : undefined })}`;
+${memoriaTexto({ ...m, chat_notas: undefined, resumen: m.resumen ? `(resumen anterior, actualizalo)\n${m.resumen}` : undefined })}`;
 }
 
 export const ESQUEMA_RESUMEN = {

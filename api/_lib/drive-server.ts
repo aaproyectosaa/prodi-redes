@@ -7,7 +7,7 @@ const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
 const FOLDER_MIME = "application/vnd.google-apps.folder";
 export const ROOT_FOLDER_NAME = "Progreso";
 
-async function ensureFolder(name: string, parent: string, token: string): Promise<string> {
+export async function ensureFolder(name: string, parent: string, token: string): Promise<string> {
   const safe = name.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
   const q = `name = '${safe}' and '${parent}' in parents and mimeType = '${FOLDER_MIME}' and trashed = false`;
   const r = await fetch(`${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id)&pageSize=1`, {
