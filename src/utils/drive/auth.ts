@@ -123,15 +123,40 @@ export async function startOAuthFlow(): Promise<{ email: string }> {
     }
 
     let settled = false;
+    const inicio = Date.now();
+    // Google corta la relación con el popup (COOP): window.opener queda null y popup.closed puede dar
+    // true aunque siga abierto. Por eso el resultado llega también por BroadcastChannel y localStorage.
+    let canal: BroadcastChannel | null = null;
+    try {
+      canal = new BroadcastChannel("prodi-drive-oauth");
+    } catch {
+      canal = null;
+    }
     const cleanup = () => {
       window.removeEventListener("message", onMessage);
+      window.removeEventListener("storage", onStorage);
+      canal?.close();
       window.clearInterval(checkClosed);
     };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== "prodi-drive-oauth" || !e.newValue) return;
+      try {
+        const d = JSON.parse(e.newValue) as { t?: number };
+        if ((d.t ?? 0) >= inicio - 5_000) recibir(d);
+      } catch {
+        /* ignore */
+      }
+    };
+    if (canal) canal.onmessage = (e) => recibir(e.data);
 
     const onMessage = (e: MessageEvent) => {
-      // Solo el popup que abrimos, desde nuestro propio dominio.
-      if (e.origin !== window.location.origin || e.source !== popup) return;
-      const data = e.data as
+      // Solo de nuestro propio dominio.
+      if (e.origin !== window.location.origin) return;
+      recibir(e.data);
+    };
+    const recibir = (raw: unknown) => {
+      if (settled) return;
+      const data = raw as
         | {
             type?: string;
             ok?: boolean;
@@ -159,8 +184,9 @@ export async function startOAuthFlow(): Promise<{ email: string }> {
       }
     };
 
+    // "Cerrado" no es confiable (COOP): recién se da por cancelado si pasan 3 minutos sin resultado.
     const checkClosed = window.setInterval(() => {
-      if (popup.closed && !settled) {
+      if (popup.closed && !settled && Date.now() - inicio > 180_000) {
         cleanup();
         reject(
           new DriveAuthError(
@@ -172,6 +198,7 @@ export async function startOAuthFlow(): Promise<{ email: string }> {
     }, 500);
 
     window.addEventListener("message", onMessage);
+    window.addEventListener("storage", onStorage);
   });
 }
 

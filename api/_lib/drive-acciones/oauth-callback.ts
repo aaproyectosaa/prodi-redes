@@ -68,11 +68,16 @@ function htmlResponse(opts: {
   <p style="margin-top:16px;">Podés cerrar esta ventana.</p>
 </div>
 <script>
+  // Google corta window.opener (Cross-Origin-Opener-Policy) en muchos navegadores: además del
+  // postMessage, se avisa por BroadcastChannel y localStorage (mismo origen, no dependen del opener).
+  var resultado = ${escaped};
   try {
     if (window.opener) {
-      window.opener.postMessage(${escaped}, window.location.origin);
+      window.opener.postMessage(resultado, window.location.origin);
     }
   } catch (_) { /* ignore */ }
+  try { new BroadcastChannel("prodi-drive-oauth").postMessage(resultado); } catch (_) { /* ignore */ }
+  try { localStorage.setItem("prodi-drive-oauth", JSON.stringify(Object.assign({ t: Date.now() }, resultado))); } catch (_) { /* ignore */ }
   setTimeout(function() { try { window.close(); } catch(_){} }, ${
     opts.ok ? 800 : 4000
   });
