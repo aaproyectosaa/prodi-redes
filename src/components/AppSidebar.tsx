@@ -177,20 +177,18 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
           location.pathname === "/notificaciones",
           unreadCount
         )}
-        {role !== "cliente" && (
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new Event(EVENTO_RECORRIDO))}
-            className={cn(
-              "flex h-9 w-full items-center gap-2.5 rounded-lg text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
-              collapsed ? "justify-center" : "px-3"
-            )}
-            title="Cómo se usa"
-          >
-            <HelpCircle className="h-4 w-4" />
-            {!collapsed && <span>¿Cómo se usa?</span>}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event(EVENTO_RECORRIDO))}
+          className={cn(
+            "flex h-9 w-full items-center gap-2.5 rounded-lg text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+            collapsed ? "justify-center" : "px-3"
+          )}
+          title="Cómo se usa"
+        >
+          <HelpCircle className="h-4 w-4" />
+          {!collapsed && <span>¿Cómo se usa?</span>}
+        </button>
         <button
           type="button"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}

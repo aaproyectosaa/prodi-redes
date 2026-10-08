@@ -205,6 +205,118 @@ function Avisos() {
   );
 }
 
+function PedirVideo() {
+  const pasos = ["¿Qué?", "Idea", "Material", "Cuándo"];
+  return (
+    <Pantalla>
+      <div className="w-60 space-y-3">
+        <div className="tour-latir mx-auto flex w-fit items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-md">
+          + Pedir un video
+        </div>
+        <div className="flex items-center justify-between gap-1">
+          {pasos.map((p, i) => (
+            <div key={p} className="tour-subir flex flex-1 flex-col items-center gap-1" style={{ animationDelay: `${300 + i * 250}ms` }}>
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">{i + 1}</span>
+              <span className="text-[9px] text-muted-foreground">{p}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Pantalla>
+  );
+}
+
+function Aprobar() {
+  return (
+    <Pantalla>
+      <div className="w-52 overflow-hidden rounded-2xl border bg-card shadow-md">
+        <div className="flex h-20 items-center justify-center bg-gradient-to-br from-primary/30 to-orange-400/30">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/80 text-primary">▶</span>
+        </div>
+        <div className="flex gap-1.5 p-2">
+          <span className="flex-1 rounded-lg border py-1 text-center text-[10px] text-muted-foreground">Pedir cambios</span>
+          <span className="tour-latir flex-1 rounded-lg bg-emerald-500 py-1 text-center text-[10px] font-semibold text-white">✓ Aprobar</span>
+        </div>
+      </div>
+    </Pantalla>
+  );
+}
+
+function SubirMaterial() {
+  return (
+    <Pantalla>
+      <div className="w-56 space-y-2">
+        {["obra-1.mp4", "obra-2.mp4"].map((n, i) => (
+          <div key={n} className="tour-subir rounded-xl border bg-card p-2 text-xs" style={{ animationDelay: `${i * 300}ms` }}>
+            <div className="flex items-center gap-2">
+              <Upload className="h-3.5 w-3.5 text-primary" /> {n}
+            </div>
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+              <div className="tour-llenar h-full rounded-full bg-primary" style={{ "--hasta": "100%" } as React.CSSProperties} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </Pantalla>
+  );
+}
+
+function Boleta() {
+  return (
+    <Pantalla>
+      <div className="tour-subir w-48 rounded-2xl border bg-card p-3 shadow-md">
+        <div className="flex items-center gap-1.5 text-xs font-semibold">
+          <Receipt className="h-4 w-4 text-primary" /> Boleta de octubre
+        </div>
+        <div className="mt-2 space-y-1">
+          <div className="h-1.5 w-full rounded bg-muted" />
+          <div className="h-1.5 w-2/3 rounded bg-muted" />
+        </div>
+        <div className="mt-2 flex items-center justify-between rounded-lg bg-primary px-2 py-1 text-[11px] text-primary-foreground">
+          <span>Total</span>
+          <b>$ 459.800</b>
+        </div>
+      </div>
+    </Pantalla>
+  );
+}
+
+function Resultados() {
+  const barras = [35, 55, 45, 80, 65, 95];
+  return (
+    <Pantalla>
+      <div className="flex h-28 items-end gap-2">
+        {barras.map((h, i) => (
+          <div key={i} className="flex h-full w-5 flex-col justify-end overflow-hidden rounded-t-md bg-muted">
+            <div className="tour-subir w-full rounded-t-md bg-primary" style={{ height: `${h}%`, animationDelay: `${i * 120}ms` }} />
+          </div>
+        ))}
+      </div>
+    </Pantalla>
+  );
+}
+
+function Cupo() {
+  return (
+    <Pantalla>
+      <div className="w-56 space-y-2 text-center">
+        <p className="text-xs font-semibold">Te queda 1 video de octubre</p>
+        <div className="flex justify-center gap-1.5">
+          {Array.from({ length: 8 }, (_, i) => (
+            <span
+              key={i}
+              className={cn("tour-subir flex h-6 w-6 items-center justify-center rounded-md border", i < 7 ? "border-primary/30 bg-primary/15 text-primary" : "border-dashed border-primary/50 text-primary/60")}
+              style={{ animationDelay: `${i * 90}ms` }}
+            >
+              <Clapperboard className="h-3 w-3" />
+            </span>
+          ))}
+        </div>
+      </div>
+    </Pantalla>
+  );
+}
+
 function Icono({ icon: Icon, texto }: { icon: React.ElementType; texto: string }) {
   return (
     <Pantalla>
@@ -247,6 +359,18 @@ export function Ilustracion({ anim }: { anim: AnimRecorrido }) {
       return <Icono icon={Receipt} texto="Boletas y cobros" />;
     case "piezas":
       return <Icono icon={Images} texto="Piezas gráficas" />;
+    case "pedir-video":
+      return <PedirVideo />;
+    case "aprobar":
+      return <Aprobar />;
+    case "subir-material":
+      return <SubirMaterial />;
+    case "boleta":
+      return <Boleta />;
+    case "resultados":
+      return <Resultados />;
+    case "cupo":
+      return <Cupo />;
     case "pagos":
       return <Icono icon={HandCoins} texto="Pagos al equipo" />;
     default:

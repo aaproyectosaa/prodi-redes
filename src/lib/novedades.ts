@@ -20,7 +20,13 @@ export type AnimRecorrido =
   | "guion"
   | "cobros"
   | "piezas"
-  | "pagos";
+  | "pagos"
+  | "pedir-video"
+  | "aprobar"
+  | "subir-material"
+  | "boleta"
+  | "resultados"
+  | "cupo";
 
 export interface Diapositiva {
   titulo: string;
@@ -51,6 +57,16 @@ const CHAT: Diapositiva[] = [
 
 /** Novedades, de la más nueva a la más vieja. */
 export const NOVEDADES: Novedad[] = [
+  {
+    id: "2026-10-cliente",
+    fecha: "2026-10-08",
+    titulo: "Novedades en tu panel",
+    roles: ["cliente"],
+    diapositivas: [
+      { titulo: "¿Filmaste vos? Mandanos el material", texto: "Al pedir un video elegí «Yo mando el material»: lo subís desde acá y lo editamos nosotros.", anim: "subir-material" },
+      { titulo: "Siempre sabés cuántos videos te quedan", texto: "Te avisamos cuando te queda 1 video del mes y cuando se terminan. Si necesitás más, pedís uno extra.", anim: "cupo" },
+    ],
+  },
   {
     id: "2026-10-chat",
     fecha: "2026-10-08",
@@ -95,6 +111,17 @@ export function bienvenidaDe(role: string | undefined, enChat: boolean): Diaposi
   const avisos: Diapositiva = { titulo: "Te avisamos de todo", texto: "Activá las notificaciones: te llega cada video, mensaje y mención al instante.", anim: "avisos" };
   const chat = CHAT.slice(0, 3);
   switch (role) {
+    case "cliente":
+      return [
+        { titulo: "Pedí un video en 4 pasos", texto: "Tocá «Pedir un video»: contanos qué querés, con qué material y para cuándo. Si entra en tu plan, no se paga aparte.", anim: "pedir-video" },
+        { titulo: "¿Filmaste vos? Subilo", texto: "Elegí «Yo mando el material» y subí los videos desde el celular. Nosotros lo editamos.", anim: "subir-material" },
+        { titulo: "Aprobá con un toque", texto: "Cuando un video está listo te avisamos. Lo mirás y lo aprobás o pedís cambios.", anim: "aprobar" },
+        { titulo: "Tus videos del mes", texto: "En «Mi plan» ves cuántos usaste y cuántos te quedan. Te avisamos cuando se terminan.", anim: "cupo" },
+        { titulo: "Resultados", texto: "Mirá cuánta gente vio tus videos y cuántos mensajes te llegaron.", anim: "resultados" },
+        { titulo: "Tus boletas", texto: "Te llegan el 27 por la app y por mail. Las ves, las descargás y pagás por transferencia o débito.", anim: "boleta" },
+        ...chat,
+        avisos,
+      ];
     case "productor":
       return [
         { titulo: "Todos tus videos en un lugar", texto: "En «Mis videos» ves cada video por etapa: idea, rodaje, edición y aprobación del cliente.", anim: "videos" },
@@ -145,7 +172,12 @@ export function bienvenidaDe(role: string | undefined, enChat: boolean): Diaposi
 
 /** Las novedades que le tocan a este rol (en Prodi Chat, solo las del chat). */
 export const novedadesPara = (role: string | undefined, enChat: boolean) =>
-  NOVEDADES.filter((n) => (enChat ? n.chat : !n.roles || n.roles.includes(role ?? "")) && (role !== "cliente" || n.chat) && (EQUIPO.includes(role ?? "") || n.chat));
+  NOVEDADES.filter((n) => {
+    if (enChat) return !!n.chat;
+    // Sin roles: las del chat son para todos (también clientes y contactos); el resto, solo para el equipo.
+    const para = n.roles ?? (n.chat ? [...EQUIPO, "cliente", "contacto"] : EQUIPO);
+    return para.includes(role ?? "");
+  });
 
 /** Para volver a abrir la bienvenida desde el menú ("¿Cómo se usa?"). */
 export const EVENTO_RECORRIDO = "prodi-recorrido";

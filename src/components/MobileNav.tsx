@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { asset } from "@/lib/asset";
 import { useLocation, useNavigate } from "react-router-dom";
 import { signOut } from "@/lib/auth";
-import { Bell, LogOut, Menu, Moon, Sun, User } from "lucide-react";
+import { Bell, HelpCircle, LogOut, Menu, Moon, Sun, User } from "lucide-react";
+import { EVENTO_RECORRIDO } from "@/lib/novedades";
 import { auth } from "@/integrations/firebase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import UserAvatar from "@/components/UserAvatar";
@@ -138,6 +139,16 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
             <VerComoBoton onAbrir={() => setVerComo(true)} />
             <BotonInstalar className="h-10 gap-3 text-foreground" />
             <BotonInstalarChat className="h-10 gap-3 text-foreground" />
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                window.dispatchEvent(new Event(EVENTO_RECORRIDO));
+              }}
+              className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm hover:bg-accent"
+            >
+              <HelpCircle className="h-4 w-4" /> ¿Cómo se usa?
+            </button>
             <button
               type="button"
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}

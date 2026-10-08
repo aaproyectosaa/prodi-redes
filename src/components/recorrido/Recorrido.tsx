@@ -96,13 +96,12 @@ export function RecorridoAuto({ enChat = false }: { enChat?: boolean }) {
   const rol = role as string | undefined;
   const vistas = useMemo(() => new Set(profile?.novedades_vistas ?? []), [profile?.novedades_vistas]);
   const nuevo = !profile?.bienvenida_at && !!profile?.created_at && profile.created_at >= DESDE_RECORRIDOS;
-  const esCliente = rol === "cliente";
 
   // Bienvenida (nuevos) o novedades pendientes (los demás). Un poco después de entrar, sin pisar otro cartel.
   useEffect(() => {
     if (!uid || !profile || viewingAs || abierto || !rol || rol === "pending") return;
     let pendiente: typeof abierto = null;
-    if (nuevo && !(esCliente && !enChat)) {
+    if (nuevo) {
       pendiente = { tipo: "bienvenida", titulo: "Bienvenido a Prodi", pasos: bienvenidaDe(rol, enChat) };
     } else {
       const lista = novedadesPara(rol, enChat).filter((n) => !vistas.has(n.id));
