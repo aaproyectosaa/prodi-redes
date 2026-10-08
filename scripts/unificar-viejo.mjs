@@ -5,24 +5,42 @@
 // SOLO AGREGA en Postgres: insert … on conflict do nothing. Nunca modifica ni borra filas que ya existen.
 // Los ids son deterministas, así que correrlo dos veces no duplica nada.
 //
-// Uso (llave en certs/firebase-<origen>.json, no se sube a git):
+// Uso (llaves en certs/firebase-progreso.json y certs/firebase-postgo.json, no se suben a git; se leen las dos
+// porque las personas se unen entre los dos sistemas). Corre con tsx (usa api/_lib/cuentas.ts para los links):
 //   pnpm unificar:viejo --origen=progreso --inspeccionar        → muestra el esquema viejo (solo Firebase, no toca la base)
 //   pnpm unificar:viejo --origen=progreso                       → SIMULACIÓN contra la base de DATABASE_URL (solo lee)
 //   pnpm unificar:viejo --origen=progreso --aplicar             → agrega en la base LOCAL
 //   pnpm unificar:viejo --origen=progreso --aplicar --produccion → agrega en una base que no es local
-// Orden recomendado: primero progreso, después postgo (así los mails y clientes repetidos quedan unidos).
+//   pnpm unificar:viejo --origen=progreso --links [--produccion] → solo vuelve a generar los links de contraseña
+//                                                                  (usuarios activos creados con este origen; no toca datos)
+// Orden recomendado: primero progreso, después postgo.
 //
 // ─── MAPEO (viejo → nuevo) ────────────────────────────────────────────────────────────────────────────────
-// Usuarios (Firebase Auth + profiles):
-//   · Se buscan por MAIL (minúsculas) en `usuarios` de la base destino. Si existe: se reusa ese uid (no se toca
-//     ni el usuario ni su perfil) y todas las referencias viejas (equipo del cliente, responsables, chats,
-//     historial…) pasan al uid existente. Si no: se crea con el uid viejo (o "<origen>_<uid>" si ese uid ya
-//     lo usa otra persona) y la contraseña de Firebase como "fbscrypt$sal$hash" (progreso) o
-//     "fbscrypt$sal$hash$postgo" (postgo, valida con FIREBASE_HASH_POSTGO_*; ver api/_lib/cuentas.ts).
-//   · Perfil nuevo: nombre, email, avatarColor, profileImage (si es una imagen chica), theme, created_at,
-//     activo (false si estaba deshabilitado en Auth) y role:
-//       admin→admin · productor→productor · editor→editor · cliente→cliente
+// Personas (Firebase Auth + profiles de LOS DOS orígenes + usuarios/perfiles que ya hay en destino):
+//   · Se agrupan como una sola persona las cuentas con el mismo mail, el mismo nombre normalizado (minúsculas,
+//     sin tildes, espacios simples), el mismo nombre+apellido (primera y última palabra), o que caen en la
+//     misma entrada de FUSIONAR (por nombre; los mails no se escriben en el repo, se resuelven al correr).
+//     Solo personas: los clientes (projects) se unen únicamente por id o nombre EXACTO normalizado, nunca por
+//     parecido (Buyatti Materiales ≠ Camila Buyatti).
+//   · Cuenta canónica: si en destino ya hay un usuario del grupo (por mail o nombre), se reusa ese uid
+//     (si hay varios, el @gmail.com) y NO se toca ni el usuario ni su perfil. Si no, se crea uno solo con el
+//     mail @gmail.com del grupo (si no hay gmail, el de la cuenta con el último ingreso), con el uid viejo de
+//     esa cuenta (o "<origen>_<uid>" si ese uid ya lo usa otra persona). Todas las referencias viejas de
+//     todas las cuentas del grupo (equipo del cliente, responsables, chats, historial…) pasan a ese uid.
+//   · Rol del perfil nuevo: el "más alto" del grupo, en este orden:
+//       admin > productor > editor > pauta > diseno > administracion > cliente > pending
+//     (si la persona ya tiene perfil en destino, se respeta el suyo, no se toca).
+//     Rol viejo → nuevo: admin→admin · productor→productor · editor→editor · cliente→cliente
 //       pm→productor · cm→pauta · disenador→diseno · otro/sin rol→pending
+//   · INACTIVOS (por nombre): ya no trabajan; su cuenta se crea igual (para que el historial tenga su nombre)
+//     pero desactivada (usuarios.desactivado = true, perfil activo: false) y sin link.
+//   · Contraseñas: NO se importan las de Firebase. Todo usuario nuevo se crea sin contraseña y, con --aplicar,
+//     se genera un link para crearla (linkDeClave de api/_lib/cuentas.ts: vence en 3 días, sirve una vez;
+//     necesita AUTH_SECRET y APP_URL de la app destino). Los links van a certs/accesos-<origen>-<fecha>.csv
+//     (nombre, email, rol, link; certs/ está en .gitignore); por consola solo se muestra la ruta y la cantidad.
+//     Los que ya existían en destino y los desactivados no reciben link.
+//   · Perfil nuevo: nombre, email, avatarColor, profileImage (si es una imagen chica), theme, created_at,
+//     activo (false si es INACTIVO o estaba deshabilitado en Auth) y role.
 //     Se descartan: fcm_tokens, whatsapp_*, project_permissions, dashboard_access, filtros y preferencias viejas.
 // Clientes (projects):
 //   · Si en destino ya hay un cliente con el mismo id, o con el mismo nombre normalizado (minúsculas, sin
@@ -62,6 +80,19 @@
 //     content_plans (planes por tipo de contenido), portal_service_* (catálogo viejo del portal).
 // Todo lo creado lleva `_origen` y `_id_viejo`.
 
+/** Misma persona con varios mails. Se busca por nombre normalizado ("origen:nombre" limita a un origen; "destino"
+ *  = usuarios que ya están en la base). `nombre` es el que queda si se crea la cuenta. Sin mails acá (repo público). */
+const FUSIONAR = [
+  { nombre: "Natalia", alias: ["natalia"] },
+  { nombre: "Lucía Pasetto", alias: ["lucia pasetto", "postgo:lucia"] },
+  { nombre: "Lucas Paulón", alias: ["lucas paulon", "progreso:lucas"] },
+  { nombre: "Laura Camargo", alias: ["laura camargo"] },
+];
+/** Ya no trabajan en Prodi: cuenta desactivada (conserva el nombre en el historial, no puede entrar). Por nombre. */
+const INACTIVOS = ["Laura Camargo"];
+/** Orden para elegir el rol de una persona unida (el primero que aparezca gana). */
+const PRIORIDAD_ROL = ["admin", "productor", "editor", "pauta", "diseno", "administracion", "cliente", "pending"];
+
 import { cert, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, Timestamp, GeoPoint, DocumentReference } from "firebase-admin/firestore";
@@ -77,6 +108,7 @@ if (!["progreso", "postgo"].includes(ORIGEN)) {
 const APLICAR = flag("aplicar");
 const PRODUCCION = flag("produccion");
 const INSPECCIONAR = flag("inspeccionar");
+const LINKS = flag("links");
 /** Lo no terminado con mes anterior a este se cierra (por defecto: el mes actual; --cierre=YYYY-MM para cambiarlo). */
 const CIERRE = arg("cierre") ?? mesAR(new Date().toISOString());
 if (!/^\d{4}-\d{2}$/.test(CIERRE)) {
@@ -209,8 +241,8 @@ if (!url) {
   process.exit(1);
 }
 const local = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(url);
-if (APLICAR && !local && !PRODUCCION) {
-  console.error("La base no es local. Para escribir en producción agregá --produccion (solo agrega, no pisa).");
+if ((APLICAR || LINKS) && !local && !PRODUCCION) {
+  console.error("La base no es local. Para escribir (o sacar links) en producción agregá --produccion (solo agrega, no pisa).");
   process.exit(1);
 }
 const pool = new pg.Pool({ connectionString: url, ssl: local ? undefined : { rejectUnauthorized: true }, max: 3 });
@@ -222,6 +254,43 @@ const host = (() => {
     return "?";
   }
 })();
+
+/** Genera links para crear la contraseña (helper de la app) y los guarda en certs/ (gitignored). Nunca los muestra. */
+async function guardarLinks(filas) {
+  if (!filas.length) return console.log("\nLinks de contraseña: no hay usuarios nuevos activos, no se generó archivo.");
+  const base = process.env.APP_URL;
+  if (!base || !process.env.AUTH_SECRET) {
+    console.error("\nFaltan APP_URL o AUTH_SECRET (los de la app destino): no se generaron links. Después: --links");
+    process.exitCode = 1;
+    return;
+  }
+  const { linkDeClave } = await import("../api/_lib/cuentas.ts");
+  const { getPool } = await import("../api/_lib/db.ts");
+  const csv = (s) => `"${String(s ?? "").replace(/"/g, '""')}"`;
+  const lineas = ["nombre,email,rol,link"];
+  for (const f of filas) lineas.push([f.nombre, f.email, f.rol, await linkDeClave(f.uid, base)].map(csv).join(","));
+  await getPool().end();
+  const fecha = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 16).replace("T", "-").replace(":", "");
+  fsArch.mkdirSync("certs", { recursive: true });
+  const ruta = `certs/accesos-${ORIGEN}-${fecha}.csv`;
+  fsArch.writeFileSync(ruta, "﻿" + lineas.join("\r\n") + "\r\n");
+  console.log(`\nLinks de contraseña (vencen en 3 días, sirven una vez): ${filas.length} en ${ruta} (no se suben a git).`);
+}
+
+if (LINKS) {
+  // Solo links: usuarios activos creados por esta herramienta con este origen. No modifica datos.
+  const filas = await q(
+    `select u.uid, u.email, coalesce(p.data->>'nombre', u.nombre) as nombre, p.data->>'role' as rol
+       from usuarios u join documentos p on p.coleccion = 'profiles' and p.id = u.uid
+      where p.data->>'_origen' = $1 and not u.desactivado and coalesce(p.data->>'activo', 'true') <> 'false'
+      order by 3`,
+    [ORIGEN]
+  );
+  console.log(`Destino: ${local ? "base LOCAL" : "base NO local (producción)"} (${host}) · usuarios activos de ${ORIGEN}: ${filas.length}`);
+  await guardarLinks(filas);
+  await pool.end();
+  process.exit();
+}
 
 console.log(`Origen: Firebase "${ORIGEN}" (proyecto ${JSON.parse(fsArch.readFileSync(LLAVE, "utf8")).project_id})`);
 console.log(`Destino: ${local ? "base LOCAL" : "base NO local (producción)"} (${host})`);
@@ -235,11 +304,12 @@ const MIGRACION = "migracion";
 const nid = (id) => `${ORIGEN}_${id}`;
 
 // Lo que hay en el destino.
-const destUsuarios = await q("select uid, lower(email) as email from usuarios");
-const uidPorMail = new Map(destUsuarios.map((r) => [r.email, r.uid]));
+const destUsuarios = await q(
+  `select u.uid, lower(u.email) as email, coalesce(p.data->>'nombre', u.nombre) as nombre, u.desactivado
+     from usuarios u left join documentos p on p.coleccion = 'profiles' and p.id = u.uid`
+);
 const uidsDest = new Set(destUsuarios.map((r) => r.uid));
-const destPerfiles = await q("select id, lower(data->>'email') as email from documentos where coleccion = 'profiles'");
-const perfilPorMail = new Map(destPerfiles.filter((r) => r.email).map((r) => [r.email, r.id]));
+const destPerfiles = await q("select id, lower(data->>'email') as email, data->>'nombre' as nombre from documentos where coleccion = 'profiles'");
 const perfilesDest = new Set(destPerfiles.map((r) => r.id));
 const destClientes = await q("select id, data->>'nombre' as nombre from documentos where coleccion = 'projects'");
 const clienteDestPorId = new Map(destClientes.map((r) => [r.id, r]));
@@ -250,86 +320,167 @@ for (const r of destClientes) if (!clienteDestPorNombre.has(normalizar(r.nombre)
 const [perfilesV, proyectosV, tareasV, reviewsV, ratingsV, reunionesV, videosNV] = await Promise.all(
   ["profiles", "projects", "tasks", "client_reviews", "content_ratings", "team_meetings", "videos"].map(leer)
 );
-const authV = [];
-{
+async function usuariosAuth(app) {
+  const out = [];
   let token;
   do {
-    const r = await getAuth().listUsers(1000, token);
-    authV.push(...r.users);
+    const r = await getAuth(app).listUsers(1000, token);
+    out.push(...r.users);
     token = r.pageToken;
   } while (token);
+  return out;
 }
+const authV = await usuariosAuth();
+// Personas del OTRO origen (solo Auth y profiles, solo lectura) para unir a la misma persona entre sistemas.
+const OTRO = ORIGEN === "progreso" ? "postgo" : "progreso";
+const LLAVE_OTRO = arg("llave-otro") ?? `certs/firebase-${OTRO}.json`;
+if (!fsArch.existsSync(LLAVE_OTRO)) {
+  console.error(`No encontré la llave ${LLAVE_OTRO} (hace falta para unir personas entre los dos sistemas).`);
+  process.exit(1);
+}
+const appOtro = initializeApp({ credential: cert(JSON.parse(fsArch.readFileSync(LLAVE_OTRO, "utf8"))) }, OTRO);
+const authOtro = await usuariosAuth(appOtro);
+const perfilesOtro = (await getFirestore(appOtro).collection("profiles").get()).docs.map((d) => ({ id: d.id, ...aJson(d.data()) }));
 
-// ─── usuarios ───────────────────────────────────────────────────────────────────────────────────────────
+// ─── personas → usuarios ────────────────────────────────────────────────────────────────────────────────
 const ROL = { admin: "admin", productor: "productor", editor: "editor", cliente: "cliente", pm: "productor", cm: "pauta", disenador: "diseno" };
 const mapaU = new Map(); // uid viejo → uid nuevo
 const rolViejo = new Map(); // uid viejo → rol viejo
-const nuevosUsuarios = []; // { uid, email, clave_hash, nombre, desactivado }
+const nuevosUsuarios = []; // { uid, email, nombre, desactivado, rol }
 const nuevosPerfiles = [];
 const usuariosEmparejados = [];
 const usuariosOmitidos = [];
 const rolesNuevos = {};
-const conClaveFb = { si: 0, no: 0 };
+const gruposUnidos = []; // informe (mails tapados)
 {
-  const perfilPorUid = new Map(perfilesV.map((p) => [p.id, p]));
-  const authPorUid = new Map(authV.map((u) => [u.uid, u]));
-  const uids = [...new Set([...authPorUid.keys(), ...perfilPorUid.keys()])];
-  const enEstaCorrida = new Map(); // mail → uid nuevo (dos cuentas viejas con el mismo mail)
-  for (const uid of uids) {
-    const a = authPorUid.get(uid);
-    const p = perfilPorUid.get(uid);
-    rolViejo.set(uid, p?.role ?? null);
-    const mail = (a?.email ?? p?.email ?? "").trim().toLowerCase();
-    if (!mail) {
-      usuariosOmitidos.push(`${uid.slice(0, 6)}… sin mail`);
-      continue;
+  // Cuentas: las de este origen, las del otro y las que ya hay en destino.
+  const cuentas = [];
+  const sumarCuentas = (origen, auth, perfiles) => {
+    const perfilPorUid = new Map(perfiles.map((p) => [p.id, p]));
+    const authPorUid = new Map(auth.map((u) => [u.uid, u]));
+    for (const uid of new Set([...authPorUid.keys(), ...perfilPorUid.keys()])) {
+      const a = authPorUid.get(uid);
+      const p = perfilPorUid.get(uid);
+      cuentas.push({
+        origen,
+        uid,
+        a,
+        p,
+        email: String(a?.email ?? p?.email ?? "").trim().toLowerCase(),
+        nombre: String(p?.nombre ?? a?.displayName ?? "").trim(),
+        rol: ROL[p?.role] ?? "pending",
+        ultimo: Date.parse(a?.metadata?.lastSignInTime ?? a?.metadata?.creationTime ?? p?.created_at ?? "") || 0,
+      });
     }
-    const existente = uidPorMail.get(mail) ?? enEstaCorrida.get(mail);
-    if (existente) {
-      mapaU.set(uid, existente);
-      usuariosEmparejados.push(`${tapar(mail)} → ${existente === uid ? "mismo uid" : existente}`);
-      continue;
-    }
-    if (perfilPorMail.has(mail)) {
-      // Hay un perfil con ese mail pero sin usuario para entrar: se reusa, sin crear nada.
-      const pid = perfilPorMail.get(mail);
-      mapaU.set(uid, pid);
-      usuariosEmparejados.push(`${tapar(mail)} → perfil ${pid} (sin usuario en la tabla usuarios)`);
-      avisar(`${tapar(mail)}: tiene perfil en destino pero no usuario para entrar; no se creó usuario.`);
-      continue;
-    }
-    const nuevo = uidsDest.has(uid) || perfilesDest.has(uid) ? nid(uid) : uid;
-    mapaU.set(uid, nuevo);
-    enEstaCorrida.set(mail, nuevo);
-    let hash = null;
-    if (a?.passwordHash && a?.passwordSalt) hash = `fbscrypt$${a.passwordSalt}$${a.passwordHash}${ORIGEN === "progreso" ? "" : "$" + ORIGEN}`;
-    hash ? conClaveFb.si++ : conClaveFb.no++;
-    const nombre = p?.nombre ?? a?.displayName ?? mail.split("@")[0];
-    const desactivado = !!a?.disabled;
-    nuevosUsuarios.push({ uid: nuevo, email: mail, clave_hash: hash, nombre, desactivado });
-    const role = ROL[p?.role] ?? "pending";
-    contar(rolesNuevos, `${p?.role ?? "(sin perfil)"} → ${role}`);
-    const imagen = typeof p?.profileImage === "string" && /^data:image\/(jpeg|png|webp);base64,/.test(p.profileImage) && p.profileImage.length <= 200_000 ? p.profileImage : undefined;
-    if (p?.profileImage && !imagen) avisar(`Foto de perfil de ${tapar(mail)} descartada (muy grande o no es imagen).`);
-    nuevosPerfiles.push({
-      id: nuevo,
-      data: {
-        nombre,
-        email: mail,
-        role,
-        ...(p?.avatarColor ? { avatarColor: p.avatarColor } : {}),
-        ...(imagen ? { profileImage: imagen } : {}),
-        ...(p?.theme ? { theme: p.theme } : {}),
-        ...(desactivado ? { activo: false } : {}),
-        ...(Array.isArray(p?.extra_panel_roles)
-          ? { extra_panel_roles: [...new Set(p.extra_panel_roles.map((r) => ROL[r]).filter((r) => r && r !== role))] }
-          : {}),
-        created_at: p?.created_at ?? a?.metadata?.creationTime ? new Date(p?.created_at ?? a.metadata.creationTime).toISOString() : AHORA,
-        _origen: ORIGEN,
-        _id_viejo: uid,
-        _rol_viejo: p?.role ?? null,
-      },
+  };
+  sumarCuentas(ORIGEN, authV, perfilesV);
+  sumarCuentas(OTRO, authOtro, perfilesOtro);
+  for (const r of destUsuarios) cuentas.push({ origen: "destino", uid: r.uid, email: r.email ?? "", nombre: r.nombre ?? "", usuario: true, desactivado: r.desactivado });
+  // Perfiles en destino sin usuario para entrar: se pueden reusar (sin crear usuario).
+  for (const r of destPerfiles) if (!uidsDest.has(r.id) && r.email) cuentas.push({ origen: "destino", uid: r.id, email: r.email, nombre: r.nombre ?? "", usuario: false });
+
+  // Agrupar (unión de conjuntos) por mail, nombre normalizado, nombre+apellido y FUSIONAR.
+  const padre = cuentas.map((_, i) => i);
+  const raiz = (i) => (padre[i] === i ? i : (padre[i] = raiz(padre[i])));
+  const porClave = new Map();
+  const unir = (i, clave) => {
+    const j = porClave.get(clave);
+    if (j === undefined) porClave.set(clave, i);
+    else padre[raiz(i)] = raiz(j);
+  };
+  const fusion = FUSIONAR.map((f) => ({
+    nombre: f.nombre,
+    alias: f.alias.map((x) => (x.includes(":") ? { o: x.split(":")[0], n: normalizar(x.split(":").slice(1).join(":")) } : { o: null, n: normalizar(x) })),
+  }));
+  cuentas.forEach((c, i) => {
+    const n = normalizar(c.nombre);
+    const pal = n.split(" ").filter(Boolean);
+    if (c.email) unir(i, `m:${c.email}`);
+    if (n) unir(i, `n:${n}`);
+    if (pal.length >= 2) unir(i, `nn:${pal[0]} ${pal.at(-1)}`);
+    fusion.forEach((f, k) => {
+      if (f.alias.some((a) => a.n === n && (!a.o || a.o === c.origen))) {
+        unir(i, `f:${k}`);
+        c.fusion = f;
+      }
     });
+  });
+  const grupos = new Map();
+  cuentas.forEach((c, i) => (grupos.get(raiz(i)) ?? grupos.set(raiz(i), []).get(raiz(i))).push(c));
+
+  const esGmail = (m) => /@gmail\.com$/.test(m ?? "");
+  const masReciente = (l) => [...l].sort((a, b) => b.ultimo - a.ultimo)[0];
+  const inactivos = new Set(INACTIVOS.map(normalizar));
+  const desc = (c) => `${c.origen}:${tapar(c.email) || "(sin mail)"}${c.p ? ` (${c.p.role ?? "sin rol"})` : ""}`;
+  for (const g of grupos.values()) {
+    const mias = g.filter((c) => c.origen === ORIGEN);
+    if (!mias.length) continue; // la crea (o no) la corrida del otro origen
+    for (const c of mias) rolViejo.set(c.uid, c.p?.role ?? null);
+    const fus = g.find((c) => c.fusion)?.fusion;
+    const inactivo = [...g.map((c) => c.nombre), fus?.nombre].some((n) => n && inactivos.has(normalizar(n)));
+    const viejas = g.filter((c) => c.origen !== "destino");
+    const dest = g.filter((c) => c.origen === "destino");
+    const conUsuario = dest.filter((c) => c.usuario);
+    let canon;
+    let resumen;
+    if (conUsuario.length) {
+      // Ya existe en destino: se reusa y no se toca (ni usuario ni perfil).
+      const d = conUsuario.find((c) => esGmail(c.email)) ?? conUsuario[0];
+      canon = d.uid;
+      resumen = `existente ${canon} (${tapar(d.email)})${d.desactivado ? " desactivado" : ""}`;
+      for (const c of mias) usuariosEmparejados.push(`${tapar(c.email) || c.uid.slice(0, 6) + "…"} → ${c.uid === canon ? "mismo uid" : canon}`);
+      if (inactivo && !d.desactivado) avisar(`${d.nombre || canon}: está en INACTIVOS pero su usuario en destino está activo (no se toca; desactivarlo desde Equipo).`);
+    } else if (dest.length) {
+      canon = dest[0].uid;
+      resumen = `perfil existente ${canon} (sin usuario para entrar)`;
+      for (const c of mias) usuariosEmparejados.push(`${tapar(c.email)} → perfil ${canon} (sin usuario en la tabla usuarios)`);
+      avisar(`${tapar(dest[0].email)}: tiene perfil en destino pero no usuario para entrar; no se creó usuario.`);
+    } else {
+      const conMail = viejas.filter((c) => c.email);
+      if (!conMail.length) {
+        for (const c of mias) usuariosOmitidos.push(`${c.uid.slice(0, 6)}… sin mail`);
+        continue;
+      }
+      const elegida = masReciente(conMail.filter((c) => esGmail(c.email))) ?? masReciente(conMail);
+      canon = uidsDest.has(elegida.uid) || perfilesDest.has(elegida.uid) ? `${elegida.origen}_${elegida.uid}` : elegida.uid;
+      const role = PRIORIDAD_ROL.find((r) => viejas.some((c) => c.rol === r)) ?? "pending";
+      // Nombre: el de FUSIONAR, si no el de la cuenta que aporta el rol (o la elegida).
+      const delRol = [elegida, ...viejas].find((c) => c.rol === role && c.nombre);
+      const nombre = fus?.nombre ?? (delRol?.nombre || elegida.nombre || elegida.email.split("@")[0]);
+      const desactivado = inactivo || !!elegida.a?.disabled;
+      // Datos del perfil: primero los de la cuenta elegida, si faltan los de otra del grupo.
+      const perfiles = [elegida, ...viejas.filter((c) => c !== elegida)].map((c) => c.p).filter(Boolean);
+      const dato = (k) => perfiles.find((p) => p[k])?.[k];
+      const fotoV = dato("profileImage");
+      const imagen = typeof fotoV === "string" && /^data:image\/(jpeg|png|webp);base64,/.test(fotoV) && fotoV.length <= 200_000 ? fotoV : undefined;
+      if (fotoV && !imagen) avisar(`Foto de perfil de ${tapar(elegida.email)} descartada (muy grande o no es imagen).`);
+      const extras = [...new Set(perfiles.flatMap((p) => (Array.isArray(p.extra_panel_roles) ? p.extra_panel_roles : [])).map((r) => ROL[r]).filter((r) => r && r !== role))];
+      const altas = viejas.map((c) => c.p?.created_at ?? c.a?.metadata?.creationTime).filter(Boolean).map((x) => new Date(x).toISOString()).sort();
+      nuevosUsuarios.push({ uid: canon, email: elegida.email, nombre, desactivado, rol: role });
+      contar(rolesNuevos, `${viejas.map((c) => c.p?.role ?? "(sin perfil)").join("+")} → ${role}${desactivado ? " (desactivado)" : ""}`);
+      nuevosPerfiles.push({
+        id: canon,
+        data: {
+          nombre,
+          email: elegida.email,
+          role,
+          ...(dato("avatarColor") ? { avatarColor: dato("avatarColor") } : {}),
+          ...(imagen ? { profileImage: imagen } : {}),
+          ...(dato("theme") ? { theme: dato("theme") } : {}),
+          ...(desactivado ? { activo: false } : {}),
+          ...(extras.length ? { extra_panel_roles: extras } : {}),
+          created_at: altas[0] ?? AHORA,
+          _origen: ORIGEN,
+          _id_viejo: elegida.uid,
+          _origen_cuenta: elegida.origen,
+          _cuentas_viejas: viejas.map((c) => `${c.origen}:${c.uid}`),
+          _rol_viejo: elegida.p?.role ?? null,
+        },
+      });
+      resumen = `nueva ${canon} (${tapar(elegida.email)}, ${role}${desactivado ? ", desactivada" : ""})`;
+    }
+    for (const c of mias) mapaU.set(c.uid, canon);
+    if (g.length > 1) gruposUnidos.push(`${fus?.nombre ?? (g.find((c) => c.nombre)?.nombre || "?")}: ${g.map(desc).join(" + ")} → ${resumen}`);
   }
 }
 /** Rol viejo de un uid nuevo (para saber quién era editor o productor). */
@@ -354,6 +505,7 @@ const clientesEmparejados = [];
   for (const p of proyectosV) {
     const n = normalizar(p.nombre);
     const porId = clienteDestPorId.get(p.id) ?? clienteDestPorId.get(nid(p.id));
+    // Solo nombre EXACTO normalizado: nunca por parecido (Buyatti Materiales y Camila Buyatti son clientes distintos).
     const porNombre = clienteDestPorNombre.get(n);
     if (porId && porId.id === nid(p.id)) {
       mapaP.set(p.id, porId.id); // ya migrado antes con esta herramienta
@@ -793,16 +945,18 @@ async function agregar(coleccion, docs) {
 }
 
 const R = {};
-// Usuarios (tabla usuarios): add-only; si el mail o el uid ya existen, no se toca.
+// Usuarios (tabla usuarios): add-only, SIN contraseña (entran con link); si el mail o el uid ya existen, no se toca.
+const paraLinks = []; // solo los creados en esta corrida y activos
 {
   let escritos = 0;
   if (APLICAR)
     for (const u of nuevosUsuarios) {
       const r = await pool.query(
-        "insert into usuarios (uid, email, clave_hash, nombre, desactivado) values ($1, $2, $3, $4, $5) on conflict do nothing",
-        [u.uid, u.email, u.clave_hash, u.nombre, u.desactivado]
+        "insert into usuarios (uid, email, clave_hash, nombre, desactivado) values ($1, $2, null, $3, $4) on conflict do nothing",
+        [u.uid, u.email, u.nombre, u.desactivado]
       );
       escritos += r.rowCount;
+      if (r.rowCount && !u.desactivado) paraLinks.push(u);
     }
   R.usuarios = { total: mapaU.size + usuariosOmitidos.length, nuevos: nuevosUsuarios.length, yaEstaban: usuariosEmparejados.length, escritos };
 }
@@ -831,9 +985,11 @@ console.log(`${"entidad".padEnd(18)} ${"a crear".padStart(8)} ${"ya estaban".pad
 for (const [k, r] of Object.entries(R)) console.log(`${k.padEnd(18)} ${String(r.nuevos).padStart(8)} ${String(r.yaEstaban).padStart(10)} ${APLICAR ? String(r.escritos).padStart(9) : ""}`);
 
 console.log(`\nUsuarios en ${ORIGEN}: ${authV.length} en Auth, ${perfilesV.length} perfiles.`);
-console.log(`  Nuevos: ${nuevosUsuarios.length} (${conClaveFb.si} con contraseña de Firebase, ${conClaveFb.no} sin contraseña: entran con link de "olvidé mi clave").`);
+console.log(`  Nuevos: ${nuevosUsuarios.length} (sin contraseña; ${nuevosUsuarios.filter((u) => u.desactivado).length} desactivados; los activos entran con el link del archivo de accesos).`);
 for (const [k, n] of Object.entries(rolesNuevos)) console.log(`    rol ${k}: ${n}`);
-console.log(`  Ya existían (por mail): ${usuariosEmparejados.length}`);
+console.log(`  Personas unidas (varias cuentas → una): ${gruposUnidos.length}`);
+for (const x of gruposUnidos) console.log(`    ⇒ ${x}`);
+console.log(`  Ya existían en destino: ${usuariosEmparejados.length}`);
 for (const x of usuariosEmparejados) console.log(`    = ${x}`);
 for (const x of usuariosOmitidos) console.log(`  omitido: ${x}`);
 
@@ -858,11 +1014,10 @@ if (Object.keys(estadosRaros).length) avisar(`Estados sin mapeo (se trataron com
 if (Object.keys(sinCliente).length) avisar(`Tareas con cliente inexistente: ${JSON.stringify(sinCliente)}`);
 if (sinDrive.n) avisar(`${sinDrive.n} adjuntos sin id de Drive (se descartaron).`);
 if (porDesconocido.size) avisar(`${porDesconocido.size} uids viejos sin usuario (quedan como texto en historial/adjuntos; en equipos y asignados se sacan).`);
-if (ORIGEN === "postgo" && conClaveFb.si)
-  avisar("Las contraseñas de PostGo necesitan FIREBASE_HASH_POSTGO_SIGNER_KEY y FIREBASE_HASH_POSTGO_SALT_SEPARATOR (y ROUNDS/MEM_COST) del proyecto postgo-c9a4a; sin eso entran con link.");
 if (AVISOS.length) {
   console.log("\nAvisos:");
   for (const a of AVISOS) console.log(`  ! ${a}`);
 }
 await pool.end();
+if (APLICAR) await guardarLinks(paraLinks.map((u) => ({ uid: u.uid, nombre: u.nombre, email: u.email, rol: u.rol })));
 console.log(APLICAR ? "\nListo: se agregó lo nuevo, no se modificó nada que ya existía." : "\nFin de la simulación: no se escribió nada.");

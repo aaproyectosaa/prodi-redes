@@ -15,7 +15,7 @@
     "db:ejemplo": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/db-ejemplo.ts",
     "db:admin": "tsx scripts/db-admin.ts",
     "migrar:firebase": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/migrar-firebase.mjs",
-    "unificar:viejo": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/unificar-viejo.mjs",
+    "unificar:viejo": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/unificar-viejo.mjs",
     "arca:probar": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/arca-probar.ts",
     "db:local": "pglite-server --db=.pglite --port=5433 --max-connections=10",
     "db:usuario": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/db-usuario.ts"
