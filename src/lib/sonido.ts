@@ -39,18 +39,38 @@ function contexto(): AudioContext | null {
   }
 }
 
-/** Desbloquea el audio con la primera interacción (llamar una vez al arrancar la app). */
+/**
+ * Desbloquea el audio con las interacciones (llamar una vez al arrancar la app).
+ * En iPhone hace falta: (1) reproducir algo dentro del toque (un buffer en silencio), no alcanza con
+ * resume(); (2) volver a hacerlo después de que la app pasa a segundo plano, porque iOS deja el
+ * contexto "interrupted". Por eso se escucha siempre (es barato) y se reactiva cuando hace falta.
+ */
 export function prepararSonido() {
   if (preparado || typeof window === "undefined") return;
   preparado = true;
   const desbloquear = () => {
     const c = contexto();
-    if (c && c.state === "suspended") void c.resume().catch(() => undefined);
-    window.removeEventListener("pointerdown", desbloquear);
-    window.removeEventListener("keydown", desbloquear);
+    if (!c || c.state === "running" || c.state === "closed") return;
+    try {
+      void c.resume().catch(() => undefined);
+      const b = c.createBuffer(1, 1, 22050);
+      const s = c.createBufferSource();
+      s.buffer = b;
+      s.connect(c.destination);
+      s.start(0);
+    } catch {
+      /* ignore */
+    }
   };
-  window.addEventListener("pointerdown", desbloquear, { passive: true });
-  window.addEventListener("keydown", desbloquear);
+  for (const ev of ["touchend", "pointerdown", "click", "keydown"]) {
+    window.addEventListener(ev, desbloquear, { passive: true, capture: true });
+  }
+  // Al volver a la app, se intenta reanudar (si iOS no lo deja, se reactiva con el próximo toque).
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && ctx && ctx.state !== "running" && ctx.state !== "closed") {
+      void ctx.resume().catch(() => undefined);
+    }
+  });
 }
 
 /** Una nota: seno + triángulo apenas desafinado, ataque suave y caída exponencial. */
