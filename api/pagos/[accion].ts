@@ -33,7 +33,17 @@ import { FORMATOS_PIEZA, leerPedidoPieza, piezaDoc, precioPieza } from "../_lib/
 import { prepararFacturacion } from "../_lib/facturar";
 import { asuntoFactura, facturaId, mailFacturaHtml, periodoDe, saldoDe, type Factura } from "../_lib/facturacion";
 import { enviarMail } from "../_lib/informe";
-import { filmaElCliente, videoDesdePedido } from "../_lib/pedidos";
+import {
+  archivosBaseDe,
+  filmaElCliente,
+  preferenciaRodaje,
+  quienFilma,
+  textoMaterial,
+  videoDesdePedido,
+  type MaterialBase,
+  type PedidoVideo,
+  type TipoMaterial,
+} from "../_lib/pedidos";
 import { hoyAR, mesAR, sumarMeses } from "../_lib/fecha";
 import { autorizarFactura, estadoArca } from "../_lib/arca";
 
@@ -552,7 +562,17 @@ async function arcaEstado(req: VercelRequest) {
 
 async function pedirVideo(req: VercelRequest) {
   const caller = await requireCaller(req, ["cliente", "admin"]);
-  const b = body<{ proyecto_id?: string; mes?: string; fecha_deseada?: string | null; titulo?: string; idea?: string; objetivo?: string; filma_cliente?: boolean }>(req);
+  const b = body<{
+    proyecto_id?: string;
+    mes?: string;
+    fecha_deseada?: string | null;
+    titulo?: string;
+    idea?: string;
+    objetivo?: string;
+    filma_cliente?: boolean;
+    /** Con qué material: { tipo: "existente", archivos: [drive_file_id] } | { tipo: "nueva", preferencia? } | { tipo: "cliente" }. */
+    material?: { tipo?: unknown; archivos?: unknown; preferencia?: unknown };
+  }>(req);
   // Con fecha, el mes sale de la fecha (no puede ser pasada). Con o sin fecha, el mes tiene que ser
   // este o uno de los 3 siguientes (hora de Argentina): si no, cada mes viejo o lejano daría su cupo gratis.
   const fecha = /^\d{4}-\d{2}-\d{2}$/.test(String(b.fecha_deseada ?? "")) ? String(b.fecha_deseada) : null;
@@ -571,15 +591,35 @@ async function pedirVideo(req: VercelRequest) {
   const db = adminDb();
   const pRef = db.collection("projects").doc(b.proyecto_id);
   const proj = (await pRef.get()).data() ?? {};
+  // Con qué material. Sin `material` (versiones viejas de la app): como antes, con `filma_cliente`.
+  const tipoMaterial: TipoMaterial | null = ["existente", "nueva", "cliente"].includes(String(b.material?.tipo))
+    ? (String(b.material?.tipo) as TipoMaterial)
+    : null;
+  const ficha = quienFilma(proj);
+  if (tipoMaterial === "cliente" && ficha === "prodi") throw new HttpError(400, "Tus videos los filma Prodi. Si querés mandar material, escribinos.");
+  let material_base: MaterialBase | null = null;
+  if (tipoMaterial === "existente") {
+    // Cada archivo tiene que ser material de un video de este cliente (el cliente, solo el editado que ya le llegó).
+    material_base = { tipo: "existente", archivos: await archivosBaseDe(b.proyecto_id, b.material?.archivos, caller.role === "cliente") };
+  } else if (tipoMaterial === "nueva") {
+    material_base = { tipo: "nueva", preferencia: preferenciaRodaje(b.material?.preferencia) };
+  } else if (tipoMaterial === "cliente") {
+    material_base = { tipo: "cliente" };
+  }
   // Quién lo filma sale de la ficha del cliente; si filman los dos, de lo que eligió en el pedido.
-  const filma = filmaElCliente(proj, b.filma_cliente === true);
-  const pedido = {
+  // Con material ya cargado no filma nadie (va a edición).
+  const filma =
+    tipoMaterial === "existente" ? false : filmaElCliente(proj, tipoMaterial ? tipoMaterial === "cliente" : b.filma_cliente === true);
+  // Si filma siempre el cliente, una "filmación nueva" también la hace él.
+  if (filma && material_base?.tipo === "nueva") material_base = { tipo: "cliente" };
+  const pedido: PedidoVideo = {
     titulo,
     idea: String(b.idea ?? "").trim().slice(0, 2000) || null,
     objetivo: String(b.objetivo ?? "").trim().slice(0, 200) || null,
     fecha_deseada: fecha,
     pedido_por: caller.uid,
     filma_cliente: filma,
+    material_base,
   };
   let incluidos = Number(proj.plan_redes_override?.videos_mes ?? NaN);
   let precioExtra = Number(proj.plan_redes_override?.precio_video_extra ?? NaN);
@@ -606,13 +646,17 @@ async function pedirVideo(req: VercelRequest) {
     data: () => videoDesdePedido(b.proyecto_id!, team, mes, pedido, "Pedido por el cliente"),
   });
   if (entra) {
+    const existente = material_base?.tipo === "existente";
     await enviarAviso(
       {
-        destinatarios: team.productor ?? [],
-        titulo: filma ? "El cliente pidió un video (lo filma él)" : "El cliente pidió un video",
-        cuerpo: `${proj.nombre ?? "Cliente"} · ${titulo}${fecha ? ` · para el ${fecha.split("-").reverse().join("/")}` : ""}${
-          filma ? " · nos manda el material" : ""
-        }`,
+        // Con material ya cargado arranca en edición: le llega también a edición.
+        destinatarios: [...new Set([...(team.productor ?? []), ...(existente ? (team.editor ?? []) : [])])],
+        titulo: existente
+          ? "El cliente pidió un video con material ya cargado"
+          : filma
+            ? "El cliente pidió un video (lo filma él)"
+            : "El cliente pidió un video",
+        cuerpo: `${proj.nombre ?? "Cliente"} · ${titulo}${fecha ? ` · para el ${fecha.split("-").reverse().join("/")}` : ""}${textoMaterial(pedido)}`,
         link: `/videos?video=${ref.id}`,
         clave: `pedido_video:${ref.id}`,
         proyectoId: b.proyecto_id,

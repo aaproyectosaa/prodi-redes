@@ -28,6 +28,61 @@ interface MaterialSlotProps {
   onSubir?: () => void;
 }
 
+/**
+ * Material ya cargado que el cliente eligió al pedir el video (material_base.tipo "existente"): los archivos siguen
+ * en su video original; acá se ven (miniaturas, se abren con el permiso corto de media-token) y se descargan.
+ */
+export function MaterialElegido({ video, audience = "team" }: { video: Video; audience?: "team" | "client" }) {
+  const { connection, ensureToken } = useDriveConnection();
+  const driveAvailable = connection?.status === "connected";
+  const [downloading, setDownloading] = useState(false);
+  const archivos = video.material_base?.tipo === "existente" ? (video.material_base.archivos ?? []) : [];
+  if (!archivos.length) return null;
+  const refs: DriveAttachmentRef[] = archivos.map((a) => ({
+    drive_file_id: a.drive_file_id,
+    name: a.name,
+    mime_type: a.mime_type,
+    size: a.size,
+    thumbnail_link: a.thumbnail_link,
+    web_view_link: a.web_view_link,
+    uploaded_at: "",
+    uploaded_by: "",
+    folder_path: "",
+  }));
+  const origen = [...new Set(archivos.map((a) => a.video_titulo).filter(Boolean))];
+  const bajar = async () => {
+    setDownloading(true);
+    try {
+      await downloadAttachmentsSequential(refs, { getAccessToken: driveAvailable ? ensureToken : undefined });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo descargar");
+    } finally {
+      setDownloading(false);
+    }
+  };
+  return (
+    <div className="space-y-2">
+      {audience === "client" ? (
+        <ClientMediaCarousel attachments={refs} driveAvailable={driveAvailable} />
+      ) : (
+        <div className="overflow-hidden rounded-xl border bg-black/90">
+          <TaskMediaGallery attachments={refs} driveAvailable={driveAvailable} />
+        </div>
+      )}
+      <p className="text-xs text-muted-foreground">
+        {archivos.length} archivo{archivos.length === 1 ? "" : "s"}
+        {origen.length > 0 && ` · de ${origen.slice(0, 3).map((t) => `“${t}”`).join(", ")}${origen.length > 3 ? ` y ${origen.length - 3} más` : ""}`}
+      </p>
+      {audience === "team" && (
+        <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={bajar} disabled={downloading}>
+          {downloading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Download className="mr-1.5 h-3.5 w-3.5" />}
+          Descargar {archivos.length} archivo{archivos.length === 1 ? "" : "s"}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 /** Subida y vista del material de un video (Drive). */
 export function MaterialSlot({
   video,

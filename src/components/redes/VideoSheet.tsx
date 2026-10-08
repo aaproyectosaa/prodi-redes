@@ -9,6 +9,7 @@ import {
   Copy,
   ExternalLink,
   Film,
+  FolderOpen,
   History,
   Link2,
   ListChecks,
@@ -73,7 +74,7 @@ import { callApi } from "@/lib/redes/api";
 import type { EtapaVideo, Video } from "@/lib/redes/types";
 import { EtapaBadge } from "./EtapaBadge";
 import { ClienteTag } from "./ClienteTag";
-import { MaterialSlot } from "./MaterialSlot";
+import { MaterialElegido, MaterialSlot } from "./MaterialSlot";
 import { CorreccionesDialog, MarcasEdicion } from "./MarcasVideo";
 import { EditarPautaDialog, PublicarDialog, ResultadosDialog } from "./PautaDialogs";
 import { RodajeDialog } from "./RodajeDialog";
@@ -239,6 +240,18 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
                   ? `Lo filmó el cliente${delCliente ? ` · ${delCliente} archivo${delCliente === 1 ? "" : "s"} suyo${delCliente === 1 ? "" : "s"} en el crudo` : ""}.`
                   : `El cliente mandó ${delCliente} archivo${delCliente === 1 ? "" : "s"} de material extra (en el crudo).`}
             </span>
+          </p>
+        )}
+
+        {!isCliente && video.material_base?.tipo === "existente" && (
+          <Block icon={FolderOpen} title="Material elegido por el cliente">
+            <MaterialElegido video={video} />
+          </Block>
+        )}
+        {!isCliente && video.material_base?.tipo === "nueva" && video.material_base.preferencia && video.etapa === "planificado" && (
+          <p className="flex items-start gap-2 rounded-xl border bg-muted/30 px-3 py-2.5 text-xs">
+            <CalendarDays className="mt-px h-3.5 w-3.5 shrink-0 text-primary" />
+            Para filmar, al cliente le quedan mejor: {video.material_base.preferencia.toLowerCase()}.
           </p>
         )}
 
@@ -1238,6 +1251,11 @@ function ClienteView({ video }: { video: Video }) {
       {video.idea && (
         <Block icon={Sparkles} title="Idea">
           <p className="whitespace-pre-wrap text-sm">{video.idea}</p>
+        </Block>
+      )}
+      {!visibleFinal && video.material_base?.tipo === "existente" && (
+        <Block icon={FolderOpen} title="El material que elegiste">
+          <MaterialElegido video={video} audience="client" />
         </Block>
       )}
       {visibleFinal && video.copy && (

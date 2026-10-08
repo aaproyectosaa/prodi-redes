@@ -63,7 +63,7 @@ async function enChatDe(uid: string, fileId: string): Promise<boolean> {
 }
 
 /**
- * ¿Puede ver este archivo? Tiene que estar en un video, pieza, reunión, en un chat del que es miembro o en la marca de un cliente
+ * ¿Puede ver este archivo? Tiene que estar en un video (o en su material elegido), pieza, reunión, en un chat del que es miembro o en la marca de un cliente
  * al que tenga acceso. Una sola consulta (usa el índice GIN de `data`).
  */
 export async function puedeVerArchivo(caller: Caller, fileId: string): Promise<boolean> {
@@ -77,7 +77,7 @@ export async function puedeVerArchivo(caller: Caller, fileId: string): Promise<b
     `select coleccion, id, data->>'proyecto_id' as pid, data->'participantes' as participantes
        from documentos
       where (coleccion in ('videos', 'piezas_ia', 'reuniones')
-             and (data @> $1::jsonb or data @> $2::jsonb or data @> $3::jsonb))
+             and (data @> $1::jsonb or data @> $2::jsonb or data @> $3::jsonb or data @> $6::jsonb))
          or (coleccion = 'projects' and (data @> $4::jsonb or data @> $5::jsonb))
       limit 50`,
     [
@@ -86,6 +86,8 @@ export async function puedeVerArchivo(caller: Caller, fileId: string): Promise<b
       JSON.stringify({ versiones: ref }),
       JSON.stringify({ marca_archivos: { logo: ref[0] } }),
       JSON.stringify({ marca_archivos: { referencias: ref } }),
+      // Material ya cargado que el cliente eligió para un video nuevo (sigue visible aunque lo saquen del video original).
+      JSON.stringify({ material_base: { archivos: ref } }),
     ]
   );
   const proyectos = new Set<string>();

@@ -253,6 +253,15 @@ html.teclado-ios .alto-app {
   bottom: auto;
   height: var(--alto-app);
 }
+/* Ventanas a pantalla completa en el celular (Pedir un video): con el teclado del iPhone siguen a la parte visible,
+   así la barra de botones de abajo queda arriba del teclado. */
+@media (max-width: 639px) {
+  html.teclado-ios .pantalla-celular {
+    top: var(--arriba-app, 0px);
+    bottom: auto;
+    height: var(--alto-app);
+  }
+}
 /* Con la app montada el documento no scrollea (scrollea lo de adentro); así Safari no arrastra la página entera. */
 html.vista-fija,
 html.vista-fija body {

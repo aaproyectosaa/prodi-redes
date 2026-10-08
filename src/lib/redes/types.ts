@@ -58,6 +58,26 @@ export interface ResultadosVideo {
   actualizado_por: string;
 }
 
+/** Archivo ya cargado (de otro video del cliente) que el cliente eligió para un video nuevo. */
+export interface ArchivoBase {
+  drive_file_id: string;
+  name: string;
+  mime_type: string;
+  size: number;
+  web_view_link: string;
+  thumbnail_link?: string;
+  video_id: string;
+  video_titulo: string;
+}
+
+/** De dónde sale el material de un video pedido por el cliente. */
+export interface MaterialBase {
+  tipo: "existente" | "nueva" | "cliente";
+  archivos?: ArchivoBase[];
+  /** Filmación nueva: cuándo le queda mejor filmar. */
+  preferencia?: string | null;
+}
+
 export interface Video {
   id: string;
   proyecto_id: string;
@@ -110,6 +130,8 @@ export interface Video {
   plan_idea_id?: string | null;
   /** Lo filma el cliente y nos manda el material (no lleva rodaje). */
   filma_cliente?: boolean;
+  /** Con qué material lo pidió el cliente (lo escribe el servidor; igual que api/_lib/pedidos.ts). */
+  material_base?: MaterialBase | null;
   /** Última vez que el cliente avisó "Listo, ya subí todo" (lo escribe el servidor). */
   material_cliente_avisado_at?: string | null;
   historial: HistorialVideo[];

@@ -6,7 +6,7 @@ import type { PagoMP } from "./mercadopago";
 import { destinatariosDe, enviarAviso, usuariosConRol } from "./notify";
 import { marcarCobradaPorDebito } from "./facturar";
 import { comisionDe, comisionPct, montoDebito, totalMensual } from "./facturacion";
-import { videoDesdePedido, type PedidoVideo } from "./pedidos";
+import { textoMaterial, videoDesdePedido, type PedidoVideo } from "./pedidos";
 import { mesAR } from "./fecha";
 
 const ESTADO: Record<string, string> = {
@@ -86,7 +86,7 @@ export async function aplicarPago(pago: PagoMP, baseUrl: string): Promise<string
         concepto: c.concepto,
         cantidad: c.cantidad,
         pedido: c.pedido
-          ? `${(c.pedido as PedidoVideo).titulo}${(c.pedido as PedidoVideo).filma_cliente ? " · lo filma el cliente y nos manda el material" : ""}`
+          ? `${(c.pedido as PedidoVideo).titulo}${textoMaterial(c.pedido as PedidoVideo)}`
           : undefined,
       };
     }
