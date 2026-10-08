@@ -27,7 +27,13 @@ type CommandDialogProps = DialogProps;
 const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
   return (
     <Dialog {...props}>
-      <DialogContent className="overflow-hidden p-0 shadow-lg">
+      <DialogContent
+        className="overflow-hidden p-0 shadow-lg"
+        // En el celular no se abre el teclado solo: tapaba media lista. Para buscar, se toca el cuadro.
+        onOpenAutoFocus={(e) => {
+          if (window.matchMedia("(pointer: coarse)").matches) e.preventDefault();
+        }}
+      >
         <VisuallyHidden>
           <DialogTitle>Command Menu</DialogTitle>
         </VisuallyHidden>
@@ -64,7 +70,11 @@ const CommandList = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <CommandPrimitive.List
     ref={ref}
-    className={cn("max-h-[300px] overflow-y-auto overflow-x-hidden", className)}
+    // touch-pan-y + overscroll-contain: en el iPhone la lista desliza sola, sin arrastrar la página de atrás.
+    className={cn(
+      "max-h-[min(60dvh,420px)] touch-pan-y overflow-y-auto overflow-x-hidden overscroll-contain [-webkit-overflow-scrolling:touch] sm:max-h-[300px]",
+      className
+    )}
     {...props}
   />
 ));
