@@ -20,7 +20,7 @@ import { DriveConnectionError, getAppDriveAccessToken } from "../drive-connectio
 import { ensureFolder, ROOT_FOLDER_NAME } from "../drive-server";
 import { enviarAviso } from "../notify";
 import { entregaSugerida } from "../fecha";
-import { aceptaMaterialCliente } from "../pedidos";
+import { aceptaMaterialCliente, soloPauta } from "../pedidos";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
@@ -204,6 +204,10 @@ export async function videoListo(req: VercelRequest, res: VercelResponse) {
     const ref = db.collection("videos").doc(id);
     const ahora = new Date().toISOString();
 
+    // Solo pauta: el cliente manda el video terminado, así que va directo a subir y pautar (sin edición).
+    const v0 = (await ref.get()).data();
+    const proyecto = v0 ? (await db.collection("projects").doc(String(v0.proyecto_id)).get()).data() ?? {} : {};
+    const pauta = soloPauta(proyecto);
     const { v, paso, nuevos } = await db.runTransaction(async (tx) => {
       const v = (await tx.get(ref)).data();
       if (!v) throw new HttpError(404, "El video ya no existe");
@@ -218,12 +222,17 @@ export async function videoListo(req: VercelRequest, res: VercelResponse) {
       const evento = {
         at: ahora,
         by: caller.uid,
-        accion: paso ? "El cliente subió su material, pasa a edición" : "El cliente mandó material extra",
+        accion: paso ? (pauta ? "El cliente mandó el video terminado, pasa a pauta" : "El cliente subió su material, pasa a edición") : "El cliente mandó material extra",
         nota: `${nuevos || delCliente.length} archivo${(nuevos || delCliente.length) === 1 ? "" : "s"}`,
       };
       tx.update(ref, {
         // Pasa a edición con la fecha de entrega sugerida (producción la puede cambiar).
-        ...(paso ? { etapa: "edicion", etapa_desde: ahora, entrega_edicion: entregaSugerida(v.fecha_deseada), entrega_aviso: null } : {}),
+        ...(paso && pauta
+          ? // Lo que mandó es el video final: queda como final para que pauta lo baje y lo publique.
+            { etapa: "para_publicar", etapa_desde: ahora, attachments_finalizado: [...((v.attachments_finalizado ?? []) as unknown[]), ...crudo] }
+          : paso
+            ? { etapa: "edicion", etapa_desde: ahora, entrega_edicion: entregaSugerida(v.fecha_deseada), entrega_aviso: null }
+            : {}),
         material_cliente_avisado_at: ahora,
         updated_at: ahora,
         historial: FieldValue.arrayUnion(evento),
@@ -231,13 +240,13 @@ export async function videoListo(req: VercelRequest, res: VercelResponse) {
       return { v, paso, nuevos: nuevos || delCliente.length };
     });
 
-    const p = (await db.collection("projects").doc(String(v.proyecto_id)).get()).data() ?? {};
+    const p = proyecto;
     const team = (p.team_roles ?? {}) as Record<string, string[]>;
     const uno = (uid: unknown, rol: string) => (typeof uid === "string" && uid ? [uid] : (team[rol] ?? []));
     await enviarAviso(
       {
-        destinatarios: [...uno(v.productor_id, "productor"), ...uno(v.editor_id, "editor")].filter((x) => x !== caller.uid),
-        titulo: paso ? "El cliente subió su material: a editar" : "El cliente mandó material extra",
+        destinatarios: (pauta ? [...uno(v.productor_id, "productor"), ...uno(v.pauta_id, "pauta")] : [...uno(v.productor_id, "productor"), ...uno(v.editor_id, "editor")]).filter((x) => x !== caller.uid),
+        titulo: paso ? (pauta ? "El cliente mandó el video: listo para pautar" : "El cliente subió su material: a editar") : "El cliente mandó material extra",
         cuerpo: `${p.nombre ?? "Cliente"} · ${v.titulo} · ${nuevos} archivo${nuevos === 1 ? "" : "s"}`,
         link: `/videos?video=${id}`,
         clave: `material_cliente:${id}:${ahora}`,
@@ -246,7 +255,7 @@ export async function videoListo(req: VercelRequest, res: VercelResponse) {
       },
       appUrl(req)
     );
-    res.status(200).json({ ok: true, etapa: paso ? "edicion" : v.etapa });
+    res.status(200).json({ ok: true, etapa: paso ? (pauta ? "para_publicar" : "edicion") : v.etapa });
   } catch (err) {
     fallo(res, err);
   }

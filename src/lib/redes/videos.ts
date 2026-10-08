@@ -525,3 +525,22 @@ export async function cambiarEntrega(video: Video, fecha: string, by: string) {
     historial: arrayUnion(evento(by, `Entrega de edición: ${fechaEntregaCorta(fecha)}`)),
   });
 }
+
+/**
+ * Cliente "solo pauta": lo que se cargó es el video terminado (lo mandó el cliente), así que no pasa por
+ * edición: queda como final y va directo a subir y pautar. Le avisa a pauta.
+ */
+export async function enviarAPauta(video: Video, project: Project | undefined, by: string) {
+  await moverA(video, "para_publicar", by, "Video terminado del cliente, pasa a pauta", {
+    attachments_finalizado: [...(video.attachments_finalizado ?? []), ...(video.attachments_crudo ?? [])],
+  });
+  void avisar({
+    destinatarios: video.pauta_id ? [video.pauta_id] : equipoDe(project, "pauta"),
+    titulo: "Video listo para pautar",
+    cuerpo: `${project?.nombre ?? "Cliente"} · ${video.titulo}`,
+    link: linkPara("/videos", video.id),
+    clave: `para_publicar:${video.id}`,
+    proyectoId: video.proyecto_id,
+    videoId: video.id,
+  });
+}

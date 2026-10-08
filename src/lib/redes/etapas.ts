@@ -115,8 +115,12 @@ export function estaTrabado(video: Video, diasAlerta: number, now = new Date()):
   return diasEnEtapa(video, now) >= limite;
 }
 
-/** Quién filma los videos de este cliente (por defecto Prodi). */
+/** Solo pauta: el cliente manda los videos terminados y nosotros solo los subimos y pautamos. */
+export const soloPauta = (cliente: Pick<Project, "produccion"> | undefined) => cliente?.produccion?.servicio === "solo_pauta";
+
+/** Quién filma los videos de este cliente (por defecto Prodi; en "solo pauta", siempre el cliente). */
 export function quienFilma(cliente: Pick<Project, "produccion"> | undefined): QuienFilma {
+  if (soloPauta(cliente)) return "cliente";
   const f = cliente?.produccion?.filma;
   return f === "cliente" || f === "ambos" ? f : "prodi";
 }

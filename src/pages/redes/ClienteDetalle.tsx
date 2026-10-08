@@ -37,7 +37,7 @@ import { DIA_VENCIMIENTO, totalMensual } from "@/lib/redes/facturacion";
 import { PlazoPago } from "@/components/redes/admin/PlazoPago";
 import { errorPlazo, plazoInicial, plazoParaGuardar } from "@/lib/redes/plazoPago";
 import { callApi } from "@/lib/redes/api";
-import { CONDICIONES_IVA, type CondicionIva, type Project, type ProjectTeamRole, type QuienFilma, type QuienPublica } from "@/integrations/firebase/types";
+import { CONDICIONES_IVA, type CondicionIva, type Project, type ProjectTeamRole, type QuienFilma, type QuienPublica, type ServicioCliente } from "@/integrations/firebase/types";
 import { COLORES } from "./Clientes";
 import { MarcaArchivos } from "@/components/redes/MarcaArchivos";
 import { ContactosCliente } from "@/components/redes/ContactosCliente";
@@ -246,6 +246,11 @@ const FILMA_OPCIONES: { v: QuienFilma; titulo: string; texto: string }[] = [
   { v: "ambos", titulo: "Los dos", texto: "En cada pedido elige quién lo filma, y puede mandarnos material extra para cualquier video." },
 ];
 
+const SERVICIO_OPCIONES: { v: ServicioCliente; titulo: string; texto: string }[] = [
+  { v: "completo", titulo: "Todo", texto: "Filmamos (o nos manda material), editamos, lo aprueba y lo pautamos." },
+  { v: "solo_pauta", titulo: "Solo pauta", texto: "Nos manda los videos terminados y nosotros solo los subimos y pautamos. Sin rodaje ni edición." },
+];
+
 function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolean }) {
   const { planes, settings, clientes } = useRedes();
   const { profiles } = useAppData();
@@ -294,8 +299,13 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
         meta: form.meta,
       };
       // Quién filma: admin o la productora del cliente (reglas.ts). Solo se escribe si cambió.
-      if (form.filma !== quienFilma(cliente) || form.publica !== (cliente.produccion?.publica ?? "prodi"))
-        data.produccion = { ...(cliente.produccion ?? {}), filma: form.filma, publica: form.publica };
+      if (
+        form.filma !== quienFilma(cliente) ||
+        form.publica !== (cliente.produccion?.publica ?? "prodi") ||
+        form.servicio !== (cliente.produccion?.servicio === "solo_pauta" ? "solo_pauta" : "completo")
+      )
+        // Solo pauta: lo publicamos siempre nosotros.
+        data.produccion = { ...(cliente.produccion ?? {}), filma: form.filma, publica: form.servicio === "solo_pauta" ? "prodi" : form.publica, servicio: form.servicio };
       if (isAdmin) {
         // Ahí se mandan boletas e informes: solo lo cambia el admin.
         Object.assign(data, {
@@ -421,6 +431,45 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
         </Section>
       )}
 
+      <Section title="¿Qué le hacemos?" description="Todo el circuito, o solo la pauta de los videos que él nos manda.">
+        <div className="space-y-2 rounded-xl border bg-card p-4">
+          {SERVICIO_OPCIONES.map((o) => (
+            <button
+              key={o.v}
+              type="button"
+              disabled={!puedeFilma}
+              onClick={() => set("servicio", o.v)}
+              className={cn(
+                "flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors disabled:cursor-not-allowed",
+                form.servicio === o.v ? "border-primary bg-primary/10" : "hover:border-primary/50 disabled:hover:border-border"
+              )}
+            >
+              <span
+                className={cn(
+                  "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
+                  form.servicio === o.v ? "border-primary bg-primary" : "border-muted-foreground/40"
+                )}
+              >
+                {form.servicio === o.v && <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />}
+              </span>
+              <span>
+                <span className="block text-sm font-medium">{o.titulo}</span>
+                <span className="block text-xs text-muted-foreground">{o.texto}</span>
+              </span>
+            </button>
+          ))}
+          {form.servicio === "solo_pauta" && (
+            <p className="text-[11px] text-muted-foreground">
+              El cliente pide el video desde su panel y sube el video terminado. Cuando toca «Listo», pasa directo a «Para subir y pautar» y le
+              avisamos a pauta. Si el video lo cargan ustedes, en el video aparece «Enviar a pauta» en vez de «Enviar a edición».
+            </p>
+          )}
+        </div>
+      </Section>
+
+      {/* Solo pauta: el material lo manda siempre el cliente y lo publicamos nosotros. */}
+      {form.servicio !== "solo_pauta" && (
+        <>
       <Section title="¿Quién filma?" description="Define cómo arrancan los videos de este cliente y si puede mandarnos su material.">
         <div className="space-y-2 rounded-xl border bg-card p-4">
           {FILMA_OPCIONES.map((o) => (
@@ -485,6 +534,8 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
           ))}
         </div>
       </Section>
+        </>
+      )}
 
       {isAdmin && (
         <Section title="Facturación" description="Cómo se le arma la boleta el 27 y cuándo la paga.">
@@ -711,6 +762,7 @@ function toForm(c: Project) {
     emails: (c.contacto_emails ?? []).join(", "),
     filma: quienFilma(c),
     publica: (c.produccion?.publica ?? "prodi") as QuienPublica,
+    servicio: (c.produccion?.servicio === "solo_pauta" ? "solo_pauta" : "completo") as ServicioCliente,
     marca: { ...(c.marca ?? {}) },
     redes: { ...(c.redes ?? {}) },
     meta: { ...(c.meta ?? {}) },

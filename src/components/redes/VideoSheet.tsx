@@ -54,7 +54,7 @@ import { cn } from "@/lib/utils";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useAppData } from "@/contexts/app-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
-import { ETAPAS, aceptaMaterialCliente, diasEnEtapa, estaTrabado, etapaInfo, quienFilma } from "@/lib/redes/etapas";
+import { ETAPAS, aceptaMaterialCliente, diasEnEtapa, estaTrabado, etapaInfo, quienFilma, soloPauta } from "@/lib/redes/etapas";
 import { fechaCorta, fechaHora, formatARS, formatNum, hace, mesLabel } from "@/lib/redes/format";
 import {
   actualizarVideo,
@@ -63,6 +63,7 @@ import {
   eliminarVideo,
   entregarEdicion,
   cambiarEntrega,
+  enviarAPauta,
   enviarAEdicion,
   filmarNosotros,
   forzarEtapa,
@@ -487,11 +488,11 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
             )}
             <Button
               disabled={!hasCrudo || busy === "edicion"}
-              onClick={() => setEntregaDlg("enviar")}
-              title={!hasCrudo ? "Primero subí el material crudo" : undefined}
+              onClick={() => (soloPauta(cliente) ? void run("edicion", () => enviarAPauta(video, cliente, uid), "Enviado a pauta") : setEntregaDlg("enviar"))}
+              title={!hasCrudo ? (soloPauta(cliente) ? "Primero subí el video que mandó el cliente" : "Primero subí el material crudo") : undefined}
             >
               {busy === "edicion" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-              Enviar a edición
+              {soloPauta(cliente) ? "Enviar a pauta" : "Enviar a edición"}
             </Button>
           </>
         )}

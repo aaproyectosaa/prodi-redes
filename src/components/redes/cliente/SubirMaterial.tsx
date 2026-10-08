@@ -16,6 +16,8 @@ import {
   useSubidasMaterial,
 } from "@/lib/redes/materialCliente";
 import { cn } from "@/lib/utils";
+import { useRedes } from "@/contexts/redes-data-context";
+import { soloPauta } from "@/lib/redes/etapas";
 import type { Video } from "@/lib/redes/types";
 
 /**
@@ -28,6 +30,9 @@ export function SubirMaterial({ video }: { video: Video }) {
   const [arrastrando, setArrastrando] = useState(false);
   const [avisando, setAvisando] = useState(false);
   const espera = video.etapa === "material_cliente";
+  const { clienteById } = useRedes();
+  // Solo pauta: lo que sube es el video terminado (no se edita, se publica y se pauta).
+  const pauta = soloPauta(clienteById(video.proyecto_id));
   const mios = (video.attachments_crudo ?? []).filter((a) => a.origen === "cliente" || a.uploaded_by === user?.uid);
   const desde = video.material_cliente_avisado_at ?? "";
   const sinAvisar = mios.filter((a) => (a.uploaded_at ?? "") > desde).length;
@@ -45,7 +50,7 @@ export function SubirMaterial({ video }: { video: Video }) {
     setAvisando(true);
     try {
       await avisarMaterialListo(video.id);
-      toast.success(espera ? "¡Gracias! Ya lo empezamos a editar." : "Listo, le avisamos al equipo.");
+      toast.success(espera ? (pauta ? "¡Gracias! Ya lo preparamos para publicar y pautar." : "¡Gracias! Ya lo empezamos a editar.") : "Listo, le avisamos al equipo.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo avisar");
     } finally {
@@ -75,7 +80,9 @@ export function SubirMaterial({ video }: { video: Video }) {
         <p className="text-sm font-semibold">{espera ? "Subí lo que filmaste" : "¿Tenés material para este video?"}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {espera
-            ? "Elegí los videos y fotos del celular (o arrastralos acá). Cuando esté todo, tocá “Listo, ya subí todo” y lo empezamos a editar."
+            ? pauta
+              ? "Subí el video terminado (o arrastralo acá). Cuando esté, tocá “Listo, ya subí todo” y lo publicamos y pautamos."
+              : "Elegí los videos y fotos del celular (o arrastralos acá). Cuando esté todo, tocá “Listo, ya subí todo” y lo empezamos a editar."
             : "Si filmaste algo que quieras sumar, subilo acá y avisanos. Lo usamos en la edición."}
         </p>
       </div>

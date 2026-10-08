@@ -291,10 +291,14 @@ export interface Project {
   alta?: string | null;
   /** Producción de los videos. `filma`: quién filma (por defecto Prodi). */
   /** filma: quién filma · publica: quién sube los videos a las redes (cliente = se le entrega el video aprobado y lo sube él). */
-  produccion?: { filma?: QuienFilma; publica?: QuienPublica } | null;
+  /** servicio: completo (filmamos/editamos y pautamos) o solo_pauta (nos manda los videos terminados). */
+  produccion?: { filma?: QuienFilma; publica?: QuienPublica; servicio?: ServicioCliente } | null;
 }
 
 export type QuienPublica = "prodi" | "cliente";
+
+/** completo = el circuito entero · solo_pauta = el cliente manda los videos terminados y solo los pautamos. */
+export type ServicioCliente = "completo" | "solo_pauta";
 
 /** prodi = filmamos nosotros · cliente = filma él y nos manda el material · ambos = se elige en cada video. */
 export type QuienFilma = "prodi" | "cliente" | "ambos";

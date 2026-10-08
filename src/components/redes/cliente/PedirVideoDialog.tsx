@@ -37,7 +37,7 @@ import { asset } from "@/lib/asset";
 import { formatearFecha } from "@/lib/fecha";
 import { formatARS, hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import { planDe, usoPlan } from "@/lib/redes/planes";
-import { quienFilma } from "@/lib/redes/etapas";
+import { quienFilma, soloPauta } from "@/lib/redes/etapas";
 import type { Video } from "@/lib/redes/types";
 import { useOpenVideo } from "@/components/redes/VideoCard";
 import { SubirMaterial } from "@/components/redes/cliente/SubirMaterial";
@@ -139,11 +139,11 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
   // nosotros); si en la ficha filma siempre él, no hay "filmación nueva".
   const opciones = useMemo<Material[]>(
     () => [
-      ...(grupos.length ? (["existente"] as const) : []),
+      ...(grupos.length && !soloPauta(cliente) ? (["existente"] as const) : []),
       ...(filma !== "cliente" ? (["nueva"] as const) : []),
       "cliente" as const,
     ],
-    [grupos.length, filma]
+    [grupos.length, filma, cliente]
   );
   // Con una sola opción, el paso de material no se muestra.
   const pasos: Paso[] = opciones.length > 1 ? ["que", "idea", "material", "cuando"] : ["que", "idea", "cuando"];
@@ -497,7 +497,9 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
                       const info = {
                         existente: { icon: Images, titulo: "Con material que ya está cargado", texto: archivos.length && material === "existente" ? `${archivos.length} archivo${archivos.length === 1 ? "" : "s"} elegido${archivos.length === 1 ? "" : "s"} · tocá para cambiar` : "Elegís fotos y videos que ya tenemos" },
                         nueva: { icon: Clapperboard, titulo: "Filmación nueva", texto: "Vamos y lo filmamos nosotros" },
-                        cliente: { icon: Smartphone, titulo: "Yo mando el material", texto: "Lo filmaste vos (o lo vas a filmar) y lo subís acá" },
+                        cliente: soloPauta(cliente)
+                          ? { icon: Smartphone, titulo: "Mando el video terminado", texto: "Lo subís acá y nosotros lo publicamos y pautamos" }
+                          : { icon: Smartphone, titulo: "Yo mando el material", texto: "Lo filmaste vos (o lo vas a filmar) y lo subís acá" },
                       }[o];
                       const sel = material === o;
                       return (

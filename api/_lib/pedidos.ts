@@ -43,8 +43,12 @@ export interface PedidoVideo {
 
 export type QuienFilma = "prodi" | "cliente" | "ambos";
 
-/** Quién filma los videos del cliente (projects.produccion.filma, por defecto Prodi). */
+/** Solo pauta: el cliente manda los videos terminados (projects.produccion.servicio). Igual en src/lib/redes/etapas.ts. */
+export const soloPauta = (proyecto: Data | undefined | null) => (proyecto?.produccion as { servicio?: unknown } | undefined)?.servicio === "solo_pauta";
+
+/** Quién filma los videos del cliente (projects.produccion.filma, por defecto Prodi; en "solo pauta", el cliente). */
 export function quienFilma(proyecto: Data | undefined | null): QuienFilma {
+  if (soloPauta(proyecto)) return "cliente";
   const f = (proyecto?.produccion as { filma?: unknown } | undefined)?.filma;
   return f === "cliente" || f === "ambos" ? f : "prodi";
 }
