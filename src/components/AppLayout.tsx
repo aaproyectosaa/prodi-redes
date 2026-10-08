@@ -11,6 +11,7 @@ import { ChatDock } from "@/components/redes/chat/ChatDock";
 import { VerComoBanner } from "@/components/redes/VerComo";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { RedesDataProvider } from "@/contexts/redes-data-context";
+import { BadgeApp } from "@/components/BadgeApp";
 import { SidebarExtrasProvider, useSidebarExtras } from "@/hooks/use-sidebar-extras";
 import { useAltoVisible } from "@/hooks/use-alto-visible";
 import { useChatDock } from "@/lib/redes/chatDock";
@@ -41,6 +42,7 @@ const LayoutInner = () => {
 
   return (
     <RedesDataProvider>
+      <BadgeApp />
       <div className="alto-app seguro-costados flex overflow-hidden bg-background">
         <AppSidebar profile={profile} role={role}>
           {extras}

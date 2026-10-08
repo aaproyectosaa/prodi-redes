@@ -26,6 +26,42 @@ self.addEventListener('fetch', (event) => {
   }
 });
 
+// ---- Numerito en el ícono (chats sin leer) ----
+// La app manda el número exacto al abrirse; con la app cerrada, cada aviso de chat suma uno.
+// Se guarda en la caché porque el service worker se apaga entre avisos.
+const BADGE_CACHE = 'prodi-badge';
+async function leerBadge() {
+  try {
+    const r = await (await caches.open(BADGE_CACHE)).match('/__badge');
+    return r ? Number(await r.text()) || 0 : 0;
+  } catch (e) {
+    return 0;
+  }
+}
+async function ponerBadge(n) {
+  try {
+    await (await caches.open(BADGE_CACHE)).put('/__badge', new Response(String(n)));
+  } catch (e) {}
+  try {
+    if (n > 0 && self.navigator.setAppBadge) await self.navigator.setAppBadge(n);
+    else if (self.navigator.clearAppBadge) await self.navigator.clearAppBadge();
+  } catch (e) {}
+}
+self.addEventListener('message', (event) => {
+  const d = event.data || {};
+  if (d.tipo === 'prodi-badge' && typeof d.n === 'number') {
+    // El número exacto viene de la app: se arranca de cero la lista de chats sumados con la app cerrada.
+    event.waitUntil(
+      (async () => {
+        try {
+          await (await caches.open(BADGE_CACHE)).delete('/__badge-chats');
+        } catch (e) {}
+        await ponerBadge(Math.max(0, d.n));
+      })()
+    );
+  }
+});
+
 // ---- Avisos push ----
 self.addEventListener('push', (event) => {
   let data = {};
@@ -45,6 +81,21 @@ self.addEventListener('push', (event) => {
         visible.postMessage({ tipo: 'prodi-push', title, body: data.body || '', url });
         return;
       }
+      // Mensaje de chat con la app cerrada: suma uno por cada chat nuevo con mensajes (no por mensaje).
+      try {
+        const destino = new URL(url, self.location.origin);
+        const chat = destino.pathname === '/chat' ? destino.searchParams.get('c') : null;
+        if (chat) {
+          const cache = await caches.open(BADGE_CACHE);
+          const r = await cache.match('/__badge-chats');
+          const vistos = r ? JSON.parse(await r.text()) : [];
+          if (!vistos.includes(chat)) {
+            vistos.push(chat);
+            await cache.put('/__badge-chats', new Response(JSON.stringify(vistos.slice(-50))));
+            await ponerBadge((await leerBadge()) + 1);
+          }
+        }
+      } catch (e) {}
       await self.registration.showNotification(title, {
         body: data.body || '',
         icon: '/icons/icon-192.png',

@@ -13,6 +13,7 @@ import { AvisoActivarAvisos } from "@/components/InstalarApp";
 import { BarraInstalarChat, BotonInstalarChat, InstalarChatHost } from "@/components/InstalarChat";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { RedesDataProvider } from "@/contexts/redes-data-context";
+import { BadgeApp } from "@/components/BadgeApp";
 import { useInAppNotifications } from "@/hooks/use-in-app-notifications";
 import { useTheme } from "@/hooks/use-theme";
 import { esContacto, getRoleInfo } from "@/lib/roles";
@@ -247,6 +248,7 @@ export function ChatAppLayout() {
 
   return (
     <RedesDataProvider>
+      <BadgeApp />
       <div className="alto-app seguro-costados flex flex-col overflow-hidden bg-background">
         <div className={conversacion ? "hidden md:block" : undefined}>
           <ChatAppHeader />
