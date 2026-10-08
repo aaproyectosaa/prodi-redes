@@ -75,6 +75,7 @@ import type { EtapaVideo, Video } from "@/lib/redes/types";
 import { EtapaBadge } from "./EtapaBadge";
 import { ClienteTag } from "./ClienteTag";
 import { MaterialElegido, MaterialSlot } from "./MaterialSlot";
+import { TextoConLinks } from "./DelSistemaAnterior";
 import { CorreccionesDialog, MarcasEdicion } from "./MarcasVideo";
 import { EditarPautaDialog, PublicarDialog, ResultadosDialog } from "./PautaDialogs";
 import { RodajeDialog } from "./RodajeDialog";
@@ -712,16 +713,17 @@ function IdeaBlock({ video, editable, uid }: { video: Video; editable: boolean; 
           {(video.objetivo || video.referencias) && (
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
               {video.objetivo && <span>Objetivo: <span className="text-foreground">{video.objetivo}</span></span>}
-              {video.referencias && (
-                <a
-                  href={video.referencias.startsWith("http") ? video.referencias : undefined}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-primary hover:underline"
-                >
-                  Referencia <ExternalLink className="h-3 w-3" />
-                </a>
-              )}
+              {video.referencias &&
+                (/^https?:\/\/\S+$/.test(video.referencias.trim()) ? (
+                  <a href={video.referencias.trim()} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                    Referencia <ExternalLink className="h-3 w-3" />
+                  </a>
+                ) : (
+                  // Texto con uno o varios links (ej. los que vinieron del sistema anterior).
+                  <div className="w-full">
+                    <TextoConLinks texto={video.referencias} />
+                  </div>
+                ))}
             </div>
           )}
         </div>

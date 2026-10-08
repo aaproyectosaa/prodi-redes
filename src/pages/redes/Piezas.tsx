@@ -22,6 +22,7 @@ import { PageShell, EmptyState } from "@/components/redes/PageShell";
 import { ClienteTag } from "@/components/redes/ClienteTag";
 import { EnfoqueBadge, EstadoPiezaBadge, VersionImg, driveDownload, driveThumb } from "@/components/redes/PiezaDialogs";
 import { NotaDialog } from "@/components/redes/PautaDialogs";
+import { DelSistemaAnterior } from "@/components/redes/DelSistemaAnterior";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { useDriveConnection } from "@/hooks/use-drive-connection";
@@ -326,7 +327,9 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
           <DialogDescription className="flex flex-wrap items-center gap-2">
             <EstadoPiezaBadge estado={pieza.estado} vista="equipo" />
             <span>
-              {info.medida} · {pieza.incluida ? "incluida en el plan" : `pagada ${formatARS(pieza.precio)}`} · pedida {fechaHora(pieza.created_at)}
+              {info.medida} ·{" "}
+              {pieza._origen ? "del sistema anterior" : pieza.incluida ? "incluida en el plan" : `pagada ${formatARS(pieza.precio)}`} · pedida{" "}
+              {fechaHora(pieza.created_at)}
             </span>
           </DialogDescription>
         </DialogHeader>
@@ -365,6 +368,7 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                 </p>
               )}
             </div>
+            <DelSistemaAnterior origen={pieza._origen} viejo={pieza._viejo} nota={pieza.nota_equipo} />
             <div className="space-y-2 rounded-xl border p-3 text-xs text-muted-foreground">
               <p className="font-semibold uppercase tracking-wider">Marca</p>
               <div className="flex items-center gap-3">
@@ -515,14 +519,14 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
         <NotaDialog
           open={rechazo}
           onOpenChange={setRechazo}
-          title={pieza.incluida ? "No se puede hacer" : "No se puede hacer: devolver el pago"}
+          title={pieza.incluida || pieza._origen ? "No se puede hacer" : "No se puede hacer: devolver el pago"}
           description={
-            pieza.incluida
+            pieza.incluida || pieza._origen
               ? "No se descuenta del plan del cliente y le avisamos con tu nota."
               : "Se devuelve el pago por Mercado Pago y le avisamos al cliente con tu nota."
           }
           placeholder="Ej.: para esto necesitamos fotos reales del producto, mejor lo filmamos."
-          confirmLabel={pieza.incluida ? "Avisar al cliente" : "Devolver el pago"}
+          confirmLabel={pieza.incluida || pieza._origen ? "Avisar al cliente" : "Devolver el pago"}
           onConfirm={async (nota) => {
             await rechazarPieza(pieza, nota);
             toast.success("Listo, le avisamos al cliente");

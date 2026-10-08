@@ -315,6 +315,9 @@ export interface PiezaIA {
   nota_equipo: string | null;
   created_at: string;
   updated_at: string;
+  /** Traída de un sistema anterior (progreso / postgo). */
+  _origen?: string;
+  _viejo?: import("@/components/redes/DelSistemaAnterior").DatosViejos | null;
 }
 
 export type TipoCobro = "pieza_ia" | "video_extra" | "abono";

@@ -339,7 +339,7 @@ async function reembolsarPieza(req: VercelRequest) {
     {
       destinatarios: team.cliente ?? [],
       titulo: "No pudimos hacer tu pieza",
-      cuerpo: `${pz.incluida ? "No se descuenta de tu plan." : "Te devolvimos el pago."} ${String(nota ?? "").slice(0, 150)}`,
+      cuerpo: `${pz.cobro_id ? "Te devolvimos el pago." : pz.incluida ? "No se descuenta de tu plan." : ""} ${String(nota ?? "").slice(0, 150)}`,
       link: "/cliente?tab=piezas",
       clave: `pieza_rechazada:${pieza_id}`,
       proyectoId: pz.proyecto_id,
