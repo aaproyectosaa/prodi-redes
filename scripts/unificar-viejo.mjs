@@ -87,6 +87,8 @@ const FUSIONAR = [
   { nombre: "Lucía Pasetto", alias: ["lucia pasetto", "postgo:lucia"] },
   { nombre: "Lucas Paulón", alias: ["lucas paulon", "progreso:lucas"] },
   { nombre: "Laura Camargo", alias: ["laura camargo"] },
+  // "Ariel Sinchi" (admin en progreso, otro gmail) es el mismo Ariel de postgo / "Arieee".
+  { nombre: "Ariel Sinchi", alias: ["ariel sinchi", "ariel", "arieee"] },
 ];
 /** Ya no trabajan en Prodi: cuenta desactivada (conserva el nombre en el historial, no puede entrar). Por nombre. */
 const INACTIVOS = ["Laura Camargo"];
