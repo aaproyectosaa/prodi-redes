@@ -109,6 +109,8 @@ async function desactivar(req: VercelRequest, adminUid: string) {
   await adminAuth().updateUser(b.uid, { disabled: !b.activo });
   if (!b.activo) await adminAuth().revokeRefreshTokens(b.uid);
   await adminDb().collection("profiles").doc(b.uid).set({ activo: !!b.activo }, { merge: true });
+  // Desactivado: deja de figurar en el equipo de todos los clientes (y, con eso, en sus grupos de chat).
+  if (!b.activo) await asignarClientes(b.uid, "", []);
   return { ok: true };
 }
 

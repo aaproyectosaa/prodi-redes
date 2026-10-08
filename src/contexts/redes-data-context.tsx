@@ -10,6 +10,7 @@ import {
   collection,
   doc,
   onSnapshot,
+  updateDoc,
   query,
   where,
   type QueryConstraint,
@@ -229,6 +230,20 @@ export function RedesDataProvider({ children }: { children: ReactNode }) {
     const t = window.setTimeout(() => void sincronizarAvatares(profiles), 3000);
     return () => window.clearTimeout(t);
   }, [isAdmin, viewingAs, appLoading, profiles]);
+
+  // Gente desactivada que quedó en el equipo de algún cliente (desactivada antes de que se limpiara sola): se saca.
+  useEffect(() => {
+    if (!isAdmin || viewingAs || appLoading || profiles.length === 0) return;
+    const inactivos = new Set(profiles.filter((p) => p.activo === false).map((p) => p.id));
+    if (!inactivos.size) return;
+    for (const p of projects) {
+      const team = p.team_roles ?? {};
+      const cambia = Object.values(team).some((ids) => (ids ?? []).some((id) => inactivos.has(id)));
+      if (!cambia) continue;
+      const limpio = Object.fromEntries(Object.entries(team).map(([k, ids]) => [k, (ids ?? []).filter((id) => !inactivos.has(id))]));
+      void updateDoc(doc(db, "projects", p.id), { team_roles: limpio }).catch((err) => console.warn("[redes] equipo", p.id, err));
+    }
+  }, [isAdmin, viewingAs, appLoading, profiles, projects]);
 
   // Foto de perfil de cada cliente armada con su logo (centrado y sin márgenes): las que falten o sean de un logo viejo.
   useEffect(() => {
