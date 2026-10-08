@@ -22,6 +22,7 @@ import { isProjectEnabled } from "@/lib/projectEnabled";
 import { trabajaEnCliente } from "@/lib/roles";
 import { mesActual, sumarMeses } from "@/lib/redes/format";
 import { noLeido, sincronizarChats } from "@/lib/redes/chat";
+import { asegurarAvatar, avatarAlDia } from "@/lib/redes/avatarLogo";
 import { sincronizarAvatares } from "@/lib/avatares";
 import {
   DEFAULT_REDES_SETTINGS,
@@ -228,6 +229,15 @@ export function RedesDataProvider({ children }: { children: ReactNode }) {
     const t = window.setTimeout(() => void sincronizarAvatares(profiles), 3000);
     return () => window.clearTimeout(t);
   }, [isAdmin, viewingAs, appLoading, profiles]);
+
+  // Foto de perfil de cada cliente armada con su logo (centrado y sin márgenes): las que falten o sean de un logo viejo.
+  useEffect(() => {
+    if (!isAdmin || viewingAs || appLoading) return;
+    const t = window.setTimeout(async () => {
+      for (const p of projects) if (!avatarAlDia(p)) await asegurarAvatar(p);
+    }, 5000);
+    return () => window.clearTimeout(t);
+  }, [isAdmin, viewingAs, appLoading, projects]);
 
   // ---- Reuniones ----
   const [reunionesRaw, setReunionesRaw] = useState<Reunion[]>([]);

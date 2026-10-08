@@ -5,6 +5,7 @@
 // POST /api/ia/preparar { proyecto_id, video_ids } → qué tiene que tener listo el cliente para el rodaje
 // POST /api/ia/marca-subir  { proyecto_id, tipo: "logo"|"variante"|"manual"|"referencia", etiqueta?, nombre, mime, data(base64) }
 // POST /api/ia/marca-quitar { proyecto_id, tipo, drive_file_id }
+// POST /api/ia/marca-avatar  { proyecto_id, de, img } → foto de perfil (JPEG chico) armada en el navegador con el logo
 // POST /api/ia/marca-variante { proyecto_id, drive_file_id, etiqueta?, principal? } → renombra o la hace el logo principal
 // POST /api/ia/marca-colores { proyecto_id, paleta: ["#rrggbb", …], info?: { "#rrggbb": { nombre, uso } } }  (también el cliente)
 // POST /api/ia/marca-info   { proyecto_id, rubro, descripcion, publico?, colores?, instagram? }  (también el cliente)
@@ -385,6 +386,24 @@ async function marcaSubir(req: VercelRequest) {
     });
   }
   return { ok: true, archivo: att };
+}
+
+/** Foto de perfil del cliente: el navegador la arma con el logo (centrado y sin márgenes) y acá se guarda. */
+async function marcaAvatar(req: VercelRequest) {
+  const caller = await requireCaller(req, ROLES_MARCA);
+  const b = body<{ proyecto_id?: string; de?: string; img?: string }>(req);
+  if (!b.proyecto_id || !b.de || typeof b.img !== "string") throw new HttpError(400, "Faltan datos");
+  await assertProjectAccess(caller, b.proyecto_id);
+  if (!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(b.img) || b.img.length > 120_000) throw new HttpError(400, "Imagen inválida");
+  const db = adminDb();
+  const ref = db.collection("projects").doc(b.proyecto_id);
+  await db.runTransaction(async (tx) => {
+    // Solo si sigue siendo el logo principal (si lo cambiaron mientras tanto, se arma de nuevo con el nuevo).
+    const logo = (await tx.get(ref)).data()?.marca_archivos?.logo?.drive_file_id;
+    if (logo !== b.de) throw new HttpError(409, "El logo cambió");
+    tx.update(ref, { "marca_archivos.avatar": { img: b.img, de: b.de } });
+  });
+  return { ok: true };
 }
 
 /** Renombra una versión del logo o la hace el logo principal (el principal anterior pasa a ser una versión más). */
@@ -831,6 +850,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "marca-subir") res.status(200).json(await marcaSubir(req));
     else if (accion === "marca-quitar") res.status(200).json(await marcaQuitar(req));
     else if (accion === "marca-info") res.status(200).json(await marcaInfo(req));
+    else if (accion === "marca-avatar") res.status(200).json(await marcaAvatar(req));
     else if (accion === "marca-variante") res.status(200).json(await marcaVariante(req));
     else if (accion === "plan-mes") res.status(200).json(await planMes(req));
     else if (accion === "plan-enviar") res.status(200).json(await planEnviar(req));

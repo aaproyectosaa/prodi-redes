@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/integrations/firebase/types";
+import { avatarAlDia } from "@/lib/redes/avatarLogo";
 
 /** Miniatura del logo en Drive (los de ejemplo no tienen). */
 const logoUrl = (fileId: string) =>
@@ -9,8 +10,16 @@ const logoUrl = (fileId: string) =>
 /** Logo del cliente (el que se carga en su marca) o, si no hay o no carga, sus iniciales con su color. */
 export function LogoCliente({ cliente, className }: { cliente: Pick<Project, "nombre" | "color" | "marca_archivos">; className?: string }) {
   const id = cliente.marca_archivos?.logo?.drive_file_id;
+  const avatar = id && avatarAlDia(cliente) ? cliente.marca_archivos?.avatar?.img : undefined;
   const src = id ? logoUrl(id) : undefined;
   const [fallo, setFallo] = useState(false);
+  if (avatar) {
+    return (
+      <span className={cn("flex h-10 w-10 shrink-0 overflow-hidden rounded-xl border", className)}>
+        <img src={avatar} alt={cliente.nombre} className="h-full w-full object-cover" />
+      </span>
+    );
+  }
   if (src && !fallo) {
     return (
       <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-white", className)}>

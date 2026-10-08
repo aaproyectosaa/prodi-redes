@@ -5,6 +5,7 @@ import { useRedes } from "@/contexts/redes-data-context";
 import { cn } from "@/lib/utils";
 import type { Chat as ChatT } from "@/lib/redes/types";
 import type { Profile } from "@/integrations/firebase/types";
+import { avatarAlDia } from "@/lib/redes/avatarLogo";
 
 /** Miniatura del logo del cliente en Drive (los de ejemplo no tienen). */
 const logoUrl = (fileId: string) => (fileId.startsWith("demo/") || fileId.startsWith("blob:") ? undefined : `https://drive.google.com/thumbnail?id=${fileId}&sz=w128`);
@@ -35,8 +36,11 @@ export function ChatIcon({
       (chat.nombres?.[otroId] ? ({ id: otroId, nombre: chat.nombres[otroId], email: "" } as Profile) : undefined);
     return otro ? <UserAvatar profile={otro} className={tam} /> : <div className={cn("shrink-0 rounded-full bg-muted", tam)} />;
   }
-  const logo = chat.tipo === "cliente" ? clienteById(chat.proyecto_id)?.marca_archivos?.logo?.drive_file_id : undefined;
-  const src = chat.foto || (logo ? logoUrl(logo) : undefined);
+  const cliente = chat.tipo === "cliente" ? clienteById(chat.proyecto_id) : undefined;
+  const logo = cliente?.marca_archivos?.logo?.drive_file_id;
+  // Foto de perfil armada con el logo (centrado y sin márgenes); si todavía no está, el logo tal cual.
+  const avatar = cliente && logo && avatarAlDia(cliente) ? cliente.marca_archivos?.avatar?.img : undefined;
+  const src = chat.foto || avatar || (logo ? logoUrl(logo) : undefined);
   const fondo = chat.tipo === "grupo" ? chat.color || "#6F40FC" : chat.tipo === "equipo" ? "#6F40FC" : color || "#6F40FC";
   return (
     <Avatar className={cn("shrink-0", tam)}>
@@ -45,7 +49,7 @@ export function ChatIcon({
           src={src}
           alt=""
           referrerPolicy="no-referrer"
-          className={cn(chat.foto ? "object-cover" : "bg-white object-contain p-1")}
+          className={cn(chat.foto || avatar ? "object-cover" : "bg-white object-contain p-1")}
         />
       )}
       <AvatarFallback className="text-sm font-bold text-white" style={{ backgroundColor: fondo }}>

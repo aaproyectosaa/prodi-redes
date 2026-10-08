@@ -243,6 +243,8 @@ export interface Project {
   marca_archivos?: {
     /** Logo principal (el que se ve en Clientes y la IA pone en las piezas). */
     logo?: DriveAttachmentRef;
+    /** Foto de perfil armada con el logo (centrado, sin márgenes, JPEG chico); `de` = el logo del que salió. */
+    avatar?: { img: string; de: string };
     /** Otras versiones del logo: blanco, negro, horizontal, isotipo, marca de agua… */
     variantes?: LogoVariante[];
     /** Manual de marca, brandboard, guías (PDF o imagen). */

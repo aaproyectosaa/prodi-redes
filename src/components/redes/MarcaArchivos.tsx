@@ -6,6 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { toast } from "sonner";
 import type { DriveAttachmentRef, LogoVariante, Project } from "@/integrations/firebase/types";
 import { callApi, imagenParaSubir } from "@/lib/redes/api";
+import { asegurarAvatar, guardarAvatar } from "@/lib/redes/avatarLogo";
 import { cn } from "@/lib/utils";
 import { driveThumb } from "./PiezaDialogs";
 
@@ -55,6 +56,11 @@ export function MarcaArchivos({ cliente, className }: { cliente: Project; classN
   const inputVariante = useRef<HTMLInputElement>(null);
   const inputManual = useRef<HTMLInputElement>(null);
 
+  // Foto de perfil (logo centrado) si falta o es de un logo anterior (ej. cuando una versión pasa a ser la principal).
+  useEffect(() => {
+    void asegurarAvatar(cliente);
+  }, [cliente]);
+
   const subir = async (tipo: "logo" | "variante" | "manual", files: File[]) => {
     if (!files.length) return;
     setSubiendo(tipo);
@@ -67,13 +73,16 @@ export function MarcaArchivos({ cliente, className }: { cliente: Project; classN
         }
         try {
           const arch = tipo === "manual" ? await archivoParaSubir(file) : await imagenParaSubir(file, 2000);
-          await callApi("/api/ia/marca-subir", {
+          const r = await callApi<{ archivo?: { drive_file_id: string } }>("/api/ia/marca-subir", {
             proyecto_id: cliente.id,
             tipo,
             ...(tipo === "variante" ? { etiqueta: etiquetaDesdeNombre(file.name) } : {}),
             ...arch,
           });
           ok++;
+          if (tipo === "logo" && r.archivo?.drive_file_id) {
+            await guardarAvatar(cliente.id, r.archivo.drive_file_id, file).catch((err) => console.warn("[marca] foto de perfil", err));
+          }
         } catch (err) {
           toast.error(`${file.name}: ${err instanceof Error ? err.message : "no se pudo subir"}`);
         }
