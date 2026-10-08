@@ -807,19 +807,30 @@ function GuionBlock({ video, editable }: { video: Video; editable: boolean }) {
               {busy === "ia" ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1 h-3.5 w-3.5" />}
               {tiene ? "Rehacer con IA" : "Armar con IA"}
             </Button>
-            {tiene && (
-              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditing(true)}>
-                Editar
-              </Button>
-            )}
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditing(true)} disabled={!!busy}>
+              <Pencil className="mr-1 h-3.5 w-3.5" />
+              {tiene ? "Editar" : "Escribirlo yo"}
+            </Button>
           </div>
         )
       }
     >
       {editing ? (
         <div className="space-y-2">
-          <Textarea value={guion} onChange={(e) => setGuion(e.target.value)} rows={6} placeholder="Guion por escenas" />
-          <Textarea value={tomas} onChange={(e) => setTomas(e.target.value)} rows={5} placeholder="Una toma por línea" />
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-muted-foreground">Guion</span>
+            <Textarea
+              value={guion}
+              onChange={(e) => setGuion(e.target.value)}
+              rows={6}
+              autoFocus
+              placeholder={"Escena 1: … qué se ve y qué se dice\nEscena 2: …\nCierre: llamado a la acción"}
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-muted-foreground">Tomas para el rodaje (una por línea)</span>
+            <Textarea value={tomas} onChange={(e) => setTomas(e.target.value)} rows={5} placeholder={"Plano general del local\nPrimer plano del producto\nTestimonio del dueño"} />
+          </label>
           <div className="flex justify-end gap-2">
             <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
               Cancelar
@@ -832,7 +843,7 @@ function GuionBlock({ video, editable }: { video: Video; editable: boolean }) {
         </div>
       ) : !tiene ? (
         <p className="text-xs text-muted-foreground">
-          Con la idea cargada, la IA arma el guion por escenas y la lista de tomas para el día de rodaje.
+          Escribilo vos con «Escribirlo yo», o tocá «Armar con IA» y la IA arma el guion por escenas y la lista de tomas a partir de la idea (después lo podés corregir).
         </p>
       ) : (
         <div className="space-y-3 text-sm">
