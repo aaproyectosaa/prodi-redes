@@ -37,12 +37,14 @@ export async function hashClave(clave: string): Promise<string> {
  * parámetros del proyecto (Authentication → Users → ⋮ → Password hash parameters).
  * Así nadie tiene que cambiar su contraseña al migrar; al entrar, se guarda en el formato nuevo.
  */
-async function verificarClaveFirebase(clave: string, salB64: string, hB64: string): Promise<boolean> {
-  const signer = process.env.FIREBASE_HASH_SIGNER_KEY;
-  const sep = process.env.FIREBASE_HASH_SALT_SEPARATOR;
+async function verificarClaveFirebase(clave: string, salB64: string, hB64: string, proyecto?: string): Promise<boolean> {
+  // Cada proyecto de Firebase tiene sus parámetros: "fbscrypt$sal$hash$postgo" usa FIREBASE_HASH_POSTGO_*.
+  const p = proyecto && /^[a-z0-9]+$/.test(proyecto) ? `FIREBASE_HASH_${proyecto.toUpperCase()}_` : "FIREBASE_HASH_";
+  const signer = process.env[`${p}SIGNER_KEY`];
+  const sep = process.env[`${p}SALT_SEPARATOR`];
   if (!signer || !sep) return false;
-  const rounds = Number(process.env.FIREBASE_HASH_ROUNDS ?? 8);
-  const mem = Number(process.env.FIREBASE_HASH_MEM_COST ?? 14);
+  const rounds = Number(process.env[`${p}ROUNDS`] ?? 8);
+  const mem = Number(process.env[`${p}MEM_COST`] ?? 14);
   const sal = Buffer.concat([Buffer.from(salB64, "base64"), Buffer.from(sep, "base64")]);
   const dk = await scrypt(clave, sal, 64, { N: 2 ** mem, r: rounds, p: 1, maxmem: 256 * 1024 * 1024 });
   const c = createCipheriv("aes-256-ctr", dk.subarray(0, 32), Buffer.alloc(16, 0));
@@ -54,7 +56,7 @@ async function verificarClaveFirebase(clave: string, salB64: string, hB64: strin
 export async function verificarClave(clave: string, guardado: string | null | undefined): Promise<boolean> {
   if (!guardado) return false;
   const [alg, n, salB64, hB64] = guardado.split("$");
-  if (alg === "fbscrypt") return verificarClaveFirebase(clave, n, salB64);
+  if (alg === "fbscrypt") return verificarClaveFirebase(clave, n, salB64, hB64);
   if (alg !== "scrypt") return false;
   const esperado = Buffer.from(hB64, "base64");
   const h = await scrypt(clave, Buffer.from(salB64, "base64"), esperado.length, { N: Number(n), r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
