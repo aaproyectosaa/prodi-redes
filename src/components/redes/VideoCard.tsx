@@ -8,6 +8,7 @@ import { diasEnEtapa, estaTrabado } from "@/lib/redes/etapas";
 import { fechaCorta } from "@/lib/redes/format";
 import type { Video } from "@/lib/redes/types";
 import { driveThumb } from "./PiezaDialogs";
+import { EntregaChip } from "./EntregaEdicion";
 
 export function useOpenVideo() {
   const [params, setParams] = useSearchParams();
@@ -101,6 +102,7 @@ export function VideoCard({
         {video.filma_cliente && vista === "equipo" && video.etapa !== "publicado" && (
           <span className="rounded-full bg-violet-500/12 px-1.5 py-0.5 font-medium text-violet-700 dark:text-violet-300">lo filma el cliente</span>
         )}
+        {vista === "equipo" && <EntregaChip video={video} className="px-1.5 text-[10px]" />}
         {video.fecha_deseada && video.etapa !== "publicado" && (
           <span className="inline-flex items-center gap-1 font-medium text-foreground">
             <CalendarDays className="h-3 w-3" /> para el {fechaCorta(video.fecha_deseada)}

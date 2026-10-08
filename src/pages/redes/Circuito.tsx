@@ -25,6 +25,7 @@ import type { EtapaVideo } from "@/lib/redes/types";
 import { tableroDe, type TableroRol } from "@/lib/redes/tableros";
 import { SelectorVista, VistaCalendario, useVista } from "@/components/redes/VistaCalendario";
 import { BotonArmarMes, PlanesAviso } from "@/components/redes/PlanesAviso";
+import { ordenEntrega } from "@/lib/redes/entrega";
 
 /** Kanban: el equipo ve su tablero; el admin, todo el recorrido. */
 export default function Circuito() {
@@ -99,7 +100,8 @@ function TableroEquipo({ tablero }: { tablero: TableroRol }) {
           {tablero.columnas.map((col) => {
             const items = mios
               .filter((v) => tablero.columnaDe(v) === col.id)
-              .sort((a, b) => a.etapa_desde.localeCompare(b.etapa_desde));
+              // En edición, lo que hay que entregar antes va arriba.
+              .sort((a, b) => (a.etapa === "edicion" && b.etapa === "edicion" ? ordenEntrega(a, b) : 0) || a.etapa_desde.localeCompare(b.etapa_desde));
             const activa = col.tuya && items.length > 0;
             return (
               <div
@@ -277,7 +279,8 @@ function CircuitoCompleto() {
           {ETAPAS.map((e) => {
             const items = filtrados
               .filter((v) => v.etapa === e.value)
-              .sort((a, b) => a.etapa_desde.localeCompare(b.etapa_desde));
+              // En edición, lo que hay que entregar antes va arriba.
+              .sort((a, b) => (a.etapa === "edicion" && b.etapa === "edicion" ? ordenEntrega(a, b) : 0) || a.etapa_desde.localeCompare(b.etapa_desde));
             return (
               <div
                 key={e.value}

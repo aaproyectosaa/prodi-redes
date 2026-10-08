@@ -24,6 +24,7 @@ import type {
   Video,
 } from "./types";
 import { etapaInfo, quienFilma } from "./etapas";
+import { entregaPorDefecto, fechaEntregaCorta } from "./entrega";
 import { fechaCorta, segundos } from "./format";
 import type { MarcaCorreccion } from "./types";
 
@@ -319,13 +320,20 @@ export async function marcarRodajeRealizado(rodaje: Rodaje) {
 // Circuito
 // ---------------------------------------------------------------------------
 
-/** Producción: crudo cargado → pasa a edición. */
-export async function enviarAEdicion(video: Video, project: Project | undefined, by: string) {
-  await moverA(video, "edicion", by, "Crudo cargado, pasa a edición");
+/**
+ * Producción: crudo cargado → pasa a edición, con la fecha para la que tiene que estar editado (si no
+ * se elige, la sugerida: un día antes de la publicación que pidió el cliente, o en 3 días hábiles).
+ */
+export async function enviarAEdicion(video: Video, project: Project | undefined, by: string, entrega?: string) {
+  const fecha = entrega && /^\d{4}-\d{2}-\d{2}$/.test(entrega) ? entrega : entregaPorDefecto(video);
+  await moverA(video, "edicion", by, `Crudo cargado, pasa a edición (entregar el ${fechaEntregaCorta(fecha)})`, {
+    entrega_edicion: fecha,
+    entrega_aviso: null,
+  });
   void avisar({
     destinatarios: video.editor_id ? [video.editor_id] : equipoDe(project, "editor"),
     titulo: "Video nuevo para editar",
-    cuerpo: `${project?.nombre ?? "Cliente"} · ${video.titulo}`,
+    cuerpo: `${project?.nombre ?? "Cliente"} · ${video.titulo} · entregar el ${fechaEntregaCorta(fecha)}`,
     link: linkPara("/videos", video.id),
     clave: `edicion:${video.id}`,
     proyectoId: video.proyecto_id,
@@ -504,4 +512,16 @@ export async function guardarGuion(video: Video, guion: string | null, tomas: st
 /** Solo admin: mover a cualquier etapa (corrige errores). */
 export async function forzarEtapa(video: Video, etapa: EtapaVideo, by: string) {
   await moverA(video, etapa, by, `Movido a "${etapaInfo(etapa).label}" por admin`);
+}
+
+/** Producción cambia para cuándo tiene que estar editado (se vuelve a avisar si hace falta). */
+export async function cambiarEntrega(video: Video, fecha: string, by: string) {
+  assertEditable();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw new Error("Fecha inválida");
+  await updateDoc(doc(db, VIDEOS, video.id), {
+    entrega_edicion: fecha,
+    entrega_aviso: null,
+    updated_at: now(),
+    historial: arrayUnion(evento(by, `Entrega de edición: ${fechaEntregaCorta(fecha)}`)),
+  });
 }

@@ -101,6 +101,10 @@ export interface Video {
   etapa: EtapaVideo;
   /** Desde cuándo está en la etapa actual (para detectar trabados). */
   etapa_desde: string;
+  /** Para cuándo tiene que estar editado (YYYY-MM-DD): lo pone producción al mandarlo a edición. */
+  entrega_edicion?: string | null;
+  /** Último recordatorio de entrega mandado ("manana" o "tarde"), para no repetirlo. */
+  entrega_aviso?: string | null;
   rodaje_id: string | null;
   productor_id: string | null;
   editor_id: string | null;

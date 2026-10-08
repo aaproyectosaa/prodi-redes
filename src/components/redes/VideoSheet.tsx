@@ -62,6 +62,7 @@ import {
   aprobarInterno,
   eliminarVideo,
   entregarEdicion,
+  cambiarEntrega,
   enviarAEdicion,
   filmarNosotros,
   forzarEtapa,
@@ -73,6 +74,7 @@ import {
 import { callApi } from "@/lib/redes/api";
 import type { EtapaVideo, Video } from "@/lib/redes/types";
 import { EtapaBadge } from "./EtapaBadge";
+import { EntregaChip, EntregaEdicionDialog } from "./EntregaEdicion";
 import { ClienteTag } from "./ClienteTag";
 import { MaterialElegido, MaterialSlot } from "./MaterialSlot";
 import { TextoConLinks } from "./DelSistemaAnterior";
@@ -160,6 +162,8 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
   const [pautaOpen, setPautaOpen] = useState(false);
   const [resultadosOpen, setResultadosOpen] = useState(false);
   const [rodajeOpen, setRodajeOpen] = useState(false);
+  // "¿Para cuándo lo necesitás editado?": al mandar a edición ("enviar") o para cambiar la fecha ("cambiar").
+  const [entregaDlg, setEntregaDlg] = useState<null | "enviar" | "cambiar">(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
 
@@ -204,6 +208,12 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
         <SheetDescription asChild>
           <div className="flex flex-wrap items-center gap-2">
             <EtapaBadge etapa={video.etapa} vista={isCliente ? "cliente" : "equipo"} />
+            {!isCliente && <EntregaChip video={video} />}
+            {isProd && video.etapa === "edicion" && (
+              <button type="button" onClick={() => setEntregaDlg("cambiar")} className="text-xs text-primary underline-offset-2 hover:underline">
+                {video.entrega_edicion ? "Cambiar fecha" : "Poner fecha de entrega"}
+              </button>
+            )}
             {!isCliente && video.etapa !== "publicado" && (
               <span className={cn("text-xs", trabado ? "font-medium text-warning" : "text-muted-foreground")}>
                 {trabado && <AlertTriangle className="mr-1 inline h-3 w-3" />}
@@ -477,7 +487,7 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
             )}
             <Button
               disabled={!hasCrudo || busy === "edicion"}
-              onClick={() => run("edicion", () => enviarAEdicion(video, cliente, uid), "Enviado a edición")}
+              onClick={() => setEntregaDlg("enviar")}
               title={!hasCrudo ? "Primero subí el material crudo" : undefined}
             >
               {busy === "edicion" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
@@ -573,6 +583,19 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
         clienteId={video.proyecto_id}
         rodaje={rodaje ?? null}
         preseleccion={[video.id]}
+      />
+      <EntregaEdicionDialog
+        video={video}
+        open={!!entregaDlg}
+        onOpenChange={(v) => !v && setEntregaDlg(null)}
+        cambiar={entregaDlg === "cambiar"}
+        onConfirmar={(fecha) =>
+          run(
+            entregaDlg === "cambiar" ? "entrega" : "edicion",
+            () => (entregaDlg === "cambiar" ? cambiarEntrega(video, fecha, uid) : enviarAEdicion(video, cliente, uid, fecha)),
+            entregaDlg === "cambiar" ? "Fecha de entrega guardada" : "Enviado a edición"
+          )
+        }
       />
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>

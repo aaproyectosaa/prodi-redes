@@ -270,3 +270,56 @@ export async function recordatoriosCobro(base: string): Promise<number> {
   }
   return enviados;
 }
+
+/** "jue 15/10" */
+const ddmmSemana = (fecha: string) => {
+  const [y, m, d] = fecha.split("-").map(Number);
+  return `${["dom", "lun", "mar", "mié", "jue", "vie", "sáb"][new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${d}/${m}`;
+};
+
+/**
+ * Entregas de edición: el día antes, aviso a la editora; si se pasó la fecha y sigue en edición, aviso
+ * a la productora y a la editora. Una vez por fecha (si producción cambia la fecha, se vuelve a avisar).
+ */
+export async function recordatoriosEdicion(base: string): Promise<number> {
+  const db = adminDb();
+  const hoy = hoyAR();
+  const manana = sumarDias(hoy, 1);
+  const snap = await db.collection("videos").where("etapa", "==", "edicion").get();
+  let enviados = 0;
+  for (const d of snap.docs) {
+    const v0 = d.data();
+    const fecha = String(v0.entrega_edicion ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || v0.demo_ejemplo) continue;
+    const caso = fecha === manana ? "manana" : fecha < hoy ? "tarde" : null;
+    if (!caso) continue;
+    const marca = `${caso}:${fecha}`;
+    // Se marca antes de mandar: si la función se corta a la mitad, no se repite el aviso.
+    const v = await db.runTransaction(async (tx) => {
+      const x = (await tx.get(d.ref)).data();
+      if (!x || x.etapa !== "edicion" || x.entrega_edicion !== fecha || x.entrega_aviso === marca) return null;
+      tx.update(d.ref, { entrega_aviso: marca });
+      return x;
+    });
+    if (!v) continue;
+    const p = (await db.collection("projects").doc(v.proyecto_id).get()).data() ?? {};
+    if (p.enabled === false) continue;
+    const team = (p.team_roles ?? {}) as Record<string, string[]>;
+    const editora = v.editor_id ? [v.editor_id] : (team.editor ?? []);
+    const productora = v.productor_id ? [v.productor_id] : (team.productor ?? []);
+    const nombre = `${p.nombre ?? "Cliente"} · ${v.titulo}`;
+    if (caso === "manana") {
+      await enviarAviso(
+        { destinatarios: editora, titulo: "Mañana se entrega este video", cuerpo: `${nombre} · entregar el ${ddmmSemana(fecha)}`, link: `/videos?video=${d.id}`, clave: `entrega_manana:${d.id}`, proyectoId: v.proyecto_id, videoId: d.id },
+        base
+      );
+    } else {
+      await enviarAviso(
+        { destinatarios: [...new Set([...productora, ...editora])], titulo: "Video atrasado en edición", cuerpo: `${nombre} · era para el ${ddmmSemana(fecha)}`, link: `/videos?video=${d.id}`, clave: `entrega_tarde:${d.id}`, proyectoId: v.proyecto_id, videoId: d.id },
+        base
+      );
+    }
+    enviados++;
+  }
+  return enviados;
+}
