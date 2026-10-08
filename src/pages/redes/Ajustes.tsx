@@ -25,6 +25,7 @@ import { useDriveConnection } from "@/hooks/use-drive-connection";
 import { fechaHora, formatARS } from "@/lib/redes/format";
 import { callApi } from "@/lib/redes/api";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { DATOS_COBRO_DEFAULT, type DatosCobro, type PlanRedes } from "@/lib/redes/types";
 import { comisionPct, montoDebito } from "@/lib/redes/facturacion";
 import { ENFOQUE_PRODI_DEFAULT } from "../../../api/_lib/plan-mes";
@@ -91,6 +92,10 @@ export default function Ajustes() {
                 </Button>
               </div>
             </div>
+          </Section>
+
+          <Section title="Con qué IA se hace cada cosa" description="Cada tarea con la que mejor la hace. Las claves se cargan en Vercel (Settings → Environment Variables) y después se hace Redeploy.">
+            <IAConexiones imagenes={settings.ia_imagenes === "gemini" ? "gemini" : "openai"} onImagenes={(v) => void guardar("ia-img", { ia_imagenes: v })} />
           </Section>
         </div>
 
@@ -481,6 +486,76 @@ function EjemploCard() {
           Borrar datos de ejemplo
         </Button>
       )}
+    </div>
+  );
+}
+
+type EstadoIA = { claude: boolean; openai: boolean; gemini: boolean; modelo_claude: string };
+
+/** Qué IA hace cada cosa, si su clave está cargada, y la elección para las imágenes. */
+function IAConexiones({ imagenes, onImagenes }: { imagenes: "openai" | "gemini"; onImagenes: (v: "openai" | "gemini") => void }) {
+  const [estado, setEstado] = useState<EstadoIA | null>(null);
+  useEffect(() => {
+    callApi<EstadoIA>("/api/ia/estado", {})
+      .then(setEstado)
+      .catch(() => setEstado(null));
+  }, []);
+  const Clave = ({ ok, nombre }: { ok?: boolean; nombre: string }) =>
+    estado === null ? null : ok ? (
+      <span className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+        <CheckCircle2 className="h-3.5 w-3.5" /> Conectada
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1 text-xs text-destructive">
+        <XCircle className="h-3.5 w-3.5" /> Falta {nombre}
+      </span>
+    );
+  const filas: { que: string; detalle: string; con: React.ReactNode; clave: React.ReactNode }[] = [
+    {
+      que: "Textos",
+      detalle: "@prodi en el chat, copys, guiones, plan del mes y minutas escritas",
+      con: <b>Claude</b>,
+      clave: <Clave ok={estado?.claude} nombre="ANTHROPIC_API_KEY" />,
+    },
+    {
+      que: "Imágenes de las piezas",
+      detalle: "ChatGPT escribe mejor el texto dentro de la imagen; Gemini es más rápido y barato",
+      con: (
+        <div className="grid grid-cols-2 gap-1 rounded-lg border bg-muted/40 p-0.5">
+          {(["openai", "gemini"] as const).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => p !== imagenes && onImagenes(p)}
+              className={cn("rounded-md px-2.5 py-1 text-xs font-medium transition-all", imagenes === p ? "bg-background shadow-sm" : "text-muted-foreground")}
+            >
+              {p === "openai" ? "ChatGPT" : "Gemini"}
+            </button>
+          ))}
+        </div>
+      ),
+      clave: <Clave ok={imagenes === "openai" ? estado?.openai : estado?.gemini} nombre={imagenes === "openai" ? "OPENAI_API_KEY" : "GEMINI_API_KEY"} />,
+    },
+    {
+      que: "Minutas desde el audio",
+      detalle: "Escucha la grabación de la reunión entera",
+      con: <b>Gemini</b>,
+      clave: <Clave ok={estado?.gemini} nombre="GEMINI_API_KEY" />,
+    },
+  ];
+  return (
+    <div className="divide-y rounded-xl border bg-card">
+      {filas.map((f) => (
+        <div key={f.que} className="flex flex-wrap items-center gap-x-4 gap-y-2 p-4">
+          <div className="min-w-0 flex-1 basis-56">
+            <p className="text-sm font-medium">{f.que}</p>
+            <p className="text-xs text-muted-foreground">{f.detalle}</p>
+          </div>
+          <div className="text-sm">{f.con}</div>
+          <div className="w-44 text-right">{f.clave}</div>
+        </div>
+      ))}
+      {estado?.claude && <p className="px-4 py-2 text-[11px] text-muted-foreground">Modelo de Claude: {estado.modelo_claude}</p>}
     </div>
   );
 }

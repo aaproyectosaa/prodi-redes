@@ -8,7 +8,7 @@
 import crypto from "crypto";
 import { adminDb, type Data } from "./db";
 import { HttpError, type Caller } from "./http";
-import { generarJSON } from "./gemini";
+import { generarJSON } from "./ia";
 import { enviarAviso } from "./notify";
 import { fechaAR, partesAR, sumarDias } from "./fecha";
 import { chatDeMiembro, mensajeProdi, PRODI_ID } from "./chat-server";
@@ -155,11 +155,11 @@ export async function atenderMencion(caller: Caller, chatId: unknown, mensajeId:
     console.error("[prodi]", err);
     const msg = err instanceof Error ? err.message : String(err);
     // Sin clave (o con una clave inválida) no es "probá en un rato": hay que configurarla.
-    const sinClave = /GEMINI_API_KEY|API key not valid|API_KEY_INVALID|PERMISSION_DENIED/i.test(msg);
+    const sinClave = /API_KEY|API key not valid|PERMISSION_DENIED|clave de (la IA|Claude)|sin saldo|no tiene saldo/i.test(msg);
     resultados = [
       {
         texto: sinClave
-          ? "Todavía no estoy conectado a la IA: falta cargar (o renovar) la clave de Gemini en Vercel (GEMINI_API_KEY). Cuando esté, respondo."
+          ? `Todavía no estoy conectado a la IA: ${msg.replace(/^IA:\s*/, "")} Cuando esté, respondo.`
           : "Uh, no pude procesar el pedido ahora. Probá de nuevo en un rato.",
       },
     ];

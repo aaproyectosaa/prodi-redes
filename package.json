@@ -21,6 +21,7 @@
     "db:usuario": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/db-usuario.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "@arcasdk/core": "^2.0.2",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.11",

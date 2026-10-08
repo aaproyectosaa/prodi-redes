@@ -7,7 +7,7 @@
 // El plan del mes, el copy y el guion lo leen (memoriaTexto / contextoComercial).
 
 import { adminDb, type Data } from "./db";
-import { generarJSON } from "./gemini";
+import { generarJSON } from "./ia";
 import { fechaAR } from "./fecha";
 import { notasChatTexto, type MemoriaIA, type NotaChat } from "./plan-mes";
 

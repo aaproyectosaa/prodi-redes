@@ -19,12 +19,13 @@
 // POST /api/ia/comercial-ver { proyecto_id } → solo el contexto comercial (para el panel del cliente)
 // POST /api/ia/chat-asistente { chat_id, mensaje_id } → @prodi en el chat (ver api/_lib/chat-asistente.ts)
 // POST /api/ia/memoria-chat-quitar { proyecto_id, texto } → saca un dato que la IA aprendió del chat
+// POST /api/ia/estado (admin) → qué claves de IA están cargadas (sí/no, nunca la clave) y con qué modelo de Claude
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { FieldValue } from "../_lib/db";
 import { adminDb } from "../_lib/db";
 import { appUrl, assertProjectAccess, body, HttpError, requireCaller, sendError } from "../_lib/http";
-import { generarImagen, generarJSON, generarMinutaIA, generarTextos } from "../_lib/gemini";
+import { generarImagen, generarJSON, generarMinutaIA, generarTextos } from "../_lib/ia";
 import { descargarDrive } from "../_lib/drive-stream";
 import { getAppDriveAccessToken } from "../_lib/drive-connection";
 import { uploadBufferToDrive } from "../_lib/drive-server";
@@ -862,8 +863,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "comercial-ver") res.status(200).json(await comercialVer(req));
     else if (accion === "chat-asistente") res.status(200).json(await chatAsistente(req));
     else if (accion === "memoria-chat-quitar") res.status(200).json(await memoriaChatQuitar(req));
+    else if (accion === "estado") res.status(200).json(await estadoIA(req));
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {
     sendError(res, err);
   }
+}
+
+/** Para Ajustes: qué claves de IA hay cargadas en Vercel (solo sí/no). */
+async function estadoIA(req: VercelRequest) {
+  await requireCaller(req, ["admin"]);
+  const hay = (k: string) => !!process.env[k]?.trim();
+  return {
+    claude: hay("ANTHROPIC_API_KEY"),
+    openai: hay("OPENAI_API_KEY"),
+    gemini: hay("GEMINI_API_KEY"),
+    modelo_claude: process.env.ANTHROPIC_MODEL || "claude-opus-5-5",
+  };
 }

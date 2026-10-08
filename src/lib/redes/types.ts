@@ -399,6 +399,8 @@ export interface RedesSettings {
   jitsi_base?: string;
   /** Cómo trabaja Prodi lo comercial: lo lee la IA en todo lo que arma. */
   ia_enfoque?: string;
+  /** Con qué IA se hacen las imágenes de las piezas (por defecto ChatGPT). */
+  ia_imagenes?: "openai" | "gemini";
 }
 
 export const DATOS_COBRO_DEFAULT: DatosCobro = {
