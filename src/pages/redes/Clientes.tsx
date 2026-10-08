@@ -30,6 +30,7 @@ import UserAvatar from "@/components/UserAvatar";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useAppData } from "@/contexts/app-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
+import { LogoCliente } from "@/components/redes/LogoCliente";
 import { formatARS, hoyISO, mesActual } from "@/lib/redes/format";
 import { planDe, usoPlan } from "@/lib/redes/planes";
 
@@ -77,12 +78,7 @@ export default function Clientes() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-3">
-                    <span
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white"
-                      style={{ backgroundColor: c.color || "#6F40FC" }}
-                    >
-                      {c.nombre.slice(0, 2).toUpperCase()}
-                    </span>
+                    <LogoCliente cliente={c} />
                     <div className="min-w-0">
                       <p className="truncate font-semibold">{c.nombre}</p>
                       <p className="text-xs text-muted-foreground">

@@ -41,6 +41,7 @@ import { CONDICIONES_IVA, type CondicionIva, type Project, type ProjectTeamRole,
 import { COLORES } from "./Clientes";
 import { MarcaArchivos } from "@/components/redes/MarcaArchivos";
 import { ContactosCliente } from "@/components/redes/ContactosCliente";
+import { LogoCliente } from "@/components/redes/LogoCliente";
 import { DebitoAdmin } from "@/components/redes/Debito";
 import { cn } from "@/lib/utils";
 import { assertEditable } from "@/lib/redes/vistaComo";
@@ -86,7 +87,7 @@ export default function ClienteDetalle() {
           <button type="button" onClick={() => navigate("/clientes")} className="-ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground" aria-label="Volver">
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: cliente.color || "#6F40FC" }} />
+          <LogoCliente cliente={cliente} className="h-9 w-9 text-xs sm:h-10 sm:w-10" />
           <span className="min-w-0 break-words">{cliente.nombre}</span>
         </span>
       }
