@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { addDoc, collection } from "@/lib/db";
-import { Building2, Copy, Loader2, Mail, Plus } from "lucide-react";
+import { Building2, Copy, Loader2, Mail, Plus, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,9 @@ import { planDe, usoPlan } from "@/lib/redes/planes";
 
 /** Dirección de la app para el mensaje de bienvenida (VITE_APP_URL o la de esta pestaña). */
 const urlApp = () => (import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/$/, "");
+/** Sin acentos ni mayúsculas, para buscar "gulala" y encontrar "GULALÁ". */
+const normal = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+
 const COLORES = ["#6F40FC", "#22C55E", "#F59E0B", "#EF4444", "#06B6D4", "#EC4899", "#84CC16", "#F97316", "#3B82F6", "#A855F7"];
 
 export default function Clientes() {
@@ -44,7 +47,18 @@ export default function Clientes() {
   const { profiles } = useAppData();
   const { role } = useUserProfileContext();
   const [nuevo, setNuevo] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
   const mes = mesActual();
+  // Busca por nombre, rubro, Instagram o quién del equipo lo lleva.
+  const visibles = useMemo(() => {
+    const q = normal(busqueda);
+    if (!q) return clientes;
+    const nombreDe = (id: string) => profiles.find((p) => p.id === id)?.nombre ?? "";
+    return clientes.filter((c) => {
+      const equipo = Object.values(c.team_roles ?? {}).flat().map(nombreDe);
+      return normal([c.nombre, c.marca?.rubro, c.redes?.instagram, ...equipo].filter(Boolean).join(" ")).includes(q);
+    });
+  }, [busqueda, clientes, profiles]);
   const isAdmin = role === "admin";
 
   return (
@@ -62,8 +76,31 @@ export default function Clientes() {
       {clientes.length === 0 ? (
         <EmptyState icon={Building2} title="Sin clientes" description="Creá el primero para empezar a planificar videos." />
       ) : (
+        <>
+        <div className="relative mb-4 max-w-md">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setBusqueda("")}
+            placeholder="Buscar cliente, rubro o persona del equipo…"
+            aria-label="Buscar cliente"
+            className="h-10 pl-9 pr-9"
+          />
+          {busqueda && (
+            <button
+              type="button"
+              onClick={() => setBusqueda("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:text-foreground"
+              aria-label="Borrar búsqueda"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        {visibles.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">No hay clientes que coincidan con «{busqueda}».</p>}
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {clientes.map((c) => {
+          {visibles.map((c) => {
             const plan = planDe(c, planes);
             const uso = usoPlan(c, planes, videos, mes);
             const equipoIds = Array.from(
@@ -100,6 +137,7 @@ export default function Clientes() {
             );
           })}
         </div>
+        </>
       )}
       <NuevoClienteDialog open={nuevo} onOpenChange={setNuevo} />
     </PageShell>
