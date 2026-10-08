@@ -80,6 +80,10 @@ export interface MaterialBase {
 
 export interface Video {
   id: string;
+  /** Traído de un sistema anterior (progreso / postgo). */
+  _origen?: string;
+  /** Datos del sistema anterior: ahí el material crudo y el final eran links a carpetas de Drive. */
+  _viejo?: { material_crudo?: string | null; material_finalizado?: string | null } | null;
   proyecto_id: string;
   titulo: string;
   /** Idea / guion acordado con el cliente. */

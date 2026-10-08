@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Camera, CheckCircle2, Download, Loader2, Upload } from "lucide-react";
+import { Camera, CheckCircle2, Download, ExternalLink, FolderOpen, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -144,6 +144,26 @@ export function MaterialSlot({
   };
 
   const activeUploads = uploads.filter((u) => u.status !== "done");
+  // Videos de los sistemas anteriores: el material estaba en una carpeta de Drive (link), no subido al video.
+  const linkViejo = String((slot === "crudo" ? video._viejo?.material_crudo : video._viejo?.material_finalizado) ?? "").trim();
+  const carpetaVieja =
+    audience === "team" && /^https?:\/\//.test(linkViejo) ? (
+      <a
+        href={linkViejo}
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center gap-2.5 rounded-xl border bg-muted/30 px-3 py-2.5 text-sm transition-colors hover:border-primary/50"
+      >
+        <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
+        <span className="min-w-0 flex-1">
+          <span className="block font-medium">{/\/folders\//.test(linkViejo) ? "Abrir carpeta en Drive" : "Abrir en Drive"}</span>
+          <span className="block text-[11px] text-muted-foreground">
+            {slot === "crudo" ? "Material crudo" : "Material final"} cargado en el sistema anterior{video._origen === "postgo" ? " (PostGo)" : ""}
+          </span>
+        </span>
+        <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      </a>
+    ) : null;
 
   if (compacto) {
     return (
@@ -155,7 +175,7 @@ export function MaterialSlot({
               {delCliente.length > 0 && ` · ${delCliente.length} del cliente`}
             </span>
           ) : (
-            <span className="text-xs text-muted-foreground">Sin material todavía</span>
+            !carpetaVieja && <span className="text-xs text-muted-foreground">Sin material todavía</span>
           )}
           {canUpload && (
             <span className="ml-auto flex gap-1.5">
@@ -169,6 +189,7 @@ export function MaterialSlot({
             </span>
           )}
         </div>
+        {carpetaVieja}
         {activeUploads.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {activeUploads.map((u) => (
@@ -192,12 +213,15 @@ export function MaterialSlot({
           </div>
         )
       ) : (
-        !canUpload && (
+        !canUpload &&
+        !carpetaVieja && (
           <p className="rounded-lg border border-dashed px-3 py-6 text-center text-xs text-muted-foreground">
             {emptyText ?? "Todavía no hay archivos."}
           </p>
         )
       )}
+
+      {carpetaVieja}
 
       {audience === "team" && delCliente.length > 0 && (
         <ul className="divide-y rounded-xl border text-xs">
