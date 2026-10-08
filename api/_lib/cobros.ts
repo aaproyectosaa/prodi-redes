@@ -85,7 +85,9 @@ export async function aplicarPago(pago: PagoMP, baseUrl: string): Promise<string
         proyecto_id: c.proyecto_id,
         concepto: c.concepto,
         cantidad: c.cantidad,
-        pedido: (c.pedido as PedidoVideo | undefined)?.titulo,
+        pedido: c.pedido
+          ? `${(c.pedido as PedidoVideo).titulo}${(c.pedido as PedidoVideo).filma_cliente ? " · lo filma el cliente y nos manda el material" : ""}`
+          : undefined,
       };
     }
 

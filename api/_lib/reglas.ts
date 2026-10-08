@@ -301,9 +301,10 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
     case "projects":
       if (crea || borra) return esAdmin(c);
       // contacto_emails: ahí se mandan boletas e informes, solo lo cambia el admin.
+      // produccion (quién filma): admin o la productora del cliente.
       return (
         esAdmin(c) ||
-        (c.role === "productor" && equipoDe(c, id) && soloCambia(antes, despues, ["marca", "redes", "meta"])) ||
+        (c.role === "productor" && equipoDe(c, id) && soloCambia(antes, despues, ["marca", "redes", "meta", "produccion"])) ||
         (esFinanzas(c) && soloCambia(antes, despues, ["facturacion"]))
       );
     case "videos":

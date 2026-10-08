@@ -44,6 +44,7 @@ export function MaterialSlot({
   const driveAvailable = connection?.status === "connected";
   const attachments: DriveAttachmentRef[] =
     (slot === "crudo" ? video.attachments_crudo : video.attachments_finalizado) ?? [];
+  const delCliente = attachments.filter((a) => a.origen === "cliente");
   const [dragOver, setDragOver] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
@@ -96,6 +97,7 @@ export function MaterialSlot({
           {attachments.length > 0 ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
               <CheckCircle2 className="h-3.5 w-3.5" /> {attachments.length} archivo{attachments.length === 1 ? "" : "s"} subido{attachments.length === 1 ? "" : "s"}
+              {delCliente.length > 0 && ` · ${delCliente.length} del cliente`}
             </span>
           ) : (
             <span className="text-xs text-muted-foreground">Sin material todavía</span>
@@ -140,6 +142,19 @@ export function MaterialSlot({
             {emptyText ?? "Todavía no hay archivos."}
           </p>
         )
+      )}
+
+      {audience === "team" && delCliente.length > 0 && (
+        <ul className="divide-y rounded-xl border text-xs">
+          {delCliente.map((a) => (
+            <li key={a.drive_file_id} className="flex items-center gap-2 px-3 py-1.5">
+              <span className="min-w-0 flex-1 truncate">{a.name}</span>
+              <span className="shrink-0 rounded-full bg-violet-500/12 px-2 py-0.5 text-[10px] font-semibold text-violet-700 dark:text-violet-300">
+                Subido por el cliente
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
 
       {activeUploads.length > 0 && (

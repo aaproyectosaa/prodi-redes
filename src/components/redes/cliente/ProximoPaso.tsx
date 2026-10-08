@@ -10,6 +10,7 @@ import { Palette,
   PlayCircle,
   Sparkles,
   TrendingUp,
+  Upload,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import type { Paso, TipoPaso } from "@/lib/redes/proximoPaso";
 
 const ICONOS: Record<TipoPaso, LucideIcon> = {
   aprobar: PlayCircle,
+  material: Upload,
   elegir_ideas: Sparkles,
   pagar_pieza: CreditCard,
   pieza_lista: ImageIcon,

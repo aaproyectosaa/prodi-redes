@@ -23,7 +23,7 @@ import type {
   Rodaje,
   Video,
 } from "./types";
-import { etapaInfo } from "./etapas";
+import { etapaInfo, quienFilma } from "./etapas";
 import { fechaCorta, segundos } from "./format";
 import type { MarcaCorreccion } from "./types";
 
@@ -91,6 +91,7 @@ export async function crearVideos(
   const batch = writeBatch(db);
   const ids: string[] = [];
   const ts = now();
+  const filmaCliente = quienFilma(project) === "cliente";
   for (const item of items) {
     const ref = doc(collection(db, VIDEOS));
     ids.push(ref.id);
@@ -102,7 +103,9 @@ export async function crearVideos(
       referencias: item.referencias?.trim() || null,
       mes,
       extra: Boolean(opts.extra),
-      etapa: "planificado",
+      // Si el cliente filma siempre él, no lleva rodaje: arranca esperando su material.
+      etapa: filmaCliente ? "material_cliente" : "planificado",
+      filma_cliente: filmaCliente,
       etapa_desde: ts,
       rodaje_id: null,
       productor_id: equipoDe(project, "productor")[0] ?? null,
@@ -119,7 +122,7 @@ export async function crearVideos(
       pauta: null,
       resultados: null,
       meta: null,
-      historial: [evento(by, "Planificado")],
+      historial: [evento(by, filmaCliente ? "Planificado · lo filma el cliente" : "Planificado")],
       created_at: ts,
       created_by: by,
       updated_at: ts,
@@ -127,7 +130,37 @@ export async function crearVideos(
     batch.set(ref, video);
   }
   await batch.commit();
+  if (filmaCliente && ids.length) {
+    void avisar({
+      destinatarios: equipoDe(project, "cliente"),
+      titulo: ids.length === 1 ? "Tenés un video para filmar" : `Tenés ${ids.length} videos para filmar`,
+      cuerpo: `${items.map((i) => i.titulo.trim()).join(", ").slice(0, 160)} · cuando lo tengas, subí el material desde la app`,
+      link: linkPara("/cliente", ids[0]),
+      clave: `material_pedido:${ids[0]}`,
+      proyectoId: project.id,
+      videoId: ids[0],
+    });
+  }
   return ids;
+}
+
+/** Producción: este video lo filma el cliente (sin rodaje). Espera su material y se le avisa. */
+export async function pasarAMaterialCliente(video: Video, project: Project | undefined, by: string) {
+  await moverA(video, "material_cliente", by, "Lo filma el cliente: esperando su material", { filma_cliente: true, rodaje_id: null });
+  void avisar({
+    destinatarios: equipoDe(project, "cliente"),
+    titulo: "Tenés un video para filmar",
+    cuerpo: `${video.titulo} · cuando lo tengas, subí el material desde la app`,
+    link: linkPara("/cliente", video.id),
+    clave: `material_pedido:${video.id}`,
+    proyectoId: video.proyecto_id,
+    videoId: video.id,
+  });
+}
+
+/** Producción: al final lo filmamos nosotros (vuelve a planificado para agendar el rodaje). */
+export async function filmarNosotros(video: Video, by: string) {
+  await moverA(video, "planificado", by, "Lo filmamos nosotros", { filma_cliente: false });
 }
 
 export async function actualizarVideo(

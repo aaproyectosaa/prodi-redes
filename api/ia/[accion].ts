@@ -28,7 +28,7 @@ import { getAppDriveAccessToken } from "../_lib/drive-connection";
 import { uploadBufferToDrive } from "../_lib/drive-server";
 import { briefPieza, FORMATOS_PIEZA } from "../_lib/piezas";
 import { enviarAviso } from "../_lib/notify";
-import { videoDesdePedido } from "../_lib/pedidos";
+import { filmaElCliente, videoDesdePedido } from "../_lib/pedidos";
 import { fechaAR, sumarDias } from "../_lib/fecha";
 import { atenderMencion } from "../_lib/chat-asistente";
 import {
@@ -614,7 +614,7 @@ async function planResponder(req: VercelRequest) {
             pid,
             team,
             mes,
-            { titulo: i.titulo, idea: i.idea, objetivo: i.objetivo, pedido_por: caller.uid },
+            { titulo: i.titulo, idea: i.idea, objetivo: i.objetivo, pedido_por: caller.uid, filma_cliente: filmaElCliente(proj) },
             "Idea del plan del mes aprobada por el cliente"
           ),
           pedido_cliente: false,
@@ -683,7 +683,7 @@ async function planAjustar(req: VercelRequest) {
         pid,
         team,
         mes,
-        { titulo, idea: texto || null, objetivo: String(b.objetivo ?? "").trim().slice(0, 200) || i.objetivo, pedido_por: caller.uid },
+        { titulo, idea: texto || null, objetivo: String(b.objetivo ?? "").trim().slice(0, 200) || i.objetivo, pedido_por: caller.uid, filma_cliente: filmaElCliente(proj) },
         "Idea del plan ajustada con el pedido del cliente"
       );
       (v.historial[0] as { nota: string | null }).nota = i.respuesta?.comentario ?? null;

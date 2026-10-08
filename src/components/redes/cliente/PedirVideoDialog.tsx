@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { es } from "date-fns/locale";
-import { ArrowLeft, ArrowRight, CalendarDays, CheckCircle2, Clapperboard, CreditCard, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, CheckCircle2, Clapperboard, CreditCard, Loader2, Smartphone, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,8 @@ import { callApi } from "@/lib/redes/api";
 import { formatearFecha } from "@/lib/fecha";
 import { formatARS, hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import { planDe, usoPlan } from "@/lib/redes/planes";
+import { quienFilma } from "@/lib/redes/etapas";
+import { useOpenVideo } from "@/components/redes/VideoCard";
 import { cn } from "@/lib/utils";
 
 const IDEAS = [
@@ -50,10 +52,19 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
   const [aviso, setAviso] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [listo, setListo] = useState(false);
+  /** Si filman los dos: quién filma este (null = todavía no eligió). */
+  const [loFilmo, setLoFilmo] = useState<boolean | null>(null);
+  const [videoId, setVideoId] = useState<string | null>(null);
   const tituloRef = useRef<HTMLInputElement>(null);
+  const abrirVideo = useOpenVideo();
+  const filma = quienFilma(cliente);
+  // Lo filma el cliente: siempre si filma él; si filman los dos, si lo eligió.
+  const filmaCliente = filma === "cliente" || (filma === "ambos" && loFilmo === true);
 
   useEffect(() => {
     if (!open) return;
+    setLoFilmo(null);
+    setVideoId(null);
     setPaso(0);
     setTipo(null);
     setTitulo("");
@@ -84,6 +95,10 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
       tituloRef.current?.focus();
       return;
     }
+    if (paso === 0 && filma === "ambos" && loFilmo === null) {
+      setAviso("Contanos quién lo filma.");
+      return;
+    }
     if (paso === 1 && !fecha) {
       setAviso("Elegí un día en el calendario, o tocá “Cuando puedan”.");
       return;
@@ -95,15 +110,18 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
   const pedir = async (m: string) => {
     setEnviando(true);
     try {
-      const r = await callApi<{ estado: "creado" | "pago"; init_point?: string }>("/api/pagos/pedir-video", {
+      const r = await callApi<{ estado: "creado" | "pago"; init_point?: string; video_id?: string }>("/api/pagos/pedir-video", {
         proyecto_id: cliente.id,
         mes: m,
         fecha_deseada: fecha && fecha !== "sin_fecha" ? fecha : null,
         titulo,
         idea,
         objetivo,
+        // El servidor lo decide con la ficha del cliente; esto solo cuenta si filman los dos.
+        filma_cliente: filmaCliente,
       });
       setMesFinal(m);
+      setVideoId(r.video_id ?? null);
       if (r.estado === "pago" && r.init_point) {
         onOpenChange(false);
         window.location.href = r.init_point;
@@ -137,11 +155,25 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
             </span>
             <DialogTitle className="text-xl">¡Pedido enviado!</DialogTitle>
             <DialogDescription className="max-w-xs">
-              “{titulo}” ya está en tus videos de {nombreMes(mesFinal ?? mes)}. El equipo te escribe para coordinar la filmación.
+              {filmaCliente
+                ? `“${titulo}” ya está en tus videos de ${nombreMes(mesFinal ?? mes)}. Cuando lo filmes, subí el material desde el video y tocá “Listo, ya subí todo”.`
+                : `“${titulo}” ya está en tus videos de ${nombreMes(mesFinal ?? mes)}. El equipo te escribe para coordinar la filmación.`}
             </DialogDescription>
-            <Button className="mt-2" onClick={() => onOpenChange(false)}>
-              Listo
-            </Button>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+              {filmaCliente && videoId && (
+                <Button
+                  onClick={() => {
+                    onOpenChange(false);
+                    abrirVideo(videoId);
+                  }}
+                >
+                  <Upload className="mr-2 h-4 w-4" /> Subir material ahora
+                </Button>
+              )}
+              <Button variant={filmaCliente && videoId ? "outline" : "default"} onClick={() => onOpenChange(false)}>
+                {filmaCliente && videoId ? "Más tarde" : "Listo"}
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="space-y-5">
@@ -202,6 +234,42 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
                     <Label>Contanos más (opcional)</Label>
                     <Textarea rows={3} value={idea} onChange={(e) => setIdea(e.target.value)} placeholder="Qué querés que se vea, qué decir, alguna idea que te guste…" />
                   </div>
+                  {filma === "ambos" && (
+                    <div className="space-y-1.5">
+                      <Label>¿Quién filma este video?</Label>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {[
+                          { v: false, icon: Clapperboard, titulo: "Lo filman ustedes", texto: "Coordinamos el día y vamos a filmar." },
+                          { v: true, icon: Smartphone, titulo: "Lo filmo yo", texto: "Lo filmás vos y nos mandás el material desde la app." },
+                        ].map((o) => (
+                          <button
+                            key={String(o.v)}
+                            type="button"
+                            onClick={() => {
+                              setLoFilmo(o.v);
+                              if (aviso) setAviso(null);
+                            }}
+                            className={cn(
+                              "flex items-start gap-2.5 rounded-xl border p-3 text-left transition-colors",
+                              loFilmo === o.v ? "border-primary bg-primary/10" : "hover:border-primary/50"
+                            )}
+                          >
+                            <o.icon className={cn("mt-0.5 h-4 w-4 shrink-0", loFilmo === o.v ? "text-primary" : "text-muted-foreground")} />
+                            <span>
+                              <span className="block text-sm font-medium">{o.titulo}</span>
+                              <span className="block text-xs text-muted-foreground">{o.texto}</span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {filma === "cliente" && (
+                    <p className="flex items-start gap-2 rounded-xl border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+                      <Smartphone className="mt-px h-3.5 w-3.5 shrink-0 text-primary" />
+                      Lo filmás vos: después de pedirlo, subís el material desde la app y nosotros lo editamos.
+                    </p>
+                  )}
                 </>
               )}
 
@@ -278,6 +346,9 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
                     <p className="text-xs text-muted-foreground">
                       {fecha && fecha !== "sin_fecha" ? `Para el ${fechaTexto(fecha)}` : `Sin fecha fija (${nombreMes(mes)})`}
                       {objetivo ? ` · ${objetivo}` : ""}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {filmaCliente ? "Lo filmás vos y nos mandás el material" : "Lo filmamos nosotros"}
                     </p>
                   </div>
                   {entra ? (

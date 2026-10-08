@@ -1,4 +1,4 @@
-import type { UserRole } from "@/integrations/firebase/types";
+import type { Project, QuienFilma, UserRole } from "@/integrations/firebase/types";
 import type { EtapaVideo, Video } from "./types";
 
 export interface EtapaInfo {
@@ -32,6 +32,15 @@ export const ETAPAS: EtapaInfo[] = [
     descripcion: "Tiene día, hora y lugar. Después de filmar se sube el crudo.",
     dot: "bg-sky-500",
     badge: "bg-sky-500/12 text-sky-700 dark:text-sky-300 border-sky-500/25",
+  },
+  {
+    value: "material_cliente",
+    label: "Material del cliente",
+    clienteLabel: "Esperando tu material",
+    responsable: "cliente",
+    descripcion: "Lo filma el cliente (sin rodaje). Pasa a edición cuando sube el material y avisa que está todo.",
+    dot: "bg-violet-500",
+    badge: "bg-violet-500/12 text-violet-700 dark:text-violet-300 border-violet-500/25",
   },
   {
     value: "edicion",
@@ -100,9 +109,25 @@ export function diasEnEtapa(video: Pick<Video, "etapa_desde">, now = new Date())
 /** Un video está trabado si superó los días de alerta y no está publicado. */
 export function estaTrabado(video: Video, diasAlerta: number, now = new Date()): boolean {
   if (video.etapa === "publicado") return false;
-  // Lo planificado sin rodaje es normal al principio de mes: solo alerta pasado el doble.
-  const limite = video.etapa === "planificado" ? diasAlerta * 3 : diasAlerta;
+  // Lo planificado sin rodaje es normal al principio de mes: solo alerta pasado el triple.
+  // El material del cliente depende de cuándo filma él: alerta pasado el doble.
+  const limite = video.etapa === "planificado" ? diasAlerta * 3 : video.etapa === "material_cliente" ? diasAlerta * 2 : diasAlerta;
   return diasEnEtapa(video, now) >= limite;
+}
+
+/** Quién filma los videos de este cliente (por defecto Prodi). */
+export function quienFilma(cliente: Pick<Project, "produccion"> | undefined): QuienFilma {
+  const f = cliente?.produccion?.filma;
+  return f === "cliente" || f === "ambos" ? f : "prodi";
+}
+
+/** Hasta edición el cliente puede mandar material (después ya está editado). Igual en api/_lib/pedidos.ts. */
+export const ETAPAS_CON_MATERIAL: EtapaVideo[] = ["planificado", "agendado", "material_cliente", "edicion"];
+
+/** ¿El cliente puede subir material a este video? Los que filma él, o cualquiera si el cliente filma (o filman los dos). */
+export function aceptaMaterialCliente(video: Video, cliente: Pick<Project, "produccion"> | undefined): boolean {
+  if (!ETAPAS_CON_MATERIAL.includes(video.etapa)) return false;
+  return !!video.filma_cliente || video.etapa === "material_cliente" || quienFilma(cliente) !== "prodi";
 }
 
 /** ¿Este rol tiene que hacer algo con el video en esta etapa? */

@@ -1,17 +1,19 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, Clapperboard, Download, Film, FolderOpen, Image as ImageIcon, Loader2 } from "lucide-react";
+import { ChevronDown, Clapperboard, Download, Film, FolderOpen, Image as ImageIcon, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ClientMediaCarousel } from "@/components/media/ClientMediaCarousel";
 import { EtapaBadge } from "@/components/redes/EtapaBadge";
+import { useOpenVideo } from "@/components/redes/VideoCard";
+import { aceptaMaterialCliente } from "@/lib/redes/etapas";
 import { useDriveConnection } from "@/hooks/use-drive-connection";
 import { getDriveMediaPlayUrl } from "@/utils/drive/driveMediaUrl";
 import { asset } from "@/lib/asset";
 import { mesLabel } from "@/lib/redes/format";
 import { versionFinal } from "@/lib/redes/piezas";
 import { cn } from "@/lib/utils";
-import type { DriveAttachmentRef } from "@/integrations/firebase/types";
+import type { DriveAttachmentRef, Project } from "@/integrations/firebase/types";
 import type { PiezaIA, Video } from "@/lib/redes/types";
 
 type Filtro = "todo" | "crudo" | "editado";
@@ -33,7 +35,70 @@ interface Grupo {
 const mesDe = (iso: string) => iso.slice(0, 7);
 
 /** Todo el material de la marca: lo que filmamos (crudo) y lo terminado (videos editados y piezas entregadas). */
-export function MaterialCliente({ videos, piezas }: { videos: Video[]; piezas: PiezaIA[] }) {
+export function MaterialCliente({ videos, piezas, cliente }: { videos: Video[]; piezas: PiezaIA[]; cliente?: Project }) {
+  const subir = useMemo(
+    () =>
+      videos
+        .filter((v) => aceptaMaterialCliente(v, cliente))
+        // Primero los que esperan su material.
+        .sort((a, b) => Number(b.etapa === "material_cliente") - Number(a.etapa === "material_cliente") || a.mes.localeCompare(b.mes)),
+    [videos, cliente]
+  );
+  return (
+    <div className="space-y-6">
+      {subir.length > 0 && <SubirTuMaterial videos={subir} />}
+      <MaterialArchivos videos={videos} piezas={piezas} />
+    </div>
+  );
+}
+
+/** Videos a los que el cliente les puede mandar material (los que filma él, o extra si filman los dos). */
+function SubirTuMaterial({ videos }: { videos: Video[] }) {
+  const open = useOpenVideo();
+  const espera = videos.filter((v) => v.etapa === "material_cliente").length;
+  return (
+    <section className={cn("space-y-3 rounded-2xl border p-3.5", espera ? "border-primary/40 bg-primary/[0.06]" : "bg-card")}>
+      <div>
+        <p className="flex items-center gap-1.5 font-semibold">
+          <Upload className="h-4 w-4 text-primary" /> Subí tu material
+        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {espera
+            ? "Estos videos los filmás vos: subí lo que grabaste y avisanos cuando esté todo para editarlo."
+            : "Si filmaste algo para alguno de estos videos, mandánoslo y lo sumamos a la edición."}
+        </p>
+      </div>
+      <ul className="space-y-1.5">
+        {videos.map((v) => {
+          const subidos = (v.attachments_crudo ?? []).filter((a) => a.origen === "cliente").length;
+          return (
+            <li key={v.id}>
+              <button
+                type="button"
+                onClick={() => open(v.id)}
+                className="group flex w-full items-center gap-3 rounded-xl border bg-card p-2.5 text-left transition-colors hover:border-primary/50"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">{v.titulo}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {mesLabel(v.mes)}
+                    {v.etapa === "material_cliente" ? " · esperando tu material" : ""}
+                    {subidos ? ` · ${subidos} archivo${subidos === 1 ? "" : "s"} subido${subidos === 1 ? "" : "s"}` : ""}
+                  </span>
+                </span>
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                  <Upload className="h-3.5 w-3.5" /> {subidos ? "Subir más" : "Subir"}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+function MaterialArchivos({ videos, piezas }: { videos: Video[]; piezas: PiezaIA[] }) {
   const { connection } = useDriveConnection();
   const driveAvailable = connection?.status === "connected";
   const [filtro, setFiltro] = useState<Filtro>("todo");

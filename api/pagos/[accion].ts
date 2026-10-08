@@ -5,8 +5,9 @@
 // POST /api/pagos/reembolsar  { pieza_id, nota }  (el equipo rechaza una pieza)
 // POST /api/pagos/suscribir   { proyecto_id, email }  (cliente o admin) → débito automático del abono
 // POST /api/pagos/suscripcion { proyecto_id, accion: "cancelar" | "actualizar_monto" }  (admin)
-// POST /api/pagos/pedir-video { proyecto_id, mes, titulo, idea?, objetivo? }  (cliente)
-//      → si entra en el plan se crea; si no, se cobra como video extra y se crea al pagar
+// POST /api/pagos/pedir-video { proyecto_id, mes, titulo, idea?, objetivo?, filma_cliente? }  (cliente)
+//      → si entra en el plan se crea; si no, se cobra como video extra y se crea al pagar.
+//        Si lo filma el cliente (ficha del cliente, o lo eligió si filman los dos) arranca esperando su material.
 // POST /api/pagos/arca-autorizar { factura_id, reintentar? }  (admin/administración) → CAE de ARCA para una boleta emitida
 // POST /api/pagos/arca-estado    (admin) → prueba la conexión con ARCA
 
@@ -32,7 +33,7 @@ import { FORMATOS_PIEZA, leerPedidoPieza, piezaDoc, precioPieza } from "../_lib/
 import { prepararFacturacion } from "../_lib/facturar";
 import { asuntoFactura, facturaId, mailFacturaHtml, periodoDe, saldoDe, type Factura } from "../_lib/facturacion";
 import { enviarMail } from "../_lib/informe";
-import { videoDesdePedido } from "../_lib/pedidos";
+import { filmaElCliente, videoDesdePedido } from "../_lib/pedidos";
 import { hoyAR, mesAR, sumarMeses } from "../_lib/fecha";
 import { autorizarFactura, estadoArca } from "../_lib/arca";
 
@@ -551,7 +552,7 @@ async function arcaEstado(req: VercelRequest) {
 
 async function pedirVideo(req: VercelRequest) {
   const caller = await requireCaller(req, ["cliente", "admin"]);
-  const b = body<{ proyecto_id?: string; mes?: string; fecha_deseada?: string | null; titulo?: string; idea?: string; objetivo?: string }>(req);
+  const b = body<{ proyecto_id?: string; mes?: string; fecha_deseada?: string | null; titulo?: string; idea?: string; objetivo?: string; filma_cliente?: boolean }>(req);
   // Con fecha, el mes sale de la fecha (no puede ser pasada). Con o sin fecha, el mes tiene que ser
   // este o uno de los 3 siguientes (hora de Argentina): si no, cada mes viejo o lejano daría su cupo gratis.
   const fecha = /^\d{4}-\d{2}-\d{2}$/.test(String(b.fecha_deseada ?? "")) ? String(b.fecha_deseada) : null;
@@ -567,17 +568,19 @@ async function pedirVideo(req: VercelRequest) {
   const titulo = String(b.titulo ?? "").trim().slice(0, 120);
   if (titulo.length < 3) throw new HttpError(400, "Contanos de qué se trata el video");
   const mes = String(b.mes);
+  const db = adminDb();
+  const pRef = db.collection("projects").doc(b.proyecto_id);
+  const proj = (await pRef.get()).data() ?? {};
+  // Quién lo filma sale de la ficha del cliente; si filman los dos, de lo que eligió en el pedido.
+  const filma = filmaElCliente(proj, b.filma_cliente === true);
   const pedido = {
     titulo,
     idea: String(b.idea ?? "").trim().slice(0, 2000) || null,
     objetivo: String(b.objetivo ?? "").trim().slice(0, 200) || null,
     fecha_deseada: fecha,
     pedido_por: caller.uid,
+    filma_cliente: filma,
   };
-
-  const db = adminDb();
-  const pRef = db.collection("projects").doc(b.proyecto_id);
-  const proj = (await pRef.get()).data() ?? {};
   let incluidos = Number(proj.plan_redes_override?.videos_mes ?? NaN);
   let precioExtra = Number(proj.plan_redes_override?.precio_video_extra ?? NaN);
   if (proj.plan_redes_id && (isNaN(incluidos) || isNaN(precioExtra))) {
@@ -606,8 +609,10 @@ async function pedirVideo(req: VercelRequest) {
     await enviarAviso(
       {
         destinatarios: team.productor ?? [],
-        titulo: "El cliente pidió un video",
-        cuerpo: `${proj.nombre ?? "Cliente"} · ${titulo}${fecha ? ` · para el ${fecha.split("-").reverse().join("/")}` : ""}`,
+        titulo: filma ? "El cliente pidió un video (lo filma él)" : "El cliente pidió un video",
+        cuerpo: `${proj.nombre ?? "Cliente"} · ${titulo}${fecha ? ` · para el ${fecha.split("-").reverse().join("/")}` : ""}${
+          filma ? " · nos manda el material" : ""
+        }`,
         link: `/videos?video=${ref.id}`,
         clave: `pedido_video:${ref.id}`,
         proyectoId: b.proyecto_id,

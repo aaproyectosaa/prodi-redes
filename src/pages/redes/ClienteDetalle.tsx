@@ -30,14 +30,14 @@ import { EvolucionMensajes } from "@/components/redes/EvolucionMensajes";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useAppData } from "@/contexts/app-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
-import { ETAPAS } from "@/lib/redes/etapas";
+import { ETAPAS, quienFilma } from "@/lib/redes/etapas";
 import { formatARS, mesActual, mesLabel, sumarMeses, fechaCorta } from "@/lib/redes/format";
 import { planDe, usoPlan } from "@/lib/redes/planes";
 import { DIA_VENCIMIENTO, totalMensual } from "@/lib/redes/facturacion";
 import { PlazoPago } from "@/components/redes/admin/PlazoPago";
 import { errorPlazo, plazoInicial, plazoParaGuardar } from "@/lib/redes/plazoPago";
 import { callApi } from "@/lib/redes/api";
-import { CONDICIONES_IVA, type CondicionIva, type Project, type ProjectTeamRole } from "@/integrations/firebase/types";
+import { CONDICIONES_IVA, type CondicionIva, type Project, type ProjectTeamRole, type QuienFilma } from "@/integrations/firebase/types";
 import { COLORES } from "./Clientes";
 import { MarcaArchivos } from "@/components/redes/MarcaArchivos";
 import { ContactosCliente } from "@/components/redes/ContactosCliente";
@@ -230,9 +230,17 @@ const ROLES_EQUIPO: { rol: ProjectTeamRole; label: string; desc: string }[] = [
   { rol: "cliente", label: "Usuarios del cliente", desc: "Aprueban y ven resultados" },
 ];
 
+const FILMA_OPCIONES: { v: QuienFilma; titulo: string; texto: string }[] = [
+  { v: "prodi", titulo: "Filmamos nosotros", texto: "Como siempre: se agenda el rodaje y producción sube el crudo." },
+  { v: "cliente", titulo: "Filma el cliente", texto: "Todos sus videos los filma él y nos manda el material desde su panel." },
+  { v: "ambos", titulo: "Los dos", texto: "En cada pedido elige quién lo filma, y puede mandarnos material extra para cualquier video." },
+];
+
 function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolean }) {
   const { planes, settings } = useRedes();
   const { profiles } = useAppData();
+  const { role, user } = useUserProfileContext();
+  const puedeFilma = isAdmin || (role === "productor" && !!user && (cliente.team_roles?.productor ?? []).includes(user.uid));
   const [form, setForm] = useState(() => toForm(cliente));
   const [saving, setSaving] = useState(false);
 
@@ -267,6 +275,8 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
         redes: form.redes,
         meta: form.meta,
       };
+      // Quién filma: admin o la productora del cliente (reglas.ts). Solo se escribe si cambió.
+      if (form.filma !== quienFilma(cliente)) data.produccion = { ...(cliente.produccion ?? {}), filma: form.filma };
       if (isAdmin) {
         // Ahí se mandan boletas e informes: solo lo cambia el admin.
         Object.assign(data, {
@@ -378,6 +388,41 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
           </div>
         </Section>
       )}
+
+      <Section title="¿Quién filma?" description="Define cómo arrancan los videos de este cliente y si puede mandarnos su material.">
+        <div className="space-y-2 rounded-xl border bg-card p-4">
+          {FILMA_OPCIONES.map((o) => (
+            <button
+              key={o.v}
+              type="button"
+              disabled={!puedeFilma}
+              onClick={() => set("filma", o.v)}
+              className={cn(
+                "flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors disabled:cursor-not-allowed",
+                form.filma === o.v ? "border-primary bg-primary/10" : "hover:border-primary/50 disabled:hover:border-border"
+              )}
+            >
+              <span
+                className={cn(
+                  "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
+                  form.filma === o.v ? "border-primary bg-primary" : "border-muted-foreground/40"
+                )}
+              >
+                {form.filma === o.v && <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />}
+              </span>
+              <span>
+                <span className="block text-sm font-medium">{o.titulo}</span>
+                <span className="block text-xs text-muted-foreground">{o.texto}</span>
+              </span>
+            </button>
+          ))}
+          <p className="text-[11px] text-muted-foreground">
+            Los videos que filma el cliente no llevan rodaje: quedan en “Material del cliente” hasta que sube lo que grabó y avisa. Igual
+            entran en el plan del mes (y si ya lo usó, se cobran como video extra).
+            {!puedeFilma && " Lo cambia el admin o la productora del cliente."}
+          </p>
+        </div>
+      </Section>
 
       {isAdmin && (
         <Section title="Facturación" description="Cómo se le arma la boleta el 27 y cuándo la paga.">
@@ -589,6 +634,7 @@ function toForm(c: Project) {
       cliente: c.team_roles?.cliente ?? [],
     } as Partial<Record<ProjectTeamRole, string[]>>,
     emails: (c.contacto_emails ?? []).join(", "),
+    filma: quienFilma(c),
     marca: { ...(c.marca ?? {}) },
     redes: { ...(c.redes ?? {}) },
     meta: { ...(c.meta ?? {}) },

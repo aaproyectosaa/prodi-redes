@@ -98,6 +98,9 @@ export function VideoCard({
         {video.pedido_cliente && vista === "equipo" && video.etapa === "planificado" && (
           <span className="rounded-full bg-primary/12 px-1.5 py-0.5 font-medium text-primary">pedido del cliente</span>
         )}
+        {video.filma_cliente && vista === "equipo" && video.etapa !== "publicado" && (
+          <span className="rounded-full bg-violet-500/12 px-1.5 py-0.5 font-medium text-violet-700 dark:text-violet-300">lo filma el cliente</span>
+        )}
         {video.fecha_deseada && video.etapa !== "publicado" && (
           <span className="inline-flex items-center gap-1 font-medium text-foreground">
             <CalendarDays className="h-3 w-3" /> para el {fechaCorta(video.fecha_deseada)}

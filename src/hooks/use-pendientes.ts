@@ -17,7 +17,7 @@ export function usePendientes(): Record<string, number> {
       out["/piezas"] = piezas.filter((p) => p.estado === "pagada" || p.estado === "en_proceso").length;
     }
     if (role === "cliente") {
-      out["/cliente"] = videos.filter((v) => v.etapa === "revision_cliente").length;
+      out["/cliente"] = videos.filter((v) => v.etapa === "revision_cliente" || v.etapa === "material_cliente").length;
     }
     return out;
   }, [videos, chatsNoLeidos, piezas, role, uid]);

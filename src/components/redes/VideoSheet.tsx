@@ -18,6 +18,7 @@ import {
   MessageSquareWarning,
   Pencil,
   Send,
+  Smartphone,
   Sparkles,
   Trash2,
   TrendingUp,
@@ -52,7 +53,7 @@ import { cn } from "@/lib/utils";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useAppData } from "@/contexts/app-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
-import { ETAPAS, diasEnEtapa, estaTrabado, etapaInfo } from "@/lib/redes/etapas";
+import { ETAPAS, aceptaMaterialCliente, diasEnEtapa, estaTrabado, etapaInfo, quienFilma } from "@/lib/redes/etapas";
 import { fechaCorta, fechaHora, formatARS, formatNum, hace, mesLabel } from "@/lib/redes/format";
 import {
   actualizarVideo,
@@ -61,10 +62,12 @@ import {
   eliminarVideo,
   entregarEdicion,
   enviarAEdicion,
+  filmarNosotros,
   forzarEtapa,
   guardarGuion,
   pedirCambiosCliente,
   pedirCambiosInterno,
+  pasarAMaterialCliente,
 } from "@/lib/redes/videos";
 import { callApi } from "@/lib/redes/api";
 import type { EtapaVideo, Video } from "@/lib/redes/types";
@@ -74,6 +77,7 @@ import { MaterialSlot } from "./MaterialSlot";
 import { CorreccionesDialog, MarcasEdicion } from "./MarcasVideo";
 import { EditarPautaDialog, PublicarDialog, ResultadosDialog } from "./PautaDialogs";
 import { RodajeDialog } from "./RodajeDialog";
+import { SubirMaterial } from "./cliente/SubirMaterial";
 
 function Block({
   icon: Icon,
@@ -178,6 +182,8 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
   const feedbackDe = video.feedback_cliente ? "el cliente" : "producción";
   const trabado = !isCliente && estaTrabado(video, settings.dias_alerta);
   const avanzado = ["revision_interna", "revision_cliente", "para_publicar", "publicado"].includes(video.etapa);
+  const filma = quienFilma(cliente);
+  const delCliente = (video.attachments_crudo ?? []).filter((a) => a.origen === "cliente").length;
 
   return (
     <>
@@ -221,6 +227,21 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
 
         {!isCliente && video.etapa === "revision_cliente" && <RecordatorioCliente video={video} />}
 
+        {!isCliente && (video.filma_cliente || delCliente > 0) && (
+          <p className="flex items-start gap-2 rounded-xl border border-violet-500/30 bg-violet-500/[0.07] px-3 py-2.5 text-xs">
+            <Smartphone className="mt-px h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-300" />
+            <span>
+              {video.etapa === "material_cliente"
+                ? delCliente
+                  ? `Lo filma el cliente: ya subió ${delCliente} archivo${delCliente === 1 ? "" : "s"}. Pasa a edición cuando avise que terminó (o mandalo vos).`
+                  : "Lo filma el cliente: estamos esperando que suba su material desde su panel."
+                : video.filma_cliente
+                  ? `Lo filmó el cliente${delCliente ? ` · ${delCliente} archivo${delCliente === 1 ? "" : "s"} suyo${delCliente === 1 ? "" : "s"} en el crudo` : ""}.`
+                  : `El cliente mandó ${delCliente} archivo${delCliente === 1 ? "" : "s"} de material extra (en el crudo).`}
+            </span>
+          </p>
+        )}
+
         {isCliente ? (
           <ClienteView video={video} />
         ) : (
@@ -228,7 +249,7 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
             {avanzado ? (
               <>
                 {/* Ya hay video final: lo primero es verlo */}
-                {video.etapa !== "planificado" && video.etapa !== "agendado" && (
+                {!["planificado", "agendado", "material_cliente"].includes(video.etapa) && (
               <Block icon={Film} title="Video final">
                 <MaterialSlot
                   video={video}
@@ -292,8 +313,8 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
                 video={video}
                 slot="crudo"
                 clienteNombre={cliente?.nombre ?? "Cliente"}
-                canUpload={isProd && ["planificado", "agendado", "edicion"].includes(video.etapa)}
-                emptyText="Producción todavía no subió el material filmado."
+                canUpload={isProd && ["planificado", "agendado", "material_cliente", "edicion"].includes(video.etapa)}
+                emptyText={video.filma_cliente ? "El cliente todavía no subió su material." : "Producción todavía no subió el material filmado."}
               />
             </Block>
                   </div>
@@ -339,11 +360,11 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
                 video={video}
                 slot="crudo"
                 clienteNombre={cliente?.nombre ?? "Cliente"}
-                canUpload={isProd && ["planificado", "agendado", "edicion"].includes(video.etapa)}
-                emptyText="Producción todavía no subió el material filmado."
+                canUpload={isProd && ["planificado", "agendado", "material_cliente", "edicion"].includes(video.etapa)}
+                emptyText={video.filma_cliente ? "El cliente todavía no subió su material." : "Producción todavía no subió el material filmado."}
               />
             </Block>
-                {video.etapa !== "planificado" && video.etapa !== "agendado" && (
+                {!["planificado", "agendado", "material_cliente"].includes(video.etapa) && (
               <Block icon={Film} title="Video final">
                 <MaterialSlot
                   video={video}
@@ -419,8 +440,22 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
 
       {/* Barra de acciones según rol + etapa */}
       <ActionBar>
-        {isProd && (video.etapa === "planificado" || video.etapa === "agendado") && (
+        {isProd && (video.etapa === "planificado" || video.etapa === "agendado" || video.etapa === "material_cliente") && (
           <>
+            {video.etapa === "planificado" && !video.rodaje_id && filma !== "prodi" && (
+              <Button
+                variant="outline"
+                disabled={busy === "filma"}
+                onClick={() => run("filma", () => pasarAMaterialCliente(video, cliente, uid), "Le avisamos al cliente que suba su material")}
+              >
+                <Smartphone className="mr-2 h-4 w-4" /> Lo filma el cliente
+              </Button>
+            )}
+            {video.etapa === "material_cliente" && !hasCrudo && (
+              <Button variant="outline" disabled={busy === "filma"} onClick={() => run("filma", () => filmarNosotros(video, uid), "Vuelve a planificado")}>
+                <Clapperboard className="mr-2 h-4 w-4" /> Lo filmamos nosotros
+              </Button>
+            )}
             {video.etapa === "planificado" && (
               <Button variant="outline" onClick={() => setRodajeOpen(true)}>
                 <CalendarDays className="mr-2 h-4 w-4" /> Agendar rodaje
@@ -1189,11 +1224,16 @@ function ClienteView({ video }: { video: Video }) {
             audience="client"
           />
         </Block>
-      ) : (
+      ) : video.etapa === "material_cliente" ? null : (
         <div className="rounded-xl border p-4 text-sm text-muted-foreground">
           Estamos trabajando en este video ({etapaInfo(video.etapa).clienteLabel.toLowerCase()}). Te avisamos
           cuando esté listo para que lo veas.
         </div>
+      )}
+      {aceptaMaterialCliente(video, cliente) && (
+        <Block icon={Clapperboard} title={video.etapa === "material_cliente" ? "Tu material" : "Material extra"}>
+          <SubirMaterial video={video} />
+        </Block>
       )}
       {video.idea && (
         <Block icon={Sparkles} title="Idea">

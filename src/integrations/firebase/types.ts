@@ -267,7 +267,12 @@ export interface Project {
   } | null;
   /** Fecha de alta del cliente (YYYY-MM-DD). */
   alta?: string | null;
+  /** Producción de los videos. `filma`: quién filma (por defecto Prodi). */
+  produccion?: { filma?: QuienFilma } | null;
 }
+
+/** prodi = filmamos nosotros · cliente = filma él y nos manda el material · ambos = se elige en cada video. */
+export type QuienFilma = "prodi" | "cliente" | "ambos";
 
 /** Cómo el cliente elige el ítem en Nuevo pedido. */
 export type PortalServiceSelection = "counter" | "toggle" | "request";
@@ -392,6 +397,8 @@ export interface DriveAttachmentRef {
   uploaded_at: string;
   uploaded_by: string;
   folder_path: string;
+  /** Lo subió el cliente desde su panel (material que filmó él). */
+  origen?: "cliente";
 }
 
 /** Adjunto del pedido de cambios del cliente (Google Drive). */

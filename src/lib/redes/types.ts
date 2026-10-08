@@ -16,6 +16,7 @@ import type { DriveAttachmentRef } from "@/integrations/firebase/types";
 export type EtapaVideo =
   | "planificado" // Idea cargada con el cliente
   | "agendado" // Tiene rodaje con día, hora y lugar
+  | "material_cliente" // Lo filma el cliente: esperando que suba el material
   | "edicion" // Material crudo cargado; lo edita la editora
   | "revision_interna" // Lo revisa la productora
   | "revision_cliente" // Lo aprueba el cliente
@@ -107,6 +108,10 @@ export interface Video {
   recordatorio_cliente_at?: string | null;
   /** Salió de una idea del plan del mes. */
   plan_idea_id?: string | null;
+  /** Lo filma el cliente y nos manda el material (no lleva rodaje). */
+  filma_cliente?: boolean;
+  /** Última vez que el cliente avisó "Listo, ya subí todo" (lo escribe el servidor). */
+  material_cliente_avisado_at?: string | null;
   historial: HistorialVideo[];
   created_at: string;
   created_by: string;

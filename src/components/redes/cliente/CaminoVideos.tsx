@@ -17,6 +17,7 @@ export function CaminoVideos({ videos, onPedir }: { videos: Video[]; onPedir?: (
       const r = rodajes.find((x) => x.id === v.rodaje_id);
       return r ? `Lo filmamos el ${fechaCorta(r.fecha)}${r.hora ? ` a las ${r.hora}` : ""}` : "Por filmar";
     }
+    if (v.etapa === "material_cliente") return "Esperando tu material";
     if (v.etapa === "edicion" || v.etapa === "revision_interna") return "Lo estamos editando";
     if (v.etapa === "para_publicar") return "Aprobado, lo estamos subiendo";
     if (v.etapa === "publicado") return v.publicacion ? `Publicado el ${fechaCorta(v.publicacion.publicado_at)}` : "Publicado";
@@ -24,12 +25,12 @@ export function CaminoVideos({ videos, onPedir }: { videos: Video[]; onPedir?: (
   };
 
   const columnas = [
-    { id: "vos", titulo: "Te toca", icon: PlayCircle, items: videos.filter((v) => v.etapa === "revision_cliente"), vacio: "Nada pendiente 👌" },
+    { id: "vos", titulo: "Te toca", icon: PlayCircle, items: videos.filter((v) => v.etapa === "revision_cliente" || v.etapa === "material_cliente"), vacio: "Nada pendiente 👌" },
     {
       id: "proceso",
       titulo: "En proceso",
       icon: Clock,
-      items: videos.filter((v) => !["revision_cliente", "publicado"].includes(v.etapa)),
+      items: videos.filter((v) => !["revision_cliente", "material_cliente", "publicado"].includes(v.etapa)),
       vacio: "Nada en proceso",
     },
     { id: "listos", titulo: "Publicados", icon: CheckCircle2, items: videos.filter((v) => v.etapa === "publicado"), vacio: "Todavía ninguno" },
@@ -82,7 +83,7 @@ export function CaminoVideos({ videos, onPedir }: { videos: Video[]; onPedir?: (
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium">{v.titulo}</span>
                       <span className={cn("block truncate text-xs", activa ? "font-medium text-primary" : "text-muted-foreground")}>
-                        {activa ? "Tocá para verlo y aprobarlo" : estado(v)}
+                        {activa ? (v.etapa === "material_cliente" ? "Tocá para subir tu material" : "Tocá para verlo y aprobarlo") : estado(v)}
                       </span>
                     </span>
                     {activa && <ArrowRight className="h-4 w-4 shrink-0 text-primary transition-transform group-hover:translate-x-1" />}

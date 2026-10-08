@@ -355,7 +355,7 @@ export default function ClientePortal() {
         </TabsContent>
 
         <TabsContent value="material">
-          <MaterialCliente videos={mios} piezas={misPiezas} />
+          <MaterialCliente videos={mios} piezas={misPiezas} cliente={cliente} />
         </TabsContent>
 
         <TabsContent value="plan">

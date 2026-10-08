@@ -6,6 +6,7 @@ import type { PiezaIA, Rodaje, Video } from "./types";
 /** Lo que el cliente tiene que saber o hacer ahora, en orden de importancia. */
 export type TipoPaso =
   | "aprobar"
+  | "material"
   | "elegir_ideas"
   | "pagar_pieza"
   | "pieza_lista"
@@ -61,6 +62,21 @@ export function pasosCliente(params: {
       titulo: paraAprobar.length === 1 ? "Tenés un video para aprobar" : `Tenés ${paraAprobar.length} videos para aprobar`,
       texto: paraAprobar.length === 1 ? `“${paraAprobar[0].titulo}” está listo. Miralo y decinos si va.` : "Están listos. Miralos y decinos si van.",
       accion: { label: "Ver y aprobar", destino: "video", videoId: paraAprobar[0].id },
+    });
+  }
+
+  // Videos que filma el cliente y esperan su material.
+  const sinMaterial = mios.filter((v) => v.etapa === "material_cliente").sort((a, b) => a.etapa_desde.localeCompare(b.etapa_desde));
+  if (sinMaterial.length) {
+    out.push({
+      tipo: "material",
+      teToca: true,
+      titulo: sinMaterial.length === 1 ? "Subí el material de tu video" : `Subí el material de ${sinMaterial.length} videos`,
+      texto:
+        sinMaterial.length === 1
+          ? `“${sinMaterial[0].titulo}” lo filmás vos. Subí los videos y fotos, y tocá “Listo, ya subí todo” para que lo editemos.`
+          : "Los filmás vos. Subí los videos y fotos de cada uno, y avisanos cuando esté todo para editarlos.",
+      accion: { label: "Subir material", destino: "video", videoId: sinMaterial[0].id },
     });
   }
 
@@ -183,7 +199,7 @@ export function pasosCliente(params: {
 /** Los 5 pasos que ve el cliente en cada video. */
 export const CAMINO_CLIENTE = [
   { key: "idea", label: "Idea", etapas: ["planificado"] },
-  { key: "filmacion", label: "Filmación", etapas: ["agendado"] },
+  { key: "filmacion", label: "Filmación", etapas: ["agendado", "material_cliente"] },
   { key: "edicion", label: "Edición", etapas: ["edicion", "revision_interna"] },
   { key: "aprobacion", label: "Tu OK", etapas: ["revision_cliente"] },
   { key: "redes", label: "En redes", etapas: ["para_publicar", "publicado"] },
