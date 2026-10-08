@@ -36,6 +36,27 @@ export async function borrarSuscripciones(uid: string, endpoint?: string) {
   else await getPool().query("delete from push_suscripciones where uid = $1", [uid]);
 }
 
+/** Prueba: manda un aviso a cada dispositivo del usuario y devuelve qué pasó con cada uno. */
+export async function probarPush(uid: string): Promise<{ configurado: boolean; dispositivos: { equipo: string; ok: boolean; estado?: number; error?: string }[] }> {
+  if (!configurar()) return { configurado: false, dispositivos: [] };
+  const r = await getPool().query("select endpoint, datos from push_suscripciones where uid = $1", [uid]);
+  const equipo = (endpoint: string) =>
+    /push.apple.com/.test(endpoint) ? "iPhone / Mac (Apple)" : /fcm.googleapis/.test(endpoint) ? "Chrome / Android" : /mozilla/.test(endpoint) ? "Firefox" : /notify.windows/.test(endpoint) ? "Edge (Windows)" : "otro";
+  const dispositivos = await Promise.all(
+    r.rows.map(async (row: { endpoint: string; datos: Suscripcion }) => {
+      try {
+        await webpush.sendNotification(row.datos, JSON.stringify({ title: "Prueba de Prodi", body: "Si ves esto, los avisos llegan a este dispositivo.", url: "/notificaciones", tag: "prueba" }), { TTL: 600 });
+        return { equipo: equipo(row.endpoint), ok: true };
+      } catch (err) {
+        const estado = (err as { statusCode?: number }).statusCode;
+        if (estado === 404 || estado === 410) await getPool().query("delete from push_suscripciones where endpoint = $1", [row.endpoint]);
+        return { equipo: equipo(row.endpoint), ok: false, estado, error: String((err as { body?: string }).body || (err as Error).message).slice(0, 200) };
+      }
+    })
+  );
+  return { configurado: true, dispositivos };
+}
+
 /** Manda el aviso a todos los dispositivos del usuario. Borra las suscripciones que ya no existen. */
 export async function enviarPush(uid: string, aviso: { title: string; body: string; url: string; tag?: string }): Promise<number> {
   if (!configurar()) return 0;

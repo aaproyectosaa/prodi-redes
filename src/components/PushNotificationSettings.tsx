@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { callApi } from "@/lib/redes/api";
 import {
   detectPushPlatform,
   isRunningAsInstalledPwa,
@@ -26,7 +27,32 @@ export function PushNotificationSettings({
 }: PushNotificationSettingsProps) {
   const [supported, setSupported] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
+  const [probando, setProbando] = useState(false);
   const platform = detectPushPlatform();
+
+  // Prueba de punta a punta: el servidor manda un aviso a cada dispositivo y dice qué pasó.
+  const probar = async () => {
+    setProbando(true);
+    try {
+      const r = await callApi<{ configurado: boolean; dispositivos: { equipo: string; ok: boolean; estado?: number; error?: string }[] }>(
+        "/api/auth/push-prueba"
+      );
+      if (!r.configurado) {
+        toast.error("El servidor no tiene las claves de avisos (VAPID). Hay que cargarlas en Vercel.");
+      } else if (!r.dispositivos.length) {
+        toast.error("No hay ningún dispositivo suscripto. Tocá \"Volver a activar en este dispositivo\".");
+      } else {
+        const bien = r.dispositivos.filter((d) => d.ok).length;
+        const mal = r.dispositivos.filter((d) => !d.ok);
+        if (bien) toast.success(`Enviada a ${bien} dispositivo${bien === 1 ? "" : "s"}. Si no te llega, revisá los permisos de notificaciones del teléfono.`, { duration: 10000 });
+        for (const d of mal) toast.error(`${d.equipo}: no se pudo (${d.estado ?? "error"}). ${d.estado === 403 ? "Las claves VAPID no coinciden: volvé a activar." : ""}`, { duration: 12000 });
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo probar");
+    } finally {
+      setProbando(false);
+    }
+  };
   const isPwa = isRunningAsInstalledPwa();
   const needsIosInstall = platform === "ios" && !isPwa;
 
@@ -183,6 +209,19 @@ export function PushNotificationSettings({
           >
             Activar en este dispositivo
           </Button>
+        )}
+
+        {pushEnabled && !needsIosInstall && supported && (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {/* En iPhone, Prodi y Prodi Chat se activan por separado: el interruptor puede estar prendido por la otra. */}
+            <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void handleToggle(true)}>
+              Volver a activar en este dispositivo
+            </Button>
+            <Button type="button" variant="outline" size="sm" disabled={probando} onClick={() => void probar()}>
+              {probando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Mandarme una notificación de prueba
+            </Button>
+          </div>
         )}
       </CardContent>
     </Card>

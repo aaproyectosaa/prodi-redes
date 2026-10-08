@@ -14,7 +14,7 @@ import { AuthError, cambiarClave, crearUsuario, iniciarSesion, tokenDeSesion, us
 import { extractBearerToken, HttpError } from "../_lib/auth";
 import { body, sendError } from "../_lib/http";
 import { getPool } from "../_lib/db";
-import { borrarSuscripciones, guardarSuscripcion } from "../_lib/push";
+import { borrarSuscripciones, guardarSuscripcion, probarPush } from "../_lib/push";
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -71,6 +71,10 @@ async function handlerAccion(accion: string, req: VercelRequest) {
       if (b.quitar) await borrarSuscripciones(u.uid, typeof b.quitar === "string" ? b.quitar : undefined);
       else await guardarSuscripcion(u.uid, b.suscripcion);
       return { ok: true };
+    }
+    case "push-prueba": {
+      const u = await sesion(req);
+      return probarPush(u.uid);
     }
     default:
       throw new HttpError(404, "Acción desconocida");
