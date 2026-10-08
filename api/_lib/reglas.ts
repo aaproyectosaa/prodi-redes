@@ -13,7 +13,7 @@ export interface Contexto {
   role: string;
   /** Clientes donde el usuario es "cliente" (se calcula una vez por pedido). */
   misClientes: Set<string>;
-  /** Clientes asignados a productor / editor / pauta (en cualquier rol de team_roles). */
+  /** Clientes asignados a productor / editor / pauta / diseño (en cualquier rol de team_roles; diseño, también los sin diseñadora). */
   misProyectos: Set<string>;
   /** Chats leídos en este pedido (para saber si es miembro). */
   chats: Map<string, Data | null>;
@@ -36,11 +36,11 @@ const esTeam = (c: Contexto) => TEAM.includes(c.role);
 const esDiseno = (c: Contexto) => c.role === "diseno";
 const esFinanzas = (c: Contexto) => c.role === "admin" || c.role === "administracion";
 
-/** Roles del equipo que solo ven los clientes donde están asignados (como assertProjectAccess). */
-const ASIGNADOS = ["productor", "editor", "pauta"];
-/** ¿Trabaja en este cliente? Admin y diseño ven todos; el resto, solo si está en team_roles. */
+/** Roles del equipo que solo ven los clientes donde están asignados (como assertProjectAccess). Diseño ve además los clientes sin diseñadora asignada. */
+const ASIGNADOS = ["productor", "editor", "pauta", "diseno"];
+/** ¿Trabaja en este cliente? Admin ve todos; el resto, solo si está en team_roles (diseño: también los sin diseñadora). */
 const equipoDe = (c: Contexto, pid: unknown) =>
-  esAdmin(c) || esDiseno(c) || (ASIGNADOS.includes(c.role) && typeof pid === "string" && c.misProyectos.has(pid));
+  esAdmin(c) || (ASIGNADOS.includes(c.role) && typeof pid === "string" && c.misProyectos.has(pid));
 /** Admin, o productor asignado a ese cliente. */
 const produceEn = (c: Contexto, pid: unknown) => esAdmin(c) || (c.role === "productor" && equipoDe(c, pid));
 /** Campos del WhatsApp (ya no se usa): nadie los escribe desde la app. */
@@ -218,7 +218,7 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
       return equipoDe(c, d.proyecto_id) || (clienteDe(c, d.proyecto_id) && d.estado !== "borrador");
     case "ia_memoria":
       // ia_memoria/{cliente}
-      return produceEn(c, id) || esDiseno(c);
+      return produceEn(c, id) || (esDiseno(c) && equipoDe(c, id));
     case "cobros":
       return esFinanzas(c) || clienteDe(c, d.proyecto_id);
     case "facturas":
@@ -318,7 +318,10 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       // El cliente aprueba o pide cambios solo por /api/publico/pieza-cliente.
       if (crea) return produceEn(c, despues!.proyecto_id);
       if (borra) return esAdmin(c);
-      return esDiseno(c) || (produceEn(c, antes!.proyecto_id) && produceEn(c, despues!.proyecto_id));
+      return (
+        (esDiseno(c) && equipoDe(c, antes!.proyecto_id) && equipoDe(c, despues!.proyecto_id)) ||
+        (produceEn(c, antes!.proyecto_id) && produceEn(c, despues!.proyecto_id))
+      );
     case "planes_mes":
       if (crea || borra) return false;
       return produceEn(c, antes!.proyecto_id) && antes!.estado === "borrador" && soloCambia(antes, despues, ["ideas", "nota_equipo", "updated_at"]);
@@ -437,16 +440,20 @@ export async function contexto(ex: Pick<PoolClient, "query">, uid: string, role:
     );
     r.rows.forEach((x: { id: string }) => misClientes.add(x.id));
   } else if (ASIGNADOS.includes(role)) {
-    // En cualquier rol del cliente (igual que assertProjectAccess).
+    // En cualquier rol del cliente (igual que assertProjectAccess / trabajaEn). Diseño: también los clientes
+    // sin diseñadora asignada (team_roles.diseno vacío), así no se pierde nada hasta que el admin las asigne.
     const r = await ex.query(
       `select d.id from documentos d
         where d.coleccion = 'projects'
-          and exists (
-            select 1
-              from jsonb_each(case when jsonb_typeof(d.data->'team_roles') = 'object' then d.data->'team_roles' else '{}'::jsonb end) t
-             where jsonb_typeof(t.value) = 'array' and t.value @> jsonb_build_array($1::text)
+          and (
+            exists (
+              select 1
+                from jsonb_each(case when jsonb_typeof(d.data->'team_roles') = 'object' then d.data->'team_roles' else '{}'::jsonb end) t
+               where jsonb_typeof(t.value) = 'array' and t.value @> jsonb_build_array($1::text)
+            )
+            or ($2::boolean and coalesce(jsonb_array_length(case when jsonb_typeof(d.data->'team_roles'->'diseno') = 'array' then d.data->'team_roles'->'diseno' end), 0) = 0)
           )`,
-      [uid]
+      [uid, role === "diseno"]
     );
     r.rows.forEach((x: { id: string }) => misProyectos.add(x.id));
   }

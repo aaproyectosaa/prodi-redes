@@ -174,6 +174,7 @@ export default function Equipo() {
                   <p className="truncate text-xs text-muted-foreground">
                     {p.email}
                     {cls.length > 0 && ` · ${cls.map((c) => c.nombre).join(", ")}`}
+                    {cls.length === 0 && p.role === "diseno" && " · Sin clientes asignados (ve los sin diseñadora)"}
                   </p>
                   <p className="text-[11px] text-muted-foreground/80">
                     {p.ultimo_acceso ? `Entró ${hace(p.ultimo_acceso)}` : "Nunca entró al sistema nuevo"}
@@ -368,7 +369,7 @@ function UsuarioDialog({
     }
   };
 
-  const usaClientes = ["productor", "editor", "pauta", "cliente"].includes(rol);
+  const usaClientes = ["productor", "editor", "pauta", "diseno", "cliente"].includes(rol);
 
   return (
     <Dialog open={!!persona} onOpenChange={(o) => !o && onClose()}>
@@ -409,6 +410,11 @@ function UsuarioDialog({
           {usaClientes && (
             <div className="space-y-1.5">
               <Label>{rol === "cliente" ? "Marca a la que pertenece" : "Clientes en los que trabaja"}</Label>
+              {rol === "diseno" && (
+                <p className="text-xs text-muted-foreground">
+                  Ve solo estos clientes y los que todavía no tienen diseñadora asignada (esos los ven todas).
+                </p>
+              )}
               <div className="space-y-1 rounded-lg border p-2 sm:max-h-56 sm:overflow-y-auto">
                 {clientes.length === 0 && (
                   <p className="px-2 py-1.5 text-xs text-muted-foreground">Todavía no hay clientes. Cuando des de alta uno, lo asignás desde acá o desde la ficha del cliente.</p>

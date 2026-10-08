@@ -42,12 +42,18 @@ export async function sincronizarChats(projects: Project[], profiles: Profile[],
       tareas.push(setDoc(doc(db, CHATS, id), { ...data, nombres, ultimo: null, leido: {}, created_at: now() }));
     } else if (
       !mismo(actual.miembros, data.miembros) ||
-      actual.nombre !== data.nombre ||
+      (!actual.nombre_propio && actual.nombre !== data.nombre) ||
       JSON.stringify(actual.nombres ?? {}) !== JSON.stringify(nombres) ||
       (data.contactos && !mismo(actual.contactos ?? [], data.contactos))
     ) {
       tareas.push(
-        updateDoc(doc(db, CHATS, id), { miembros: data.miembros, nombre: data.nombre, nombres, ...(data.contactos ? { contactos: data.contactos } : {}) })
+        updateDoc(doc(db, CHATS, id), {
+          miembros: data.miembros,
+          // Si el super admin le puso un nombre propio (equipo o grupo de cliente), se respeta.
+          ...(actual.nombre_propio ? {} : { nombre: data.nombre }),
+          nombres,
+          ...(data.contactos ? { contactos: data.contactos } : {}),
+        })
       );
     }
   };
@@ -59,7 +65,8 @@ export async function sincronizarChats(projects: Project[], profiles: Profile[],
     // Contactos (solo chat) del cliente: están en su grupo; `contactos` deja que todos los vean marcados.
     const contactos = profiles.filter((x) => x.role === "contacto" && x.activo !== false && x.proyecto_id === p.id).map((x) => x.id).sort();
     const miembros = Array.from(
-      new Set([...(t.productor ?? []), ...(t.editor ?? []), ...(t.pauta ?? []), ...(t.cliente ?? []), ...contactos, ...admins])
+      // La diseñadora asignada también entra al grupo del cliente.
+      new Set([...(t.productor ?? []), ...(t.editor ?? []), ...(t.pauta ?? []), ...(t.diseno ?? []), ...(t.cliente ?? []), ...contactos, ...admins])
     );
     asegurar(chatClienteId(p.id), { tipo: "cliente", proyecto_id: p.id, nombre: p.nombre, miembros, contactos });
   }
@@ -301,10 +308,14 @@ export async function crearGrupo(uid: string, remitente: string, datos: DatosGru
 export async function editarChat(chat: Chat, uid: string, remitente: string, cambios: Partial<DatosGrupo>) {
   assertEditable();
   const patch: Record<string, unknown> = {};
-  if (cambios.nombre !== undefined && chat.tipo === "grupo") {
+  if (cambios.nombre !== undefined && chat.tipo !== "directo") {
     const n = cambios.nombre.trim().slice(0, 80);
     if (!n) throw new Error("Ponele un nombre al grupo");
-    if (n !== chat.nombre) patch.nombre = n;
+    if (n !== chat.nombre) {
+      patch.nombre = n;
+      // Equipo y grupos de cliente: el nombre queda fijo (la sincronización ya no lo cambia).
+      if (chat.tipo !== "grupo") patch.nombre_propio = true;
+    }
   }
   if (cambios.foto !== undefined) patch.foto = cambios.foto || null;
   if (chat.tipo === "grupo") {

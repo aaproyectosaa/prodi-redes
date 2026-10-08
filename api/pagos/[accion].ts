@@ -28,7 +28,7 @@ import {
   type PagoMP,
 } from "../_lib/mercadopago";
 import { aplicarPago, estadoSuscripcion, precioAbono, proyectoDeSuscripcion, registrarAbono } from "../_lib/cobros";
-import { destinatariosDe, enviarAviso, usuariosConRol } from "../_lib/notify";
+import { destinatariosDe, disenadorasDe, enviarAviso } from "../_lib/notify";
 import { FORMATOS_PIEZA, leerPedidoPieza, piezaDoc, precioPieza } from "../_lib/piezas";
 import { prepararFacturacion } from "../_lib/facturar";
 import { asuntoFactura, facturaId, mailFacturaHtml, periodoDe, saldoDe, type Factura } from "../_lib/facturacion";
@@ -415,7 +415,7 @@ async function pedirPieza(req: VercelRequest) {
   if (incluida) {
     await enviarAviso(
       {
-        destinatarios: await usuariosConRol(["diseno"]),
+        destinatarios: await disenadorasDe(pid),
         titulo: "Nueva pieza para diseñar",
         cuerpo: `${proj.nombre ?? "Cliente"} · ${FORMATOS_PIEZA[pedido.formato].label} · ${pedido.enfoque === "comercial" ? "para vender" : "para comunicar"}`,
         link: `/piezas?pieza=${ref.id}`,

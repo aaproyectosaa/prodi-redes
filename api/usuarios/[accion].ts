@@ -25,7 +25,7 @@ import { borrarEjemplo, cargarEjemplo } from "../_lib/ejemplo";
 export const config = { maxDuration: 60 };
 
 const ROLES = ["admin", "productor", "editor", "pauta", "diseno", "administracion", "cliente", "pending"];
-const ROL_EN_CLIENTE: Record<string, string> = { productor: "productor", editor: "editor", pauta: "pauta", cliente: "cliente" };
+const ROL_EN_CLIENTE: Record<string, string> = { productor: "productor", editor: "editor", pauta: "pauta", diseno: "diseno", cliente: "cliente" };
 
 /** Deja a la persona exactamente en esos clientes (para su rol). */
 async function asignarClientes(uid: string, rol: string, clientes: string[]) {

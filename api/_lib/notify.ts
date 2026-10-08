@@ -5,6 +5,7 @@ import { adminDb } from "./db";
 import { enviarPush } from "./push";
 import { enviarMailsLote, type MailLote } from "./informe";
 import { mailAvisoHtml } from "./mail-aviso";
+import { sinDisenadora } from "./http";
 
 export interface AvisoServer {
   destinatarios: string[];
@@ -118,7 +119,20 @@ export async function destinatariosDe(proyectoId: string, roles: string[], inclu
   return Array.from(out);
 }
 
-/** IDs de los usuarios con alguno de esos roles (ej. "diseno": Karen hace la gráfica de todos los clientes). */
+/**
+ * Diseñadoras de un cliente (activas): las asignadas en su ficha (team_roles.diseno).
+ * Si el cliente todavía no tiene ninguna asignada, todas las de diseño (como antes).
+ */
+export async function disenadorasDe(proyectoId: string | null | undefined): Promise<string[]> {
+  const todas = await usuariosConRol(["diseno"]);
+  if (!proyectoId) return todas;
+  const team = (await adminDb().collection("projects").doc(proyectoId).get()).data()?.team_roles;
+  if (sinDisenadora(team)) return todas;
+  const asignadas = (team as Record<string, unknown>).diseno as unknown[];
+  return todas.filter((id) => asignadas.includes(id));
+}
+
+/** IDs de los usuarios con alguno de esos roles. */
 export async function usuariosConRol(roles: string[]): Promise<string[]> {
   if (!roles.length) return [];
   const snap = await adminDb().collection("profiles").where("role", "in", roles.slice(0, 10)).get();

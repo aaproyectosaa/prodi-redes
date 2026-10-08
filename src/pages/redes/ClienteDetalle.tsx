@@ -227,6 +227,7 @@ const ROLES_EQUIPO: { rol: ProjectTeamRole; label: string; desc: string }[] = [
   { rol: "productor", label: "Producción", desc: "Planifica, filma y revisa" },
   { rol: "editor", label: "Edición", desc: "Edita los videos" },
   { rol: "pauta", label: "Pauta", desc: "Sube y pauta los videos" },
+  { rol: "diseno", label: "Diseño", desc: "Arma las piezas gráficas: ve este cliente y le llegan sus pedidos" },
   { rol: "cliente", label: "Usuarios del cliente", desc: "Aprueban y ven resultados" },
 ];
 
@@ -318,7 +319,8 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
 
   const candidatos = (rol: ProjectTeamRole) =>
     profiles
-      .filter((p) => (rol === "cliente" ? p.role === "cliente" : p.role === rol || p.role === "admin"))
+      // Diseño: solo quienes tienen ese rol (el admin ya ve todo; si quedara asignado, las diseñadoras dejarían de verlo).
+      .filter((p) => (rol === "cliente" || rol === "diseno" ? p.role === rol : p.role === rol || p.role === "admin"))
       .sort((a, b) => (a.nombre ?? "").localeCompare(b.nombre ?? ""));
 
   return (
@@ -527,6 +529,11 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
                     <span className="text-xs text-muted-foreground">No hay usuarios con este rol. Asignalo en Equipo.</span>
                   )}
                 </div>
+                {rol === "diseno" && !form.team.diseno?.length && candidatos(rol).length > 0 && (
+                  <p className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+                    Sin diseñadora asignada: por ahora lo ven todas y a todas les llegan sus pedidos.
+                  </p>
+                )}
               </div>
             ))}
           </div>
@@ -631,6 +638,7 @@ function toForm(c: Project) {
       productor: c.team_roles?.productor ?? [],
       editor: c.team_roles?.editor ?? [],
       pauta: c.team_roles?.pauta ?? [],
+      diseno: c.team_roles?.diseno ?? [],
       cliente: c.team_roles?.cliente ?? [],
     } as Partial<Record<ProjectTeamRole, string[]>>,
     emails: (c.contacto_emails ?? []).join(", "),

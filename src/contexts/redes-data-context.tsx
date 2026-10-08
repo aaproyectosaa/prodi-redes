@@ -19,6 +19,7 @@ import type { Project } from "@/integrations/firebase/types";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { useAppData } from "@/contexts/app-data-context";
 import { isProjectEnabled } from "@/lib/projectEnabled";
+import { trabajaEnCliente } from "@/lib/roles";
 import { mesActual, sumarMeses } from "@/lib/redes/format";
 import { noLeido, sincronizarChats } from "@/lib/redes/chat";
 import { sincronizarAvatares } from "@/lib/avatares";
@@ -125,9 +126,9 @@ export function RedesDataProvider({ children }: { children: ReactNode }) {
   const { projects, loading: appLoading } = useAppData();
   const uid = user?.uid;
   const isAdmin = role === "admin";
-  // Diseño hace la gráfica de todos los clientes sin estar asignada a cada uno.
+  // Diseño ve sus clientes y los que todavía no tienen diseñadora asignada (trabajaEnCliente).
   const finanzas = isAdmin || role === "administracion";
-  const global = finanzas || role === "diseno";
+  const global = finanzas;
   const activo = !!uid && !!role && role !== "pending";
   // Contacto (solo chat): no ve nada del sistema, solo sus chats.
   const soloChat = role === "contacto";
@@ -136,13 +137,8 @@ export function RedesDataProvider({ children }: { children: ReactNode }) {
     const enabled = projects.filter(isProjectEnabled);
     if (global) return enabled.sort((a, b) => a.nombre.localeCompare(b.nombre));
     if (!uid) return [];
-    return enabled
-      .filter((p) => {
-        const t = p.team_roles ?? {};
-        return Object.values(t).some((ids) => (ids ?? []).includes(uid));
-      })
-      .sort((a, b) => a.nombre.localeCompare(b.nombre));
-  }, [projects, global, uid]);
+    return enabled.filter((p) => trabajaEnCliente(role, uid, p)).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [projects, global, uid, role]);
 
   const scope: string[] | "all" = global ? "all" : clientes.map((c) => c.id);
   const conVideos = activo && role !== "diseno" && !soloChat;

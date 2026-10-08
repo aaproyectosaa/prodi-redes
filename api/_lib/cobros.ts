@@ -3,7 +3,7 @@
 import { FieldValue } from "./db";
 import { adminDb } from "./db";
 import type { PagoMP } from "./mercadopago";
-import { destinatariosDe, enviarAviso, usuariosConRol } from "./notify";
+import { destinatariosDe, disenadorasDe, enviarAviso } from "./notify";
 import { marcarCobradaPorDebito } from "./facturar";
 import { comisionDe, comisionPct, montoDebito, totalMensual } from "./facturacion";
 import { textoMaterial, videoDesdePedido, type PedidoVideo } from "./pedidos";
@@ -133,9 +133,9 @@ export async function aplicarPago(pago: PagoMP, baseUrl: string): Promise<string
   if (efecto) {
     const e = efecto as { tipo: string; proyecto_id: string; concepto: string; cantidad: number; pedido?: string };
     const proj = (await db.collection("projects").doc(e.proyecto_id).get()).data() ?? {};
-    // Las piezas pagadas le llegan a diseño; los videos, a producción.
+    // Las piezas pagadas le llegan a las diseñadoras del cliente (o a todas si no tiene); los videos, a producción.
     const destinatarios =
-      e.tipo === "pieza_ia" ? await usuariosConRol(["diseno"]) : await destinatariosDe(e.proyecto_id, ["productor"]);
+      e.tipo === "pieza_ia" ? await disenadorasDe(e.proyecto_id) : await destinatariosDe(e.proyecto_id, ["productor"]);
     await enviarAviso(
       {
         destinatarios,

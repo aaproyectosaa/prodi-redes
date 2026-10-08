@@ -37,7 +37,7 @@ import {
   sumarAlGrupo,
   tituloChat,
 } from "@/lib/redes/chat";
-import { getRoleInfo } from "@/lib/roles";
+import { getRoleInfo, trabajaEnCliente } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import type { Chat } from "@/lib/redes/types";
 import type { Profile } from "@/integrations/firebase/types";
@@ -57,7 +57,7 @@ export interface Persona {
 /**
  * Con quién puede hablar (privado o en grupo), igual que lo que valida el servidor:
  * - cliente: la gente con la que ya comparte un chat;
- * - equipo: todo el equipo y los usuarios de los clientes donde trabaja (super admin y diseño: todos).
+ * - equipo: todo el equipo y los usuarios de los clientes donde trabaja (super admin: todos; diseño: también los sin diseñadora).
  */
 export function useContactos(): Persona[] {
   const { chats } = useRedes();
@@ -76,10 +76,10 @@ export function useContactos(): Persona[] {
         .map(([id, nombre]) => ({ id, nombre, profile: { id, nombre, email: "" } as Profile, etiqueta: contactos.has(id) ? "Contacto" : "" }))
         .sort((a, b) => a.nombre.localeCompare(b.nombre));
     }
-    const todos = role === "admin" || role === "diseno";
-    const asignado = ["productor", "editor", "pauta"].includes(role ?? "");
+    const todos = role === "admin";
+    const asignado = ["productor", "editor", "pauta", "diseno"].includes(role ?? "");
     const misProyectos = projects.filter(
-      (p) => todos || (asignado && Object.values(p.team_roles ?? {}).some((ids) => Array.isArray(ids) && ids.includes(uid)))
+      (p) => todos || (asignado && trabajaEnCliente(role, uid, p))
     );
     const misClientes = new Set(misProyectos.flatMap((p) => p.team_roles?.cliente ?? []));
     const misIds = new Set(misProyectos.map((p) => p.id));
@@ -386,7 +386,7 @@ export function InfoChat({
                 <p className="text-lg font-semibold">{tituloChat(chat, uid, profiles, role)}</p>
               </div>
             )}
-            {esGrupo && admin && uid && (
+            {((esGrupo && admin) || (!esGrupo && editaFoto)) && uid && (
               <form
                 className="flex gap-2"
                 onSubmit={(e) => {
@@ -400,7 +400,7 @@ export function InfoChat({
                 </Button>
               </form>
             )}
-            {editaFoto && !esGrupo && <p className="text-xs text-muted-foreground">Como super admin podés cambiar la foto de este grupo.</p>}
+            {editaFoto && !esGrupo && <p className="text-xs text-muted-foreground">Como super admin podés cambiar el nombre y la foto de este grupo.</p>}
           </SheetHeader>
 
           <div className="flex-1 space-y-3 p-5">

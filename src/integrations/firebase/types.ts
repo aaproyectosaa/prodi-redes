@@ -14,7 +14,7 @@ export type UserRole =
   | "productor" // Producción: clientes, planificación, rodajes y revisión interna
   | "editor" // Edición de video
   | "pauta" // Sube los videos y maneja la pauta en Meta
-  | "diseno" // Diseño gráfico (Karen): arma las piezas de todos los clientes, con IA de apoyo
+  | "diseno" // Diseño gráfico: arma las piezas de sus clientes (y de los que no tienen diseñadora), con IA de apoyo
   | "administracion" // Administración: facturación, cobros, pagos al equipo y gastos
   | "cliente"
   | "contacto" // Contacto de un cliente que usa solo Prodi Chat (proyecto_id = su cliente)
@@ -74,6 +74,7 @@ export type ProjectTeamRole =
   | "productor"
   | "editor"
   | "pauta"
+  | "diseno" // Diseño gráfico: si el cliente no tiene ninguna, lo ven todas las de diseño
   | "cliente"
   // Heredados del modelo anterior (solo lectura).
   | "pm"

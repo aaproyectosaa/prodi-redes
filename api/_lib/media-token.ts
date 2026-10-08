@@ -5,12 +5,12 @@
 import crypto from "crypto";
 import { HttpError } from "./auth";
 import { getPool } from "./db";
-import type { Caller } from "./http";
+import { trabajaEn, type Caller } from "./http";
 
 const TTL_SEG = 60 * 60;
-/** Ven los archivos de todos los clientes (igual que assertProjectAccess). */
-const GLOBALES = ["admin", "diseno", "administracion"];
-const ASIGNABLES = ["productor", "editor", "pauta", "cliente"];
+/** Ven los archivos de todos los clientes (igual que assertProjectAccess). Diseño: los de sus clientes y los sin diseñadora. */
+const GLOBALES = ["admin", "administracion"];
+const ASIGNABLES = ["productor", "editor", "pauta", "diseno", "cliente"];
 
 export const fileIdValido = (id: unknown): id is string => typeof id === "string" && /^[A-Za-z0-9_-]{10,200}$/.test(id);
 
@@ -102,10 +102,11 @@ export async function puedeVerArchivo(caller: Caller, fileId: string): Promise<b
     [[...proyectos]]
   );
   return (p.rows as { team: unknown }[]).some(({ team }) => {
+    // El equipo, en cualquier rol del proyecto (y diseño, también sin diseñadora asignada): como assertProjectAccess.
+    if (caller.role !== "cliente") return trabajaEn(caller.role, caller.uid, team);
     if (!team || typeof team !== "object" || Array.isArray(team)) return false;
-    const t = team as Record<string, unknown>;
-    // El cliente, solo como cliente; el equipo, en cualquier rol del proyecto (como assertProjectAccess).
-    const listas = caller.role === "cliente" ? [t.cliente] : Object.values(t);
-    return listas.some((ids) => Array.isArray(ids) && ids.includes(caller.uid));
+    // El cliente, solo como cliente.
+    const ids = (team as Record<string, unknown>).cliente;
+    return Array.isArray(ids) && ids.includes(caller.uid);
   });
 }

@@ -26,15 +26,29 @@ export async function requireCaller(req: VercelRequest, roles?: Rol[]): Promise<
   return { ...user, role, nombre: (propio("nombre") as string) ?? "" };
 }
 
+/** El cliente todavía no tiene diseñadora asignada (team_roles.diseno vacío): lo ven todas las de diseño. */
+export const sinDisenadora = (team: unknown): boolean => {
+  const d = team && typeof team === "object" && !Array.isArray(team) ? (team as Record<string, unknown>).diseno : undefined;
+  return !Array.isArray(d) || d.length === 0;
+};
+
+/**
+ * ¿Trabaja en este cliente? Equipo: en cualquier rol de team_roles. Diseño: además, los clientes
+ * sin diseñadora asignada (transición: así no se pierde ningún pedido hasta que el admin las asigne).
+ */
+export function trabajaEn(role: Rol, uid: string, team: unknown): boolean {
+  const t = team && typeof team === "object" && !Array.isArray(team) ? (team as Record<string, unknown>) : {};
+  if (Object.values(t).some((ids) => Array.isArray(ids) && ids.includes(uid))) return true;
+  return role === "diseno" && sinDisenadora(t);
+}
+
 /** ¿El usuario está asignado a ese cliente (o es admin)? */
 export async function assertProjectAccess(caller: Caller, proyectoId: string) {
-  // Admin y diseño (hace la gráfica de todos los clientes) no necesitan estar asignados.
-  if (caller.role === "admin" || caller.role === "diseno" || caller.role === "administracion") return;
+  // Admin y administración no necesitan estar asignados.
+  if (caller.role === "admin" || caller.role === "administracion") return;
   const snap = await adminDb().collection("projects").doc(proyectoId).get();
   if (!snap.exists) throw new HttpError(404, "Cliente no encontrado");
-  const team = (snap.data()?.team_roles ?? {}) as Record<string, string[]>;
-  const ok = Object.values(team).some((ids) => (ids ?? []).includes(caller.uid));
-  if (!ok) throw new HttpError(403, "No tenés acceso a este cliente");
+  if (!trabajaEn(caller.role, caller.uid, snap.data()?.team_roles)) throw new HttpError(403, "No tenés acceso a este cliente");
 }
 
 export function sendError(res: VercelResponse, err: unknown) {

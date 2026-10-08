@@ -66,7 +66,7 @@ export default function Clientes() {
             const plan = planDe(c, planes);
             const uso = usoPlan(c, planes, videos, mes);
             const equipoIds = Array.from(
-              new Set([...(c.team_roles?.productor ?? []), ...(c.team_roles?.editor ?? []), ...(c.team_roles?.pauta ?? [])])
+              new Set([...(c.team_roles?.productor ?? []), ...(c.team_roles?.editor ?? []), ...(c.team_roles?.pauta ?? []), ...(c.team_roles?.diseno ?? [])])
             );
             return (
               <button

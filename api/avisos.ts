@@ -3,8 +3,8 @@
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { adminDb } from "./_lib/db";
-import { appUrl, body, HttpError, requireCaller, sendError, type Caller } from "./_lib/http";
-import { enviarAviso, usuariosConRol, type AvisoServer } from "./_lib/notify";
+import { appUrl, body, HttpError, requireCaller, sendError, trabajaEn, type Caller } from "./_lib/http";
+import { disenadorasDe, enviarAviso, type AvisoServer } from "./_lib/notify";
 import { crearTokenAprobacion } from "./_lib/aprobacion";
 
 export const config = { maxDuration: 30 };
@@ -58,8 +58,10 @@ async function avisoDelCliente(caller: Caller, b: Body): Promise<AvisoServer> {
     const team = (p?.team_roles ?? {}) as Record<string, string[]>;
     if (!(team.cliente ?? []).includes(caller.uid)) throw new HttpError(403, "Sin acceso a este cliente");
     const validos = new Set(Object.values(team).flat());
-    const admins = await db.collection("profiles").where("role", "in", ["admin", "diseno", "administracion"]).get();
+    const admins = await db.collection("profiles").where("role", "in", ["admin", "administracion"]).get();
     admins.docs.forEach((d) => validos.add(d.id));
+    // Diseño: las asignadas a este cliente (o todas si todavía no tiene).
+    (await disenadorasDe(r.proyecto_id)).forEach((id) => validos.add(id));
     const participantes: string[] = Array.isArray(r.participantes) ? r.participantes : [];
     const ahora = Math.abs(new Date(String(r.fecha)).getTime() - Date.now()) < 10 * 60_000;
     const cuando = fechaHoraAR(r.fecha);
@@ -106,8 +108,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
     const pedidos = Array.isArray(b.destinatarios) ? b.destinatarios.filter((x) => typeof x === "string") : [];
-    // "rol:diseno" = todas las personas de diseño (el cliente no puede ver los perfiles del equipo).
-    const porRol = pedidos.filter((d) => d === "rol:diseno").length ? await usuariosConRol(["diseno"]) : [];
+    // "rol:diseno" = las diseñadoras de ese cliente (o todas si todavía no tiene asignada).
+    const porRol = pedidos.includes("rol:diseno") ? await disenadorasDe(b.proyectoId) : [];
     const destinatarios = [...pedidos.filter((d) => !d.startsWith("rol:")), ...porRol];
     const titulo = String(b.titulo ?? "").slice(0, 120).trim();
     const cuerpo = String(b.cuerpo ?? "").slice(0, 400).trim();
@@ -123,10 +125,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const p = await adminDb().collection("projects").doc(b.proyectoId).get();
       const team = (p.data()?.team_roles ?? {}) as Record<string, string[]>;
       const miembros = new Set(Object.values(team).flat());
-      // Diseño trabaja con todos los clientes sin estar asignado.
-      if (!miembros.has(caller.uid) && caller.role !== "diseno" && caller.role !== "administracion") throw new HttpError(403, "Sin acceso a este cliente");
-      const globales = await adminDb().collection("profiles").where("role", "in", ["admin", "diseno", "administracion"]).get();
+      // Diseño: también los clientes sin diseñadora asignada.
+      if (!trabajaEn(caller.role, caller.uid, team) && caller.role !== "administracion") throw new HttpError(403, "Sin acceso a este cliente");
+      const globales = await adminDb().collection("profiles").where("role", "in", ["admin", "administracion"]).get();
       globales.docs.forEach((d) => miembros.add(d.id));
+      (await disenadorasDe(b.proyectoId)).forEach((id) => miembros.add(id));
       permitidos = destinatarios.filter((d) => miembros.has(d));
     }
     if (!permitidos.length) {

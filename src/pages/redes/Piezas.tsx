@@ -38,6 +38,7 @@ import {
 } from "@/lib/redes/piezas";
 import { fechaHora, formatARS, hace, hoyISO } from "@/lib/redes/format";
 import { CalendarioEventos, SelectorVista, useVista, type EventoCal, type TipoCal } from "@/components/redes/VistaCalendario";
+import { sinDisenadora } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import type { PiezaIA } from "@/lib/redes/types";
 
@@ -197,6 +198,8 @@ function PiezaCard({ pieza: p, cliente, onClick, i }: { pieza: PiezaIA; cliente?
   const portada = vs[vs.length - 1];
   const info = formatoInfo(p.formato);
   const conCambios = p.estado === "en_proceso" && (p.rondas ?? 0) > 0;
+  // Cliente sin diseñadora en su ficha: lo ven todas las de diseño hasta que el admin asigne una.
+  const sinAsignar = !!clienteById(p.proyecto_id) && sinDisenadora(clienteById(p.proyecto_id)) && p.estado !== "entregada";
   return (
     <button
       type="button"
@@ -227,6 +230,7 @@ function PiezaCard({ pieza: p, cliente, onClick, i }: { pieza: PiezaIA; cliente?
             <MessageSquareWarning className="h-3 w-3" /> El cliente pidió cambios
           </span>
         )}
+        {sinAsignar && <span className="block text-[10px] text-amber-600 dark:text-amber-400">Sin diseñadora asignada</span>}
       </span>
     </button>
   );

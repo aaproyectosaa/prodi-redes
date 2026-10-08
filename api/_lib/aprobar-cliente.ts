@@ -4,7 +4,7 @@
 import { adminDb, FieldValue } from "./db";
 import { HttpError } from "./auth";
 import type { Caller } from "./http";
-import { enviarAviso, usuariosConRol } from "./notify";
+import { disenadorasDe, enviarAviso } from "./notify";
 
 interface Marca {
   t: number;
@@ -184,7 +184,7 @@ export async function responderPiezaApp(caller: Caller, b: PedidoPieza, base: st
     return { pz, p };
   });
 
-  const diseno = (await usuariosConRol(["diseno"])).filter((id) => id !== caller.uid);
+  const diseno = (await disenadorasDe(pz.proyecto_id)).filter((id) => id !== caller.uid);
   await enviarAviso(
     decision === "aprobar"
       ? {
