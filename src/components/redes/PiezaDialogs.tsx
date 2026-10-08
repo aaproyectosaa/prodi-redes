@@ -4,6 +4,8 @@ import {
   Check,
   CreditCard,
   Download,
+  FolderOpen,
+  ImageOff,
   Loader2,
   Megaphone,
   Monitor,
@@ -125,6 +127,9 @@ export function PiezaClienteCard({ pieza, onAbrir }: { pieza: PiezaIA; onAbrir?:
   const final = versionFinal(pieza);
   const enviada = versionEnviada(pieza);
   const imagen = pieza.estado === "entregada" ? final : pieza.estado === "para_aprobar" ? enviada : null;
+  const sinImagen = pieza.estado === "entregada" && !imagen;
+  // Del sistema anterior: muchas tienen el link a la carpeta de Drive con el diseño en vez del archivo.
+  const carpetaDrive = sinImagen ? (pieza._viejo?.material_finalizado ?? "").match(/https?:\/\/drive\.google\.com\/\S+/)?.[0] ?? null : null;
   const pagar = async () => {
     setPaying(true);
     try {
@@ -147,6 +152,12 @@ export function PiezaClienteCard({ pieza, onAbrir }: { pieza: PiezaIA; onAbrir?:
       <button type="button" onClick={onAbrir} disabled={!onAbrir || !imagen} className="relative block aspect-square w-full bg-muted">
         {imagen ? (
           <VersionImg v={imagen} />
+        ) : sinImagen ? (
+          // Lista pero sin archivo: casi siempre del sistema anterior (no se subió la imagen al sistema).
+          <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center text-muted-foreground">
+            <ImageOff className="h-8 w-8 opacity-50" />
+            <p className="text-xs">{carpetaDrive ? "La imagen está en Drive" : "Sin imagen en el sistema"}</p>
+          </div>
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center text-muted-foreground">
             <Sparkles className="h-8 w-8 text-primary/60" />
@@ -194,6 +205,13 @@ export function PiezaClienteCard({ pieza, onAbrir }: { pieza: PiezaIA; onAbrir?:
           <Button asChild className="w-full" size="sm" variant="secondary">
             <a href={driveDownload(final.drive_file_id)} target="_blank" rel="noreferrer" download>
               <Download className="mr-2 h-4 w-4" /> Descargar
+            </a>
+          </Button>
+        )}
+        {carpetaDrive && (
+          <Button asChild className="w-full" size="sm" variant="secondary">
+            <a href={carpetaDrive} target="_blank" rel="noreferrer">
+              <FolderOpen className="mr-2 h-4 w-4" /> Abrir en Drive
             </a>
           </Button>
         )}
