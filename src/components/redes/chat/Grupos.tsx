@@ -39,6 +39,7 @@ import {
 } from "@/lib/redes/chat";
 import { getRoleInfo, trabajaEnCliente } from "@/lib/roles";
 import { cn } from "@/lib/utils";
+import { callApi } from "@/lib/redes/api";
 import type { Chat } from "@/lib/redes/types";
 import type { Profile } from "@/integrations/firebase/types";
 
@@ -341,6 +342,9 @@ export function InfoChat({
   const [elegidas, setElegidas] = useState<Set<string>>(new Set());
   const [ocupado, setOcupado] = useState(false);
   const [confirmarSalir, setConfirmarSalir] = useState(false);
+  const [confirmarBorrar, setConfirmarBorrar] = useState(false);
+  /** Borrar el grupo (con todos sus mensajes): solo el super admin. */
+  const puedeBorrar = role === "admin" && chat.tipo !== "directo";
 
   const persona = (id: string): Profile =>
     profiles.find((p) => p.id === id) ?? ({ id, nombre: chat.nombres?.[id] || "Usuario", email: "" } as Profile);
@@ -485,9 +489,40 @@ export function InfoChat({
                 <LogOut className="mr-1.5 h-4 w-4" /> Salir del grupo
               </Button>
             )}
+            {puedeBorrar && (
+              <Button variant="ghost" className="w-full text-destructive hover:text-destructive" onClick={() => setConfirmarBorrar(true)}>
+                <Trash2 className="mr-1.5 h-4 w-4" /> Borrar el grupo
+              </Button>
+            )}
           </div>
         </SheetContent>
       </Sheet>
+      <AlertDialog open={confirmarBorrar} onOpenChange={setConfirmarBorrar}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Borrar «{chat.nombre}»?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se borran el grupo y todos sus mensajes, fotos y audios para todos los miembros. No se puede deshacer.
+              {chat.tipo !== "grupo" && " Este grupo lo arma el sistema: queda dado de baja y no se vuelve a crear solo."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() =>
+                void hacer(async () => {
+                  await callApi("/api/usuarios/chat-borrar", { chat_id: chat.id });
+                  onOpenChange(false);
+                  onSalio();
+                }, "Grupo borrado")
+              }
+            >
+              Borrar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog open={confirmarSalir} onOpenChange={setConfirmarSalir}>
         <AlertDialogContent>
           <AlertDialogHeader>

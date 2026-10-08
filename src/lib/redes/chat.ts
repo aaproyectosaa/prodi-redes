@@ -38,6 +38,8 @@ export async function sincronizarChats(projects: Project[], profiles: Profile[],
   const asegurar = (id: string, data: Omit<Chat, "id" | "ultimo" | "leido" | "created_at" | "nombres">) => {
     const actual = chats.find((c) => c.id === id);
     const nombres = Object.fromEntries(data.miembros.map((m) => [m, nombreDe(m)]));
+    // Grupo dado de baja por el super admin: no se vuelve a armar.
+    if (actual?.borrado) return;
     if (!actual) {
       tareas.push(setDoc(doc(db, CHATS, id), { ...data, nombres, ultimo: null, leido: {}, created_at: now() }));
     } else if (

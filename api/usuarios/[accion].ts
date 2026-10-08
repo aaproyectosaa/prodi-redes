@@ -7,6 +7,7 @@
 // POST /api/usuarios/clave       { uid }  → link para que la persona elija contraseña
 // POST /api/usuarios/ejemplo-cargar  → carga los datos de ejemplo (mismos de la demo)
 // POST /api/usuarios/ejemplo-borrar  → los borra
+// POST /api/usuarios/chat-borrar    { chat_id } → borra un grupo con sus mensajes (el del equipo o de un cliente queda dado de baja)
 // Contactos (solo chat), super admin o producción asignada al cliente:
 // POST /api/usuarios/contacto-crear   { proyecto_id, nombre, email, telefono?, cargo? } → { uid, link, mail }
 // POST /api/usuarios/contacto-activo  { uid, activo }  → (des)activa y lo saca/suma al grupo del cliente
@@ -263,6 +264,44 @@ async function contactoInvitar(req: VercelRequest, caller: Caller) {
   return { ok: true, link, mail };
 }
 
+/**
+ * Borra un grupo de chat y todos sus mensajes y audios. Los grupos que arma la app sola ("equipo" y uno por cliente)
+ * quedan dados de baja (sin miembros) para que no se vuelvan a crear al abrir la app.
+ */
+async function chatBorrar(req: VercelRequest) {
+  const { chat_id } = body<{ chat_id?: string }>(req);
+  if (!chat_id || typeof chat_id !== "string" || chat_id.includes("/")) throw new HttpError(400, "Falta el chat");
+  const db = adminDb();
+  const ref = db.collection("chats").doc(chat_id);
+  const chat = (await ref.get()).data();
+  if (!chat) throw new HttpError(404, "El grupo ya no existe");
+  if (chat.tipo === "directo") throw new HttpError(400, "Solo se borran grupos");
+  let mensajes = 0;
+  for (const sub of ["mensajes", "audios"]) {
+    const docs = (await db.collection(`chats/${chat_id}/${sub}`).get()).docs;
+    if (sub === "mensajes") mensajes = docs.length;
+    for (let i = 0; i < docs.length; i += 400) {
+      const lote = db.batch();
+      docs.slice(i, i + 400).forEach((d) => lote.delete(d.ref));
+      await lote.commit();
+    }
+  }
+  if (chat.tipo === "grupo") await ref.delete();
+  else
+    await ref.set({
+      tipo: chat.tipo,
+      proyecto_id: chat.proyecto_id ?? null,
+      nombre: chat.nombre ?? "",
+      borrado: true,
+      borrado_at: new Date().toISOString(),
+      miembros: [],
+      nombres: {},
+      ultimo: null,
+      leido: {},
+    });
+  return { ok: true, mensajes };
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
@@ -286,6 +325,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "clave") res.status(200).json(await clave(req));
     else if (accion === "ejemplo-cargar") res.status(200).json(await cargarEjemplo(admin.uid));
     else if (accion === "ejemplo-borrar") res.status(200).json(await borrarEjemplo());
+    else if (accion === "chat-borrar") res.status(200).json(await chatBorrar(req));
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {
     sendError(res, err);
