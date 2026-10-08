@@ -19,12 +19,15 @@ type Esfuerzo = "low" | "medium" | "high";
 type Ratio = "1:1" | "4:5" | "9:16" | "16:9" | "2:3" | "3:4" | "21:9";
 
 const MODELO = () => process.env.ANTHROPIC_MODEL || "claude-opus-5-5";
-const hayClaude = () => !!process.env.ANTHROPIC_API_KEY?.trim();
+const hayClaude = () => !!(process.env.ANTHROPIC_API_KEY ?? "").replace(/[\s"']/g, "");
 const hayGemini = () => !!process.env.GEMINI_API_KEY?.trim();
 const hayOpenAI = () => !!process.env.OPENAI_API_KEY?.trim();
 
+/** La clave como viene de Vercel, sin espacios, saltos de línea ni comillas pegados al copiarla. */
+const claveClaude = () => (process.env.ANTHROPIC_API_KEY ?? "").trim().replace(/^["']|["']$/g, "").replace(/\s+/g, "");
+
 let cliente: Anthropic | null = null;
-const claude = () => (cliente ??= new Anthropic());
+const claude = () => (cliente ??= new Anthropic({ apiKey: claveClaude() }));
 
 /** Esquema estilo Gemini (OBJECT, STRING, nullable…) → JSON Schema de Claude (objetos cerrados). */
 function aJsonSchema(s: any): any {
@@ -47,7 +50,12 @@ function aJsonSchema(s: any): any {
 
 /** Errores de Claude en castellano (la clave mal o faltante se dice clara: no es "probá en un rato"). */
 function errorClaude(err: unknown): Error {
-  if (err instanceof Anthropic.AuthenticationError) return new Error("IA: la clave de Claude (ANTHROPIC_API_KEY) no es válida. Revisala en Vercel.");
+  if (err instanceof Anthropic.AuthenticationError) {
+    // Sin mostrar la clave: solo cómo empieza y cuánto mide, para ver si se pegó mal o incompleta.
+    const k = claveClaude();
+    console.error(`[ia] Claude rechazó la clave (empieza con ${k.slice(0, 10)}…, ${k.length} caracteres)`);
+    return new Error("IA: la clave de Claude (ANTHROPIC_API_KEY) no es válida. Revisala en Vercel.");
+  }
   if (err instanceof Anthropic.PermissionDeniedError) return new Error("IA: la clave de Claude no tiene permiso o la cuenta no tiene saldo.");
   if (err instanceof Anthropic.RateLimitError) return new Error("IA: muchos pedidos seguidos. Probá en un minuto.");
   if (err instanceof Anthropic.APIError) return new Error(`IA: Claude respondió ${err.status ?? "con un error"}. Probá de nuevo.`);
