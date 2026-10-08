@@ -74,9 +74,11 @@ self.addEventListener('push', (event) => {
   const url = data.url || '/';
   event.waitUntil(
     (async () => {
-      // Con la app abierta y a la vista, se avisa adentro (toast) en vez de la notificación del sistema.
+      // Con la app abierta y usándose (ventana activa), se avisa adentro (toast) en vez de la notificación
+      // del sistema. Solo "a la vista" no alcanza: en la compu una ventana detrás de otra o en el otro
+      // monitor cuenta como visible, y el aviso quedaba adentro sin que nadie lo viera.
       const abiertas = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-      const visible = abiertas.find((c) => c.visibilityState === 'visible');
+      const visible = abiertas.find((c) => c.visibilityState === 'visible' && c.focused);
       if (visible) {
         visible.postMessage({ tipo: 'prodi-push', title, body: data.body || '', url });
         return;

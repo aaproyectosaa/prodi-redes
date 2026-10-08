@@ -250,30 +250,51 @@ export function AvisoInstalar() {
   return <InstalarDialog open={open} onOpenChange={setOpen} invitacion={auto} />;
 }
 
+/** ¿Este equipo ya está anotado para recibir avisos? (hay una suscripción push en el navegador). */
+async function equipoSuscripto(): Promise<boolean> {
+  try {
+    const reg = await navigator.serviceWorker.getRegistration("/");
+    return !!(await reg?.pushManager.getSubscription());
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Con la app instalada, si todavía no activaron los avisos en este equipo,
- * se lo pedimos con un toque. Una vez por sesión, se puede dejar para después.
+ * Con la app instalada, si este equipo no recibe avisos, se lo pedimos con un toque. Una vez por sesión,
+ * se puede dejar para después. Casos: nunca se preguntó; el permiso está dado pero el equipo no quedó
+ * anotado (no llegaba nada y no se volvía a pedir); o están bloqueados en el navegador (se explica cómo
+ * desbloquearlos, porque desde la página no se puede volver a preguntar).
  */
 export function AvisoActivarAvisos({ uid }: { uid?: string }) {
   const app = useInstalarApp();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [bloqueados, setBloqueados] = useState(false);
 
   useEffect(() => {
-    if (!uid || typeof Notification === "undefined" || Notification.permission !== "default") return;
+    if (!uid || typeof Notification === "undefined") return;
     // Primero que instalen la app (el popup de instalar va antes); después, los avisos.
     // En iPhone además es obligatorio: los avisos solo funcionan con la app instalada.
     if (!app.instalada) return;
     if (yaMostrado(CLAVE_AVISOS)) return;
     let cancel = () => undefined as void;
+    let vivo = true;
     void import("@/lib/webPush").then(async ({ isWebPushSupported }) => {
       if (!(await isWebPushSupported())) return;
+      const permiso = Notification.permission;
+      if (permiso === "granted" && (await equipoSuscripto())) return;
+      if (!vivo) return;
+      setBloqueados(permiso === "denied");
       cancel = cuandoNoHayDialogo(() => {
         marcarMostrado(CLAVE_AVISOS);
         setOpen(true);
       });
     });
-    return () => cancel();
+    return () => {
+      vivo = false;
+      cancel();
+    };
   }, [uid, app.instalada, app.plataforma]);
 
   const activar = async () => {
@@ -298,14 +319,39 @@ export function AvisoActivarAvisos({ uid }: { uid?: string }) {
           <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 text-primary animate-in zoom-in-50 duration-500">
             <Bell className="h-7 w-7" />
           </span>
-          <DialogTitle className="text-xl">Activá los avisos</DialogTitle>
+          <DialogTitle className="text-xl">{bloqueados ? "Tenés los avisos bloqueados" : "Activá los avisos"}</DialogTitle>
           <DialogDescription>
-            Te avisamos al instante cuando haya un video para ver, un mensaje en el chat o un rodaje al día siguiente.
+            {bloqueados
+              ? "Así no te llegan los mensajes del chat ni los avisos. Para destrabarlo:"
+              : "Te avisamos al instante cuando haya un video para ver, un mensaje en el chat o un rodaje al día siguiente."}
           </DialogDescription>
-          <Button size="lg" className="mt-1 w-full" onClick={() => void activar()} disabled={busy}>
-            {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}
-            Activar avisos
-          </Button>
+          {bloqueados ? (
+            <>
+              <ol className="w-full space-y-2 text-left text-sm">
+                {[
+                  app.plataforma !== "compu"
+                    ? "Abrí los ajustes del celular → Notificaciones → Prodi."
+                    : "Arriba de la ventana, tocá los tres puntitos ⋮ → «Información de la app» (en el navegador, el candado al lado de la dirección).",
+                  app.plataforma !== "compu" ? "Activá «Permitir notificaciones»." : "En «Notificaciones», elegí «Permitir».",
+                  "Tocá «Ya lo desbloqueé».",
+                ].map((t, i) => (
+                  <li key={i} className="flex gap-2.5 rounded-xl bg-muted/60 p-2.5">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">{i + 1}</span>
+                    {t}
+                  </li>
+                ))}
+              </ol>
+              <Button size="lg" className="mt-1 w-full" onClick={() => void activar()} disabled={busy}>
+                {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Ya lo desbloqueé
+              </Button>
+            </>
+          ) : (
+            <Button size="lg" className="mt-1 w-full" onClick={() => void activar()} disabled={busy}>
+              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}
+              Activar avisos
+            </Button>
+          )}
           <button type="button" onClick={() => setOpen(false)} className="text-sm text-muted-foreground hover:text-foreground">
             Más tarde
           </button>
