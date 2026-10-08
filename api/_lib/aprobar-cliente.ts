@@ -70,12 +70,15 @@ export async function responderVideoApp(caller: Caller, b: PedidoVideo, base: st
     if (v.etapa !== "revision_cliente") throw new HttpError(409, "Este video ya fue respondido");
     const evento = (accion: string, n: string | null) => ({ at: now, by: caller.uid, accion, nota: n });
     if (decision === "aprobar") {
+      // Si los sube el cliente, el video aprobado se le entrega (queda publicado) y no pasa por pauta.
+      const subeCliente = p.produccion?.publica === "cliente";
       tx.update(ref, {
-        etapa: "para_publicar",
+        etapa: subeCliente ? "publicado" : "para_publicar",
         etapa_desde: now,
         updated_at: now,
         feedback_cliente: null,
         cliente_rating: rating,
+        ...(subeCliente ? { publicacion: { publicado_at: now, sube_cliente: true, link_instagram: null, link_facebook: null, link_tiktok: null } } : {}),
         historial: FieldValue.arrayUnion(evento("Aprobado por el cliente", comentario)),
       });
     } else {
@@ -100,8 +103,8 @@ export async function responderVideoApp(caller: Caller, b: PedidoVideo, base: st
   if (decision === "aprobar") {
     await enviarAviso(
       {
-        destinatarios: sinMi([...uno(v.pauta_id, "pauta"), ...uno(v.productor_id, "productor")]),
-        titulo: "Video aprobado: listo para subir y pautar",
+        destinatarios: sinMi([...(p.produccion?.publica === "cliente" ? [] : uno(v.pauta_id, "pauta")), ...uno(v.productor_id, "productor")]),
+        titulo: p.produccion?.publica === "cliente" ? "Video aprobado: se le entregó al cliente para que lo suba" : "Video aprobado: listo para subir y pautar",
         cuerpo: `${p.nombre ?? "Cliente"} · ${v.titulo}`,
         link: `/videos?video=${videoId}`,
         clave: `para_publicar:${videoId}`,

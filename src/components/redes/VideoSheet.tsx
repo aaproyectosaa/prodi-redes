@@ -1100,7 +1100,9 @@ function PublicacionBlock({
             {p.link_instagram && <LinkChip href={p.link_instagram} label="Instagram" />}
             {p.link_facebook && <LinkChip href={p.link_facebook} label="Facebook" />}
             {p.link_tiktok && <LinkChip href={p.link_tiktok} label="TikTok" />}
-            <span className="self-center text-xs text-muted-foreground">Publicado {fechaCorta(p.publicado_at)}</span>
+            <span className="self-center text-xs text-muted-foreground">
+              {p.sube_cliente ? `Entregado al cliente el ${fechaCorta(p.publicado_at)}: lo sube él` : `Publicado ${fechaCorta(p.publicado_at)}`}
+            </span>
           </div>
           {pauta && (
             <div className="rounded-xl border p-3 text-xs">

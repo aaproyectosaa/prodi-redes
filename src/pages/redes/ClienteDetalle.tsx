@@ -37,7 +37,7 @@ import { DIA_VENCIMIENTO, totalMensual } from "@/lib/redes/facturacion";
 import { PlazoPago } from "@/components/redes/admin/PlazoPago";
 import { errorPlazo, plazoInicial, plazoParaGuardar } from "@/lib/redes/plazoPago";
 import { callApi } from "@/lib/redes/api";
-import { CONDICIONES_IVA, type CondicionIva, type Project, type ProjectTeamRole, type QuienFilma } from "@/integrations/firebase/types";
+import { CONDICIONES_IVA, type CondicionIva, type Project, type ProjectTeamRole, type QuienFilma, type QuienPublica } from "@/integrations/firebase/types";
 import { COLORES } from "./Clientes";
 import { MarcaArchivos } from "@/components/redes/MarcaArchivos";
 import { ContactosCliente } from "@/components/redes/ContactosCliente";
@@ -232,6 +232,11 @@ const ROLES_EQUIPO: { rol: ProjectTeamRole; label: string; desc: string }[] = [
   { rol: "cliente", label: "Usuarios del cliente", desc: "Aprueban y ven resultados" },
 ];
 
+const PUBLICA_OPCIONES: { v: QuienPublica; titulo: string; texto: string }[] = [
+  { v: "prodi", titulo: "Los subimos nosotros", texto: "Cuando el cliente aprueba, el video pasa a pauta para subirlo y pautarlo." },
+  { v: "cliente", titulo: "Los sube el cliente", texto: "Cuando aprueba, el video se le entrega para que lo descargue y lo suba él. No pasa por pauta." },
+];
+
 const FILMA_OPCIONES: { v: QuienFilma; titulo: string; texto: string }[] = [
   { v: "prodi", titulo: "Filmamos nosotros", texto: "Como siempre: se agenda el rodaje y producción sube el crudo." },
   { v: "cliente", titulo: "Filma el cliente", texto: "Todos sus videos los filma él y nos manda el material desde su panel." },
@@ -286,7 +291,8 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
         meta: form.meta,
       };
       // Quién filma: admin o la productora del cliente (reglas.ts). Solo se escribe si cambió.
-      if (form.filma !== quienFilma(cliente)) data.produccion = { ...(cliente.produccion ?? {}), filma: form.filma };
+      if (form.filma !== quienFilma(cliente) || form.publica !== (cliente.produccion?.publica ?? "prodi"))
+        data.produccion = { ...(cliente.produccion ?? {}), filma: form.filma, publica: form.publica };
       if (isAdmin) {
         // Ahí se mandan boletas e informes: solo lo cambia el admin.
         Object.assign(data, {
@@ -443,6 +449,36 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
             entran en el plan del mes (y si ya lo usó, se cobran como video extra).
             {!puedeFilma && " Lo cambia el admin o la productora del cliente."}
           </p>
+        </div>
+      </Section>
+
+      <Section title="¿Quién sube los videos?" description="Qué pasa cuando el cliente aprueba un video.">
+        <div className="space-y-2 rounded-xl border bg-card p-4">
+          {PUBLICA_OPCIONES.map((o) => (
+            <button
+              key={o.v}
+              type="button"
+              disabled={!puedeFilma}
+              onClick={() => set("publica", o.v)}
+              className={cn(
+                "flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors disabled:cursor-not-allowed",
+                form.publica === o.v ? "border-primary bg-primary/10" : "hover:border-primary/50 disabled:hover:border-border"
+              )}
+            >
+              <span
+                className={cn(
+                  "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
+                  form.publica === o.v ? "border-primary bg-primary" : "border-muted-foreground/40"
+                )}
+              >
+                {form.publica === o.v && <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />}
+              </span>
+              <span>
+                <span className="block text-sm font-medium">{o.titulo}</span>
+                <span className="block text-xs text-muted-foreground">{o.texto}</span>
+              </span>
+            </button>
+          ))}
         </div>
       </Section>
 
@@ -667,6 +703,7 @@ function toForm(c: Project) {
     } as Partial<Record<ProjectTeamRole, string[]>>,
     emails: (c.contacto_emails ?? []).join(", "),
     filma: quienFilma(c),
+    publica: (c.produccion?.publica ?? "prodi") as QuienPublica,
     marca: { ...(c.marca ?? {}) },
     redes: { ...(c.redes ?? {}) },
     meta: { ...(c.meta ?? {}) },

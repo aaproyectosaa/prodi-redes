@@ -31,6 +31,8 @@ export interface HistorialVideo {
 }
 
 export interface PublicacionVideo {
+  /** Lo sube el cliente: se le entregó el video aprobado (no lo publicamos nosotros). */
+  sube_cliente?: boolean;
   publicado_at: string;
   link_instagram?: string | null;
   link_facebook?: string | null;

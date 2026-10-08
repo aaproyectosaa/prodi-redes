@@ -284,8 +284,11 @@ export interface Project {
   /** Fecha de alta del cliente (YYYY-MM-DD). */
   alta?: string | null;
   /** Producción de los videos. `filma`: quién filma (por defecto Prodi). */
-  produccion?: { filma?: QuienFilma } | null;
+  /** filma: quién filma · publica: quién sube los videos a las redes (cliente = se le entrega el video aprobado y lo sube él). */
+  produccion?: { filma?: QuienFilma; publica?: QuienPublica } | null;
 }
+
+export type QuienPublica = "prodi" | "cliente";
 
 /** prodi = filmamos nosotros · cliente = filma él y nos manda el material · ambos = se elige en cada video. */
 export type QuienFilma = "prodi" | "cliente" | "ambos";
