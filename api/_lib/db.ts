@@ -59,6 +59,8 @@ export interface Consulta {
   filtros: Filtro[];
   orden: Orden[];
   limite?: number | null;
+  /** Solo los que cambiaron después de esta marca (para refrescar sin volver a bajar todo). */
+  desdeRev?: number | null;
 }
 
 const ID = "__name__";
@@ -77,6 +79,7 @@ export function sqlConsulta(c: Consulta, params: unknown[]): string {
     return `$${params.length}`;
   };
   const partes = [`coleccion = ${p(c.coleccion)}`];
+  if (c.desdeRev != null && Number.isFinite(c.desdeRev)) partes.push(`rev > ${p(Math.floor(c.desdeRev))}`);
   for (const f of c.filtros) {
     if (!OPERADORES.has(f.op)) throw new Error(`Operador no soportado: ${f.op}`);
     if (f.campo === ID) {

@@ -144,6 +144,8 @@ export async function createUserWithEmailAndPassword(_auth: unknown, email: stri
 
 export async function signOut(_auth?: unknown) {
   setSesion(null);
+  // Lo que la app guardó en el dispositivo (copias de la base) no queda para el próximo que entre.
+  await import("@/lib/db/cache").then((m) => m.borrarCopias()).catch(() => undefined);
 }
 
 export async function updateProfile(user: User, datos: { displayName?: string | null }) {

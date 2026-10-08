@@ -26,6 +26,8 @@ interface PedidoConsulta {
   filtros?: { campo: string; op: string; valor: unknown }[];
   orden?: { campo: string; dir: "asc" | "desc" }[];
   limite?: number | null;
+  /** Marca de la última vez: devuelve solo lo cambiado (ver consultar). */
+  desde?: number | null;
 }
 
 const COLECCION_OK = /^[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+)?$/;
@@ -53,6 +55,9 @@ async function consultar(req: VercelRequest) {
   if (!Array.isArray(consultas) || consultas.length > MAX_CONSULTAS) throw new HttpError(400, "Consultas inválidas");
   const pool = getPool();
   const ctx = await contexto(pool, caller.uid, caller.role);
+  // Marca de este momento, tomada antes de consultar: lo que cambie mientras tanto se vuelve a mandar la próxima vez.
+  // Con 3 s de margen (lo que se estaba guardando): lo más nuevo se manda dos veces antes que perderlo.
+  const marca = Number((await pool.query("select coalesce(max(rev), 0)::bigint as rev from documentos where actualizado < now() - interval '3 seconds'")).rows[0].rev);
   const resultados = await Promise.all(
     consultas.map(async (q) => {
       try {
@@ -64,16 +69,28 @@ async function consultar(req: VercelRequest) {
           return { doc: data ? { id, data: paraLaApp(data) } : null };
         }
         const coleccion = validarColeccion(q.coleccion);
+        // Con `desde` (la marca de la última vez) y sin límite: solo lo que cambió. La pantalla ya tiene el
+        // resto guardado; así no se vuelve a bajar la colección entera por cada cambio (tráfico de la base).
+        const desde = !q.limite && typeof q.desde === "number" && Number.isFinite(q.desde) && q.desde > 0 ? Math.floor(q.desde) : null;
         const c: Consulta = {
           coleccion,
           filtros: (q.filtros ?? []).map((f) => ({ campo: String(f.campo), op: f.op as Consulta["filtros"][number]["op"], valor: f.valor })),
           orden: (q.orden ?? []).map((o) => ({ campo: String(o.campo), dir: o.dir === "desc" ? "desc" : "asc" })),
           limite: q.limite ?? null,
+          desdeRev: desde,
         };
         const filas = await ejecutarConsulta(pool, c);
         const visibles = [];
         for (const f of filas) if (await puedeLeer(ctx, coleccion, f.id, f.data)) visibles.push({ id: f.id, data: paraLaApp(f.data) });
-        return { docs: visibles };
+        if (desde === null) return { docs: visibles, rev: marca };
+        // Los que cambiaron pero ya no entran (otro filtro, sin permiso) y los borrados: la pantalla los saca.
+        const [cambiados, borrados] = await Promise.all([
+          pool.query("select id from documentos where coleccion = $1 and rev > $2", [coleccion, desde]),
+          pool.query("select id from borrados where coleccion = $1 and rev > $2", [coleccion, desde]),
+        ]);
+        const quedan = new Set(visibles.map((v) => v.id));
+        const quitar = [...cambiados.rows, ...borrados.rows].map((x: { id: string }) => x.id).filter((id) => !quedan.has(id));
+        return { docs: visibles, quitar, parcial: true, rev: marca };
       } catch (err) {
         return { error: err instanceof Error ? err.message : "Error" };
       }

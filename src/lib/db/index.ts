@@ -7,6 +7,7 @@
 
 import { auth, sesionVencida } from "@/lib/auth";
 import { autoria } from "@/lib/redes/vistaComo";
+import { guardarCopia, leerCopia } from "./cache";
 
 export type DocumentData = Record<string, any>;
 
@@ -172,12 +173,21 @@ const patron = (col: string) => {
 };
 
 // Junta todas las consultas de un mismo momento en un solo pedido.
-type Resultado = { doc?: { id: string; data: DocumentData } | null; docs?: { id: string; data: DocumentData }[]; error?: string };
-let cola: { spec: Spec; resolver: (r: Resultado) => void; fallar: (e: unknown) => void }[] = [];
+type Resultado = {
+  doc?: { id: string; data: DocumentData } | null;
+  docs?: { id: string; data: DocumentData }[];
+  error?: string;
+  /** Marca para pedir solo lo nuevo la próxima vez. */
+  rev?: number;
+  /** Respuesta con solo lo cambiado: `docs` se agregan o reemplazan y `quitar` se sacan. */
+  parcial?: boolean;
+  quitar?: string[];
+};
+let cola: { spec: Spec & { desde?: number }; resolver: (r: Resultado) => void; fallar: (e: unknown) => void }[] = [];
 let colaProgramada = false;
-function consultar(spec: Spec): Promise<Resultado> {
+function consultar(spec: Spec, desde?: number): Promise<Resultado> {
   return new Promise((resolver, fallar) => {
-    cola.push({ spec, resolver, fallar });
+    cola.push({ spec: desde ? { ...spec, desde } : spec, resolver, fallar });
     if (colaProgramada) return;
     colaProgramada = true;
     setTimeout(async () => {
@@ -227,27 +237,96 @@ interface Suscripcion {
   snap?: any;
   pidiendo?: boolean;
   repetir?: boolean;
+  /** Colecciones sin límite: lo que ya se tiene (para pedir solo lo nuevo) y la marca de la base. */
+  docs?: Map<string, DocumentData>;
+  rev?: number;
+  /** Cuándo se bajó todo completo por última vez (ms). */
+  completo?: number;
+  /** Clave de la copia local (por usuario y consulta). */
+  copia?: string;
 }
 const subs = new Map<string, Suscripcion>();
 
-async function refrescar(s: Suscripcion) {
+/** Cada cuánto se baja todo completo igual (por si cambió algún permiso sin que cambien los datos). */
+const COMPLETO_CADA = 6 * 3600_000;
+
+/** Se puede pedir solo lo nuevo: consulta de colección sin límite (las con límite son chicas). */
+const incremental = (spec: Spec) => "coleccion" in spec && !spec.limite;
+
+/** Orden de la consulta, aplicado en la pantalla al juntar lo nuevo con lo que ya había. */
+function ordenar(lista: { id: string; data: DocumentData }[], spec: Spec) {
+  const orden = "coleccion" in spec ? (spec.orden as { campo: string; dir: "asc" | "desc" }[]) : [];
+  if (!orden.length) return lista;
+  const valor = (d: DocumentData, campo: string) => campo.split(".").reduce((o: any, k) => (o == null ? undefined : o[k]), d);
+  return [...lista].sort((a, b) => {
+    for (const o of orden) {
+      const x = valor(a.data, o.campo);
+      const y = valor(b.data, o.campo);
+      if (x === y) continue;
+      if (x == null) return 1;
+      if (y == null) return -1;
+      const c = x < y ? -1 : 1;
+      return o.dir === "desc" ? -c : c;
+    }
+    return 0;
+  });
+}
+
+function emitir(s: Suscripcion, r: Resultado) {
+  try {
+    s.snap = aSnapshot(s.target, r);
+    s.oyentes.forEach((o) => o.cb(s.snap));
+  } catch (err) {
+    s.snap = undefined;
+    s.oyentes.forEach((o) => o.err?.(err));
+  }
+}
+
+function guardar(s: Suscripcion) {
+  if (!s.copia || !s.docs || !s.rev) return;
+  const docs = s.docs;
+  const rev = s.rev;
+  const completo = s.completo ?? Date.now();
+  guardarCopia(s.copia, () => ({ rev, completo, docs: [...docs.entries()] }));
+}
+
+async function refrescar(s: Suscripcion, forzarCompleto = false) {
   if (s.pidiendo) {
     s.repetir = true;
     return;
   }
   s.pidiendo = true;
   try {
-    const r = await consultar(s.spec);
-    const firma = JSON.stringify(r);
+    const parcialPosible =
+      !forzarCompleto && incremental(s.spec) && !!s.docs && !!s.rev && Date.now() - (s.completo ?? 0) < COMPLETO_CADA;
+    const r = await consultar(s.spec, parcialPosible ? s.rev : undefined);
+    if (r.error) {
+      emitir(s, r);
+      return;
+    }
+    if (r.parcial && s.docs) {
+      // Solo lo que cambió: se junta con lo que ya había (sin volver a bajar todo).
+      if (r.rev) s.rev = r.rev;
+      if (!r.docs?.length && !r.quitar?.length) return;
+      for (const id of r.quitar ?? []) s.docs.delete(id);
+      for (const d of r.docs ?? []) s.docs.set(d.id, d.data);
+      const lista = ordenar([...s.docs.entries()].map(([id, data]) => ({ id, data })), s.spec);
+      s.ultimo = undefined;
+      emitir(s, { docs: lista });
+      guardar(s);
+      return;
+    }
+    if (incremental(s.spec) && r.docs) {
+      s.docs = new Map(r.docs.map((d) => [d.id, d.data]));
+      s.rev = r.rev;
+      s.completo = Date.now();
+      guardar(s);
+    }
+    // Solo los datos (la marca cambia siempre): si no cambió nada, no se vuelve a dibujar.
+    const firma = JSON.stringify(r.docs ?? r.doc ?? null);
     if (firma !== s.ultimo) {
       s.ultimo = firma;
-      try {
-        s.snap = aSnapshot(s.target, r);
-        s.oyentes.forEach((o) => o.cb(s.snap));
-      } catch (err) {
-        s.snap = undefined;
-        s.oyentes.forEach((o) => o.err?.(err));
-      }
+      emitir(s, r);
     }
   } catch (err) {
     s.oyentes.forEach((o) => o.err?.(err));
@@ -268,12 +347,16 @@ function refrescarColecciones(patrones: Iterable<string>) {
   });
 }
 
-// Cada 4 s (cada 20 s con la pestaña en segundo plano) pregunta qué cambió.
+// Cada 4 s (cada 60 s con la pestaña en segundo plano) pregunta qué cambió. Con la app escondida más de
+// 15 min deja de preguntar hasta que se vuelva a mirar (no gasta tráfico de la base sin que nadie mire).
 let rev: number | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
+let ocultaDesde: number | null = null;
+const PAUSA_OCULTA = 15 * 60_000;
 async function sondear() {
   timer = null;
   if (!subs.size || !auth.currentUser) return;
+  if (ocultaDesde && Date.now() - ocultaDesde > PAUSA_OCULTA) return;
   try {
     const r = await api<{ rev: number; colecciones: string[] }>("cambios", { desde: rev });
     const primera = rev === null;
@@ -287,15 +370,22 @@ async function sondear() {
 function programar(ms?: number) {
   if (timer || !subs.size) return;
   const oculto = typeof document !== "undefined" && document.visibilityState === "hidden";
-  timer = setTimeout(sondear, ms ?? (oculto ? 20_000 : 4_000));
+  timer = setTimeout(sondear, ms ?? (oculto ? 60_000 : 4_000));
 }
 if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && subs.size) {
-      if (timer) clearTimeout(timer);
-      timer = null;
-      programar(50);
+    if (document.visibilityState === "hidden") {
+      ocultaDesde = Date.now();
+      return;
     }
+    const estuvoPausada = ocultaDesde !== null && Date.now() - ocultaDesde > PAUSA_OCULTA;
+    ocultaDesde = null;
+    if (!subs.size) return;
+    if (timer) clearTimeout(timer);
+    timer = null;
+    // Si estuvo pausada, se ponen al día las pantallas abiertas (solo lo nuevo).
+    if (estuvoPausada) subs.forEach((s) => void refrescar(s));
+    programar(50);
   });
 }
 
@@ -305,10 +395,26 @@ export function onSnapshot(target: any, cb: (s: any) => void, err?: (e: unknown)
   let s = subs.get(clave);
   const oyente = { cb, err };
   if (!s) {
-    s = { target, spec, col: coleccionDe(target), oyentes: new Set() };
-    subs.set(clave, s);
-    s.oyentes.add(oyente);
-    void refrescar(s);
+    const nueva: Suscripcion = { target, spec, col: coleccionDe(target), oyentes: new Set() };
+    s = nueva;
+    subs.set(clave, nueva);
+    nueva.oyentes.add(oyente);
+    const uid = auth.currentUser?.uid;
+    if (incremental(spec) && uid) {
+      // Primero lo guardado en el dispositivo (se ve al toque) y después solo lo nuevo.
+      nueva.copia = `${uid}|${clave}`;
+      void leerCopia(nueva.copia).then((c) => {
+        if (c && !nueva.docs && Date.now() - c.completo < COMPLETO_CADA) {
+          nueva.docs = new Map(c.docs);
+          nueva.rev = c.rev;
+          nueva.completo = c.completo;
+          emitir(nueva, { docs: ordenar(c.docs.map(([id, data]) => ({ id, data })), spec) });
+        }
+        void refrescar(nueva);
+      });
+    } else {
+      void refrescar(nueva);
+    }
     if (rev === null) programar(50);
     else programar();
   } else {
