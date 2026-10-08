@@ -15,10 +15,13 @@ import { PlanificarDialog } from "@/components/redes/PlanificarDialog";
 import { RodajeDialog } from "@/components/redes/RodajeDialog";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
-import { ETAPAS, estaTrabado } from "@/lib/redes/etapas";
+import { ETAPAS, estaTrabado, etapaInfo } from "@/lib/redes/etapas";
 import { mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import { canManageProduction } from "@/lib/roles";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { forzarEtapa } from "@/lib/redes/videos";
+import type { EtapaVideo } from "@/lib/redes/types";
 import { tableroDe, type TableroRol } from "@/lib/redes/tableros";
 import { SelectorVista, VistaCalendario, useVista } from "@/components/redes/VistaCalendario";
 import { BotonArmarMes, PlanesAviso } from "@/components/redes/PlanesAviso";
@@ -150,7 +153,23 @@ function TableroEquipo({ tablero }: { tablero: TableroRol }) {
 /** Vista del super admin: todas las etapas, con filtros. */
 function CircuitoCompleto() {
   const { videos, clientes, settings } = useRedes();
-  const { role } = useUserProfileContext();
+  const { role, user } = useUserProfileContext();
+  // Super admin: arrastra una tarjeta a otra columna para cambiar el video de etapa (como "Mover a…" en el video).
+  const arrastra = role === "admin" && !!user;
+  const [arrastrando, setArrastrando] = useState<string | null>(null);
+  const [sobre, setSobre] = useState<EtapaVideo | null>(null);
+  const soltar = async (etapa: EtapaVideo, id: string) => {
+    setArrastrando(null);
+    setSobre(null);
+    const v = videos.find((x) => x.id === id);
+    if (!v || !user || v.etapa === etapa) return;
+    try {
+      await forzarEtapa(v, etapa, user.uid);
+      toast.success(`«${v.titulo}» pasó a ${etapaInfo(etapa).label}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo mover");
+    }
+  };
   const [cliente, setCliente] = useState("todos");
   const [mes, setMes] = useState<string>("activos");
   const [q, setQ] = useState("");
@@ -254,7 +273,33 @@ function CircuitoCompleto() {
               .filter((v) => v.etapa === e.value)
               .sort((a, b) => a.etapa_desde.localeCompare(b.etapa_desde));
             return (
-              <div key={e.value} className="flex w-72 shrink-0 flex-col rounded-2xl border bg-muted/30">
+              <div
+                key={e.value}
+                className={cn(
+                  "flex w-72 shrink-0 flex-col rounded-2xl border bg-muted/30 transition-colors",
+                  arrastrando && sobre === e.value && "border-primary bg-primary/10"
+                )}
+                onDragOver={
+                  arrastra
+                    ? (ev) => {
+                        if (!arrastrando) return;
+                        ev.preventDefault();
+                        ev.dataTransfer.dropEffect = "move";
+                        if (sobre !== e.value) setSobre(e.value);
+                      }
+                    : undefined
+                }
+                onDragLeave={arrastra ? (ev) => !ev.currentTarget.contains(ev.relatedTarget as Node) && setSobre(null) : undefined}
+                onDrop={
+                  arrastra
+                    ? (ev) => {
+                        ev.preventDefault();
+                        const id = ev.dataTransfer.getData("text/video-id") || arrastrando;
+                        if (id) void soltar(e.value, id);
+                      }
+                    : undefined
+                }
+              >
                 <div className="flex items-center justify-between gap-2 px-3 py-2.5">
                   <div className="flex items-center gap-2">
                     <span className={cn("h-2 w-2 rounded-full", e.dot)} />
@@ -267,10 +312,25 @@ function CircuitoCompleto() {
                 <p className="px-3 pb-2 text-[11px] leading-snug text-muted-foreground">{e.descripcion}</p>
                 <div className="flex min-h-[120px] flex-col gap-2 px-2 pb-2 md:max-h-[calc(100dvh-300px)] md:overflow-y-auto">
                   {items.map((v) => (
-                    <VideoCard key={v.id} video={v} showEtapa={false} />
+                    <div
+                      key={v.id}
+                      draggable={arrastra}
+                      onDragStart={(ev) => {
+                        ev.dataTransfer.setData("text/video-id", v.id);
+                        ev.dataTransfer.effectAllowed = "move";
+                        setArrastrando(v.id);
+                      }}
+                      onDragEnd={() => {
+                        setArrastrando(null);
+                        setSobre(null);
+                      }}
+                      className={cn(arrastra && "cursor-grab active:cursor-grabbing", arrastrando === v.id && "opacity-40")}
+                    >
+                      <VideoCard video={v} showEtapa={false} />
+                    </div>
                   ))}
                   {items.length === 0 && (
-                    <p className="py-6 text-center text-xs text-muted-foreground/70">Vacío</p>
+                    <p className="py-6 text-center text-xs text-muted-foreground/70">{arrastrando ? "Soltalo acá" : "Vacío"}</p>
                   )}
                 </div>
               </div>
