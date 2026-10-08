@@ -155,6 +155,55 @@ function alMantenerApretado(t: MutableRefObject<ReturnType<typeof setTimeout> | 
   };
 }
 
+/**
+ * Deslizar un mensaje hacia la derecha para responderlo (como en WhatsApp): la burbuja acompaña el dedo,
+ * aparece la flechita y, si se pasa de la marca, vibra y queda respondiendo. Movimiento vertical: es scroll.
+ */
+function DeslizarParaResponder({ children, onResponder }: { children: ReactNode; onResponder: () => void }) {
+  const [dx, setDx] = useState(0);
+  const inicio = useRef<{ x: number; y: number; eje: "x" | "y" | null } | null>(null);
+  const MARCA = 60;
+  return (
+    <div
+      className="relative"
+      onTouchStart={(e) => {
+        const t = e.touches[0];
+        inicio.current = { x: t.clientX, y: t.clientY, eje: null };
+      }}
+      onTouchMove={(e) => {
+        const s = inicio.current;
+        if (!s) return;
+        const t = e.touches[0];
+        const mx = t.clientX - s.x;
+        const my = t.clientY - s.y;
+        if (!s.eje && (Math.abs(mx) > 8 || Math.abs(my) > 8)) s.eje = Math.abs(mx) > Math.abs(my) ? "x" : "y";
+        if (s.eje !== "x") return;
+        const nuevo = Math.max(0, Math.min(90, mx));
+        if (nuevo >= MARCA && dx < MARCA) navigator.vibrate?.(10);
+        setDx(nuevo);
+      }}
+      onTouchEnd={() => {
+        if (dx >= MARCA) onResponder();
+        inicio.current = null;
+        setDx(0);
+      }}
+      onTouchCancel={() => {
+        inicio.current = null;
+        setDx(0);
+      }}
+    >
+      <span
+        aria-hidden
+        className="pointer-events-none absolute left-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-primary/15 text-primary transition-opacity"
+        style={{ opacity: Math.min(1, dx / MARCA), transform: `translateY(-50%) scale(${0.6 + Math.min(1, dx / MARCA) * 0.4})` }}
+      >
+        <Reply className="h-4 w-4" />
+      </span>
+      <div style={{ transform: `translateX(${dx}px)`, transition: dx ? "none" : "transform 200ms ease-out" }}>{children}</div>
+    </div>
+  );
+}
+
 /** Debajo del último mensaje propio: "✓✓ Visto 14:32" / "Visto por 3 de 5", en violeta Prodi. */
 function VistoLinea({ chat, m, uid }: { chat: ChatT; m: Mensaje; uid: string }) {
   const { vieron, resumen } = estadoVisto(chat, m, uid);
@@ -573,6 +622,7 @@ export function ChatConversacion({
                   {mostrarDia && (
                     <p className="my-3 text-center text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{dia}</p>
                   )}
+                  <DeslizarParaResponder onResponder={() => responder(m)}>
                   <div className={cn("group/msj flex items-end gap-2", mio ? "justify-end" : "justify-start", !agrupado && "mt-2")}>
                     {mio && (
                       <button
@@ -742,6 +792,7 @@ export function ChatConversacion({
                       </button>
                     )}
                   </div>
+                  </DeslizarParaResponder>
                   {reacciones.length > 0 && (
                     <div className={cn("-mt-1 flex flex-wrap gap-1", mio ? "justify-end pr-1" : chat.tipo !== "directo" || bot ? "pl-9" : "pl-1")}>
                       {reacciones.map(([emoji, quienes]) => {
