@@ -58,7 +58,7 @@ async function crear(req: VercelRequest) {
   const nombre = String(b.nombre ?? "").trim();
   const email = String(b.email ?? "").trim().toLowerCase();
   const rol = String(b.rol ?? "");
-  if (!nombre || !/.+@.+\..+/.test(email) || !ROLES.includes(rol)) throw new HttpError(400, "Completá nombre, mail y rol");
+  if (!nombre || !/.+@.+\..+/.test(email) || !(ROLES.includes(rol) || rol === "contacto")) throw new HttpError(400, "Completá nombre, mail y rol");
   const password = b.password && b.password.length >= 6 ? b.password : `Prodi-${crypto.randomBytes(4).toString("hex")}`;
   let user;
   try {
@@ -87,8 +87,9 @@ async function editar(req: VercelRequest, adminUid: string) {
   const patch: Record<string, unknown> = {};
   if (b.nombre?.trim()) patch.nombre = b.nombre.trim();
   if (b.rol) {
-    // "contacto" no se asigna desde Equipo (se crea desde la ficha del cliente), pero editar uno lo mantiene.
-    if (!ROLES.includes(b.rol) && !(b.rol === "contacto" && prev.role === "contacto")) throw new HttpError(400, "Rol inválido");
+    // "contacto" desde Equipo = solo chat, sin cliente: entra solo a los grupos donde lo sume el super admin.
+    // (Los contactos de un cliente se crean desde su ficha y conservan su cliente.)
+    if (!ROLES.includes(b.rol) && b.rol !== "contacto") throw new HttpError(400, "Rol inválido");
     patch.role = b.rol;
   }
   if (b.email && b.email.trim().toLowerCase() !== prev.email) {

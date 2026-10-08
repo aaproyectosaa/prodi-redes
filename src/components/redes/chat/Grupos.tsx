@@ -86,11 +86,12 @@ export function useContactos(): Persona[] {
     const misIds = new Set(misProyectos.map((p) => p.id));
     return profiles
       .filter((p) => p.id !== uid && p.role && !LEGADO.includes(p.role) && p.activo !== false && p.nombre?.trim())
-      .filter((p) => (p.role === "cliente" ? misClientes.has(p.id) : p.role === "contacto" ? !!p.proyecto_id && misIds.has(p.proyecto_id) : true))
+      // Contactos: los de los clientes propios; los de solo chat (sin cliente) los suma únicamente el super admin.
+      .filter((p) => (p.role === "cliente" ? misClientes.has(p.id) : p.role === "contacto" ? (p.proyecto_id ? misIds.has(p.proyecto_id) : todos) : true))
       .map((p) => {
         if (p.role === "contacto") {
           const de = projects.find((x) => x.id === p.proyecto_id)?.nombre;
-          return { id: p.id, nombre: p.nombre, profile: p, etiqueta: de ? `Contacto · ${de}` : "Contacto" };
+          return { id: p.id, nombre: p.nombre, profile: p, etiqueta: de ? `Contacto · ${de}` : "Solo chat" };
         }
         const de = p.role === "cliente" ? projects.find((x) => x.team_roles?.cliente?.includes(p.id))?.nombre : undefined;
         return { id: p.id, nombre: p.nombre, profile: p, etiqueta: de ? `Cliente · ${de}` : getRoleInfo(p.role).label };

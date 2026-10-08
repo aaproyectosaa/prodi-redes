@@ -403,10 +403,19 @@ function UsuarioDialog({
                     {r.label} · <span className="text-muted-foreground">{r.description.split(".")[0]}</span>
                   </SelectItem>
                 ))}
+                <SelectItem value="contacto">
+                  Solo chat · <span className="text-muted-foreground">Entra solo a los grupos de chat donde lo sumes</span>
+                </SelectItem>
                 {!nuevo && <SelectItem value="pending">Sin rol (bloqueado)</SelectItem>}
               </SelectContent>
             </Select>
           </div>
+          {rol === "contacto" && (
+            <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+              Usa solo Prodi Chat: no ve clientes, videos ni nada del sistema. Entra únicamente a los grupos donde lo sumes
+              (en el chat: abrí el grupo → Sumar) y puede escribirle por privado a la gente de esos grupos.
+            </p>
+          )}
           {usaClientes && (
             <div className="space-y-1.5">
               <Label>{rol === "cliente" ? "Marca a la que pertenece" : "Clientes en los que trabaja"}</Label>
