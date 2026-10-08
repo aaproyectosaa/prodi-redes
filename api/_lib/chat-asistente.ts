@@ -15,6 +15,7 @@ import { chatDeMiembro, mensajeProdi, PRODI_ID } from "./chat-server";
 import { guardarNotasChat, limpiarHecho, normalizar } from "./chat-memoria";
 import { crearTarea } from "./tareas";
 import { sincronizarCalendario } from "./calendario";
+import { marcaTexto } from "./marca";
 
 export const MENCION_PRODI = /(^|[\s(])@prodi\b/i;
 const POR_MINUTO = 4;
@@ -195,7 +196,7 @@ async function interpretarYHacer(
   const prompt = `Sos Prodi, el asistente del chat interno de Prodi (agencia argentina de videos y pauta en redes). Te llaman escribiendo "@prodi".
 Ahora en Argentina: ${ahora}.
 Chat: ${queChat}. Te escribe: ${yo.nombre}.
-
+${chat.tipo === "cliente" && proj ? `\nIdentidad de marca del cliente (para contestar sobre logos, colores, tipografías y reglas de uso):\n${marcaTexto(proj)}\n` : ""}
 Personas que se pueden sumar (nombre completo · rol):
 ${personas.map((x) => `- ${x.nombre} · ${x.role}`).join("\n")}
 

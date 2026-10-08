@@ -3,9 +3,10 @@
 // POST /api/ia/pieza  { pieza_id, ajustes? }    → genera una versión y la guarda en Drive
 // POST /api/ia/guion  { video_id }              → guion y lista de tomas del video
 // POST /api/ia/preparar { proyecto_id, video_ids } → qué tiene que tener listo el cliente para el rodaje
-// POST /api/ia/marca-subir  { proyecto_id, tipo: "logo"|"referencia", nombre, mime, data(base64) }
+// POST /api/ia/marca-subir  { proyecto_id, tipo: "logo"|"variante"|"manual"|"referencia", etiqueta?, nombre, mime, data(base64) }
 // POST /api/ia/marca-quitar { proyecto_id, tipo, drive_file_id }
-// POST /api/ia/marca-colores { proyecto_id, paleta: ["#rrggbb", …] }  (también el cliente)
+// POST /api/ia/marca-variante { proyecto_id, drive_file_id, etiqueta?, principal? } → renombra o la hace el logo principal
+// POST /api/ia/marca-colores { proyecto_id, paleta: ["#rrggbb", …], info?: { "#rrggbb": { nombre, uso } } }  (también el cliente)
 // POST /api/ia/marca-info   { proyecto_id, rubro, descripcion, publico?, colores?, instagram? }  (también el cliente)
 // Plan del mes con IA (ver api/_lib/plan-mes.ts):
 // POST /api/ia/plan-mes      { proyecto_id, mes, idea_id?, pista? }  → arma el borrador (o rehace una idea)
@@ -31,6 +32,7 @@ import { enviarAviso } from "../_lib/notify";
 import { filmaElCliente, videoDesdePedido } from "../_lib/pedidos";
 import { fechaAR, sumarDias } from "../_lib/fecha";
 import { atenderMencion } from "../_lib/chat-asistente";
+import { logosParaPieza, marcaTexto } from "../_lib/marca";
 import {
   comercialTexto,
   limpiarComercial,
@@ -54,22 +56,6 @@ import {
 
 // Las minutas de reuniones largas pueden tardar: hasta 5 minutos.
 export const config = { maxDuration: 300 };
-
-function marcaTexto(p: Record<string, any>): string {
-  const m = p.marca ?? {};
-  return [
-    `Marca: ${p.nombre}`,
-    m.rubro && `Rubro: ${m.rubro}`,
-    m.publico && `Público: ${m.publico}`,
-    m.descripcion && `Qué los hace distintos: ${m.descripcion}`,
-    m.tono && `Tono: ${m.tono}`,
-    (m.paleta?.length || m.colores) && `Colores de marca: ${m.paleta?.length ? m.paleta.join(", ") : m.colores}`,
-    m.notas && `Notas: ${m.notas}`,
-    p.redes?.instagram && `Instagram: ${p.redes.instagram}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
 
 /**
  * Enfoque comercial de Prodi + productos y temporadas del cliente vigentes en esas fechas
@@ -154,15 +140,21 @@ ${
 Usá los colores de la marca si están indicados. No inventes logos de otras marcas ni datos de contacto.`;
 
   // Logo y piezas de referencia de la marca (si las cargaron).
-  const archivos = (p.marca_archivos ?? {}) as { logo?: { drive_file_id: string }; referencias?: { drive_file_id: string }[] };
+  const archivos = (p.marca_archivos ?? {}) as { referencias?: { drive_file_id: string }[] };
   const imagenes: { data: Buffer; mime: string }[] = [];
   let guia = "";
-  if (archivos.logo?.drive_file_id) {
-    const logo = await descargarDrive(archivos.logo.drive_file_id).catch(() => null);
-    if (logo) {
-      imagenes.push(logo);
-      guia += "\nLa primera imagen adjunta es el LOGO de la marca: incluilo tal cual, sin redibujarlo, deformarlo ni cambiarle los colores, en un lugar visible y prolijo.";
-    }
+  // Logo principal y, si hay, la versión para fondos oscuros: la IA usa la que contraste con el fondo.
+  const logos = logosParaPieza(p);
+  const [logo, logoClaro] = await Promise.all([
+    logos.principal ? descargarDrive(logos.principal.drive_file_id).catch(() => null) : null,
+    logos.clara ? descargarDrive(logos.clara.drive_file_id).catch(() => null) : null,
+  ]);
+  if (logo && logoClaro) {
+    imagenes.push(logo, logoClaro);
+    guia += `\nLas dos primeras imágenes adjuntas son el LOGO de la marca: la primera es la versión principal y la segunda la versión "${logos.clara?.etiqueta}" para fondos oscuros. Usá UNA sola, la que mejor contraste con el fondo de la pieza, tal cual: sin redibujarla, deformarla ni cambiarle los colores, en un lugar visible y prolijo.`;
+  } else if (logo) {
+    imagenes.push(logo);
+    guia += "\nLa primera imagen adjunta es el LOGO de la marca: incluilo tal cual, sin redibujarlo, deformarlo ni cambiarle los colores, en un lugar visible y prolijo.";
   }
   const refs = await Promise.all(
     (archivos.referencias ?? []).slice(0, 3).map((r) => descargarDrive(r.drive_file_id).catch(() => null))
@@ -322,39 +314,60 @@ ${lista || "- (sin detalle)"}`;
 }
 
 const MIME_IMG = ["image/png", "image/jpeg", "image/webp"];
+/** Roles que cargan la marca de un cliente (además, tienen que tener acceso a ese cliente). */
+const ROLES_MARCA = ["admin", "productor", "diseno", "cliente"];
+/** Listas de la marca y cuántos archivos entran en cada una. */
+const LISTAS_MARCA = { variante: ["variantes", 30], manual: ["manuales", 8], referencia: ["referencias", 4] } as const;
+type ListaMarca = keyof typeof LISTAS_MARCA;
+const etiquetaLimpia = (v: unknown) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
+const slug = (s: string) =>
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
 
 async function marcaSubir(req: VercelRequest) {
-  const caller = await requireCaller(req, ["admin", "productor", "cliente"]);
-  const b = body<{ proyecto_id?: string; tipo?: string; nombre?: string; mime?: string; data?: string }>(req);
+  const caller = await requireCaller(req, ROLES_MARCA);
+  const b = body<{ proyecto_id?: string; tipo?: string; etiqueta?: string; nombre?: string; mime?: string; data?: string }>(req);
   if (!b.proyecto_id || !b.data) throw new HttpError(400, "Faltan datos");
   await assertProjectAccess(caller, b.proyecto_id);
-  const tipo = b.tipo === "logo" ? "logo" : "referencia";
-  const mime = String(b.mime ?? "");
-  if (!MIME_IMG.includes(mime)) throw new HttpError(400, "Subí una imagen PNG, JPG o WEBP");
+  const tipo: "logo" | ListaMarca = b.tipo === "logo" || b.tipo === "variante" || b.tipo === "manual" ? b.tipo : "referencia";
   const data = Buffer.from(String(b.data), "base64");
-  if (data.length > 3 * 1024 * 1024) throw new HttpError(413, "La imagen es muy pesada (máximo 3 MB)");
-  // Se verifica que de verdad sea una imagen (firma del archivo), no solo lo que dice el navegador.
+  if (data.length > 3 * 1024 * 1024) throw new HttpError(413, "El archivo es muy pesado (máximo 3 MB)");
+  // Se verifica que de verdad sea una imagen (o un PDF en los manuales) por la firma del archivo, no solo lo que dice el navegador.
   const esPng = data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
   const esJpg = data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff;
   const esWebp = data.subarray(0, 4).toString() === "RIFF" && data.subarray(8, 12).toString() === "WEBP";
-  if (!(esPng || esJpg || esWebp)) throw new HttpError(400, "El archivo no es una imagen válida");
-  const mimeReal = esPng ? "image/png" : esJpg ? "image/jpeg" : "image/webp";
+  const esPdf = tipo === "manual" && data.subarray(0, 5).toString() === "%PDF-";
+  if (!(esPng || esJpg || esWebp || esPdf)) {
+    throw new HttpError(400, tipo === "manual" ? "Subí un PDF o una imagen (PNG, JPG o WEBP)" : "Subí una imagen PNG, JPG o WEBP");
+  }
+  const mimeReal = esPdf ? "application/pdf" : esPng ? "image/png" : esJpg ? "image/jpeg" : "image/webp";
+  const ext = esPdf ? "pdf" : esPng ? "png" : esWebp ? "webp" : "jpg";
+  const etiqueta = etiquetaLimpia(b.etiqueta);
+  if (tipo === "variante" && !etiqueta) throw new HttpError(400, "Poné qué versión del logo es (ej. Blanco, Horizontal)");
 
   const db = adminDb();
   const ref = db.collection("projects").doc(b.proyecto_id);
   const p = (await ref.get()).data() ?? {};
-  const actuales = (p.marca_archivos?.referencias ?? []) as unknown[];
-  if (tipo === "referencia" && actuales.length >= 4) throw new HttpError(409, "Ya hay 4 referencias. Quitá una para subir otra.");
+  if (tipo !== "logo") {
+    const [campo, max] = LISTAS_MARCA[tipo];
+    if (((p.marca_archivos?.[campo] ?? []) as unknown[]).length >= max) throw new HttpError(409, `Ya hay ${max}. Quitá uno para subir otro.`);
+  }
 
-  const ext = mimeReal === "image/png" ? "png" : mimeReal === "image/webp" ? "webp" : "jpg";
-  const up = await uploadBufferToDrive({
-    path: [String(p.nombre ?? "Cliente"), "Marca"],
-    name: tipo === "logo" ? `logo.${ext}` : `referencia-${Date.now()}.${ext}`,
-    mime: mimeReal,
-    data,
-  });
+  // Nombre legible en Drive: "logo-blanco.png", "manual-identidad.pdf".
+  const base = String(b.nombre ?? "").replace(/\.[a-z0-9]+$/i, "").trim();
+  const nombre =
+    tipo === "logo"
+      ? `logo.${ext}`
+      : tipo === "variante"
+        ? `logo-${slug(etiqueta) || Date.now()}.${ext}`
+        : tipo === "manual"
+          ? `manual-${slug(base) || Date.now()}.${ext}`
+          : `referencia-${Date.now()}.${ext}`;
+  const up = await uploadBufferToDrive({ path: [String(p.nombre ?? "Cliente"), "Marca"], name: nombre, mime: mimeReal, data });
   const att = {
     ...up,
+    ...(tipo === "variante" ? { etiqueta } : {}),
+    // El manual se muestra con el nombre que tenía el archivo.
+    ...(tipo === "manual" && base ? { name: base.slice(0, 80) } : {}),
     size: data.length,
     uploaded_at: new Date().toISOString(),
     uploaded_by: caller.uid,
@@ -363,18 +376,48 @@ async function marcaSubir(req: VercelRequest) {
   if (tipo === "logo") {
     await ref.update({ "marca_archivos.logo": att });
   } else {
-    // El tope de 4 se vuelve a controlar dentro de la transacción (dos subidas a la vez).
+    // El tope se vuelve a controlar dentro de la transacción (dos subidas a la vez).
+    const [campo, max] = LISTAS_MARCA[tipo];
     await db.runTransaction(async (tx) => {
-      const refs = ((await tx.get(ref)).data()?.marca_archivos?.referencias ?? []) as unknown[];
-      if (refs.length >= 4) throw new HttpError(409, "Ya hay 4 referencias. Quitá una para subir otra.");
-      tx.update(ref, { "marca_archivos.referencias": [...refs, att] });
+      const lista = ((await tx.get(ref)).data()?.marca_archivos?.[campo] ?? []) as unknown[];
+      if (lista.length >= max) throw new HttpError(409, `Ya hay ${max}. Quitá uno para subir otro.`);
+      tx.update(ref, { [`marca_archivos.${campo}`]: [...lista, att] });
     });
   }
   return { ok: true, archivo: att };
 }
 
+/** Renombra una versión del logo o la hace el logo principal (el principal anterior pasa a ser una versión más). */
+async function marcaVariante(req: VercelRequest) {
+  const caller = await requireCaller(req, ROLES_MARCA);
+  const b = body<{ proyecto_id?: string; drive_file_id?: string; etiqueta?: string; principal?: boolean }>(req);
+  if (!b.proyecto_id || !b.drive_file_id) throw new HttpError(400, "Faltan datos");
+  await assertProjectAccess(caller, b.proyecto_id);
+  const db = adminDb();
+  const ref = db.collection("projects").doc(b.proyecto_id);
+  await db.runTransaction(async (tx) => {
+    const a = ((await tx.get(ref)).data()?.marca_archivos ?? {}) as Record<string, any>;
+    let variantes = (a.variantes ?? []) as Record<string, any>[];
+    const i = variantes.findIndex((v) => v.drive_file_id === b.drive_file_id);
+    if (i < 0) throw new HttpError(404, "No encontré esa versión del logo");
+    const etiqueta = etiquetaLimpia(b.etiqueta);
+    if (etiqueta) variantes = variantes.map((v, j) => (j === i ? { ...v, etiqueta } : v));
+    const patch: Record<string, unknown> = {};
+    if (b.principal) {
+      const { etiqueta: _sinEtiqueta, ...nuevo } = variantes[i];
+      void _sinEtiqueta;
+      variantes = variantes.filter((_, j) => j !== i);
+      if (a.logo) variantes = [{ ...a.logo, etiqueta: "Logo anterior" }, ...variantes];
+      patch["marca_archivos.logo"] = nuevo;
+    }
+    patch["marca_archivos.variantes"] = variantes;
+    tx.update(ref, patch);
+  });
+  return { ok: true };
+}
+
 async function marcaInfo(req: VercelRequest) {
-  const caller = await requireCaller(req, ["admin", "productor", "cliente"]);
+  const caller = await requireCaller(req, ROLES_MARCA);
   const b = body<{ proyecto_id?: string; rubro?: string; descripcion?: string; publico?: string; colores?: string; instagram?: string }>(req);
   if (!b.proyecto_id) throw new HttpError(400, "Faltan datos");
   await assertProjectAccess(caller, b.proyecto_id);
@@ -392,8 +435,8 @@ async function marcaInfo(req: VercelRequest) {
 
 /** Colores de la marca (los elige el cliente o el equipo con el selector de color). */
 async function marcaColores(req: VercelRequest) {
-  const caller = await requireCaller(req, ["admin", "productor", "cliente"]);
-  const b = body<{ proyecto_id?: string; paleta?: unknown }>(req);
+  const caller = await requireCaller(req, ROLES_MARCA);
+  const b = body<{ proyecto_id?: string; paleta?: unknown; info?: unknown }>(req);
   if (!b.proyecto_id) throw new HttpError(400, "Faltan datos");
   await assertProjectAccess(caller, b.proyecto_id);
   const paleta = (Array.isArray(b.paleta) ? b.paleta : [])
@@ -401,12 +444,25 @@ async function marcaColores(req: VercelRequest) {
     .filter((c) => /^#[0-9a-f]{6}$/.test(c))
     .filter((c, i, a) => a.indexOf(c) === i)
     .slice(0, 12);
-  await adminDb().collection("projects").doc(b.proyecto_id).update({ "marca.paleta": paleta, "marca.colores": paleta.join(", ") });
+  const datos: Record<string, unknown> = { "marca.paleta": paleta, "marca.colores": paleta.join(", ") };
+  // Nombre y uso de cada color (opcional: el panel del cliente manda solo la paleta y no los toca).
+  if (b.info && typeof b.info === "object" && !Array.isArray(b.info)) {
+    const dados = b.info as Record<string, { nombre?: unknown; uso?: unknown } | null>;
+    const info: Record<string, { nombre?: string; uso?: string }> = {};
+    for (const hex of paleta) {
+      const d = Object.hasOwn(dados, hex) ? dados[hex] : null;
+      const nombre = String(d?.nombre ?? "").trim().slice(0, 40);
+      const uso = String(d?.uso ?? "").trim().slice(0, 80);
+      if (nombre || uso) info[hex] = { ...(nombre ? { nombre } : {}), ...(uso ? { uso } : {}) };
+    }
+    datos["marca.colores_info"] = info;
+  }
+  await adminDb().collection("projects").doc(b.proyecto_id).update(datos);
   return { ok: true, paleta };
 }
 
 async function marcaQuitar(req: VercelRequest) {
-  const caller = await requireCaller(req, ["admin", "productor", "cliente"]);
+  const caller = await requireCaller(req, ROLES_MARCA);
   const b = body<{ proyecto_id?: string; tipo?: string; drive_file_id?: string }>(req);
   if (!b.proyecto_id) throw new HttpError(400, "Faltan datos");
   await assertProjectAccess(caller, b.proyecto_id);
@@ -414,11 +470,11 @@ async function marcaQuitar(req: VercelRequest) {
   if (b.tipo === "logo") {
     await ref.update({ "marca_archivos.logo": FieldValue.delete() });
   } else {
+    const tipo: ListaMarca = b.tipo === "variante" || b.tipo === "manual" ? b.tipo : "referencia";
+    const [campo] = LISTAS_MARCA[tipo];
     const p = (await ref.get()).data() ?? {};
-    const refs = ((p.marca_archivos?.referencias ?? []) as { drive_file_id: string }[]).filter(
-      (r) => r.drive_file_id !== b.drive_file_id
-    );
-    await ref.update({ "marca_archivos.referencias": refs });
+    const lista = ((p.marca_archivos?.[campo] ?? []) as { drive_file_id: string }[]).filter((r) => r.drive_file_id !== b.drive_file_id);
+    await ref.update({ [`marca_archivos.${campo}`]: lista });
   }
   return { ok: true };
 }
@@ -775,6 +831,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "marca-subir") res.status(200).json(await marcaSubir(req));
     else if (accion === "marca-quitar") res.status(200).json(await marcaQuitar(req));
     else if (accion === "marca-info") res.status(200).json(await marcaInfo(req));
+    else if (accion === "marca-variante") res.status(200).json(await marcaVariante(req));
     else if (accion === "plan-mes") res.status(200).json(await planMes(req));
     else if (accion === "plan-enviar") res.status(200).json(await planEnviar(req));
     else if (accion === "plan-responder") res.status(200).json(await planResponder(req));

@@ -273,7 +273,15 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
         .map((e) => e.trim().toLowerCase())
         .filter((e) => /.+@.+\..+/.test(e));
       const data: Record<string, unknown> = {
-        marca: form.marca,
+        // Colores y archivos de la marca se guardan aparte (MarcaArchivos): no se pisan con lo que había al abrir.
+        marca: {
+          ...(cliente.marca ?? {}),
+          rubro: form.marca.rubro ?? "",
+          publico: form.marca.publico ?? "",
+          tono: form.marca.tono ?? "",
+          tipografias: form.marca.tipografias ?? "",
+          notas: form.marca.notas ?? "",
+        },
         redes: form.redes,
         meta: form.meta,
       };
@@ -560,7 +568,11 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
             <Input value={form.marca.tono ?? ""} onChange={(e) => set("marca", { ...form.marca, tono: e.target.value })} placeholder="Ej: cercano, con voseo, sin exagerar" />
           </div>
           <div className="space-y-1.5">
-            <Label>Notas (qué no decir, datos fijos, dirección…)</Label>
+            <Label>Tipografías</Label>
+            <Input value={form.marca.tipografias ?? ""} onChange={(e) => set("marca", { ...form.marca, tipografias: e.target.value })} placeholder="Ej: títulos Amatic SC, textos Montserrat" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Reglas de la marca y notas (qué logo sobre qué fondo, qué no decir, datos fijos, dirección…)</Label>
             <Textarea rows={3} value={form.marca.notas ?? ""} onChange={(e) => set("marca", { ...form.marca, notas: e.target.value })} />
           </div>
           <div className="border-t pt-3">

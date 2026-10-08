@@ -78,7 +78,7 @@ export async function puedeVerArchivo(caller: Caller, fileId: string): Promise<b
        from documentos
       where (coleccion in ('videos', 'piezas_ia', 'reuniones')
              and (data @> $1::jsonb or data @> $2::jsonb or data @> $3::jsonb or data @> $6::jsonb))
-         or (coleccion = 'projects' and (data @> $4::jsonb or data @> $5::jsonb))
+         or (coleccion = 'projects' and (data @> $4::jsonb or data @> $5::jsonb or data @> $7::jsonb or data @> $8::jsonb))
       limit 50`,
     [
       JSON.stringify({ attachments_crudo: ref }),
@@ -88,6 +88,9 @@ export async function puedeVerArchivo(caller: Caller, fileId: string): Promise<b
       JSON.stringify({ marca_archivos: { referencias: ref } }),
       // Material ya cargado que el cliente eligió para un video nuevo (sigue visible aunque lo saquen del video original).
       JSON.stringify({ material_base: { archivos: ref } }),
+      // Versiones del logo y manuales de marca.
+      JSON.stringify({ marca_archivos: { variantes: ref } }),
+      JSON.stringify({ marca_archivos: { manuales: ref } }),
     ]
   );
   const proyectos = new Set<string>();

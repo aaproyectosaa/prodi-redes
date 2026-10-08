@@ -151,6 +151,9 @@ export const CONDICIONES_IVA: Record<CondicionIva, string> = {
   consumidor_final: "Consumidor final",
 };
 
+/** Una versión del logo con su nombre ("Blanco, para fondos oscuros"). */
+export type LogoVariante = DriveAttachmentRef & { etiqueta: string };
+
 export interface Project {
   id: string;
   nombre: string;
@@ -227,13 +230,23 @@ export interface Project {
     colores?: string;
     /** Colores de la marca en hex, el primero es el principal. */
     paleta?: string[];
+    /** Nombre y uso de cada color de la paleta (por hex en minúscula): "Verde Maurenzi · fondos". */
+    colores_info?: Record<string, { nombre?: string; uso?: string }>;
+    /** Tipografías de la marca ("Títulos: Amatic SC · Textos: Montserrat"). */
+    tipografias?: string;
+    /** Reglas de uso de la marca (qué logo sobre qué fondo, qué no hacer). */
     notas?: string;
     /** Qué hace distinto al negocio, en palabras del cliente. */
     descripcion?: string;
   } | null;
   /** Logo y piezas de referencia para la IA (los escribe el servidor). */
   marca_archivos?: {
+    /** Logo principal (el que se ve en Clientes y la IA pone en las piezas). */
     logo?: DriveAttachmentRef;
+    /** Otras versiones del logo: blanco, negro, horizontal, isotipo, marca de agua… */
+    variantes?: LogoVariante[];
+    /** Manual de marca, brandboard, guías (PDF o imagen). */
+    manuales?: DriveAttachmentRef[];
     referencias?: DriveAttachmentRef[];
   } | null;
   /** Débito automático del abono mensual (Mercado Pago, lo escribe el servidor). */

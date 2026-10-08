@@ -67,3 +67,6 @@ certs/
 # Base local de desarrollo (pnpm db:local) y usuarios de prueba
 .pglite/
 usuarios-locales.txt
+
+# Logos y manuales de marca de los clientes (se cargan al sistema, no van al repo)
+marcas/
