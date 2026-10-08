@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { doc, updateDoc } from "@/lib/db";
-import { ArrowLeft, Eye, Loader2, Mail, MessageCircle, Plus, Send, X } from "lucide-react";
+import { ArrowLeft, Clapperboard, Eye, Loader2, Mail, MessageCircle, Plus, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { db } from "@/integrations/firebase/client";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ import {
 import { PageShell, Section, StatCard } from "@/components/redes/PageShell";
 import { VideoCard } from "@/components/redes/VideoCard";
 import { PlanUsage } from "@/components/redes/PlanUsage";
-import { PlanificarDialog } from "@/components/redes/PlanificarDialog";
+import { PlanificarDialog, type ModoPlanificar } from "@/components/redes/PlanificarDialog";
 import { BotonArmarMes } from "@/components/redes/PlanesAviso";
 import { ContextoComercialEditor } from "@/components/redes/ContextoComercial";
 import { resumenMarca } from "@/lib/redes/proximoPaso";
@@ -57,7 +57,7 @@ export default function ClienteDetalle() {
   const { role } = useUserProfileContext();
   const cliente = clienteById(id);
   const [mes, setMes] = useState(mesActual());
-  const [planificar, setPlanificar] = useState(false);
+  const [planificar, setPlanificar] = useState<false | ModoPlanificar>(false);
   const isAdmin = role === "admin";
 
   if (!cliente) {
@@ -121,7 +121,10 @@ export default function ClienteDetalle() {
               <MessageCircle className="mr-2 h-4 w-4" /> Chat
             </Button>
           )}
-          <Button onClick={() => setPlanificar(true)}>
+          <Button variant="outline" onClick={() => setPlanificar("filmado")} title="Fuiste a grabar sin planificar: creás el video y subís el material">
+            <Clapperboard className="mr-2 h-4 w-4" /> Ya lo filmé
+          </Button>
+          <Button onClick={() => setPlanificar("planificar")}>
             <Plus className="mr-2 h-4 w-4" /> Planificar
           </Button>
         </>
@@ -219,7 +222,7 @@ export default function ClienteDetalle() {
         )}
       </Tabs>
 
-      <PlanificarDialog open={planificar} onOpenChange={setPlanificar} clienteId={cliente.id} />
+      <PlanificarDialog open={!!planificar} onOpenChange={(v) => !v && setPlanificar(false)} modoInicial={planificar || "planificar"} clienteId={cliente.id} />
     </PageShell>
   );
 }

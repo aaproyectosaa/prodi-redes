@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { CalendarDays, Clapperboard, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -27,31 +27,47 @@ import { crearVideos, type NuevoVideo } from "@/lib/redes/videos";
 import { mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import { usoPlan } from "@/lib/redes/planes";
 import { PlanUsage } from "./PlanUsage";
+import { useOpenVideo } from "./VideoCard";
+import { cn } from "@/lib/utils";
+
+export type ModoPlanificar = "planificar" | "filmado";
 
 const vacio = (): NuevoVideo => ({ titulo: "", idea: "", objetivo: "", referencias: "" });
 
+const MODOS: { value: ModoPlanificar; icon: typeof CalendarDays; titulo: string; texto: string }[] = [
+  { value: "planificar", icon: CalendarDays, titulo: "Planificar", texto: "Todavía no se filmó: cargás la idea y después agendás el rodaje" },
+  { value: "filmado", icon: Clapperboard, titulo: "Ya lo filmé", texto: "Fuiste a grabar sin planificar: creás el video y subís el material para edición" },
+];
+
 /**
- * Planificación con el cliente: se cargan varias ideas de video de una.
+ * Cargar videos: planificar ideas (varias de una) o, si ya se filmó sin planificar, crear el video y
+ * abrirlo para subir el crudo y mandarlo a edición (sin rodaje).
  */
 export function PlanificarDialog({
   open,
   onOpenChange,
   clienteId: clienteInicial,
+  modoInicial = "planificar",
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   clienteId?: string;
+  modoInicial?: ModoPlanificar;
 }) {
   const { clientes, planes, videos } = useRedes();
   const { user } = useUserProfileContext();
+  const abrirVideo = useOpenVideo();
+  const [modo, setModo] = useState<ModoPlanificar>(modoInicial);
   const [clienteId, setClienteId] = useState<string>(clienteInicial ?? "");
   const [mes, setMes] = useState(mesActual());
   const [items, setItems] = useState<NuevoVideo[]>([vacio()]);
   const [extra, setExtra] = useState(false);
   const [saving, setSaving] = useState(false);
+  const filmado = modo === "filmado";
 
   useEffect(() => {
     if (open) {
+      setModo(modoInicial);
       setClienteId(clienteInicial ?? clientes[0]?.id ?? "");
       setItems([vacio()]);
       setExtra(false);
@@ -66,7 +82,8 @@ export function PlanificarDialog({
     () => usoPlan(cliente, planes, videos, mes),
     [cliente, planes, videos, mes]
   );
-  const validos = items.filter((i) => i.titulo.trim().length > 0);
+  // "Ya lo filmé" es de a un video (después se abre para subir su material).
+  const validos = (filmado ? items.slice(0, 1) : items).filter((i) => i.titulo.trim().length > 0);
   const quedaria = uso.usados + (extra ? 0 : validos.length);
   const seExcede = !extra && uso.cupo > 0 && quedaria > uso.cupo;
 
@@ -81,13 +98,19 @@ export function PlanificarDialog({
     }
     setSaving(true);
     try {
-      await crearVideos(cliente, validos, mes, user.uid, { extra });
-      toast.success(
-        `${validos.length} video${validos.length === 1 ? "" : "s"} planificado${
-          validos.length === 1 ? "" : "s"
-        } para ${cliente.nombre}`
-      );
+      const ids = await crearVideos(cliente, validos, mes, user.uid, { extra, filmado });
       onOpenChange(false);
+      if (filmado && ids[0]) {
+        // Se abre el video: ahí se sube el crudo y se toca "Enviar a edición".
+        abrirVideo(ids[0]);
+        toast.success("Video creado. Ahora subí el material y tocá «Enviar a edición».", { duration: 8000 });
+      } else {
+        toast.success(
+          `${validos.length} video${validos.length === 1 ? "" : "s"} planificado${
+            validos.length === 1 ? "" : "s"
+          } para ${cliente.nombre}`
+        );
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo guardar");
     } finally {
@@ -101,11 +124,35 @@ export function PlanificarDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-h-[92dvh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Planificar videos</DialogTitle>
+          <DialogTitle>{filmado ? "Ya lo filmé" : "Planificar videos"}</DialogTitle>
           <DialogDescription>
-            Cargá las ideas que acordaste con el cliente. Después las agendás en un rodaje.
+            {filmado
+              ? "Creás el video, se abre y subís el material crudo. Con «Enviar a edición» le llega a la editora. No hace falta rodaje."
+              : "Cargá las ideas que acordaste con el cliente. Después las agendás en un rodaje."}
           </DialogDescription>
         </DialogHeader>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          {MODOS.map((m) => (
+            <button
+              key={m.value}
+              type="button"
+              onClick={() => setModo(m.value)}
+              className={cn(
+                "flex items-start gap-3 rounded-xl border-2 p-3 text-left transition-colors",
+                modo === m.value ? "border-primary bg-primary/[0.06]" : "border-border hover:border-primary/40"
+              )}
+            >
+              <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", modo === m.value ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
+                <m.icon className="h-4 w-4" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">{m.titulo}</span>
+                <span className="block text-xs text-muted-foreground">{m.texto}</span>
+              </span>
+            </button>
+          ))}
+        </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
@@ -153,7 +200,7 @@ export function PlanificarDialog({
         )}
 
         <div className="space-y-3">
-          {items.map((it, idx) => (
+          {(filmado ? items.slice(0, 1) : items).map((it, idx) => (
             <div key={idx} className="space-y-2 rounded-xl border p-3">
               <div className="flex items-center gap-2">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
@@ -162,7 +209,7 @@ export function PlanificarDialog({
                 <Input
                   value={it.titulo}
                   onChange={(e) => update(idx, { titulo: e.target.value })}
-                  placeholder="Título del video (ej. Promo 2x1 de los jueves)"
+                  placeholder={filmado ? "¿Qué filmaste? (ej. Obra con cobots en Rafaela)" : "Título del video (ej. Promo 2x1 de los jueves)"}
                   className="font-medium"
                   autoFocus={idx === items.length - 1}
                 />
@@ -181,7 +228,7 @@ export function PlanificarDialog({
               <Textarea
                 value={it.idea ?? ""}
                 onChange={(e) => update(idx, { idea: e.target.value })}
-                placeholder="Idea / guion: qué se muestra, qué se dice, tomas clave"
+                placeholder={filmado ? "Cómo lo querés editado (opcional): qué mostrar, qué texto, música" : "Idea / guion: qué se muestra, qué se dice, tomas clave"}
                 rows={2}
               />
               <div className="grid gap-2 sm:grid-cols-2">
@@ -198,9 +245,11 @@ export function PlanificarDialog({
               </div>
             </div>
           ))}
-          <Button variant="outline" size="sm" onClick={() => setItems((p) => [...p, vacio()])}>
-            <Plus className="mr-1.5 h-4 w-4" /> Otro video
-          </Button>
+          {!filmado && (
+            <Button variant="outline" size="sm" onClick={() => setItems((p) => [...p, vacio()])}>
+              <Plus className="mr-1.5 h-4 w-4" /> Otro video
+            </Button>
+          )}
         </div>
 
         <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
@@ -219,7 +268,13 @@ export function PlanificarDialog({
           </Button>
           <Button onClick={save} disabled={saving || !cliente || validos.length === 0}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Guardar {validos.length > 0 ? validos.length : ""} video{validos.length === 1 ? "" : "s"}
+            {filmado ? (
+              <>
+                <Clapperboard className="mr-2 h-4 w-4" /> Crear y subir el material
+              </>
+            ) : (
+              `Guardar ${validos.length > 0 ? validos.length : ""} video${validos.length === 1 ? "" : "s"}`
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

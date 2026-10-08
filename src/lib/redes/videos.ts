@@ -85,13 +85,14 @@ export async function crearVideos(
   items: NuevoVideo[],
   mes: string,
   by: string,
-  opts: { extra?: boolean } = {}
+  /** filmado: ya se filmó sin planificar (lo filmamos nosotros): queda listo para subir el crudo y mandarlo a edición. */
+  opts: { extra?: boolean; filmado?: boolean } = {}
 ): Promise<string[]> {
   assertEditable();
   const batch = writeBatch(db);
   const ids: string[] = [];
   const ts = now();
-  const filmaCliente = quienFilma(project) === "cliente";
+  const filmaCliente = !opts.filmado && quienFilma(project) === "cliente";
   for (const item of items) {
     const ref = doc(collection(db, VIDEOS));
     ids.push(ref.id);
@@ -122,7 +123,7 @@ export async function crearVideos(
       pauta: null,
       resultados: null,
       meta: null,
-      historial: [evento(by, filmaCliente ? "Planificado · lo filma el cliente" : "Planificado")],
+      historial: [evento(by, opts.filmado ? "Filmado sin planificar: falta subir el material" : filmaCliente ? "Planificado · lo filma el cliente" : "Planificado")],
       created_at: ts,
       created_by: by,
       updated_at: ts,

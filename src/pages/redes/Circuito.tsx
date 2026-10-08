@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, CalendarPlus, Plus, Search } from "lucide-react";
+import { AlertTriangle, CalendarPlus, Clapperboard, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 import { PageShell } from "@/components/redes/PageShell";
 import { VideoCard } from "@/components/redes/VideoCard";
-import { PlanificarDialog } from "@/components/redes/PlanificarDialog";
+import { PlanificarDialog, type ModoPlanificar } from "@/components/redes/PlanificarDialog";
 import { RodajeDialog } from "@/components/redes/RodajeDialog";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
@@ -38,7 +38,7 @@ function TableroEquipo({ tablero }: { tablero: TableroRol }) {
   const { role, user } = useUserProfileContext();
   const uid = user?.uid ?? "";
   const [cliente, setCliente] = useState("todos");
-  const [planificar, setPlanificar] = useState(false);
+  const [planificar, setPlanificar] = useState<false | ModoPlanificar>(false);
   const [rodaje, setRodaje] = useState(false);
   const esProd = role === "productor";
   const [vista, setVista] = useVista(`equipo-${role}`);
@@ -76,7 +76,10 @@ function TableroEquipo({ tablero }: { tablero: TableroRol }) {
               <Button variant="outline" onClick={() => setRodaje(true)}>
                 <CalendarPlus className="mr-2 h-4 w-4" /> Agendar rodaje
               </Button>
-              <Button onClick={() => setPlanificar(true)}>
+              <Button variant="outline" onClick={() => setPlanificar("filmado")} title="Fuiste a grabar sin planificar: creás el video y subís el material">
+                <Clapperboard className="mr-2 h-4 w-4" /> Ya lo filmé
+              </Button>
+              <Button onClick={() => setPlanificar("planificar")}>
                 <Plus className="mr-2 h-4 w-4" /> Planificar
               </Button>
             </>
@@ -142,7 +145,7 @@ function TableroEquipo({ tablero }: { tablero: TableroRol }) {
       )}
       {esProd && (
         <>
-          <PlanificarDialog open={planificar} onOpenChange={setPlanificar} />
+          <PlanificarDialog open={!!planificar} onOpenChange={(v) => !v && setPlanificar(false)} modoInicial={planificar || "planificar"} />
           <RodajeDialog open={rodaje} onOpenChange={setRodaje} />
         </>
       )}
@@ -174,7 +177,7 @@ function CircuitoCompleto() {
   const [mes, setMes] = useState<string>("activos");
   const [q, setQ] = useState("");
   const [soloTrabados, setSoloTrabados] = useState(false);
-  const [planificar, setPlanificar] = useState(false);
+  const [planificar, setPlanificar] = useState<false | ModoPlanificar>(false);
   const [vista, setVista] = useVista("circuito");
 
   const meses = [0, -1, -2, -3, 1].map((d) => sumarMeses(mesActual(), d));
@@ -208,7 +211,10 @@ function CircuitoCompleto() {
         canManageProduction(role) && (
           <>
             <BotonArmarMes clienteId={cliente === "todos" ? null : cliente} />
-            <Button onClick={() => setPlanificar(true)}>
+            <Button variant="outline" onClick={() => setPlanificar("filmado")} title="Fuiste a grabar sin planificar: creás el video y subís el material">
+              <Clapperboard className="mr-2 h-4 w-4" /> Ya lo filmé
+            </Button>
+            <Button onClick={() => setPlanificar("planificar")}>
               <Plus className="mr-2 h-4 w-4" /> Planificar
             </Button>
           </>
@@ -341,7 +347,7 @@ function CircuitoCompleto() {
 
       )}
 
-      <PlanificarDialog open={planificar} onOpenChange={setPlanificar} />
+      <PlanificarDialog open={!!planificar} onOpenChange={(v) => !v && setPlanificar(false)} modoInicial={planificar || "planificar"} />
     </PageShell>
   );
 }
