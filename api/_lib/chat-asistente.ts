@@ -153,7 +153,16 @@ export async function atenderMencion(caller: Caller, chatId: unknown, mensajeId:
     resultados = await interpretarYHacer(caller, chat, cid, texto, baseUrl);
   } catch (err) {
     console.error("[prodi]", err);
-    resultados = [{ texto: "Uh, no pude procesar el pedido ahora. Probá de nuevo en un rato." }];
+    const msg = err instanceof Error ? err.message : String(err);
+    // Sin clave (o con una clave inválida) no es "probá en un rato": hay que configurarla.
+    const sinClave = /GEMINI_API_KEY|API key not valid|API_KEY_INVALID|PERMISSION_DENIED/i.test(msg);
+    resultados = [
+      {
+        texto: sinClave
+          ? "Todavía no estoy conectado a la IA: falta cargar (o renovar) la clave de Gemini en Vercel (GEMINI_API_KEY). Cuando esté, respondo."
+          : "Uh, no pude procesar el pedido ahora. Probá de nuevo en un rato.",
+      },
+    ];
   }
   const conLink = resultados.find((r) => r.link);
   await mensajeProdi(cid, resultados.map((r) => r.texto).join("\n"), {

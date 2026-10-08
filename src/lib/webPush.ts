@@ -2,6 +2,7 @@
 import { doc, updateDoc } from "@/lib/db";
 import { db } from "@/integrations/firebase/client";
 import { guardarPush } from "@/lib/auth";
+import { enHostChat } from "@/lib/chatApp";
 
 const SW_PATH = "/sw.js";
 
@@ -94,7 +95,8 @@ export async function subscribeWebPush(userId: string): Promise<string> {
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(`El navegador no pudo activar los avisos (${msg}). Borrá los datos del sitio y probá de nuevo.`);
   }
-  await guardarPush(sub.toJSON());
+  // De qué app es este dispositivo: con Prodi Chat en su propia dirección, sus avisos son solo del chat.
+  await guardarPush(sub.toJSON(), undefined, enHostChat() ? "chat" : "sistema");
   await updateDoc(doc(db, "profiles", userId), { push_enabled: true });
   return sub.endpoint;
 }

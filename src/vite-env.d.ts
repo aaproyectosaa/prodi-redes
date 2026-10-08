@@ -4,6 +4,8 @@ interface ImportMetaEnv {
   readonly VITE_VAPID_PUBLIC_KEY?: string;
   readonly VITE_API_PROXY?: string;
   readonly VITE_APP_URL?: string;
+  /** Dirección propia de Prodi Chat (ej. https://prodi-chat.vercel.app): sus avisos van solo ahí. */
+  readonly VITE_CHAT_URL?: string;
   readonly VITE_GOOGLE_OAUTH_CLIENT_ID?: string;
 }
 

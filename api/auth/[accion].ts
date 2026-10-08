@@ -69,7 +69,7 @@ async function handlerAccion(accion: string, req: VercelRequest) {
     case "push": {
       const u = await sesion(req);
       if (b.quitar) await borrarSuscripciones(u.uid, typeof b.quitar === "string" ? b.quitar : undefined);
-      else await guardarSuscripcion(u.uid, b.suscripcion);
+      else await guardarSuscripcion(u.uid, b.suscripcion, b.app === "chat" ? "chat" : "sistema");
       return { ok: true };
     }
     case "push-prueba": {

@@ -10,6 +10,11 @@
     },
     {
       "source": "/((?!api/).*)",
+      "has": [{ "type": "host", "value": "prodi-chat.vercel.app" }],
+      "destination": "/chat-app.html"
+    },
+    {
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ],

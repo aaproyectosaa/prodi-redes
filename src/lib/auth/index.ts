@@ -184,10 +184,10 @@ export async function usarLinkDeClave(token: string, nueva: string) {
 }
 
 /** Avisos push de este dispositivo. */
-export async function guardarPush(suscripcion: PushSubscriptionJSON | null, quitar?: string | true) {
+export async function guardarPush(suscripcion: PushSubscriptionJSON | null, quitar?: string | true, app: "chat" | "sistema" = "sistema") {
   const g = leer();
   if (!g) return;
-  await llamar("push", quitar ? { quitar } : { suscripcion }, g.token);
+  await llamar("push", quitar ? { quitar } : { suscripcion, app }, g.token);
 }
 
 // Compatibilidad con la inicialización anterior.

@@ -2,7 +2,7 @@
 // (pagos, informes, chat, tareas, cron diario).
 
 import { adminDb } from "./db";
-import { enviarPush } from "./push";
+import { chatUrl, enviarPush, esAvisoDeChat } from "./push";
 import { enviarMailsLote, type MailLote } from "./informe";
 import { mailAvisoHtml } from "./mail-aviso";
 import { sinDisenadora } from "./http";
@@ -75,7 +75,10 @@ export async function enviarAviso(aviso: AvisoServer, baseUrl: string): Promise<
         const p = snap.data() ?? {};
         const url = `${baseUrl}${aviso.link}`;
 
-        if (p.push_enabled) await enviarPush(uid, { title: aviso.titulo, body: aviso.cuerpo, url, tag: dedupe });
+        // Los mensajes del chat van a Prodi Chat (y se abren ahí, en su dirección); el resto, a Prodi.
+        const deChat = esAvisoDeChat(aviso.link);
+        const urlPush = deChat && chatUrl() ? `${chatUrl()}${aviso.link}` : url;
+        if (p.push_enabled) await enviarPush(uid, { title: aviso.titulo, body: aviso.cuerpo, url: urlPush, tag: dedupe }, deChat ? "chat" : "sistema");
 
         // Correo: uno por aviso nuevo. Si ya tenía uno sin leer con la misma clave (ej. varios mensajes
         // del mismo chat), no se repite: el primero ya le llegó y todavía no lo abrió.

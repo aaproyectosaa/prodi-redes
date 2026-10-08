@@ -17,6 +17,25 @@ const CLAVE_AVISO = "prodi-aviso-chat-cerrado";
 
 export const esRutaChatApp = (pathname: string) => pathname === CHAT_APP || pathname.startsWith(CHAT_APP + "/");
 
+const origen = (u: string | undefined) => {
+  try {
+    return u ? new URL(u.trim().replace(/^["']|["']$/g, "")).origin : null;
+  } catch {
+    return null;
+  }
+};
+/**
+ * Dirección propia de Prodi Chat (VITE_CHAT_URL, ej. https://prodi-chat.vercel.app). Con su propia
+ * dirección es otra app para el celular: su ícono, su número y sus avisos (solo los del chat), sin
+ * mezclarse con Prodi. Sin configurar, vive en /chat-app del mismo sitio, como antes.
+ */
+export const CHAT_ORIGEN = origen(import.meta.env.VITE_CHAT_URL as string | undefined);
+/** Dirección del sistema, para abrir desde Prodi Chat lo que no es del chat. */
+const SISTEMA_ORIGEN = origen(import.meta.env.VITE_APP_URL as string | undefined) ?? "https://prodi-redes.vercel.app";
+
+/** ¿Esta página está en la dirección propia de Prodi Chat? */
+export const enHostChat = () => typeof window !== "undefined" && !!CHAT_ORIGEN && window.location.origin === CHAT_ORIGEN;
+
 const leer = (s: Storage | undefined, k: string) => {
   try {
     return s?.getItem(k) ?? null;
@@ -36,7 +55,13 @@ const local = () => (typeof window === "undefined" ? undefined : window.localSto
 
 /** Se llama al arrancar: si se abrió en /chat-app, esta ventana queda en modo chat. */
 export function marcarArranqueChat() {
-  if (typeof window === "undefined" || !esRutaChatApp(window.location.pathname)) return;
+  if (typeof window === "undefined") return;
+  // Prodi Chat ya tiene su dirección: el /chat-app del sistema (accesos viejos) lleva allá.
+  if (CHAT_ORIGEN && !enHostChat() && esRutaChatApp(window.location.pathname)) {
+    window.location.replace(CHAT_ORIGEN + window.location.pathname + window.location.search);
+    return;
+  }
+  if (!esRutaChatApp(window.location.pathname) && !enHostChat()) return;
   guardar(sesion(), CLAVE_SESION, "1");
   if (yaInstalada()) guardar(local(), CLAVE_INSTALADA, "1");
   window.addEventListener("appinstalled", () => guardar(local(), CLAVE_INSTALADA, "1"));
@@ -47,7 +72,7 @@ export function marcarArranqueChat() {
  * (por ejemplo, un aviso la llevó a /chat?c=…: se vuelve a /chat-app?c=…).
  */
 export function enModoChat(pathname = typeof window === "undefined" ? "" : window.location.pathname): boolean {
-  if (esRutaChatApp(pathname)) return true;
+  if (esRutaChatApp(pathname) || enHostChat()) return true;
   return leer(sesion(), CLAVE_SESION) === "1" && yaInstalada();
 }
 
@@ -70,7 +95,7 @@ function abrirVentana(url: string) {
 
 /** Abre una parte del sistema fuera de Prodi Chat (en el navegador o en la app Prodi). */
 export function abrirEnSistema(ruta: string) {
-  const url = new URL(ruta, window.location.origin).href;
+  const url = new URL(ruta, enHostChat() ? SISTEMA_ORIGEN : window.location.origin).href;
   abrirVentana(url);
 }
 
@@ -78,7 +103,7 @@ export const chatAppInstalada = () => leer(local(), CLAVE_INSTALADA) === "1";
 export const avisoChatCerrado = () => leer(local(), CLAVE_AVISO) === "1";
 export const cerrarAvisoChat = () => guardar(local(), CLAVE_AVISO, "1");
 
-export const urlChatApp = () => (typeof window === "undefined" ? CHAT_APP : window.location.origin + CHAT_APP);
+export const urlChatApp = () => (CHAT_ORIGEN ?? (typeof window === "undefined" ? "" : window.location.origin)) + CHAT_APP;
 
 /**
  * Ir a la página de Prodi Chat para instalarla. Tiene que ser una carga completa (no del router):
