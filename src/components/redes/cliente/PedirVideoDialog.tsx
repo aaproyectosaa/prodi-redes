@@ -135,12 +135,13 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
       .filter((g) => g.archivos.length > 0);
   }, [videos, cliente.id]);
 
-  // Opciones de material según quién filma en su ficha: si filma Prodi no hay "lo mando yo"; si filma él, no hay "filmación nueva".
+  // Opciones de material: "lo mando yo" está siempre (a veces filman ellos aunque lo normal sea que filmemos
+  // nosotros); si en la ficha filma siempre él, no hay "filmación nueva".
   const opciones = useMemo<Material[]>(
     () => [
       ...(grupos.length ? (["existente"] as const) : []),
       ...(filma !== "cliente" ? (["nueva"] as const) : []),
-      ...(filma !== "prodi" ? (["cliente"] as const) : []),
+      "cliente" as const,
     ],
     [grupos.length, filma]
   );
@@ -496,7 +497,7 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
                       const info = {
                         existente: { icon: Images, titulo: "Con material que ya está cargado", texto: archivos.length && material === "existente" ? `${archivos.length} archivo${archivos.length === 1 ? "" : "s"} elegido${archivos.length === 1 ? "" : "s"} · tocá para cambiar` : "Elegís fotos y videos que ya tenemos" },
                         nueva: { icon: Clapperboard, titulo: "Filmación nueva", texto: "Vamos y lo filmamos nosotros" },
-                        cliente: { icon: Smartphone, titulo: "Yo mando el material", texto: "Lo filmás vos y lo subís desde la app" },
+                        cliente: { icon: Smartphone, titulo: "Yo mando el material", texto: "Lo filmaste vos (o lo vas a filmar) y lo subís acá" },
                       }[o];
                       const sel = material === o;
                       return (

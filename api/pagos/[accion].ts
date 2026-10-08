@@ -7,7 +7,7 @@
 // POST /api/pagos/suscripcion { proyecto_id, accion: "cancelar" | "actualizar_monto" }  (admin)
 // POST /api/pagos/pedir-video { proyecto_id, mes, titulo, idea?, objetivo?, filma_cliente? }  (cliente)
 //      → si entra en el plan se crea; si no, se cobra como video extra y se crea al pagar.
-//        Si lo filma el cliente (ficha del cliente, o lo eligió si filman los dos) arranca esperando su material.
+//        Si lo filma el cliente ("Yo mando el material", o la ficha dice que filma él) arranca esperando su material.
 // POST /api/pagos/arca-autorizar { factura_id, reintentar? }  (admin/administración) → CAE de ARCA para una boleta emitida
 // POST /api/pagos/arca-estado    (admin) → prueba la conexión con ARCA
 
@@ -37,7 +37,6 @@ import {
   archivosBaseDe,
   filmaElCliente,
   preferenciaRodaje,
-  quienFilma,
   textoMaterial,
   videoDesdePedido,
   type MaterialBase,
@@ -626,8 +625,6 @@ async function pedirVideo(req: VercelRequest) {
   const tipoMaterial: TipoMaterial | null = ["existente", "nueva", "cliente"].includes(String(b.material?.tipo))
     ? (String(b.material?.tipo) as TipoMaterial)
     : null;
-  const ficha = quienFilma(proj);
-  if (tipoMaterial === "cliente" && ficha === "prodi") throw new HttpError(400, "Tus videos los filma Prodi. Si querés mandar material, escribinos.");
   let material_base: MaterialBase | null = null;
   if (tipoMaterial === "existente") {
     // Cada archivo tiene que ser material de un video de este cliente (el cliente, solo el editado que ya le llegó).
@@ -637,10 +634,13 @@ async function pedirVideo(req: VercelRequest) {
   } else if (tipoMaterial === "cliente") {
     material_base = { tipo: "cliente" };
   }
-  // Quién lo filma sale de la ficha del cliente; si filman los dos, de lo que eligió en el pedido.
+  // "Yo mando el material": lo filma él, diga lo que diga la ficha (a veces filman ellos). Si no, sale de
+  // la ficha del cliente; si filman los dos, de lo que eligió en el pedido.
   // Con material ya cargado no filma nadie (va a edición).
   const filma =
-    tipoMaterial === "existente" ? false : filmaElCliente(proj, tipoMaterial ? tipoMaterial === "cliente" : b.filma_cliente === true);
+    tipoMaterial === "existente"
+      ? false
+      : tipoMaterial === "cliente" || filmaElCliente(proj, tipoMaterial ? false : b.filma_cliente === true);
   // Si filma siempre el cliente, una "filmación nueva" también la hace él.
   if (filma && material_base?.tipo === "nueva") material_base = { tipo: "cliente" };
   const pedido: PedidoVideo = {
