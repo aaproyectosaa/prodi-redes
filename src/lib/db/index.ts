@@ -6,6 +6,7 @@
 // pregunta qué colecciones cambiaron y vuelve a pedir solo lo que hace falta.
 
 import { auth, sesionVencida } from "@/lib/auth";
+import { autoria } from "@/lib/redes/vistaComo";
 
 export type DocumentData = Record<string, any>;
 
@@ -330,7 +331,8 @@ type Op = { tipo: "set" | "update" | "create" | "delete"; ruta: string; data?: D
 
 async function escribir(ops: Op[]) {
   if (!ops.length) return;
-  await api("escribir", { ops });
+  // En "ver como" con cambios permitidos, lo escrito queda a nombre del super admin.
+  await api("escribir", { ops: ops.map((o) => (o.data ? { ...o, data: autoria(o.data) } : o)) });
   refrescarColecciones(ops.map((o) => patron(o.ruta.split("/").slice(0, -1).join("/"))));
 }
 

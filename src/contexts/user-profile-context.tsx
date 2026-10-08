@@ -100,7 +100,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
 
   // Se fija en el render (no en un efecto) para que ningún componente hijo
   // alcance a escribir datos antes de que el modo solo lectura esté activo.
-  setModoVista(!!viewingAs || (puedeVer && vista.loading), viewingAs?.nombre ?? "");
+  setModoVista(!!viewingAs || (puedeVer && vista.loading), viewingAs?.nombre ?? "", { vista: vistaUid ?? undefined, real: user?.uid });
 
   const verComo = useCallback((uid: string | null) => {
     guardarVistaComo(uid);
