@@ -40,10 +40,19 @@ if (arg("llave") && !fsArch.existsSync(LLAVE)) {
   console.error(`No encontré la llave ${LLAVE}`);
   process.exit(1);
 }
-const credencial = b64
-  ? cert(JSON.parse(Buffer.from(b64, "base64").toString("utf8")))
-  : !process.env.GOOGLE_APPLICATION_CREDENTIALS && fsArch.existsSync(LLAVE)
-    ? cert(JSON.parse(fsArch.readFileSync(LLAVE, "utf8")))
+// Primero la llave del origen (certs/); la variable en base64 solo si es una llave de verdad (no "COMPLETAR").
+const desdeB64 = () => {
+  try {
+    const j = JSON.parse(Buffer.from(b64 ?? "", "base64").toString("utf8"));
+    return j?.private_key ? j : null;
+  } catch {
+    return null;
+  }
+};
+const credencial = fsArch.existsSync(LLAVE)
+  ? cert(JSON.parse(fsArch.readFileSync(LLAVE, "utf8")))
+  : desdeB64()
+    ? cert(desdeB64())
     : applicationDefault();
 initializeApp({ credential: credencial });
 const fs = getFirestore();
