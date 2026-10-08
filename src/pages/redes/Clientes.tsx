@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { addDoc, collection } from "@/lib/db";
-import { Building2, Copy, Loader2, Mail, Plus, Search, X } from "lucide-react";
+import { Building2, Copy, Loader2, Mail, Plus, Search, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,7 @@ import { useRedes } from "@/contexts/redes-data-context";
 import { useAppData } from "@/contexts/app-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { LogoCliente } from "@/components/redes/LogoCliente";
+import { QuienSubeDialog } from "@/components/redes/QuienSubeDialog";
 import { formatARS, hoyISO, mesActual } from "@/lib/redes/format";
 import { planDe, usoPlan } from "@/lib/redes/planes";
 
@@ -48,6 +49,7 @@ export default function Clientes() {
   const { role } = useUserProfileContext();
   const [nuevo, setNuevo] = useState(false);
   const [busqueda, setBusqueda] = useState("");
+  const [quienSube, setQuienSube] = useState(false);
   const mes = mesActual();
   // Busca por nombre, rubro, Instagram o quién del equipo lo lleva.
   const visibles = useMemo(() => {
@@ -67,9 +69,14 @@ export default function Clientes() {
       subtitle={clientes.length === 1 ? "1 cliente activo" : `${clientes.length} clientes activos`}
       actions={
         isAdmin && (
-          <Button onClick={() => setNuevo(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Nuevo cliente
-          </Button>
+          <>
+            <Button variant="outline" onClick={() => setQuienSube(true)}>
+              <Upload className="mr-2 h-4 w-4" /> Quién sube
+            </Button>
+            <Button onClick={() => setNuevo(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Nuevo cliente
+            </Button>
+          </>
         )
       }
     >
@@ -121,6 +128,7 @@ export default function Clientes() {
                       <p className="text-xs text-muted-foreground">
                         {plan.nombre}
                         {isAdmin && plan.precioMensual > 0 && ` · ${formatARS(plan.precioMensual)}`}
+                        {c.produccion?.publica === "cliente" && <span className="text-amber-600 dark:text-amber-400"> · Sube el cliente</span>}
                       </p>
                     </div>
                   </div>
@@ -140,6 +148,7 @@ export default function Clientes() {
         </>
       )}
       <NuevoClienteDialog open={nuevo} onOpenChange={setNuevo} />
+      {isAdmin && <QuienSubeDialog open={quienSube} onOpenChange={setQuienSube} clientes={clientes} />}
     </PageShell>
   );
 }
