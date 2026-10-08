@@ -18,6 +18,7 @@ import {
   mencionaProdi,
   noLeido,
   pedirAProdi,
+  puedeEditarMensaje,
   PRODI_ID,
   tituloChat,
 } from "@/lib/redes/chat";
@@ -26,7 +27,7 @@ import { AudioMensaje, BarraGrabando, BotonMic, useGrabadorVoz } from "@/compone
 import { ArchivoMensaje, SubidaBurbuja } from "@/components/redes/chat/Archivo";
 import { ChatIcon } from "@/components/redes/chat/ChatIcon";
 import { EtiquetaContacto, InfoChat } from "@/components/redes/chat/Grupos";
-import { Cabecitas, InfoMensaje, vistosHasta } from "@/components/redes/chat/InfoMensaje";
+import { Cabecitas, EditarMensajeDialog, InfoMensaje, vistosHasta } from "@/components/redes/chat/InfoMensaje";
 import { CamaraDialog, camaraDelSistema } from "@/components/redes/chat/Camara";
 import { comprimirFoto } from "@/lib/imagen";
 import { crearReunion } from "@/lib/redes/reuniones";
@@ -192,6 +193,7 @@ export function ChatConversacion({
   const [camara, setCamara] = useState(false);
   const [info, setInfo] = useState(false);
   const [infoMsg, setInfoMsg] = useState<Mensaje | null>(null);
+  const [editMsg, setEditMsg] = useState<Mensaje | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const pegadoAbajo = useRef(true);
   const tMantener = useRef<ReturnType<typeof setTimeout>>();
@@ -625,6 +627,7 @@ export function ChatConversacion({
                         )}
                         aria-label="Info del mensaje"
                       >
+                        {m.editado_at && <span className="italic">editado ·</span>}
                         {hora(m.at)}
                         {mio && <Visto chat={chat} m={m} uid={uid} />}
                       </button>
@@ -875,7 +878,22 @@ export function ChatConversacion({
       </footer>
       {!enCelular && <CamaraDialog open={camara} onOpenChange={setCamara} onFoto={(f) => mandarArchivos([f])} />}
       {chat.tipo !== "directo" && <InfoChat chat={chat} open={info} onOpenChange={setInfo} onSalio={onBack} />}
-      <InfoMensaje chat={chat} m={infoMsg} uid={uid} perfilDe={perfilDe} onOpenChange={(v) => !v && setInfoMsg(null)} />
+      <InfoMensaje
+        chat={chat}
+        m={infoMsg}
+        uid={uid}
+        perfilDe={perfilDe}
+        onOpenChange={(v) => !v && setInfoMsg(null)}
+        onEditar={
+          infoMsg && puedeEditarMensaje(infoMsg, uid)
+            ? () => {
+                setEditMsg(infoMsg);
+                setInfoMsg(null);
+              }
+            : undefined
+        }
+      />
+      <EditarMensajeDialog chat={chat} m={editMsg} onOpenChange={(v) => !v && setEditMsg(null)} />
     </div>
   );
 }

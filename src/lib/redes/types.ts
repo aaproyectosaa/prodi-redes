@@ -484,6 +484,8 @@ export interface Mensaje {
   /** Respuestas de @prodi: texto del botón del link. */
   link_texto?: string | null;
   tarea_id?: string | null;
+  /** Si el autor lo corrigió después de mandarlo. */
+  editado_at?: string | null;
 }
 
 /** Tareas que deja @prodi ("recordale a Lucía que mande el guion el viernes"). */

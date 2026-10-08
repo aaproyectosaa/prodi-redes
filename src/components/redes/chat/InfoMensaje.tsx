@@ -1,8 +1,11 @@
-import type { ReactNode } from "react";
-import { CheckCheck, Clock } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useEffect, useState, type ReactNode } from "react";
+import { CheckCheck, Clock, Loader2, Pencil } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import UserAvatar from "@/components/UserAvatar";
-import { lecturasDe, PRODI_ID } from "@/lib/redes/chat";
+import { editarMensaje, lecturasDe, PRODI_ID } from "@/lib/redes/chat";
 import { fechaAR, formatearFecha, hoyAR } from "@/lib/fecha";
 import { cn } from "@/lib/utils";
 import type { Chat as ChatT, Mensaje } from "@/lib/redes/types";
@@ -75,12 +78,15 @@ export function InfoMensaje({
   uid,
   perfilDe,
   onOpenChange,
+  onEditar,
 }: {
   chat: ChatT;
   m: Mensaje | null;
   uid: string;
   perfilDe: (id: string) => Profile | undefined;
   onOpenChange: (v: boolean) => void;
+  /** Mensaje propio de texto: abre la edición. */
+  onEditar?: () => void;
 }) {
   const lecturas = m ? lecturasDe(chat, m.at, m.by).filter((l) => l.uid !== PRODI_ID) : [];
   const vieron = lecturas.filter((l) => l.at).sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""));
@@ -106,7 +112,13 @@ export function InfoMensaje({
           <p className="text-xs text-muted-foreground">
             Enviado {cuandoLargo(m.at)}
             {m.by !== uid && ` por ${nombre(m.by)}`}
+            {m.editado_at && ` · editado ${cuandoLargo(m.editado_at)}`}
           </p>
+        )}
+        {onEditar && (
+          <Button variant="outline" className="w-full" onClick={onEditar}>
+            <Pencil className="mr-2 h-4 w-4" /> Editar mensaje
+          </Button>
         )}
         <div className="max-h-[50vh] space-y-3 overflow-y-auto">
           <section>
@@ -129,6 +141,58 @@ export function InfoMensaje({
           )}
         </div>
         <p className="text-[11px] text-muted-foreground">La hora es la última vez que cada uno abrió el chat.</p>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Corregir un mensaje propio: el texto cambia para todos y queda la marca "editado". */
+export function EditarMensajeDialog({ chat, m, onOpenChange }: { chat: ChatT; m: Mensaje | null; onOpenChange: (v: boolean) => void }) {
+  const [texto, setTexto] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (m) setTexto(m.texto);
+  }, [m]);
+  const guardar = async () => {
+    if (!m) return;
+    setBusy(true);
+    try {
+      await editarMensaje(chat, m, texto);
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo editar");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog open={!!m} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-md gap-3 rounded-2xl">
+        <DialogHeader>
+          <DialogTitle>Editar mensaje</DialogTitle>
+          <DialogDescription>Todos ven el texto nuevo, con la marca «editado».</DialogDescription>
+        </DialogHeader>
+        <Textarea
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          rows={4}
+          autoFocus
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              void guardar();
+            }
+          }}
+        />
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button onClick={() => void guardar()} disabled={busy || !texto.trim() || texto.trim() === m?.texto.trim()}>
+            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Guardar
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

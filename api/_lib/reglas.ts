@@ -280,6 +280,19 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
     const delServidor = (d: Data | null) => !!d && (d.archivo != null || d.tipo === "archivo" || d.tipo === "bot" || d.by === "prodi");
     if (sub === "mensajes" && (delServidor(despues) || (delServidor(antes) && !(borra && esAdmin(c))))) return false;
     if (esAdmin(c)) return true;
+    // Editar un mensaje de texto propio: solo el texto (y la marca de editado).
+    if (
+      sub === "mensajes" &&
+      !crea &&
+      !borra &&
+      antes!.by === c.uid &&
+      despues!.by === c.uid &&
+      (antes!.tipo ?? "texto") === "texto" &&
+      typeof despues!.texto === "string" &&
+      despues!.texto.trim().length > 0 &&
+      soloCambia(antes, despues, ["texto", "editado_at"])
+    )
+      return miembroDelChat(c, padreId!);
     if (!crea || borra) return false;
     if (!(await miembroDelChat(c, padreId!)) || despues!.by !== c.uid) return false;
     if (sub === "audios") return typeof despues!.data === "string" && despues!.data.length < 1_000_000;

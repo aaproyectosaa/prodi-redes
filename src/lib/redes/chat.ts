@@ -136,6 +136,22 @@ export async function enviarMensaje(
   return ref.id;
 }
 
+/** ¿Se puede editar? Solo los mensajes de texto propios (no audios, archivos, llamadas ni respuestas de @prodi). */
+export const puedeEditarMensaje = (m: Mensaje, uid: string | undefined) =>
+  !!uid && m.by === uid && (m.tipo ?? "texto") === "texto" && !m.archivo && !m.audio;
+
+/** Corrige el texto de un mensaje propio. Si era el último del chat, también se actualiza la vista previa. */
+export async function editarMensaje(chat: Chat, m: Mensaje, texto: string) {
+  assertEditable();
+  const nuevo = texto.trim();
+  if (!nuevo) throw new Error("El mensaje no puede quedar vacío");
+  if (nuevo === m.texto.trim()) return;
+  await updateDoc(doc(db, CHATS, chat.id, "mensajes", m.id), { texto: nuevo, editado_at: now() });
+  if (chat.ultimo && chat.ultimo.at === m.at && chat.ultimo.by === m.by) {
+    await updateDoc(doc(db, CHATS, chat.id), { ultimo: { ...chat.ultimo, texto: nuevo.slice(0, 140) } }).catch(() => undefined);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // @prodi: el asistente (lo procesa el servidor: api/_lib/chat-asistente.ts)
 // ---------------------------------------------------------------------------
