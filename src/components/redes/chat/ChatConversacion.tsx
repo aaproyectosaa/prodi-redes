@@ -165,7 +165,8 @@ function DeslizarParaResponder({ children, onResponder }: { children: ReactNode;
   const MARCA = 60;
   return (
     <div
-      className="relative"
+      // pan-y: el scroll vertical lo hace el navegador; lo horizontal queda para "responder" (no corre la lista).
+      className="relative touch-pan-y"
       onTouchStart={(e) => {
         const t = e.touches[0];
         inicio.current = { x: t.clientX, y: t.clientY, eje: null };
@@ -585,7 +586,7 @@ export function ChatConversacion({
         {acciones}
       </header>
 
-      <div ref={scroller} className={cn("min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3", compacto ? "py-3" : "py-4 md:px-6")}>
+      <div ref={scroller} className={cn("min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-3", compacto ? "py-3" : "py-4 md:px-6")}>
         {cargando ? (
           <div className="flex justify-center py-10">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />

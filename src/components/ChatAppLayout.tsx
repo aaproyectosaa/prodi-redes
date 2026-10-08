@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import UserAvatar from "@/components/UserAvatar";
 import { RoleBadge } from "@/components/RoleBadge";
 import { AvisoActivarAvisos } from "@/components/InstalarApp";
+import { RecorridoAuto } from "@/components/recorrido/Recorrido";
 import { BarraInstalarChat, BotonInstalarChat, InstalarChatHost } from "@/components/InstalarChat";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { RedesDataProvider } from "@/contexts/redes-data-context";
@@ -259,6 +260,7 @@ export function ChatAppLayout() {
         </main>
         <InstalarChatHost />
         <AvisoActivarAvisos uid={viewingAs ? undefined : user?.uid} />
+        <RecorridoAuto enChat />
       </div>
     </RedesDataProvider>
   );

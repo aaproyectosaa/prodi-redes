@@ -2,7 +2,8 @@ import { useState } from "react";
 import { asset } from "@/lib/asset";
 import { useLocation, useNavigate } from "react-router-dom";
 import { signOut } from "@/lib/auth";
-import { Bell, ChevronLeft, ChevronRight, LogOut, Moon, Sun, User } from "lucide-react";
+import { Bell, ChevronLeft, ChevronRight, HelpCircle, LogOut, Moon, Sun, User } from "lucide-react";
+import { EVENTO_RECORRIDO } from "@/lib/novedades";
 import { auth } from "@/integrations/firebase/client";
 import { Button } from "@/components/ui/button";
 import UserAvatar from "@/components/UserAvatar";
@@ -175,6 +176,20 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
           { label: "Avisos", icon: Bell, path: "/notificaciones" },
           location.pathname === "/notificaciones",
           unreadCount
+        )}
+        {role !== "cliente" && (
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event(EVENTO_RECORRIDO))}
+            className={cn(
+              "flex h-9 w-full items-center gap-2.5 rounded-lg text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+              collapsed ? "justify-center" : "px-3"
+            )}
+            title="Cómo se usa"
+          >
+            <HelpCircle className="h-4 w-4" />
+            {!collapsed && <span>¿Cómo se usa?</span>}
+          </button>
         )}
         <button
           type="button"

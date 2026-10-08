@@ -5,6 +5,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { DriveUploadStatusBar } from "@/components/DriveUploadStatusBar";
 import { MobileAppHeader, MobileTabBar, useTecladoAbierto } from "@/components/MobileNav";
 import { AvisoActivarAvisos, AvisoInstalar } from "@/components/InstalarApp";
+import { RecorridoAuto } from "@/components/recorrido/Recorrido";
 import { AvisoDescargarChat, InstalarChatHost } from "@/components/InstalarChat";
 import { VideoSheet } from "@/components/redes/VideoSheet";
 import { ChatDock } from "@/components/redes/chat/ChatDock";
@@ -60,6 +61,7 @@ const LayoutInner = () => {
         <AvisoInstalar />
         <InstalarChatHost />
         <AvisoActivarAvisos uid={viewingAs ? undefined : user?.uid} />
+        <RecorridoAuto />
         <DriveUploadStatusBar />
         <VideoSheet />
         <ChatDock />
