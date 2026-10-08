@@ -321,26 +321,47 @@ export const UNIDAD_POR_ROL: Record<string, { label: string; plural: string }> =
   diseno: { label: "pieza entregada", plural: "piezas entregadas" },
 };
 
-/** Cuántas unidades de trabajo hizo cada persona en el mes (sale del historial). */
-export function unidadesDelMes(uid: string, role: string, mes: string, videos: Video[], piezas: PiezaIA[]): number {
+/** Un trabajo que cuenta para el pago del mes: un video o una pieza, con cuándo se hizo. */
+export interface TrabajoDelMes {
+  id: string;
+  titulo: string;
+  proyecto_id: string;
+  at: string;
+  tipo: "video" | "pieza";
+}
+
+/**
+ * Lo que hizo cada persona en el mes (sale del historial): la productora, el crudo cargado; la editora,
+ * la edición entregada; pauta, lo publicado; diseño, las piezas que aprobó el cliente.
+ */
+export function trabajosDelMes(uid: string, role: string, mes: string, videos: Video[], piezas: PiezaIA[]): TrabajoDelMes[] {
   const en = (at: string) => mesAR(at) === mes;
   if (role === "diseno") {
-    return piezas.filter(
-      (p) =>
-        p.estado === "entregada" &&
-        (p.historial ?? []).some((h) => h.accion === "Aprobada por el cliente" && en(h.at)) &&
-        (p.historial ?? []).some((h) => h.by === uid && h.accion.startsWith("Enviada al cliente"))
-    ).length;
+    return piezas.flatMap((p) => {
+      const aprobada = (p.historial ?? []).find((h) => h.accion === "Aprobada por el cliente" && en(h.at));
+      const suya = (p.historial ?? []).some((h) => h.by === uid && h.accion.startsWith("Enviada al cliente"));
+      return p.estado === "entregada" && aprobada && suya
+        ? [{ id: p.id, titulo: p.producto || p.pedido, proyecto_id: p.proyecto_id, at: aprobada.at, tipo: "pieza" as const }]
+        : [];
+    });
   }
   const accion =
     role === "productor"
-      ? (a: string) => a === "Crudo cargado, pasa a edición"
+      ? (a: string) => a.startsWith("Crudo cargado, pasa a edición")
       : role === "editor"
         ? (a: string) => a === "Edición entregada"
         : role === "pauta"
           ? (a: string) => a.startsWith("Publicado")
           : () => false;
-  return videos.filter((v) => (v.historial ?? []).some((h) => h.by === uid && accion(h.accion) && en(h.at))).length;
+  return videos.flatMap((v) => {
+    const h = (v.historial ?? []).find((x) => x.by === uid && accion(x.accion) && en(x.at));
+    return h ? [{ id: v.id, titulo: v.titulo, proyecto_id: v.proyecto_id, at: h.at, tipo: "video" as const }] : [];
+  });
+}
+
+/** Cuántas unidades de trabajo hizo cada persona en el mes. */
+export function unidadesDelMes(uid: string, role: string, mes: string, videos: Video[], piezas: PiezaIA[]): number {
+  return trabajosDelMes(uid, role, mes, videos, piezas).length;
 }
 
 /**

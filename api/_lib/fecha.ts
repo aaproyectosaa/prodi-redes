@@ -54,3 +54,23 @@ export function sumarMeses(mes: string, n: number): string {
   const d = new Date(Date.UTC(y, m - 1 + n, 1));
   return `${d.getUTCFullYear()}-${dos(d.getUTCMonth() + 1)}`;
 }
+
+/**
+ * Para cuándo tiene que estar editado un video (YYYY-MM-DD), si nadie eligió fecha: un día antes de la
+ * publicación que pidió el cliente, o en 3 días hábiles. Igual que en src/lib/redes/entrega.ts.
+ */
+export function entregaSugerida(fechaDeseada: string | null | undefined, hoy = hoyAR()): string {
+  const manana = sumarDias(hoy, 1);
+  if (fechaDeseada && /^\d{4}-\d{2}-\d{2}$/.test(fechaDeseada)) {
+    const antes = sumarDias(fechaDeseada, -1);
+    return antes > manana ? antes : manana;
+  }
+  let f = hoy;
+  for (let i = 0; i < 3; ) {
+    f = sumarDias(f, 1);
+    const [y, m, d] = f.split("-").map(Number);
+    const dia = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+    if (dia !== 0 && dia !== 6) i++;
+  }
+  return f;
+}

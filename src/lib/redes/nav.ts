@@ -85,6 +85,7 @@ export function navForRole(role: UserRole | undefined): NavSection[] {
             { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
             { label: "Clientes", icon: Building2, path: "/clientes", mobile: true },
             { label: "Reuniones", icon: VideoIcon, path: "/reuniones" },
+            { label: "Mis ganancias", icon: HandCoins, path: "/mis-ganancias" },
           ],
         },
       ];
@@ -109,6 +110,7 @@ export function navForRole(role: UserRole | undefined): NavSection[] {
             { label: "Piezas gráficas", icon: ImageIcon, path: "/piezas", mobile: true },
             { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
             { label: "Reuniones", icon: VideoIcon, path: "/reuniones", mobile: true },
+            { label: "Mis ganancias", icon: HandCoins, path: "/mis-ganancias" },
           ],
         },
       ];
@@ -120,6 +122,7 @@ export function navForRole(role: UserRole | undefined): NavSection[] {
             { label: "Mis videos", icon: LayoutGrid, path: "/videos", mobile: true },
             { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
             { label: "Reuniones", icon: VideoIcon, path: "/reuniones", mobile: true },
+            { label: "Mis ganancias", icon: HandCoins, path: "/mis-ganancias" },
           ],
         },
       ];

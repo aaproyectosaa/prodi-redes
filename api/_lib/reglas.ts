@@ -223,8 +223,11 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
       return esFinanzas(c) || clienteDe(c, d.proyecto_id);
     case "facturas":
       return esFinanzas(c) || (clienteDe(c, d.proyecto_id) && ["pendiente", "cobrada"].includes(d.estado));
+    // Cada uno ve cómo se le paga y sus liquidaciones ("Mis ganancias"); administración, las de todos.
     case "equipo_pagos":
+      return esFinanzas(c) || id === c.uid;
     case "equipo_liquidaciones":
+      return esFinanzas(c) || d.uid === c.uid;
     case "gastos":
     case "obligaciones":
       return esFinanzas(c);

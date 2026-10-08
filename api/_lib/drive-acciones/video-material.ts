@@ -19,6 +19,7 @@ import { appUrl, assertProjectAccess, body, HttpError, requireCaller, sendError,
 import { DriveConnectionError, getAppDriveAccessToken } from "../drive-connection";
 import { ensureFolder, ROOT_FOLDER_NAME } from "../drive-server";
 import { enviarAviso } from "../notify";
+import { entregaSugerida } from "../fecha";
 import { aceptaMaterialCliente } from "../pedidos";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
@@ -221,7 +222,8 @@ export async function videoListo(req: VercelRequest, res: VercelResponse) {
         nota: `${nuevos || delCliente.length} archivo${(nuevos || delCliente.length) === 1 ? "" : "s"}`,
       };
       tx.update(ref, {
-        ...(paso ? { etapa: "edicion", etapa_desde: ahora } : {}),
+        // Pasa a edición con la fecha de entrega sugerida (producción la puede cambiar).
+        ...(paso ? { etapa: "edicion", etapa_desde: ahora, entrega_edicion: entregaSugerida(v.fecha_deseada), entrega_aviso: null } : {}),
         material_cliente_avisado_at: ahora,
         updated_at: ahora,
         historial: FieldValue.arrayUnion(evento),
