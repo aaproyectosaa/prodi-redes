@@ -24,6 +24,7 @@ import {
 } from "../../../api/_lib/facturacion";
 
 export type { EstadoFactura, Factura, ItemFactura, MedioCobro };
+export type { ModoCobro } from "../../../api/_lib/facturacion";
 // Las reglas de facturación son las mismas que usa el servidor (mismo archivo): período (el 27 se
 // arma la de ese mes, mes vencido), se paga del 1 al 5 del siguiente, interés del 0,5% diario y total
 // del débito (con la comisión de Mercado Pago).
@@ -38,6 +39,7 @@ export {
   montoDebito,
   nombrePeriodo,
   periodoDe,
+  periodoFactura,
   saldoDe,
   textoMora,
   textoPlazoPago,

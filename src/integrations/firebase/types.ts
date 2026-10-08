@@ -213,6 +213,8 @@ export interface Project {
     /** Días del mes siguiente al facturado en que paga (por defecto del 1 al 5). Vence el último. */
     pago_desde?: number | null;
     pago_hasta?: number | null;
+    /** vencido (por defecto): el 27 se factura ese mes. adelantado: el 27 se factura el mes que viene. */
+    modo_cobro?: "vencido" | "adelantado" | null;
     /** No se le prepara la boleta sola el 27 (canje, pausa): se le factura solo eligiéndolo a mano. */
     pausada?: boolean;
     /** No mandarle recordatorios automáticos de pago. */

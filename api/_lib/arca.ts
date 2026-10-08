@@ -16,7 +16,7 @@ type Comprobante = Parameters<Arca["electronicBillingService"]["createNextVouche
 import { adminDb } from "./db";
 import { HttpError } from "./auth";
 import { hoyAR, sumarDias, sumarMeses } from "./fecha";
-import { periodoDe, type DatosArca, type Factura } from "./facturacion";
+import { periodoFactura, type DatosArca, type Factura } from "./facturacion";
 
 export type { DatosArca };
 
@@ -97,7 +97,7 @@ export function comprobanteDe(f: Factura, receptor: CondicionReceptor, emisor: C
   const letra = letraDe(emisor, receptor);
   const cuit = digitos(f.cuit);
   if (letra === "A" && cuit.length !== 11) throw new HttpError(400, "Para factura A el cliente tiene que tener CUIT");
-  const periodo = periodoDe(f.mes);
+  const periodo = periodoFactura(f);
   // El vencimiento del pago no puede ser anterior a la fecha del comprobante.
   const vto = f.vencimiento && f.vencimiento >= hoy ? f.vencimiento : hoy;
   let neto = r2(f.neto);

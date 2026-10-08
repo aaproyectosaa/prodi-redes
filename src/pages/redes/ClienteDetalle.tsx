@@ -316,6 +316,7 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
             condicion_iva: form.factCondIva || null,
             adelantado_hasta: /^\d{4}-\d{2}$/.test(form.factAdelantado) ? form.factAdelantado : null,
             ...plazoParaGuardar(form.factPagoDesde, form.factPagoHasta, settings.dia_vencimiento ?? DIA_VENCIMIENTO),
+            modo_cobro: form.factModo,
             extras_fijos: form.factFijos
               .filter((x) => x.concepto.trim() && Number(x.neto) > 0)
               .map((x) => ({ concepto: x.concepto.trim(), neto: Number(x.neto) })),
@@ -498,6 +499,8 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
               ))}
             </div>
             <PlazoPago
+              modo={form.factModo}
+              onModo={(m) => set("factModo", m)}
               desde={form.factPagoDesde}
               hasta={form.factPagoHasta}
               onChange={(v) => setForm((f) => ({ ...f, factPagoDesde: v.desde, factPagoHasta: v.hasta }))}
@@ -693,6 +696,7 @@ function toForm(c: Project) {
     factAdelantado: c.facturacion?.adelantado_hasta ?? "",
     factPagoDesde: plazoInicial(c.facturacion?.pago_desde),
     factPagoHasta: plazoInicial(c.facturacion?.pago_hasta),
+    factModo: (c.facturacion?.modo_cobro === "adelantado" ? "adelantado" : "vencido") as "vencido" | "adelantado",
     factFijos: (c.facturacion?.extras_fijos ?? []).map((x) => ({ concepto: x.concepto, neto: String(x.neto) })),
     team: {
       productor: c.team_roles?.productor ?? [],

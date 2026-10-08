@@ -40,7 +40,9 @@ import {
   DIA_VENCIMIENTO,
   MEDIOS,
   anularFactura,
+  nombrePeriodo,
   periodoDe,
+  periodoFactura,
   textoMora,
   descargarPlanilla,
   emitirAClientes,
@@ -168,7 +170,7 @@ export default function Cobros() {
   return (
     <PageShell
       title="Cobros a clientes"
-      subtitle={`Mes vencido: el 27 de ${mesLabel(mes).split(" ")[0].toLowerCase()} se emiten las boletas de ${mesLabel(periodoDe(mes)).split(" ")[0].toLowerCase()} y se pagan del 1 al ${settings.dia_vencimiento ?? DIA_VENCIMIENTO} de ${mesLabel(sumarMeses(mes, 1)).toLowerCase()} (salvo los clientes con otro plazo). Después corre un 0,5% de interés por día.`}
+      subtitle={`Mes vencido: el 27 de ${mesLabel(mes).split(" ")[0].toLowerCase()} se emiten las boletas de ${mesLabel(periodoDe(mes)).split(" ")[0].toLowerCase()} y se pagan del 1 al ${settings.dia_vencimiento ?? DIA_VENCIMIENTO} de ${mesLabel(sumarMeses(mes, 1)).toLowerCase()} (salvo los clientes con otro plazo). A los de mes adelantado se les factura ${mesLabel(sumarMeses(mes, 1)).split(" ")[0].toLowerCase()}. Después corre un 0,5% de interés por día.`}
       actions={
         <>
           {vivas.length > 0 && (
@@ -385,6 +387,11 @@ function PasoEmitir({
                       <ClienteTag cliente={clienteById(r.pid)} size="md" className="font-semibold text-foreground" />
                       <span className="rounded-full border px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">{r.f.tipo}</span>
                       {r.f.debito && <span className="rounded-full bg-primary/12 px-1.5 py-0.5 text-[10px] font-medium text-primary">Débito automático</span>}
+                      {periodoFactura(r.f) !== r.f.mes && (
+                        <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                          Mes adelantado · {nombrePeriodo(r.f)}
+                        </span>
+                      )}
                       <span className="ml-auto font-bold tabular-nums">{formatARS(r.f.bruto)}</span>
                     </div>
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">

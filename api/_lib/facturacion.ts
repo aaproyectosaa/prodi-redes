@@ -10,10 +10,15 @@
 // Ajustes (`montoDebito`) y paga la última boleta pendiente; los que pagaron por adelantado salen como
 // cobrados.
 //
-// `mes` es el mes en que se arma (el del 27) y es también el período facturado: `periodoDe(mes)`
-// devuelve el mismo mes (se deja el helper para no tocar cada lugar que lo usa).
+// Algunos clientes pagan a MES ADELANTADO (`facturacion.modo_cobro = "adelantado"`): la armada el 27/10
+// es la "boleta de noviembre" (el servicio que viene) y se paga igual, del 1 al 5 de noviembre.
+//
+// `mes` es el mes en que se arma (el del 27; el id es `{cliente}_{mes}`). El período facturado queda
+// guardado en `periodo` (ver `periodoFactura`); las boletas viejas sin `periodo` son de mes vencido.
 
 export type TipoComprobante = "boleta" | "factura";
+/** vencido: el 27 se factura ese mes. adelantado: el 27 se factura el mes que viene. */
+export type ModoCobro = "vencido" | "adelantado";
 export type EstadoFactura = "borrador" | "pendiente" | "cobrada" | "anulada";
 export type MedioCobro = "transferencia" | "efectivo" | "mercadopago" | "adelantado" | "debito" | "otro";
 
@@ -41,8 +46,10 @@ export interface DatosArca {
 
 export interface Factura {
   proyecto_id: string;
-  /** Mes en que se arma (el del 27, YYYY-MM) y que se factura (mes vencido). */
+  /** Mes en que se arma (el del 27, YYYY-MM). */
   mes: string;
+  /** Mes del servicio que se factura (YYYY-MM): `mes` (vencido) o el siguiente (adelantado). */
+  periodo?: string | null;
   cliente: string;
   tipo: TipoComprobante;
   razon_social?: string | null;
@@ -103,11 +110,22 @@ export const diaPago = (v: unknown): number | null => {
 /** Interés por mora: 0,5% diario, simple, sobre el saldo. */
 export const TASA_INTERES_DIARIO = 0.005;
 
-/** Período que cubre una boleta armada el 27 de `mes`: ese mismo mes (mes vencido). */
-export const periodoDe = (mes: string): string => mes;
+/**
+ * Período que cubre una boleta armada el 27 de `mes`: ese mismo mes (mes vencido, lo normal) o el
+ * siguiente (mes adelantado).
+ */
+export function periodoDe(mes: string, modo: ModoCobro | null = "vencido"): string {
+  if (modo !== "adelantado") return mes;
+  const [y, m] = mes.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Mes del servicio de una boleta (las viejas, sin `periodo`, son de mes vencido). */
+export const periodoFactura = (f: Pick<Factura, "mes" | "periodo">) => f.periodo || f.mes;
 
 /** "octubre 2026": el período de la boleta (el mes del servicio). */
-export const nombrePeriodo = (f: Pick<Factura, "mes">) => nombreMesF(periodoDe(f.mes));
+export const nombrePeriodo = (f: Pick<Factura, "mes" | "periodo">) => nombreMesF(periodoFactura(f));
 
 /** Día `dia` del mes siguiente a `mes`: la boleta de octubre vence el 5 de noviembre. */
 export function vencimientoDe(mes: string, dia = DIA_VENCIMIENTO): string {
@@ -206,6 +224,8 @@ export interface DatosCliente {
     /** Días del mes siguiente en que paga (por defecto del 1 al día de vencimiento de Ajustes, el 5). */
     pago_desde?: number | null;
     pago_hasta?: number | null;
+    /** vencido (por defecto): el 27 se factura ese mes. adelantado: el 27 se factura el mes que viene. */
+    modo_cobro?: "vencido" | "adelantado" | null;
   } | null;
   debitoActivo?: boolean;
   /** Mercado Pago ya debitó y ese débito todavía no se aplicó a ninguna boleta. */
@@ -253,8 +273,9 @@ export function armarFactura(
   const tipo = tipoDe(c);
   const items = itemsDe(c);
   const t = totales(items, tipo, opciones.ivaPct);
+  const periodo = periodoDe(mes, c.facturacion?.modo_cobro ?? "vencido");
   // "Tiene pagado hasta" es un mes de servicio: se compara con el período de la boleta.
-  const adelantado = !!c.facturacion?.adelantado_hasta && periodoDe(mes) <= c.facturacion.adelantado_hasta;
+  const adelantado = !!c.facturacion?.adelantado_hasta && periodo <= c.facturacion.adelantado_hasta;
   // Si el débito no llega al total (suscripción con un monto viejo), el resto queda para cobrar.
   // La comisión de Mercado Pago no paga la boleta.
   const debitado = c.abonoDebitado ? Math.round(Number(c.montoDebitado ?? t.bruto) || 0) : 0;
@@ -265,6 +286,7 @@ export function armarFactura(
   return {
     proyecto_id: c.id,
     mes,
+    periodo,
     cliente: c.nombre,
     tipo,
     razon_social: c.facturacion?.razon_social ?? null,

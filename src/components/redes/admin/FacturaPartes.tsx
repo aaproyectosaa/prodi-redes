@@ -193,6 +193,7 @@ export function DatosFacturacionDialog({ proyectoId, onClose }: { proyectoId: st
   const [cuit, setCuit] = useState("");
   const [adelantado, setAdelantado] = useState("");
   const [plazo, setPlazo] = useState({ desde: "", hasta: "" });
+  const [modo, setModo] = useState<"vencido" | "adelantado">("vencido");
   const [pausada, setPausada] = useState(false);
   const [recordar, setRecordar] = useState(true);
   const [fijos, setFijos] = useState<{ concepto: string; neto: string }[]>([]);
@@ -205,6 +206,7 @@ export function DatosFacturacionDialog({ proyectoId, onClose }: { proyectoId: st
     setCuit(f.cuit ?? "");
     setAdelantado(f.adelantado_hasta ?? "");
     setPlazo({ desde: plazoInicial(f.pago_desde), hasta: plazoInicial(f.pago_hasta) });
+    setModo(f.modo_cobro === "adelantado" ? "adelantado" : "vencido");
     setPausada(!!f.pausada);
     setRecordar(!f.sin_recordatorios);
     setFijos((f.extras_fijos ?? []).map((x) => ({ concepto: x.concepto, neto: String(x.neto) })));
@@ -220,6 +222,7 @@ export function DatosFacturacionDialog({ proyectoId, onClose }: { proyectoId: st
         ...(c.facturacion ?? {}),
         tipo,
         ...plazoParaGuardar(plazo.desde, plazo.hasta, diaDefecto),
+        modo_cobro: modo,
         razon_social: razon.trim() || null,
         cuit: cuit.trim() || null,
         adelantado_hasta: /^\d{4}-\d{2}$/.test(adelantado) ? adelantado : null,
@@ -242,7 +245,7 @@ export function DatosFacturacionDialog({ proyectoId, onClose }: { proyectoId: st
           <DialogTitle>Datos de facturación · {c.nombre}</DialogTitle>
           <DialogDescription>Se usan cada vez que se prepara su boleta.</DialogDescription>
         </DialogHeader>
-        <PlazoPago desde={plazo.desde} hasta={plazo.hasta} onChange={setPlazo} adelantado={adelantado} onAdelantado={setAdelantado} />
+        <PlazoPago modo={modo} onModo={setModo} desde={plazo.desde} hasta={plazo.hasta} onChange={setPlazo} adelantado={adelantado} onAdelantado={setAdelantado} />
         <div className="grid grid-cols-2 gap-1 rounded-xl border bg-muted/40 p-1">
           {(["boleta", "factura"] as const).map((t) => (
             <button

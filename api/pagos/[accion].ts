@@ -31,7 +31,7 @@ import { aplicarPago, estadoSuscripcion, precioAbono, proyectoDeSuscripcion, reg
 import { destinatariosDe, disenadorasDe, enviarAviso } from "../_lib/notify";
 import { FORMATOS_PIEZA, leerPedidoPieza, piezaDoc, precioPieza } from "../_lib/piezas";
 import { prepararFacturacion } from "../_lib/facturar";
-import { asuntoFactura, facturaId, mailFacturaHtml, periodoDe, saldoDe, type Factura } from "../_lib/facturacion";
+import { asuntoFactura, facturaId, mailFacturaHtml, periodoFactura, saldoDe, type Factura } from "../_lib/facturacion";
 import { enviarMail } from "../_lib/informe";
 import {
   archivosBaseDe,
@@ -513,7 +513,7 @@ async function emitir(req: VercelRequest) {
     await enviarAviso(
       {
         destinatarios: team.cliente ?? [],
-        titulo: `Tu ${doc} de ${MESES[Number(periodoDe(f.mes).slice(5)) - 1]}`,
+        titulo: `Tu ${doc} de ${MESES[Number(periodoFactura(f).slice(5)) - 1]}`,
         cuerpo: `Total ${ars(f.bruto)}${
           saldo > 0
             ? ` · falta pagar ${ars(saldo)}, vence el ${vto} (después, 0,5% de interés por día)`
