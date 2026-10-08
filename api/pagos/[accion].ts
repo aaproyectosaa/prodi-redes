@@ -560,6 +560,37 @@ async function arcaEstado(req: VercelRequest) {
   return { ok: true, ...(await estadoArca()) };
 }
 
+/**
+ * Después de un pedido que entró en el plan: si al cliente le queda 1 video del mes, o ninguno, se le
+ * avisa (app, push y mail) para que no se entere recién al pedir el próximo. Si falla, el pedido sigue igual.
+ */
+async function avisarCupo(pid: string, mes: string, incluidos: number, creditosExtra: number, clientes: string[], base: string) {
+  if (!clientes.length) return;
+  const cupo = incluidos + creditosExtra;
+  if (cupo <= 0) return;
+  const q = await adminDb().collection("videos").where("proyecto_id", "==", pid).where("mes", "==", mes).get();
+  const usados = q.docs.filter((d) => d.data().extra !== true).length;
+  const quedan = cupo - usados;
+  if (quedan > 1) return;
+  const [y, m] = mes.split("-").map(Number);
+  const nombre = MESES[m - 1];
+  const siguiente = MESES[m % 12];
+  await enviarAviso(
+    {
+      destinatarios: clientes,
+      titulo: quedan === 1 ? `Te queda 1 video de ${nombre}` : `Se te terminaron los videos de ${nombre}`,
+      cuerpo:
+        quedan === 1
+          ? `Usaste ${usados} de los ${cupo} videos de tu plan de ${nombre} ${y}. El 1 de ${siguiente} se renuevan.`
+          : `Ya usaste los ${cupo} videos de tu plan de ${nombre} ${y}. Si necesitás otro, podés pedir un video extra desde la app, o esperar al 1 de ${siguiente}, cuando se renuevan.`,
+      link: "/cliente?tab=plan",
+      clave: `cupo_videos:${pid}:${mes}:${quedan === 1 ? "uno" : "cero"}`,
+      proyectoId: pid,
+    },
+    base
+  );
+}
+
 async function pedirVideo(req: VercelRequest) {
   const caller = await requireCaller(req, ["cliente", "admin"]);
   const b = body<{
@@ -664,6 +695,7 @@ async function pedirVideo(req: VercelRequest) {
       },
       base
     );
+    await avisarCupo(b.proyecto_id, mes, incluidos, Number(proj.creditos_extra?.[mes] ?? 0), team.cliente ?? [], base).catch((e) => console.error("aviso de cupo", e));
     return { estado: "creado", video_id: ref.id };
   }
 

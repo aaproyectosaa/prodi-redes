@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Section } from "@/components/redes/PageShell";
 import { DebitoCliente } from "@/components/redes/Debito";
 import { BoletaDialog } from "@/components/redes/admin/BoletaDialog";
+import { CupoVideos } from "@/components/redes/cliente/CupoVideos";
 import { useRedes } from "@/contexts/redes-data-context";
 import { mesAR } from "@/lib/fecha";
 import { fechaCorta, formatARS, hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
@@ -153,6 +154,8 @@ export function MiPlan({
         </div>
       )}
 
+      <CupoVideos uso={uso} mes={mes} precioExtra={plan.precioVideoExtra} onPedir={onPedirVideo} />
+
       {/* 2. Qué incluye y cuánto usaste */}
       <div className="rounded-2xl border bg-card p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -173,7 +176,7 @@ export function MiPlan({
             usados={uso.usados}
             total={uso.cupo}
             nota={uso.creditosExtra ? `incluye ${uso.creditosExtra} extra que compraste` : undefined}
-            accion={uso.disponibles > 0 ? { label: "Pedir un video", onClick: onPedirVideo } : undefined}
+            accion={{ label: uso.disponibles > 0 || !uso.cupo ? "Pedir un video" : "Pedir un video extra", onClick: onPedirVideo }}
           />
           <Medidor
             icono={ImageIcon}

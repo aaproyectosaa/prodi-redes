@@ -32,6 +32,7 @@ import { PedirVideoDialog } from "@/components/redes/cliente/PedirVideoDialog";
 import { PlanMesCliente } from "@/components/redes/cliente/PlanMesCliente";
 import { usePlanMes } from "@/lib/redes/planMes";
 import { MiPlan } from "@/components/redes/cliente/MiPlan";
+import { CupoVideos } from "@/components/redes/cliente/CupoVideos";
 import { MaterialCliente } from "@/components/redes/cliente/MaterialCliente";
 import { ContextoComercialEditor } from "@/components/redes/ContextoComercial";
 import { cn } from "@/lib/utils";
@@ -240,6 +241,7 @@ export default function ClientePortal() {
 
         <TabsContent value="inicio" className="space-y-8">
           <ProximoPaso pasos={pasos} onPedir={() => setPedirVideo(true)} onIdeas={() => planPend && setPlanAbierto(planPend.mes)} />
+          <CupoVideos uso={uso} mes={mes} precioExtra={plan.precioVideoExtra} onPedir={() => setPedirVideo(true)} />
           {/* Si hay algo más urgente arriba, las ideas del mes quedan a un toque igual. */}
           {planPend && pasos[0]?.tipo !== "elegir_ideas" && (
             <button
