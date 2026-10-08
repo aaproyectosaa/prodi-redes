@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { collection, limit, onSnapshot, orderBy, query } from "@/lib/db";
-import { ArrowLeft, Camera, Check, CheckCheck, FileText, Image as ImageIcon, Info, Loader2, Paperclip, Send, Sparkles, Upload, Video } from "lucide-react";
+import { ArrowLeft, Camera, Check, CheckCheck, FileText, Image as ImageIcon, Info, Loader2, Paperclip, Reply, Send, Sparkles, Upload, Video, X } from "lucide-react";
 import { toast } from "sonner";
 import { db } from "@/integrations/firebase/client";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import {
   mencionaProdi,
   noLeido,
   pedirAProdi,
+  reaccionar,
   puedeEditarMensaje,
   PRODI_ID,
   tituloChat,
@@ -28,6 +29,7 @@ import { ArchivoMensaje, SubidaBurbuja } from "@/components/redes/chat/Archivo";
 import { ChatIcon } from "@/components/redes/chat/ChatIcon";
 import { EtiquetaContacto, InfoChat } from "@/components/redes/chat/Grupos";
 import { Cabecitas, EditarMensajeDialog, InfoMensaje, vistosHasta } from "@/components/redes/chat/InfoMensaje";
+import { TareaMensajeDialog } from "@/components/redes/chat/TareaMensaje";
 import { CamaraDialog, camaraDelSistema } from "@/components/redes/chat/Camara";
 import { comprimirFoto } from "@/lib/imagen";
 import { crearReunion } from "@/lib/redes/reuniones";
@@ -55,11 +57,34 @@ function AvatarProdi() {
   );
 }
 
-/** Lo que se está escribiendo justo antes del cursor termina en "@pr…": se sugiere @prodi. */
-function mencionEnCurso(texto: string, cursor: number): { desde: number } | null {
-  const m = /(^|\s)@([a-záéíóú]*)$/i.exec(texto.slice(0, cursor));
-  if (!m || !"prodi".startsWith(m[2].toLowerCase())) return null;
-  return { desde: cursor - m[2].length - 1 };
+/** Lo que se está escribiendo justo antes del cursor termina en "@algo": se sugieren @prodi y la gente del chat. */
+function mencionEnCurso(texto: string, cursor: number): { desde: number; q: string } | null {
+  const m = /(^|\s)@([\p{L}]*)$/u.exec(texto.slice(0, cursor));
+  if (!m) return null;
+  return { desde: cursor - m[2].length - 1, q: m[2] };
+}
+
+const sinTildes = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+/** "@Nati" y "@prodi" resaltados dentro del texto de un mensaje. */
+function conMenciones(texto: string, mio: boolean) {
+  const partes = texto.split(/(@[\p{L}]+)/u);
+  if (partes.length === 1) return texto;
+  return partes.map((p, j) =>
+    p.startsWith("@") ? (
+      <span
+        key={j}
+        className={cn(
+          "rounded px-0.5 font-semibold",
+          /^@prodi$/i.test(p) ? (mio ? "bg-white/20" : "bg-[#6F40FC]/10 text-[#6F40FC]") : mio ? "bg-white/20" : "bg-primary/10 text-primary"
+        )}
+      >
+        {p}
+      </span>
+    ) : (
+      p
+    )
+  );
 }
 
 /** Texto de ayuda de la caja de escribir, del más completo al más corto: se usa el primero que entra en una línea. */
@@ -182,7 +207,10 @@ export function ChatConversacion({
   const [llamando, setLlamando] = useState(false);
   const [pensando, setPensando] = useState(false);
   const [arrastrando, setArrastrando] = useState(false);
-  const [sugerir, setSugerir] = useState<{ desde: number } | null>(null);
+  const [sugerir, setSugerir] = useState<{ desde: number; q: string } | null>(null);
+  const [mencionados, setMencionados] = useState<Record<string, string>>({});
+  const [respondiendo, setRespondiendo] = useState<Mensaje | null>(null);
+  const [tareaMsg, setTareaMsg] = useState<Mensaje | null>(null);
   const fin = useRef<HTMLDivElement>(null);
   const caja = useRef<HTMLTextAreaElement>(null);
   const elegirArchivo = useRef<HTMLInputElement>(null);
@@ -223,14 +251,17 @@ export function ChatConversacion({
     mandarArchivos(listos);
   };
 
-  const usarMencion = () => {
+  /** Elige una sugerencia de "@": inserta "@Nombre " y la anota para avisarle (si sigue en el texto al mandar). */
+  const usarMencion = (c: { id: string; etiqueta: string }) => {
     if (!sugerir) return;
     const cursor = caja.current?.selectionStart ?? texto.length;
-    const nuevo = `${texto.slice(0, sugerir.desde)}@prodi ${texto.slice(cursor)}`;
+    const ins = `@${c.etiqueta} `;
+    const nuevo = `${texto.slice(0, sugerir.desde)}${ins}${texto.slice(cursor)}`;
     setTexto(nuevo);
     setSugerir(null);
+    if (c.id !== PRODI_ID) setMencionados((prev) => ({ ...prev, [c.id]: c.etiqueta }));
     requestAnimationFrame(() => {
-      const pos = sugerir.desde + 7;
+      const pos = sugerir.desde + ins.length;
       caja.current?.focus();
       caja.current?.setSelectionRange(pos, pos);
     });
@@ -302,14 +333,38 @@ export function ChatConversacion({
     if (!cargando) onSinLeer?.(sinLeer);
   }, [sinLeer, cargando, onSinLeer]);
 
+  /** "Responder": el mensaje queda citado arriba de la caja y se escribe la respuesta. */
+  const responder = (m: Mensaje) => {
+    setRespondiendo(m);
+    requestAnimationFrame(() => caja.current?.focus());
+  };
+
+  /** Toca una cita: lleva al mensaje original y lo resalta un momento. */
+  const irAMensaje = (id: string) => {
+    const el = document.getElementById(`msj-${id}`);
+    if (!el) {
+      toast.info("Ese mensaje es más viejo: no está cargado en pantalla.");
+      return;
+    }
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("bg-primary/15");
+    setTimeout(() => el.classList.remove("bg-primary/15"), 1400);
+  };
+
   const enviar = async () => {
     const t = texto.trim();
     if (!t) return;
     setEnviando(true);
     setSugerir(null);
     try {
-      const id = await enviarMensaje(chat, uid, t, { remitente: nombre });
+      // Mencionados: los elegidos de la lista cuyo "@Nombre" sigue en el texto.
+      const menciones = Object.entries(mencionados)
+        .filter(([, etiqueta]) => new RegExp(`@${etiqueta}(?![\\p{L}])`, "u").test(t))
+        .map(([id]) => id);
+      const id = await enviarMensaje(chat, uid, t, { remitente: nombre, respondeA: respondiendo, menciones });
       setTexto("");
+      setMencionados({});
+      setRespondiendo(null);
       // @prodi: el servidor lo procesa y contesta en el chat.
       if (mencionaProdi(t)) {
         setPensando(true);
@@ -373,6 +428,20 @@ export function ChatConversacion({
   const perfilDe = (id: string): Profile | undefined =>
     profiles.find((p) => p.id === id) ?? (chat.nombres?.[id] ? ({ id, nombre: chat.nombres[id], email: "" } as Profile) : undefined);
   const nombreDe = (id: string, fallback?: string) => perfilDe(id)?.nombre || fallback || "Usuario";
+  // Para "@": @prodi y la gente del chat (sin mí). Se escribe el nombre de pila; si se repite, nombre y apellido.
+  const genteDelChat = chat.miembros.filter((u) => u !== uid && u !== PRODI_ID).map((u) => ({ id: u, nombre: nombreDe(u, chat.nombres?.[u]) }));
+  const pilas = genteDelChat.map((g) => g.nombre.split(" ")[0]);
+  const candidatos = [
+    { id: PRODI_ID, etiqueta: "prodi", nombre: "prodi", detalle: "Asistente: agenda reuniones, deja tareas, recuerda cosas del cliente" },
+    ...genteDelChat.map((g) => {
+      const pila = g.nombre.split(" ")[0];
+      const repetido = pilas.filter((p) => p === pila).length > 1;
+      return { id: g.id, etiqueta: (repetido ? g.nombre : pila).replace(/\s+/g, ""), nombre: g.nombre, detalle: "Le llega un aviso" };
+    }),
+  ];
+  const sugerencias = sugerir
+    ? candidatos.filter((c) => !sugerir.q || sinTildes(c.nombre).split(" ").some((w) => w.startsWith(sinTildes(sugerir.q))) || sinTildes(c.etiqueta).startsWith(sinTildes(sugerir.q))).slice(0, 6)
+    : [];
   const contactos = contactosDe(chats);
   /** "Contacto" (solo chat) o el rol; los clientes no leen perfiles ajenos: ahí solo se sabe si es contacto. */
   const etiquetaPersona = (id: string) => {
@@ -493,16 +562,29 @@ export function ChatConversacion({
                       <p className="my-3 text-center text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{dia}</p>
                     )}
                     <p className="mx-auto my-2 w-fit max-w-[90%] rounded-full bg-muted px-3 py-1 text-center text-xs text-muted-foreground">
-                      {mio ? "Vos" : nombreDe(m.by, m.by_nombre).split(" ")[0]} {m.texto}
+                      {/* Las propias, sin "Vos" adelante (quedaba "Vos sumó…"): con mayúscula. */}
+                      {mio ? m.texto.charAt(0).toUpperCase() + m.texto.slice(1) : `${nombreDe(m.by, m.by_nombre).split(" ")[0]} ${m.texto}`}
                     </p>
                   </div>
                 );
+              const reacciones = Object.entries(m.reacciones ?? {}).filter(([, l]) => l.length > 0);
               return (
-                <div key={m.id}>
+                <div key={m.id} id={`msj-${m.id}`} className="scroll-mt-24 rounded-xl transition-colors duration-700">
                   {mostrarDia && (
                     <p className="my-3 text-center text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{dia}</p>
                   )}
                   <div className={cn("group/msj flex items-end gap-2", mio ? "justify-end" : "justify-start", !agrupado && "mt-2")}>
+                    {mio && (
+                      <button
+                        type="button"
+                        onClick={() => responder(m)}
+                        className="mb-1 hidden h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground opacity-0 hover:bg-muted focus-visible:opacity-100 group-hover/msj:opacity-100 md:flex"
+                        aria-label="Responder"
+                        title="Responder"
+                      >
+                        <Reply className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                     {mio && (
                       <button
                         type="button"
@@ -548,6 +630,21 @@ export function ChatConversacion({
                             {etiquetaPersona(m.by) === "Contacto" && <EtiquetaContacto />}
                           </p>
                         )
+                      )}
+                      {m.responde_a && (
+                        <button
+                          type="button"
+                          onClick={() => irAMensaje(m.responde_a!.id)}
+                          className={cn(
+                            "mb-1.5 block w-full rounded-lg border-l-4 px-2 py-1 text-left text-xs",
+                            mio ? "border-white/70 bg-white/15" : "border-primary bg-muted/70"
+                          )}
+                        >
+                          <span className={cn("block font-semibold", mio ? "text-primary-foreground" : "text-primary")}>
+                            {m.responde_a.by === uid ? "Vos" : nombreDe(m.responde_a.by, m.responde_a.by_nombre)}
+                          </span>
+                          <span className={cn("line-clamp-2", mio ? "text-primary-foreground/80" : "text-muted-foreground")}>{m.responde_a.texto}</span>
+                        </button>
                       )}
                       {m.tipo === "archivo" && m.archivo ? (
                         <div className="space-y-1">
@@ -605,17 +702,7 @@ export function ChatConversacion({
                         <AudioMensaje chatId={chat.id} audio={m.audio} mio={mio} />
                       ) : (
                         <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-                          {mencionaProdi(m.texto)
-                            ? m.texto.split(/(@prodi\b)/i).map((p, j) =>
-                                /^@prodi$/i.test(p) ? (
-                                  <span key={j} className={cn("rounded px-0.5 font-semibold", mio ? "bg-white/20" : "bg-[#6F40FC]/10 text-[#6F40FC]")}>
-                                    {p}
-                                  </span>
-                                ) : (
-                                  p
-                                )
-                              )
-                            : m.texto}
+                          {conMenciones(m.texto, mio)}
                         </p>
                       )}
                       <button
@@ -643,7 +730,40 @@ export function ChatConversacion({
                         <Info className="h-3.5 w-3.5" />
                       </button>
                     )}
+                    {!mio && (
+                      <button
+                        type="button"
+                        onClick={() => responder(m)}
+                        className="mb-1 hidden h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground opacity-0 hover:bg-muted focus-visible:opacity-100 group-hover/msj:opacity-100 md:flex"
+                        aria-label="Responder"
+                        title="Responder"
+                      >
+                        <Reply className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
+                  {reacciones.length > 0 && (
+                    <div className={cn("-mt-1 flex flex-wrap gap-1", mio ? "justify-end pr-1" : chat.tipo !== "directo" || bot ? "pl-9" : "pl-1")}>
+                      {reacciones.map(([emoji, quienes]) => {
+                        const mia = quienes.includes(uid);
+                        return (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => void reaccionar(chat, m, uid, emoji).catch((err) => toast.error(err instanceof Error ? err.message : "No se pudo"))}
+                            title={quienes.map((q) => (q === uid ? "Vos" : nombreDe(q).split(" ")[0])).join(", ")}
+                            className={cn(
+                              "relative z-[1] inline-flex items-center gap-1 rounded-full border bg-background px-1.5 py-0.5 text-xs shadow-sm transition-transform active:scale-95",
+                              mia && "border-primary/50 bg-primary/10"
+                            )}
+                          >
+                            <span>{emoji}</span>
+                            {quienes.length > 1 && <span className="tabular-nums text-muted-foreground">{quienes.length}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                   {mio && m.id === ultimoMio && <VistoLinea chat={chat} m={m} uid={uid} />}
                   {vistos.has(m.id) && (
                     <Cabecitas ids={vistos.get(m.id)!} perfilDe={perfilDe} mio={mio} onClick={() => setInfoMsg(m)} />
@@ -681,6 +801,18 @@ export function ChatConversacion({
         )}
         style={compacto ? { paddingBottom: "calc(0.75rem + var(--abajo-seguro))" } : undefined}
       >
+        {respondiendo && (
+          <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 rounded-xl border-l-4 border-primary bg-muted/60 py-1.5 pl-3 pr-1 animate-in fade-in slide-in-from-bottom-1 motion-reduce:animate-none">
+            <Reply className="h-4 w-4 shrink-0 text-primary" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-primary">Respondiendo a {respondiendo.by === uid ? "vos" : nombreDe(respondiendo.by, respondiendo.by_nombre)}</p>
+              <p className="truncate text-xs text-muted-foreground">{respondiendo.texto || respondiendo.leyenda || (respondiendo.audio ? "🎤 Audio" : "📎 Archivo")}</p>
+            </div>
+            <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => setRespondiendo(null)} aria-label="No responder">
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
         <div className="mx-auto flex max-w-3xl items-end gap-1 min-[380px]:gap-2">
           {voz.grabando ? (
             <BarraGrabando
@@ -813,21 +945,26 @@ export function ChatConversacion({
             </Button>
           )}
           <div className="relative min-w-0 flex-1">
-            {sugerir && (
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  usarMencion();
-                }}
-                className="absolute bottom-full left-0 z-10 mb-2 flex w-full max-w-sm items-center gap-2.5 rounded-xl border bg-popover p-2 text-left shadow-lg"
-              >
-                <AvatarProdi />
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold">@prodi</span>
-                  <span className="block truncate text-xs text-muted-foreground">Asistente: agenda reuniones, deja tareas, recuerda cosas del cliente</span>
-                </span>
-              </button>
+            {sugerencias.length > 0 && (
+              <div className="absolute bottom-full left-0 z-10 mb-2 w-full max-w-sm overflow-hidden rounded-xl border bg-popover shadow-lg">
+                {sugerencias.map((c, i) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      usarMencion(c);
+                    }}
+                    className={cn("flex w-full items-center gap-2.5 p-2 text-left transition-colors hover:bg-muted", i === 0 && "bg-muted/60")}
+                  >
+                    {c.id === PRODI_ID ? <AvatarProdi /> : <UserAvatar profile={perfilDe(c.id) ?? ({ id: c.id, nombre: c.nombre, email: "" } as Profile)} size="sm" />}
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold">{c.id === PRODI_ID ? "@prodi" : c.nombre}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{c.detalle}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
             )}
             <Textarea
               ref={caja}
@@ -837,9 +974,9 @@ export function ChatConversacion({
                 setSugerir(mencionEnCurso(e.target.value, e.target.selectionStart ?? e.target.value.length));
               }}
               onKeyDown={(e) => {
-                if (sugerir && (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey))) {
+                if (sugerencias.length && (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey))) {
                   e.preventDefault();
-                  usarMencion();
+                  usarMencion(sugerencias[0]);
                   return;
                 }
                 if (sugerir && e.key === "Escape") {
@@ -892,8 +1029,30 @@ export function ChatConversacion({
               }
             : undefined
         }
+        onResponder={
+          infoMsg
+            ? () => {
+                responder(infoMsg);
+                setInfoMsg(null);
+              }
+            : undefined
+        }
+        onTarea={
+          infoMsg && (infoMsg.texto || infoMsg.leyenda)
+            ? () => {
+                setTareaMsg(infoMsg);
+                setInfoMsg(null);
+              }
+            : undefined
+        }
+        onReaccionar={(emoji) => {
+          if (!infoMsg) return;
+          void reaccionar(chat, infoMsg, uid, emoji).catch((err) => toast.error(err instanceof Error ? err.message : "No se pudo"));
+          setInfoMsg(null);
+        }}
       />
       <EditarMensajeDialog chat={chat} m={editMsg} onOpenChange={(v) => !v && setEditMsg(null)} />
+      <TareaMensajeDialog chat={chat} m={tareaMsg} uid={uid} perfilDe={perfilDe} onOpenChange={(v) => !v && setTareaMsg(null)} />
     </div>
   );
 }

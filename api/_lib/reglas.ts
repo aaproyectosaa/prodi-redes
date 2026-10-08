@@ -57,6 +57,23 @@ const soloCambia = (antes: Data | null, despues: Data | null, permitidas: string
 const tocaAlguna = (antes: Data | null, despues: Data | null, prohibidas: string[]) =>
   clavesCambiadas(antes, despues).some((k) => prohibidas.includes(k));
 
+/** Reacciones de un mensaje: entre antes y después solo cambió la de `uid` (y son listas de uids chicas). */
+function soloSuReaccion(antes: unknown, despues: unknown, uid: string): boolean {
+  const mapa = (x: unknown): Record<string, unknown> => (x && typeof x === "object" && !Array.isArray(x) ? (x as Record<string, unknown>) : {});
+  const a = mapa(antes);
+  const d = mapa(despues);
+  if (Object.keys(d).length > 12) return false;
+  for (const emoji of new Set([...Object.keys(a), ...Object.keys(d)])) {
+    if (emoji.length > 16) return false;
+    const lista = d[emoji];
+    if (lista !== undefined && (!Array.isArray(lista) || lista.length > 500 || lista.some((u) => typeof u !== "string"))) return false;
+    const antesSet = new Set(Array.isArray(a[emoji]) ? (a[emoji] as string[]) : []);
+    const despuesSet = new Set(Array.isArray(lista) ? (lista as string[]) : []);
+    for (const u of new Set([...antesSet, ...despuesSet])) if (antesSet.has(u) !== despuesSet.has(u) && u !== uid) return false;
+  }
+  return true;
+}
+
 async function miembroDelChat(c: Contexto, chatId: string): Promise<boolean> {
   if (!c.chats.has(chatId)) c.chats.set(chatId, await leerDoc(c.ex, "chats", chatId));
   const chat = c.chats.get(chatId);
@@ -281,6 +298,11 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
     // Archivos y respuestas de @prodi: solo los escribe el servidor (ni el admin desde la app).
     // Un mensaje con `archivo` le da acceso al archivo a todo el chat (api/_lib/media-token.ts).
     const delServidor = (d: Data | null) => !!d && (d.archivo != null || d.tipo === "archivo" || d.tipo === "bot" || d.by === "prodi");
+    // Reacciones (👍 ✅ …): cualquier miembro, en cualquier mensaje, pero solo pone o saca la suya.
+    if (sub === "mensajes" && !crea && !borra && soloCambia(antes, despues, ["reacciones"])) {
+      if (!soloSuReaccion(antes!.reacciones, despues!.reacciones, c.uid)) return false;
+      return esAdmin(c) || miembroDelChat(c, padreId!);
+    }
     if (sub === "mensajes" && (delServidor(despues) || (delServidor(antes) && !(borra && esAdmin(c))))) return false;
     if (esAdmin(c)) return true;
     // Editar un mensaje de texto propio: solo el texto (y la marca de editado).

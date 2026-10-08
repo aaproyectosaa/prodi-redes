@@ -1,11 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { CheckCheck, Clock, Loader2, Pencil } from "lucide-react";
+import { CheckCheck, Clock, ListTodo, Loader2, Pencil, Reply } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import UserAvatar from "@/components/UserAvatar";
-import { editarMensaje, lecturasDe, PRODI_ID } from "@/lib/redes/chat";
+import { editarMensaje, lecturasDe, PRODI_ID, REACCIONES } from "@/lib/redes/chat";
 import { fechaAR, formatearFecha, hoyAR } from "@/lib/fecha";
 import { cn } from "@/lib/utils";
 import type { Chat as ChatT, Mensaje } from "@/lib/redes/types";
@@ -79,6 +79,9 @@ export function InfoMensaje({
   perfilDe,
   onOpenChange,
   onEditar,
+  onResponder,
+  onTarea,
+  onReaccionar,
 }: {
   chat: ChatT;
   m: Mensaje | null;
@@ -87,6 +90,9 @@ export function InfoMensaje({
   onOpenChange: (v: boolean) => void;
   /** Mensaje propio de texto: abre la edición. */
   onEditar?: () => void;
+  onResponder?: () => void;
+  onTarea?: () => void;
+  onReaccionar?: (emoji: string) => void;
 }) {
   const lecturas = m ? lecturasDe(chat, m.at, m.by).filter((l) => l.uid !== PRODI_ID) : [];
   const vieron = lecturas.filter((l) => l.at).sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""));
@@ -103,7 +109,7 @@ export function InfoMensaje({
     <Dialog open={!!m} onOpenChange={onOpenChange}>
       <DialogContent className="w-[calc(100vw-2rem)] max-w-sm gap-3 rounded-2xl">
         <DialogHeader>
-          <DialogTitle>Info del mensaje</DialogTitle>
+          <DialogTitle>Mensaje</DialogTitle>
           <DialogDescription className="line-clamp-3 whitespace-pre-wrap break-words">
             {m ? `${m.texto || m.leyenda || "Archivo"}` : ""}
           </DialogDescription>
@@ -115,10 +121,42 @@ export function InfoMensaje({
             {m.editado_at && ` · editado ${cuandoLargo(m.editado_at)}`}
           </p>
         )}
-        {onEditar && (
-          <Button variant="outline" className="w-full" onClick={onEditar}>
-            <Pencil className="mr-2 h-4 w-4" /> Editar mensaje
-          </Button>
+        {m && onReaccionar && (
+          <div className="flex justify-between gap-1 rounded-2xl bg-muted/60 p-1.5">
+            {REACCIONES.map((e) => {
+              const mia = (m.reacciones?.[e] ?? []).includes(uid);
+              return (
+                <button
+                  key={e}
+                  type="button"
+                  onClick={() => onReaccionar(e)}
+                  className={cn("flex h-10 w-10 items-center justify-center rounded-full text-xl transition-transform hover:scale-110 active:scale-95", mia && "bg-primary/15 ring-2 ring-primary/40")}
+                  aria-label={`Reaccionar ${e}`}
+                >
+                  {e}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {(onResponder || onTarea || onEditar) && (
+          <div className="grid gap-1.5">
+            {onResponder && (
+              <Button variant="outline" className="w-full justify-start" onClick={onResponder}>
+                <Reply className="mr-2 h-4 w-4" /> Responder
+              </Button>
+            )}
+            {onTarea && (
+              <Button variant="outline" className="w-full justify-start" onClick={onTarea}>
+                <ListTodo className="mr-2 h-4 w-4" /> Hacer tarea con este mensaje
+              </Button>
+            )}
+            {onEditar && (
+              <Button variant="outline" className="w-full justify-start" onClick={onEditar}>
+                <Pencil className="mr-2 h-4 w-4" /> Editar mensaje
+              </Button>
+            )}
+          </div>
         )}
         <div className="max-h-[50vh] space-y-3 overflow-y-auto">
           <section>

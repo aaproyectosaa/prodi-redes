@@ -107,10 +107,22 @@ export async function enviarMensaje(
   chat: Chat,
   by: string,
   texto: string,
-  opts: { tipo?: TipoMensaje; link?: string | null; reunion_id?: string | null; titulo?: string; remitente?: string } = {}
+  opts: {
+    tipo?: TipoMensaje;
+    link?: string | null;
+    reunion_id?: string | null;
+    titulo?: string;
+    remitente?: string;
+    /** Mensaje al que responde (se muestra citado). */
+    respondeA?: Mensaje | null;
+    /** Personas del chat mencionadas con @nombre. */
+    menciones?: string[];
+  } = {}
 ) {
   assertEditable();
   const at = now();
+  const menciones = [...new Set((opts.menciones ?? []).filter((u) => u !== by && chat.miembros.includes(u)))];
+  const r = opts.respondeA;
   const msg: Omit<Mensaje, "id"> = {
     texto: texto.trim(),
     by,
@@ -119,6 +131,8 @@ export async function enviarMensaje(
     by_nombre: opts.remitente ?? "",
     link: opts.link ?? null,
     reunion_id: opts.reunion_id ?? null,
+    ...(r ? { responde_a: { id: r.id, by: r.by, by_nombre: r.by_nombre ?? "", texto: (r.texto || r.leyenda || (r.audio ? "🎤 Audio" : "📎 Archivo")).slice(0, 160) } } : {}),
+    ...(menciones.length ? { menciones } : {}),
   };
   const ref = await addDoc(collection(db, CHATS, chat.id, "mensajes"), msg);
   await updateDoc(doc(db, CHATS, chat.id), {
@@ -126,13 +140,24 @@ export async function enviarMensaje(
     [`leido.${by}`]: at,
   });
   void avisar({
-    destinatarios: chat.miembros.filter((m) => m !== by),
+    // Los mencionados reciben su propio aviso ("te mencionó"); al resto, el del mensaje nuevo.
+    destinatarios: chat.miembros.filter((m) => m !== by && !menciones.includes(m)),
     titulo: opts.titulo ?? (chat.tipo === "directo" ? opts.remitente ?? "Mensaje nuevo" : `${chat.nombre ?? "Chat"}`),
     cuerpo: chat.tipo === "directo" ? msg.texto.slice(0, 140) : `${opts.remitente ?? ""}: ${msg.texto.slice(0, 120)}`,
     link: `/chat?c=${chat.id}`,
     clave: `chat:${chat.id}`,
     proyectoId: chat.proyecto_id,
   });
+  if (menciones.length) {
+    void avisar({
+      destinatarios: menciones,
+      titulo: "Te mencionaron",
+      cuerpo: msg.texto.slice(0, 140),
+      link: `/chat?c=${chat.id}`,
+      clave: `mencion:${chat.id}:${ref.id}`,
+      proyectoId: chat.proyecto_id,
+    });
+  }
   return ref.id;
 }
 
@@ -421,4 +446,31 @@ export function lecturasDe(chat: Chat, msgAt: string, uid: string): Lectura[] {
       const l = chat.leido?.[m];
       return { uid: m, at: l && l >= msgAt ? l : null };
     });
+}
+
+// ---------------------------------------------------------------------------
+// Reacciones y tareas desde un mensaje
+// ---------------------------------------------------------------------------
+
+/** Las reacciones rápidas que se ofrecen (como en WhatsApp). */
+export const REACCIONES = ["👍", "❤️", "😂", "✅", "🙏", "🔥"];
+
+/** Pone o saca la reacción de `uid` (una por persona: elegir otra cambia la anterior). */
+export async function reaccionar(chat: Chat, m: Mensaje, uid: string, emoji: string) {
+  assertEditable();
+  const actual = m.reacciones ?? {};
+  const yaEsta = (actual[emoji] ?? []).includes(uid);
+  const nuevas: Record<string, string[]> = {};
+  for (const [e, lista] of Object.entries(actual)) {
+    const sin = lista.filter((u) => u !== uid);
+    if (sin.length) nuevas[e] = sin;
+  }
+  if (!yaEsta) nuevas[emoji] = [...(nuevas[emoji] ?? []), uid];
+  await updateDoc(doc(db, CHATS, chat.id, "mensajes", m.id), { reacciones: nuevas });
+}
+
+/** "Hacer tarea" con un mensaje: la crea el servidor (aviso, Calendar y una línea en el chat). */
+export async function tareaDesdeMensaje(chat: Chat, m: Mensaje, datos: { titulo: string; asignados: string[]; vence: string | null }) {
+  assertEditable();
+  return callApi<{ ok: boolean; tarea_id: string }>("/api/ia/tarea-chat", { chat_id: chat.id, mensaje_id: m.id, ...datos });
 }

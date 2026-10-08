@@ -486,6 +486,12 @@ export interface Mensaje {
   /** Respuestas de @prodi: texto del botón del link. */
   link_texto?: string | null;
   tarea_id?: string | null;
+  /** Respuesta a otro mensaje: lo que se muestra citado arriba. */
+  responde_a?: { id: string; by: string; by_nombre?: string; texto: string } | null;
+  /** Personas mencionadas con @nombre (les llega un aviso aparte). */
+  menciones?: string[];
+  /** Reacciones: { "👍": [uid, …] }. */
+  reacciones?: Record<string, string[]>;
   /** Si el autor lo corrigió después de mandarlo. */
   editado_at?: string | null;
 }

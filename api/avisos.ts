@@ -19,6 +19,7 @@ const fechaHoraAR = (iso: unknown) => {
 /**
  * Avisos que puede disparar un cliente. Tipos permitidos (por la clave):
  *  - chat:<chatId>      → mensaje nuevo: a los miembros del chat, con el último mensaje que mandó él.
+ *  - mencion:<chatId>:<mensajeId> → "te mencionó": a los mencionados en ese mensaje suyo.
  *  - reunion:<id>       → reunión que creó él: a los participantes que son de su cliente (o admins).
  * Las aprobaciones de videos y piezas las avisa el servidor (/api/publico/*-cliente).
  */
@@ -46,6 +47,30 @@ async function avisoDelCliente(caller: Caller, b: Body): Promise<AvisoServer> {
       cuerpo: chat.tipo === "directo" ? texto : `${caller.nombre}: ${texto.slice(0, 120)}`,
       link: `/chat?c=${id}`,
       clave: `chat:${id}`,
+      proyectoId: (chat.proyecto_id as string | null) ?? null,
+      videoId: null,
+    };
+  }
+
+  // mencion:<chatId>:<mensajeId> → "Te mencionó": solo a los mencionados en ese mensaje (suyo) que son del chat.
+  // Clave propia por mensaje: cada mención avisa, aunque haya otros mensajes del chat sin leer.
+  if (tipo === "mencion") {
+    const [chatId, msgId] = id.split(":");
+    if (!chatId || !msgId) throw new HttpError(400, "Aviso no permitido");
+    const [chatSnap, msgSnap] = await Promise.all([db.collection("chats").doc(chatId).get(), db.collection(`chats/${chatId}/mensajes`).doc(msgId).get()]);
+    const chat = chatSnap.data();
+    const m = msgSnap.data();
+    const miembros: string[] = Array.isArray(chat?.miembros) ? chat!.miembros : [];
+    if (!chat || !m || !miembros.includes(caller.uid) || m.by !== caller.uid) throw new HttpError(403, "No sos parte de este chat");
+    const mencionados = new Set(Array.isArray(m.menciones) ? (m.menciones as string[]) : []);
+    const nombre = caller.nombre || "Alguien";
+    const texto = String(m.texto ?? "").slice(0, 140);
+    return {
+      destinatarios: miembros.filter((u) => u !== caller.uid && mencionados.has(u) && pedidos.has(u)),
+      titulo: chat.tipo === "directo" ? `${nombre} te mencionó` : `${nombre} te mencionó en ${String(chat.nombre ?? "el chat").slice(0, 80)}`,
+      cuerpo: texto,
+      link: `/chat?c=${chatId}`,
+      clave: `mencion:${chatId}:${msgId}`,
       proyectoId: (chat.proyecto_id as string | null) ?? null,
       videoId: null,
     };
@@ -99,7 +124,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const b = body<Body>(req);
     // Mensajes del chat (de cualquiera): a los miembros, con el texto que arma el servidor. Así también
     // funcionan los privados y los grupos, que no son de un cliente. Los contactos (solo chat), igual que el cliente.
-    if (caller.role === "cliente" || caller.role === "contacto" || String(b.clave ?? "").startsWith("chat:")) {
+    if (caller.role === "cliente" || caller.role === "contacto" || /^(chat|mencion):/.test(String(b.clave ?? ""))) {
       // El cliente no arma avisos a mano (salen también por correo con la marca de Prodi): solo los de
       // chat y reuniones, con el texto que arma el servidor y a quienes corresponde.
       const aviso = await avisoDelCliente(caller, b);

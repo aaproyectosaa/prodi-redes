@@ -20,6 +20,7 @@
 // POST /api/ia/chat-asistente { chat_id, mensaje_id } → @prodi en el chat (ver api/_lib/chat-asistente.ts)
 // POST /api/ia/memoria-chat-quitar { proyecto_id, texto } → saca un dato que la IA aprendió del chat
 // POST /api/ia/estado (admin) → qué claves de IA están cargadas (sí/no, nunca la clave) y con qué modelo de Claude
+// POST /api/ia/tarea-chat { chat_id, mensaje_id, titulo, asignados, vence? } → tarea a partir de un mensaje del chat (sin IA)
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { FieldValue } from "../_lib/db";
@@ -34,6 +35,7 @@ import { enviarAviso } from "../_lib/notify";
 import { filmaElCliente, videoDesdePedido } from "../_lib/pedidos";
 import { fechaAR, sumarDias } from "../_lib/fecha";
 import { atenderMencion } from "../_lib/chat-asistente";
+import { crearTarea } from "../_lib/tareas";
 import { logosParaPieza, marcaTexto } from "../_lib/marca";
 import {
   comercialTexto,
@@ -864,6 +866,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "chat-asistente") res.status(200).json(await chatAsistente(req));
     else if (accion === "memoria-chat-quitar") res.status(200).json(await memoriaChatQuitar(req));
     else if (accion === "estado") res.status(200).json(await estadoIA(req));
+    else if (accion === "tarea-chat") res.status(200).json(await tareaChat(req));
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {
     sendError(res, err);
@@ -880,4 +883,48 @@ async function estadoIA(req: VercelRequest) {
     gemini: hay("GEMINI_API_KEY"),
     modelo_claude: process.env.ANTHROPIC_MODEL || "claude-opus-5-5",
   };
+}
+
+/**
+ * "Hacer tarea" sobre un mensaje del chat: la tarea queda para gente del chat (con aviso y, si tiene
+ * fecha, en Calendar), y en el chat aparece una línea de sistema para que todos sepan.
+ */
+async function tareaChat(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "productor", "editor", "pauta", "diseno", "administracion", "cliente", "contacto"]);
+  const b = body<{ chat_id?: string; mensaje_id?: string; titulo?: string; asignados?: unknown; vence?: string | null }>(req);
+  const db = adminDb();
+  if (!b.chat_id || !b.mensaje_id || b.chat_id.includes("/") || b.mensaje_id.includes("/")) throw new HttpError(400, "Faltan datos");
+  const [chatSnap, msgSnap] = await Promise.all([db.collection("chats").doc(b.chat_id).get(), db.collection(`chats/${b.chat_id}/mensajes`).doc(b.mensaje_id).get()]);
+  const chat = chatSnap.data();
+  const miembros: string[] = Array.isArray(chat?.miembros) ? chat!.miembros : [];
+  if (!chat || !msgSnap.exists || (!miembros.includes(caller.uid) && caller.role !== "admin")) throw new HttpError(403, "No sos parte de este chat");
+  const titulo = String(b.titulo ?? "").trim().slice(0, 200);
+  if (titulo.length < 3) throw new HttpError(400, "Escribí qué hay que hacer");
+  const pedidos = Array.isArray(b.asignados) ? b.asignados.filter((x): x is string => typeof x === "string") : [];
+  const asignados = [...new Set(pedidos.filter((u) => miembros.includes(u)))];
+  if (!asignados.length) throw new HttpError(400, "Elegí a quién se la asignás");
+  const hoy = fechaAR();
+  const vence = typeof b.vence === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.vence) && b.vence >= hoy ? b.vence : null;
+  const base = appUrl(req);
+  const nombres = (chat.nombres ?? {}) as Record<string, string>;
+  const perfil = (await db.collection("profiles").doc(caller.uid).get()).data() ?? {};
+  const yo = String(perfil.nombre ?? caller.nombre ?? "Alguien");
+  const id = await crearTarea(
+    { titulo, asignados, vence, creada_por: caller.uid, creada_por_nombre: yo, chat_id: b.chat_id, proyecto_id: typeof chat.proyecto_id === "string" ? chat.proyecto_id : null },
+    base
+  );
+  // Línea en el chat (la app antepone el nombre de quien la creó): "Lucas le dejó una tarea a Nati: …".
+  const primer = (u: string) => String(nombres[u] ?? "alguien").split(" ")[0];
+  const solo = asignados.length === 1 && asignados[0] === caller.uid;
+  const para = asignados.map(primer).join(", ");
+  const dia = vence ? ` · para el ${Number(vence.slice(8, 10))}/${Number(vence.slice(5, 7))}` : "";
+  const at = new Date().toISOString();
+  await db.collection(`chats/${b.chat_id}/mensajes`).add({
+    texto: `${solo ? "se anotó una tarea" : `le dejó una tarea a ${para}`}: “${titulo}”${dia} 📌`,
+    by: caller.uid,
+    at,
+    tipo: "sistema",
+    tarea_id: id,
+  });
+  return { ok: true, tarea_id: id };
 }
