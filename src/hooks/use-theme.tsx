@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { CLAVE_TEMA, temaElegido } from "@/lib/tema";
 
 type Theme = "light" | "dark";
 
@@ -23,12 +24,10 @@ const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
 export function ThemeProvider({
   children,
   defaultTheme = "light",
-  storageKey = "ui-theme",
+  storageKey = CLAVE_TEMA,
   ...props
 }: ThemeProviderProps) {
-  const [theme, setThemeState] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
-  );
+  const [theme, setThemeState] = useState<Theme>(() => temaElegido(storageKey) ?? defaultTheme);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -39,7 +38,11 @@ export function ThemeProvider({
 
   const setTheme = useCallback(
     (nextTheme: Theme) => {
-      localStorage.setItem(storageKey, nextTheme);
+      try {
+        localStorage.setItem(storageKey, nextTheme);
+      } catch {
+        // Sin almacenamiento (modo privado): vale hasta que se cierre la página.
+      }
       setThemeState(nextTheme);
     },
     [storageKey]

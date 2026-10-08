@@ -2,6 +2,12 @@
 <html lang="es" class="dark">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // El tema elegido en este dispositivo se pone antes de dibujar: sin parpadeo oscuro al recargar en modo claro.
+      try {
+        if (localStorage.getItem("ui-theme") === "light") document.documentElement.classList.replace("dark", "light");
+      } catch (e) {}
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>Prodi Redes</title>
     <meta name="description" content="Gestor de producción de videos y pauta de Prodi" />

@@ -13,6 +13,7 @@ import { z } from "zod";
 import { defaultRouteForRole } from "@/lib/roles";
 import type { UserRole } from "@/integrations/firebase/types";
 import { useTheme } from "@/hooks/use-theme";
+import { temaElegido } from "@/lib/tema";
 import { AvisoInstalar, BotonInstalar } from "@/components/InstalarApp";
 import { BotonInstalarChat, InstalarChatHost } from "@/components/InstalarChat";
 import { CHAT_APP, CHAT_APP_INGRESAR, esRutaChatApp } from "@/lib/chatApp";
@@ -158,7 +159,7 @@ const Auth = () => {
       const profileData = profileSnap.exists() ? profileSnap.data() : null;
       const role = profileData?.role as UserRole | undefined;
 
-      if (profileData?.theme === "light" || profileData?.theme === "dark") {
+      if (!temaElegido() && (profileData?.theme === "light" || profileData?.theme === "dark")) {
         setTheme(profileData.theme);
       }
 

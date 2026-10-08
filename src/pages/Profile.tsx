@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "@/hooks/use-theme";
+import { temaElegido } from "@/lib/tema";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUserRole } from "@/hooks/use-user-role";
 import { RoleBadge } from "@/components/RoleBadge";
@@ -122,7 +123,7 @@ const Profile = () => {
         setNombre(data.nombre || "");
         setProfileImage(data.profileImage || "");
         setAvatarColor(data.avatarColor || "#3b82f6");
-        if (data.theme && data.theme !== theme) {
+        if (!temaElegido() && data.theme && data.theme !== theme) {
           setTheme(data.theme as "light" | "dark");
         }
         setPushEnabled(Boolean(data.push_enabled));
