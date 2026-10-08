@@ -239,7 +239,7 @@ const FILMA_OPCIONES: { v: QuienFilma; titulo: string; texto: string }[] = [
 ];
 
 function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolean }) {
-  const { planes, settings } = useRedes();
+  const { planes, settings, clientes } = useRedes();
   const { profiles } = useAppData();
   const { role, user } = useUserProfileContext();
   const puedeFilma = isAdmin || (role === "productor" && !!user && (cliente.team_roles?.productor ?? []).includes(user.uid));
@@ -326,11 +326,22 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
     }
   };
 
-  const candidatos = (rol: ProjectTeamRole) =>
-    profiles
-      // Diseño: solo quienes tienen ese rol (el admin ya ve todo; si quedara asignado, las diseñadoras dejarían de verlo).
-      .filter((p) => (rol === "cliente" || rol === "diseno" ? p.role === rol : p.role === rol || p.role === "admin"))
+  // Usuarios de cliente que ya son de otra empresa: no se ofrecen acá.
+  const deOtroCliente = new Set(
+    clientes.filter((c) => c.id !== cliente.id).flatMap((c) => c.team_roles?.cliente ?? [])
+  );
+  const candidatos = (rol: ProjectTeamRole) => {
+    const asignados = form.team[rol] ?? [];
+    return profiles
+      .filter((p) => {
+        // Lo que ya está tildado se sigue viendo (para poder sacarlo), aunque esté desactivado.
+        if (asignados.includes(p.id)) return true;
+        if (p.activo === false || p.role !== rol) return false;
+        // Los super admin ya ven todo: no hace falta ofrecerlos en cada rol.
+        return rol !== "cliente" || !deOtroCliente.has(p.id);
+      })
       .sort((a, b) => (a.nombre ?? "").localeCompare(b.nombre ?? ""));
+  };
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
