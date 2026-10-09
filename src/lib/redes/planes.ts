@@ -46,7 +46,7 @@ export function planDe(project: Project | undefined, planes: PlanRedes[]): PlanE
     precioVideoExtra: meta,
     precioExtra: { meta, tiktok: o.precio_extra_tiktok ?? meta, youtube: o.precio_extra_youtube ?? meta },
     redes: REDES_PLAN.filter((r) => o.redes?.[r.k]).map((r) => r.label),
-    pauta: o.pauta ? { incluida: !!o.pauta.incluida, monto: o.pauta.monto ?? null } : null,
+    pauta: o.pauta || project?.produccion?.servicio === "solo_pauta" ? { incluida: !!o.pauta?.incluida || project?.produccion?.servicio === "solo_pauta", monto: o.pauta?.monto ?? null } : null,
     administracionRedes: !!o.administracion_redes,
   };
 }

@@ -269,6 +269,16 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
 
   const set = <K extends keyof ReturnType<typeof toForm>>(k: K, v: ReturnType<typeof toForm>[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
+  // "¿Qué le hacemos?" sin contradicciones: solo pauta → incluye pauta; si sube el cliente → no pautamos ni
+  // administramos; si se activa pauta o administración → los subimos nosotros.
+  const elegir = <K extends "servicio" | "publica" | "ovPauta" | "ovAdminRedes">(k: K, v: ReturnType<typeof toForm>[K]) =>
+    setForm((f) => {
+      const n = { ...f, [k]: v };
+      if (k === "servicio" && v === "solo_pauta") n.ovPauta = true;
+      if (k === "publica" && v === "cliente") Object.assign(n, { ovPauta: false, ovAdminRedes: false });
+      if ((k === "ovPauta" || k === "ovAdminRedes") && v && n.publica === "cliente") n.publica = "prodi";
+      return n;
+    });
 
   const toggleTeam = (rol: ProjectTeamRole, uid: string) =>
     setForm((f) => {
@@ -325,7 +335,7 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
             precio_extra_tiktok: form.ovExtraTiktok === "" ? null : Number(form.ovExtraTiktok),
             precio_extra_youtube: form.ovExtraYoutube === "" ? null : Number(form.ovExtraYoutube),
             redes: form.ovRedes,
-            pauta: { incluida: form.ovPauta, monto: form.ovPauta && form.ovPautaMonto !== "" ? Number(form.ovPautaMonto) : null },
+            pauta: { incluida: form.ovPauta || form.servicio === "solo_pauta", monto: (form.ovPauta || form.servicio === "solo_pauta") && form.ovPautaMonto !== "" ? Number(form.ovPautaMonto) : null },
             administracion_redes: form.ovAdminRedes,
           },
           facturacion: {
@@ -448,155 +458,91 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
                 </div>
               </div>
             </div>
-            <div className="space-y-3 rounded-xl border p-3">
-              <p className="text-xs font-semibold">Qué incluye (lo ve el cliente en «Mi plan»)</p>
-              <div>
-                <p className="mb-1.5 text-xs text-muted-foreground">Redes en las que trabajamos</p>
-                <div className="flex flex-wrap gap-2">
-                  {REDES_PLAN.map((r) => (
-                    <button
-                      key={r.k}
-                      type="button"
-                      onClick={() => set("ovRedes", { ...form.ovRedes, [r.k]: !form.ovRedes[r.k] })}
-                      className={cn(
-                        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                        form.ovRedes[r.k] ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground hover:border-primary/50"
-                      )}
-                    >
-                      {form.ovRedes[r.k] ? "✓ " : ""}
-                      {r.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-2 text-sm">
-                  <Switch checked={form.ovPauta} onCheckedChange={(v) => set("ovPauta", v)} /> Incluye pauta
-                </label>
-                {form.ovPauta && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="text-muted-foreground">Inversión por mes $</span>
-                    <InputNumero className="h-8 w-32" value={form.ovPautaMonto} onChange={(e) => set("ovPautaMonto", e.target.value.replace(/\D/g, ""))} placeholder="Ej: 100.000" />
-                  </div>
-                )}
-              </div>
-              <label className="flex items-start gap-2 text-sm">
-                <Switch checked={form.ovAdminRedes} onCheckedChange={(v) => set("ovAdminRedes", v)} className="mt-0.5" />
-                <span>
-                  Administración de redes
-                  <span className="block text-xs text-muted-foreground">Publicamos y mantenemos el perfil. No incluye responder mensajes.</span>
-                </span>
-              </label>
-            </div>
           </div>
         </Section>
       )}
 
-      <Section title="¿Qué le hacemos?" description="Todo el circuito, o solo la pauta de los videos que él nos manda.">
-        <div className="space-y-2 rounded-xl border bg-card p-4">
-          {SERVICIO_OPCIONES.map((o) => (
-            <button
-              key={o.v}
-              type="button"
-              disabled={!puedeFilma}
-              onClick={() => set("servicio", o.v)}
-              className={cn(
-                "flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors disabled:cursor-not-allowed",
-                form.servicio === o.v ? "border-primary bg-primary/10" : "hover:border-primary/50 disabled:hover:border-border"
-              )}
-            >
-              <span
-                className={cn(
-                  "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
-                  form.servicio === o.v ? "border-primary bg-primary" : "border-muted-foreground/40"
-                )}
-              >
-                {form.servicio === o.v && <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />}
-              </span>
-              <span>
-                <span className="block text-sm font-medium">{o.titulo}</span>
-                <span className="block text-xs text-muted-foreground">{o.texto}</span>
-              </span>
-            </button>
-          ))}
-          {form.servicio === "solo_pauta" && (
-            <p className="text-[11px] text-muted-foreground">
-              El cliente pide el video desde su panel y sube el video terminado. Cuando toca «Listo», pasa directo a «Para subir y pautar» y le
-              avisamos a pauta. Si el video lo cargan ustedes, en el video aparece «Enviar a pauta» en vez de «Enviar a edición».
-            </p>
+      <Section title="¿Qué le hacemos?" description="Todo lo que hacemos para este cliente. Lo ve en «Mi plan» y define por dónde pasa cada video.">
+        <div className="space-y-5 rounded-xl border bg-card p-4">
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">1. Videos</p>
+            <Opciones opciones={SERVICIO_OPCIONES} valor={form.servicio} onElegir={(v) => elegir("servicio", v)} disabled={!puedeFilma} />
+            {form.servicio === "solo_pauta" && (
+              <p className="text-[11px] text-muted-foreground">
+                El cliente pide el video desde su panel y sube el video terminado. Cuando toca «Listo», pasa directo a «Para subir y pautar» y le
+                avisamos a pauta. Si el video lo cargan ustedes, en el video aparece «Enviar a pauta» en vez de «Enviar a edición».
+              </p>
+            )}
+          </div>
+
+          {/* Solo pauta: el material lo manda siempre el cliente y lo publicamos nosotros. */}
+          {form.servicio !== "solo_pauta" && (
+            <div className="space-y-2">
+              <p className="text-sm font-semibold">2. ¿Quién filma?</p>
+              <Opciones opciones={FILMA_OPCIONES} valor={form.filma} onElegir={(v) => set("filma", v)} disabled={!puedeFilma} />
+              <p className="text-[11px] text-muted-foreground">
+                Los videos que filma el cliente no llevan rodaje: quedan en “Material del cliente” hasta que sube lo que grabó y avisa. Igual
+                entran en el plan del mes (y si ya lo usó, se cobran como video extra).
+              </p>
+            </div>
           )}
-        </div>
-      </Section>
 
-      {/* Solo pauta: el material lo manda siempre el cliente y lo publicamos nosotros. */}
-      {form.servicio !== "solo_pauta" && (
-        <>
-      <Section title="¿Quién filma?" description="Define cómo arrancan los videos de este cliente y si puede mandarnos su material.">
-        <div className="space-y-2 rounded-xl border bg-card p-4">
-          {FILMA_OPCIONES.map((o) => (
-            <button
-              key={o.v}
-              type="button"
-              disabled={!puedeFilma}
-              onClick={() => set("filma", o.v)}
-              className={cn(
-                "flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors disabled:cursor-not-allowed",
-                form.filma === o.v ? "border-primary bg-primary/10" : "hover:border-primary/50 disabled:hover:border-border"
-              )}
-            >
-              <span
-                className={cn(
-                  "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
-                  form.filma === o.v ? "border-primary bg-primary" : "border-muted-foreground/40"
-                )}
-              >
-                {form.filma === o.v && <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />}
-              </span>
-              <span>
-                <span className="block text-sm font-medium">{o.titulo}</span>
-                <span className="block text-xs text-muted-foreground">{o.texto}</span>
-              </span>
-            </button>
-          ))}
-          <p className="text-[11px] text-muted-foreground">
-            Los videos que filma el cliente no llevan rodaje: quedan en “Material del cliente” hasta que sube lo que grabó y avisa. Igual
-            entran en el plan del mes (y si ya lo usó, se cobran como video extra).
-            {!puedeFilma && " Lo cambia el admin o la productora del cliente."}
-          </p>
-        </div>
-      </Section>
+          {form.servicio !== "solo_pauta" && (
+            <div className="space-y-2">
+              <p className="text-sm font-semibold">3. ¿Quién los sube?</p>
+              <Opciones opciones={PUBLICA_OPCIONES} valor={form.publica} onElegir={(v) => elegir("publica", v)} disabled={!puedeFilma} />
+            </div>
+          )}
 
-      <Section title="¿Quién sube los videos?" description="Qué pasa cuando el cliente aprueba un video.">
-        <div className="space-y-2 rounded-xl border bg-card p-4">
-          {PUBLICA_OPCIONES.map((o) => (
-            <button
-              key={o.v}
-              type="button"
-              disabled={!puedeFilma}
-              onClick={() => set("publica", o.v)}
-              className={cn(
-                "flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors disabled:cursor-not-allowed",
-                form.publica === o.v ? "border-primary bg-primary/10" : "hover:border-primary/50 disabled:hover:border-border"
+          <div className="space-y-3 border-t pt-4">
+            <p className="text-sm font-semibold">{form.servicio === "solo_pauta" ? "2" : "4"}. Además</p>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-sm">
+                <Switch checked={form.ovPauta || form.servicio === "solo_pauta"} onCheckedChange={(v) => elegir("ovPauta", v)} disabled={!isAdmin || form.servicio === "solo_pauta"} /> Pauta
+              </label>
+              {(form.ovPauta || form.servicio === "solo_pauta") && isAdmin && (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">Inversión por mes $</span>
+                  <InputNumero className="h-8 w-32" value={form.ovPautaMonto} onChange={(e) => set("ovPautaMonto", e.target.value.replace(/\D/g, ""))} placeholder="Ej: 100.000" />
+                </div>
               )}
-            >
-              <span
-                className={cn(
-                  "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
-                  form.publica === o.v ? "border-primary bg-primary" : "border-muted-foreground/40"
-                )}
-              >
-                {form.publica === o.v && <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />}
-              </span>
+              {form.servicio === "solo_pauta" && <span className="text-[11px] text-muted-foreground">(siempre, es solo pauta)</span>}
+            </div>
+            <label className="flex items-start gap-2 text-sm">
+              <Switch checked={form.ovAdminRedes} onCheckedChange={(v) => elegir("ovAdminRedes", v)} disabled={!isAdmin} className="mt-0.5" />
               <span>
-                <span className="block text-sm font-medium">{o.titulo}</span>
-                <span className="block text-xs text-muted-foreground">{o.texto}</span>
+                Administración de redes
+                <span className="block text-xs text-muted-foreground">Publicamos y mantenemos el perfil. No incluye responder mensajes.</span>
               </span>
-            </button>
-          ))}
+            </label>
+            <div>
+              <p className="mb-1.5 text-xs text-muted-foreground">Redes en las que trabajamos</p>
+              <div className="flex flex-wrap gap-2">
+                {REDES_PLAN.map((r) => (
+                  <button
+                    key={r.k}
+                    type="button"
+                    disabled={!isAdmin}
+                    onClick={() => set("ovRedes", { ...form.ovRedes, [r.k]: !form.ovRedes[r.k] })}
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed",
+                      form.ovRedes[r.k] ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground hover:border-primary/50"
+                    )}
+                  >
+                    {form.ovRedes[r.k] ? "✓ " : ""}
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {form.publica === "cliente" && form.servicio !== "solo_pauta" && (
+              <p className="text-[11px] text-muted-foreground">Como los sube el cliente, no pautamos ni administramos sus redes (si activás una de esas, pasa a «Los subimos nosotros»).</p>
+            )}
+            {!isAdmin && <p className="text-[11px] text-muted-foreground">Pauta, administración y redes las cambia el admin.</p>}
+            {!puedeFilma && <p className="text-[11px] text-muted-foreground">Lo cambia el admin o la productora del cliente.</p>}
+          </div>
         </div>
       </Section>
-        </>
-      )}
 
       {isAdmin && (
         <Section title="Facturación" description="Cómo se le arma la boleta el 27 y cuándo la paga.">
@@ -888,5 +834,33 @@ function InformeCliente({ cliente, mes }: { cliente: Project; mes: string }) {
         <iframe title="Vista previa del informe" srcDoc={srcDoc} className="h-[640px] w-full rounded-xl border bg-white" />
       )}
     </Section>
+  );
+}
+
+/** Lista de opciones con un círculo (una sola elegida). */
+function Opciones<T extends string>({ opciones, valor, onElegir, disabled }: { opciones: { v: T; titulo: string; texto: string }[]; valor: T; onElegir: (v: T) => void; disabled?: boolean }) {
+  return (
+    <div className="space-y-2">
+      {opciones.map((o) => (
+        <button
+          key={o.v}
+          type="button"
+          disabled={disabled}
+          onClick={() => onElegir(o.v)}
+          className={cn(
+            "flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors disabled:cursor-not-allowed",
+            valor === o.v ? "border-primary bg-primary/10" : "hover:border-primary/50 disabled:hover:border-border"
+          )}
+        >
+          <span className={cn("mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border", valor === o.v ? "border-primary bg-primary" : "border-muted-foreground/40")}>
+            {valor === o.v && <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />}
+          </span>
+          <span>
+            <span className="block text-sm font-medium">{o.titulo}</span>
+            <span className="block text-xs text-muted-foreground">{o.texto}</span>
+          </span>
+        </button>
+      ))}
+    </div>
   );
 }
