@@ -24,6 +24,7 @@ import {
   tituloChat,
 } from "@/lib/redes/chat";
 import { limpiarSubidasListas, subirArchivosChat, useSubidasChat, CHAT_MAX_MB } from "@/lib/redes/chatArchivos";
+import { TextoIA } from "@/components/redes/TextoIA";
 import { AudioMensaje, BarraGrabando, BotonMic, useGrabadorVoz } from "@/components/redes/chat/Voz";
 import { ArchivoMensaje, SubidaBurbuja } from "@/components/redes/chat/Archivo";
 import { ChatIcon } from "@/components/redes/chat/ChatIcon";
@@ -725,7 +726,7 @@ export function ChatConversacion({
                         </div>
                       ) : bot ? (
                         <div className="space-y-2">
-                          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{m.texto}</p>
+                          <TextoIA texto={m.texto} />
                           {m.link &&
                             (m.link.startsWith("/chat?tareas") ? (
                               <button

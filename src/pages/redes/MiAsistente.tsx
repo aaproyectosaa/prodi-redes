@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Loader2, Lock, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PageShell } from "@/components/redes/PageShell";
 import { callApi } from "@/lib/redes/api";
 import { cn } from "@/lib/utils";
+import { TextoIA } from "@/components/redes/TextoIA";
 
 type Msg = { role: "user" | "assistant"; content: string };
 const CLAVE = "prodi-mi-asistente";
@@ -17,24 +18,6 @@ const EJEMPLOS = [
   "¿Qué tengo que pagar este mes entre créditos, impuestos y equipo?",
   "¿A qué clientes les convendría subir el abono?",
 ];
-
-/** **negrita**, listas con "-" y párrafos: lo justo para leer bien las respuestas. */
-function Texto({ texto }: { texto: string }) {
-  const linea = (l: string) =>
-    l.split(/(\*\*[^*]+\*\*)/g).map((p, i) => (p.startsWith("**") && p.endsWith("**") ? <b key={i}>{p.slice(2, -2)}</b> : <Fragment key={i}>{p}</Fragment>));
-  return (
-    <div className="space-y-1.5">
-      {texto.split("\n").map((l, i) => {
-        const t = l.trim();
-        if (!t) return <div key={i} className="h-1" />;
-        const item = t.match(/^([-*•]|\d+[.)])\s+(.*)$/);
-        if (item) return <p key={i} className="pl-4 -indent-3">• {linea(item[2])}</p>;
-        if (/^#{1,4}\s/.test(t)) return <p key={i} className="pt-1 font-semibold">{linea(t.replace(/^#+\s*/, ""))}</p>;
-        return <p key={i}>{linea(t)}</p>;
-      })}
-    </div>
-  );
-}
 
 /** El asistente del dueño: solo el super admin, ve todo el sistema (también la plata). La conversación queda en este dispositivo. */
 export default function MiAsistente() {
@@ -115,7 +98,7 @@ export default function MiAsistente() {
         {mensajes.map((m, i) => (
           <div key={i} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
             <div className={cn("max-w-[90%] rounded-2xl px-4 py-3 text-sm leading-relaxed", m.role === "user" ? "bg-primary text-primary-foreground" : "border bg-card")}>
-              {m.role === "user" ? <p className="whitespace-pre-wrap">{m.content}</p> : <Texto texto={m.content} />}
+              {m.role === "user" ? <p className="whitespace-pre-wrap">{m.content}</p> : <TextoIA texto={m.content} />}
             </div>
           </div>
         ))}

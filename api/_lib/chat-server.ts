@@ -24,7 +24,7 @@ export async function publicarEnChat(chatId: string, msg: Data, id?: string): Pr
   const ref = db.collection(`chats/${chatId}/mensajes`).doc(id);
   if (id && (await ref.get()).exists) return { id: ref.id, nuevo: false };
   await ref.create(msg);
-  const patch: Data = { ultimo: { texto: String(msg.texto ?? "").slice(0, 140), by: msg.by, at: msg.at } };
+  const patch: Data = { ultimo: { texto: String(msg.texto ?? "").replace(/\*\*/g, "").slice(0, 140), by: msg.by, at: msg.at } };
   if (msg.by !== PRODI_ID) patch[`leido.${msg.by}`] = msg.at;
   await db.collection("chats").doc(chatId).update(patch);
   return { id: ref.id, nuevo: true };

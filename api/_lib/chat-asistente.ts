@@ -269,7 +269,7 @@ Devolvé las acciones (máximo 3):
 - crear_tarea: cuando pide recordarle algo a alguien o dejar una tarea ("recordale a Lucía que mande el guion el viernes"). titulo: la tarea corta en infinitivo ("Mandar el guion"); personas: a quién se le asigna (vacío si es para quien escribe); vence YYYY-MM-DD si dice cuándo (si no, vacío).
 - mandar_logo: cuando pide el logo (o los logos) de un cliente para mandarlo al chat. cliente: el nombre del cliente tal cual la lista.
 - recordar: solo cuando pide que te acuerdes de algo del cliente ("acordate que…", "tené en cuenta que…"). texto: el dato en una oración, en tercera persona sobre el cliente.
-- responder: si es una pregunta o un saludo. Contestá con lo que hay en el chat${ctx ? " y en los DATOS DEL SISTEMA (clientes, equipo, videos, tareas, marcas: colores, tipografías, tono)" : ""}. Corto y claro; si piden una lista, una línea por ítem. No inventes datos.
+- responder: si es una pregunta o un saludo. Contestá con lo que hay en el chat${ctx ? " y en los DATOS DEL SISTEMA (clientes, equipo, videos, tareas, marcas: colores, tipografías, tono)" : ""}. Corto y ordenado: si la respuesta tiene varias partes, separalas en bloques con un título en negrita (**Equipo**, **Videos**…), una línea en blanco entre bloques y los datos como lista con "- " (sublistas con dos espacios y "- "). Nada de párrafos largos. No inventes datos.
 - No podés borrar ni modificar tareas, videos ni clientes: eso se hace a mano en el sistema.
 - preguntar: texto con UNA pregunta corta si falta algo importante (por ejemplo la hora de la reunión) o no se entiende el pedido.
 Español rioplatense con voseo.`;
