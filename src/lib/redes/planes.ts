@@ -40,7 +40,8 @@ export function planDe(project: Project | undefined, planes: PlanRedes[]): PlanE
   const meta = o.precio_video_extra ?? plan?.precio_video_extra ?? 0;
   return {
     plan,
-    nombre: plan?.nombre ?? "Sin plan",
+    // Sin plan de la lista pero con lo suyo cargado (videos, abono…): es un plan a medida.
+    nombre: plan?.nombre ?? ([o.videos_mes, o.precio_mensual, o.piezas_mes, o.precio_video_extra].some((v) => v != null) ? "Personalizado" : "Sin plan"),
     videosMes: o.videos_mes ?? plan?.videos_mes ?? 0,
     precioMensual: o.precio_mensual ?? plan?.precio_mensual ?? 0,
     precioVideoExtra: meta,
