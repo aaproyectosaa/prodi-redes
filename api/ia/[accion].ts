@@ -173,7 +173,34 @@ Usá los colores de la marca si están indicados. No inventes logos de otras mar
     guia += `\n${imagenes.length > refsOk.length ? "Las demás imágenes" : "Las imágenes adjuntas"} son piezas anteriores de la marca: seguí su estilo (colores, tipografías, tipo de fotos y composición) sin copiarlas.`;
   }
 
-  const img = await generarImagen(prompt + guia, fmt.ratio, imagenes);
+  // Opus hace de director de arte: mira la marca, el logo, las piezas anteriores y el pedido, y le escribe a
+  // Gemini un brief visual concreto (composición, fondo, foto o ilustración, jerarquía, dónde va el logo).
+  // Si falla, Gemini trabaja con el pedido tal cual.
+  let final = prompt + guia;
+  try {
+    const paraClaude = imagenes
+      .filter((i) => /^image\/(jpeg|png|gif|webp)$/.test(i.mime) && i.data.length < 4_500_000)
+      .map((i) => ({ data: i.data, mime: i.mime as "image/jpeg" | "image/png" | "image/gif" | "image/webp" }));
+    const r = await generarJSON<{ brief?: string }>(
+      `Sos director de arte de una agencia argentina de redes. Un generador de imágenes (Gemini) va a diseñar esta pieza y necesita un brief visual preciso.
+Escribí el brief: qué se ve (foto realista, ilustración o composición gráfica), escena y producto, fondo, paleta exacta con los colores de la marca, tipografía (estilo), jerarquía del texto, dónde va el logo y con cuánto aire, y qué evitar.
+- Respetá TODO lo pedido abajo (enfoque, producto, oferta, texto exacto, cambios del cliente, ajustes del equipo). No inventes precios, datos de contacto ni textos que no estén.
+- Si hay texto que debe aparecer, copialo entre comillas exactamente igual.
+- Las imágenes adjuntas son el logo y piezas anteriores de la marca: describí cómo seguir su estilo sin copiarlas.
+- Formato ${fmt.ratio}. Máximo 180 palabras, en español, directo (sin saludos ni explicaciones).
+
+${prompt}${guia}`,
+      { type: "OBJECT", properties: { brief: { type: "STRING" } }, required: ["brief"] },
+      0.6,
+      paraClaude
+    );
+    const brief = String(r.brief ?? "").trim();
+    if (brief.length > 40) final = `${brief}\n\n${pz.texto_en_pieza ? `Texto exacto que debe aparecer, bien legible: "${pz.texto_en_pieza}"\n` : ""}${guia.trim()}\nNo inventes logos de otras marcas ni datos de contacto.`;
+  } catch (err) {
+    console.warn("[pieza] brief de Claude", err);
+  }
+
+  const img = await generarImagen(final, fmt.ratio, imagenes);
   const n = (pz.versiones?.length ?? 0) + 1;
   const ext = img.mime.includes("jpeg") ? "jpg" : "png";
   const up = await uploadBufferToDrive({
