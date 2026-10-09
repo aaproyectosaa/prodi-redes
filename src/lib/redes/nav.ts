@@ -20,6 +20,7 @@ import {
   Landmark,
   Store,
   FolderOpen,
+  Sparkles,
 } from "lucide-react";
 import type { UserRole } from "@/integrations/firebase/types";
 
@@ -46,6 +47,7 @@ export function navForRole(role: UserRole | undefined): NavSection[] {
             { label: "Tablero", icon: Gauge, path: "/tablero", mobile: true },
             { label: "Clientes", icon: Building2, path: "/clientes", mobile: true },
             { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
+            { label: "Mi asistente", icon: Sparkles, path: "/mi-asistente" },
           ],
         },
         {

@@ -102,6 +102,27 @@ export async function generarJSON<T>(prompt: string, schema: unknown, temperatur
   sinTexto();
 }
 
+/** Conversación en texto libre (el asistente del dueño). Solo Claude. */
+export async function conversarClaude(system: string, mensajes: { role: "user" | "assistant"; content: string }[]): Promise<string> {
+  if (!hayClaude()) sinTexto();
+  let r: Anthropic.Beta.BetaMessage;
+  try {
+    r = await claude().beta.messages.create({
+      model: MODELO(),
+      max_tokens: 8000,
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      output_config: { effort: "medium" },
+      system,
+      messages: mensajes,
+    });
+  } catch (err) {
+    throw errorClaude(err);
+  }
+  if (r.stop_reason === "refusal") throw new Error("IA: no pudo responder eso. Probá escribirlo de otra forma.");
+  return r.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim();
+}
+
 /** Varias opciones de texto (copys). */
 export async function generarTextos(prompt: string, cantidad = 3): Promise<string[]> {
   if (!hayClaude()) {

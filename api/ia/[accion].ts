@@ -18,6 +18,7 @@
 // POST /api/ia/comercial-guardar { proyecto_id, comercial } → enfoque, productos y temporadas del cliente (también el cliente)
 // POST /api/ia/comercial-ver { proyecto_id } → solo el contexto comercial (para el panel del cliente)
 // POST /api/ia/chat-asistente { chat_id, mensaje_id } → @prodi en el chat (ver api/_lib/chat-asistente.ts)
+// POST /api/ia/dueno { mensajes } (super admin) → asistente del dueño, ve todo (ver api/_lib/dueno.ts)
 // POST /api/ia/memoria-chat-quitar { proyecto_id, texto } → saca un dato que la IA aprendió del chat
 // POST /api/ia/estado (admin) → qué claves de IA están cargadas (sí/no, nunca la clave) y con qué modelo de Claude
 // POST /api/ia/tarea-chat { chat_id, mensaje_id, titulo, asignados, vence? } → tarea a partir de un mensaje del chat (sin IA)
@@ -35,6 +36,7 @@ import { enviarAviso } from "../_lib/notify";
 import { filmaElCliente, videoDesdePedido } from "../_lib/pedidos";
 import { fechaAR, sumarDias } from "../_lib/fecha";
 import { atenderMencion } from "../_lib/chat-asistente";
+import { asistenteDueno } from "../_lib/dueno";
 import { crearTarea } from "../_lib/tareas";
 import { logosParaPieza, marcaTexto } from "../_lib/marca";
 import {
@@ -816,6 +818,12 @@ async function memoriaNotas(req: VercelRequest) {
 }
 
 /** @prodi en el chat: el pedido lo valida y lo ejecuta el servidor. */
+// Solo el super admin (el dueño): ve todo, también la plata. Ver api/_lib/dueno.ts.
+async function dueno(req: VercelRequest) {
+  await requireCaller(req, ["admin"]);
+  return asistenteDueno(body<{ mensajes?: unknown }>(req).mensajes);
+}
+
 async function chatAsistente(req: VercelRequest) {
   // Contacto (solo chat): @prodi le contesta y le deja tareas a gente del chat; reuniones y "recordar" no (ver chat-asistente.ts).
   const caller = await requireCaller(req, ["admin", "productor", "editor", "pauta", "diseno", "administracion", "cliente", "contacto"]);
@@ -864,6 +872,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "marca-colores") res.status(200).json(await marcaColores(req));
     else if (accion === "comercial-ver") res.status(200).json(await comercialVer(req));
     else if (accion === "chat-asistente") res.status(200).json(await chatAsistente(req));
+    else if (accion === "dueno") res.status(200).json(await dueno(req));
     else if (accion === "memoria-chat-quitar") res.status(200).json(await memoriaChatQuitar(req));
     else if (accion === "estado") res.status(200).json(await estadoIA(req));
     else if (accion === "tarea-chat") res.status(200).json(await tareaChat(req));
