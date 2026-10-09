@@ -262,7 +262,15 @@ export async function generarImagen(
 
 /** Mensaje de voz a texto: Gemini o, si no hay, ChatGPT (gpt-4o-mini-transcribe). */
 export async function transcribir(data: Buffer, mime: string): Promise<string> {
-  if (hayGemini()) return gemini.transcribirAudio(data, mime);
+  if (hayGemini()) {
+    try {
+      return await gemini.transcribirAudio(data, mime);
+    } catch (err) {
+      const m = err instanceof Error ? err.message : String(err);
+      if (!hayOpenAI()) throw new Error(/API key|PERMISSION_DENIED/i.test(m) ? "Para entender audios: la clave de Gemini (GEMINI_API_KEY) no es válida. Hay que cargar una nueva en Vercel." : m);
+      console.warn("[ia] Gemini no pudo con el audio, pruebo con ChatGPT", m);
+    }
+  }
   if (hayOpenAI()) {
     const tipo = mime.split(";")[0] || "audio/webm";
     const ext = tipo.includes("mp4") || tipo.includes("m4a") ? "m4a" : tipo.includes("ogg") ? "ogg" : tipo.includes("mpeg") ? "mp3" : "webm";

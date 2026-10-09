@@ -174,10 +174,10 @@ export async function atenderMencion(caller: Caller, chatId: unknown, mensajeId:
     const sinClave = /API_KEY|API key not valid|PERMISSION_DENIED|clave de (la IA|Claude)|sin saldo|no tiene saldo/i.test(msg);
     resultados = [
       {
-        texto: sinClave
-          ? `Todavía no estoy conectado a la IA: ${msg.replace(/^IA:\s*/, "")} Cuando esté, respondo.`
-          : /audio/i.test(msg)
-            ? msg.replace(/^IA:s*/, "")
+        texto: /audio/i.test(msg)
+          ? `${msg.replace(/^IA:\s*/, "")} Mientras tanto, escribime el pedido.`
+          : sinClave
+            ? `Todavía no estoy conectado a la IA: ${msg.replace(/^IA:\s*/, "")} Cuando esté, respondo.`
             : "Uh, no pude procesar el pedido ahora. Probá de nuevo en un rato.",
       },
     ];
