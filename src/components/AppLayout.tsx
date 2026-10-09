@@ -16,6 +16,7 @@ import { BadgeApp } from "@/components/BadgeApp";
 import { SidebarExtrasProvider, useSidebarExtras } from "@/hooks/use-sidebar-extras";
 import { useAltoVisible } from "@/hooks/use-alto-visible";
 import { useChatDock } from "@/lib/redes/chatDock";
+import { useMontosOcultos } from "@/lib/privacidad";
 
 const LayoutInner = () => {
   const navigate = useNavigate();
@@ -24,6 +25,7 @@ const LayoutInner = () => {
   const { pathname } = useLocation();
   const teclado = useTecladoAbierto();
   const dockAbierto = useChatDock().abierto;
+  const [montosOcultos] = useMontosOcultos();
   useAltoVisible();
   // El aviso de Prodi Chat no va adentro del chat, con el chat flotante abierto ni con el teclado afuera.
   const sinAvisoChat = teclado || dockAbierto || pathname.replace(/\/$/, "") === "/chat";
@@ -54,7 +56,8 @@ const LayoutInner = () => {
           <VerComoBanner />
           <AvisoDescargarChat oculto={sinAvisoChat} />
           <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
-            <Outlet />
+            {/* Al tocar el ojito se vuelve a dibujar la pantalla con los montos tapados o a la vista. */}
+            <Outlet key={montosOcultos ? "ocultos" : "visibles"} />
           </main>
         </div>
         <MobileTabBar role={role} />

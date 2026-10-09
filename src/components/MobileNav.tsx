@@ -18,6 +18,7 @@ import { usePendientes } from "@/hooks/use-pendientes";
 import { VerComoBoton, VerComoDialog } from "@/components/redes/VerComo";
 import { BotonInstalar } from "@/components/InstalarApp";
 import { BotonInstalarChat } from "@/components/InstalarChat";
+import { BotonOcultarMontos } from "@/components/OcultarMontos";
 import type { Profile, UserRole } from "@/integrations/firebase/types";
 import { TituloSeccion, useSeccionesPlegables } from "@/components/SeccionNav";
 import { esCampoDeTexto } from "@/hooks/use-alto-visible";
@@ -55,6 +56,9 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
           <img src={asset("/brand/logo-horizontal-negro.png")} alt="Prodi" className="h-5 w-auto dark:hidden" />
         </button>
         <div className="flex items-center gap-1">
+          {(role === "admin" || role === "administracion") && (
+            <BotonOcultarMontos conTexto={false} className="h-10 w-10 justify-center rounded-full" />
+          )}
           <button
             type="button"
             onClick={() => navigate("/notificaciones")}
@@ -149,6 +153,7 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
             >
               <HelpCircle className="h-4 w-4" /> ¿Cómo se usa?
             </button>
+            {(role === "admin" || role === "administracion") && <BotonOcultarMontos className="h-10 w-full gap-3 px-3" />}
             <button
               type="button"
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}

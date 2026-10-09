@@ -1,3 +1,4 @@
+import { MONTO_OCULTO, montosOcultos } from "@/lib/privacidad";
 import { fechaAR, formatearFecha, mesAR, sumarMeses } from "@/lib/fecha";
 
 const MESES = [
@@ -32,6 +33,7 @@ export function mesLabel(mes: string, opts: { corto?: boolean } = {}): string {
 
 export function formatARS(n: number | null | undefined): string {
   if (n === null || n === undefined || isNaN(n)) return "—";
+  if (montosOcultos()) return MONTO_OCULTO;
   return new Intl.NumberFormat("es-AR", {
     style: "currency",
     currency: "ARS",

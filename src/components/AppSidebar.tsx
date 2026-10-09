@@ -17,6 +17,7 @@ import { usePendientes } from "@/hooks/use-pendientes";
 import { VerComoBoton } from "@/components/redes/VerComo";
 import { BotonInstalar } from "@/components/InstalarApp";
 import { BotonInstalarChat } from "@/components/InstalarChat";
+import { BotonOcultarMontos } from "@/components/OcultarMontos";
 import type { Profile, UserRole } from "@/integrations/firebase/types";
 import { TituloSeccion, useSeccionesPlegables } from "@/components/SeccionNav";
 
@@ -189,6 +190,9 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
           <HelpCircle className="h-4 w-4" />
           {!collapsed && <span>¿Cómo se usa?</span>}
         </button>
+        {(role === "admin" || role === "administracion") && (
+          <BotonOcultarMontos conTexto={!collapsed} className={cn("h-9 w-full text-muted-foreground", collapsed ? "justify-center" : "px-3")} />
+        )}
         <button
           type="button"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}

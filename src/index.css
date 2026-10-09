@@ -332,3 +332,11 @@ html.teclado-ios {
 @media (prefers-reduced-motion: reduce) {
   .tour-deslizar, .tour-flecha, .tour-aparecer, .tour-dedo, .tour-escribir, .tour-latir, .tour-llenar { animation: none; }
 }
+
+/* Ojito "Ocultar montos": los gráficos se difuminan (los montos los tapa formatARS). */
+.ocultar-montos .recharts-wrapper,
+.ocultar-montos [data-monto] {
+  filter: blur(10px);
+  pointer-events: none;
+  user-select: none;
+}
