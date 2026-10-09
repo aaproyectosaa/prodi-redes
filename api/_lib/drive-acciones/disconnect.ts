@@ -10,6 +10,7 @@ import { adminDb } from "../db";
 import { decrypt } from "../crypto";
 import { revokeToken } from "../google";
 import { FieldValue } from "../db";
+import { olvidarTokenDrive } from "../drive-connection";
 
 const COLLECTION = "app_settings";
 const DOC_ID = "drive_connection";
@@ -62,6 +63,7 @@ export default async function handler(
       }
     }
 
+    olvidarTokenDrive();
     await ref.update({
       status: "disconnected",
       disconnected_at: new Date().toISOString(),

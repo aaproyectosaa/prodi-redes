@@ -13,6 +13,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { adminDb } from "../db";
 import { encrypt } from "../crypto";
+import { olvidarTokenDrive } from "../drive-connection";
 import {
   ensureRootFolder,
   exchangeCodeForTokens,
@@ -169,6 +170,7 @@ export default async function handler(
     const now = new Date().toISOString();
 
     const db = adminDb();
+    olvidarTokenDrive();
     await db
       .collection(COLLECTION)
       .doc(DOC_ID)

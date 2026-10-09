@@ -33,7 +33,8 @@ export function getPool(): Pool {
     enableChannelBinding: /[?&]channel_binding=require/.test(url),
     max: Number(process.env.DB_POOL_MAX ?? 3),
     idleTimeoutMillis: 10_000,
-    connectionTimeoutMillis: 10_000,
+    // Neon puede tardar unos segundos en despertar: mejor esperar que cortar el pedido.
+    connectionTimeoutMillis: 25_000,
   });
   return pool;
 }

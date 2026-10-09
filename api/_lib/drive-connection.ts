@@ -33,11 +33,33 @@ export class DriveConnectionError extends Error {
   }
 }
 
-export async function getAppDriveAccessToken(): Promise<{
-  accessToken: string;
-  email: string;
-  expiresIn: number;
-}> {
+type TokenDrive = { accessToken: string; email: string; expiresIn: number };
+// El token sirve ~1 hora: se reusa mientras le queden más de 5 minutos, y si varios archivos lo piden a la vez
+// (una pieza con logos y fotos) esperan el mismo pedido. Antes cada descarga leía la base, pedía token a Google
+// y escribía la base: con 8 archivos juntos la base se quedaba sin conexiones.
+let tokenCache: { t: TokenDrive; vence: number } | null = null;
+let tokenEnCurso: Promise<TokenDrive> | null = null;
+
+export async function getAppDriveAccessToken(): Promise<TokenDrive> {
+  if (tokenCache && tokenCache.vence > Date.now()) return tokenCache.t;
+  if (tokenEnCurso) return tokenEnCurso;
+  tokenEnCurso = pedirTokenDrive()
+    .then((t) => {
+      tokenCache = { t, vence: Date.now() + Math.max(0, t.expiresIn - 300) * 1000 };
+      return t;
+    })
+    .finally(() => {
+      tokenEnCurso = null;
+    });
+  return tokenEnCurso;
+}
+
+/** Al desconectar o reconectar Drive: que no se use el token guardado. */
+export function olvidarTokenDrive() {
+  tokenCache = null;
+}
+
+async function pedirTokenDrive(): Promise<TokenDrive> {
   const ref = adminDb().collection(COLLECTION).doc(DOC_ID);
   const snap = await ref.get();
 

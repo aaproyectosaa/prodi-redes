@@ -133,6 +133,15 @@ async function tomarTurnoPieza(piezaId: string) {
   if (!libre) throw new HttpError(409, "Ya se está haciendo una versión de esta pieza. Esperá a que termine (≈30 s).");
 }
 
+/** Si la generación falla en cualquier paso, la pieza queda libre al toque para reintentar (y el error sigue). */
+async function liberarTurnoPieza(req: VercelRequest, err: unknown): Promise<never> {
+  const id = (req.body as { pieza_id?: unknown } | undefined)?.pieza_id;
+  if (typeof id === "string" && /^[A-Za-z0-9_-]{1,100}$/.test(id) && !(err instanceof HttpError && err.status === 409)) {
+    await adminDb().collection("piezas_ia").doc(id).update({ generando_at: null }).catch(() => undefined);
+  }
+  throw err;
+}
+
 async function pieza(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "productor", "diseno"]);
   const { pieza_id, ajustes } = body<{ pieza_id?: string; ajustes?: string | null }>(req);
@@ -1019,8 +1028,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const accion = String(req.query.accion ?? "");
     if (accion === "copy") res.status(200).json(await copy(req));
-    else if (accion === "pieza") res.status(200).json(await pieza(req));
-    else if (accion === "pieza-editar") res.status(200).json(await piezaEditar(req));
+    else if (accion === "pieza") res.status(200).json(await pieza(req).catch((e) => liberarTurnoPieza(req, e)));
+    else if (accion === "pieza-editar") res.status(200).json(await piezaEditar(req).catch((e) => liberarTurnoPieza(req, e)));
     else if (accion === "minuta") res.status(200).json(await minuta(req));
     else if (accion === "guion") res.status(200).json(await guion(req));
     else if (accion === "preparar") res.status(200).json(await preparar(req));
