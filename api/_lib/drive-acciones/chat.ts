@@ -15,6 +15,7 @@ import { DriveConnectionError, getAppDriveAccessToken } from "../drive-connectio
 import { ensureFolder, ROOT_FOLDER_NAME } from "../drive-server";
 import { avisarMensaje, chatDeMiembro, publicarEnChat } from "../chat-server";
 import type { Data } from "../db";
+import { atenderMencion } from "../chat-asistente";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
@@ -147,6 +148,8 @@ export async function chatArchivo(req: VercelRequest, res: VercelResponse) {
       `f_${subida}`
     );
     if (nuevo) await avisarMensaje(chatId, chat, caller.uid, caller.nombre ?? "", resumen, appUrl(req));
+    // En su chat con Prodi, una foto con texto es un pedido: Prodi la mira y contesta.
+    if (nuevo && chat.tipo === "prodi" && texto) await atenderMencion(caller, chatId, id, appUrl(req)).catch((err) => console.warn("[prodi] foto", err));
     res.status(200).json({ ok: true, id });
   } catch (err) {
     fallo(res, err);

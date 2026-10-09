@@ -445,7 +445,14 @@ export function ChatConversacion({
     if (!r) return;
     setEnviando(true);
     try {
-      await enviarAudio(chat, uid, r.blob, r.duracion, nombre);
+      const id = await enviarAudio(chat, uid, r.blob, r.duracion, nombre);
+      // En su chat con Prodi, el audio es un pedido: lo pasa a texto y contesta.
+      if (chat.tipo === "prodi") {
+        setPensando(true);
+        pedirAProdi(chat.id, id)
+          .catch((err) => toast.error(err instanceof Error ? err.message : "Prodi no pudo responder"))
+          .finally(() => setTimeout(() => setPensando(false), 1500));
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo enviar el audio");
     } finally {

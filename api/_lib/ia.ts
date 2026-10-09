@@ -16,6 +16,8 @@ import * as gemini from "./gemini";
 
 export type { MinutaIA } from "./gemini";
 type Esfuerzo = "low" | "medium" | "high";
+/** Imagen para que Claude la vea (JPEG, PNG, GIF o WebP). */
+export type Imagen = { data: Buffer; mime: "image/jpeg" | "image/png" | "image/gif" | "image/webp" };
 type Ratio = "1:1" | "4:5" | "9:16" | "16:9" | "2:3" | "3:4" | "21:9";
 
 const MODELO = () => process.env.ANTHROPIC_MODEL || "claude-opus-5-5";
@@ -63,7 +65,7 @@ function errorClaude(err: unknown): Error {
 }
 
 /** Una respuesta JSON de Claude con el esquema pedido. */
-async function jsonClaude<T>(prompt: string, schema: unknown, esfuerzo: Esfuerzo): Promise<T> {
+async function jsonClaude<T>(prompt: string, schema: unknown, esfuerzo: Esfuerzo, imagenes: Imagen[] = []): Promise<T> {
   let r: Anthropic.Beta.BetaMessage;
   try {
     r = await claude().beta.messages.create({
@@ -73,7 +75,17 @@ async function jsonClaude<T>(prompt: string, schema: unknown, esfuerzo: Esfuerzo
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
       output_config: { effort: esfuerzo, format: { type: "json_schema", schema: aJsonSchema(schema) } },
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        {
+          role: "user",
+          content: imagenes.length
+            ? [
+                ...imagenes.map((i) => ({ type: "image" as const, source: { type: "base64" as const, media_type: i.mime, data: i.data.toString("base64") } })),
+                { type: "text" as const, text: prompt },
+              ]
+            : prompt,
+        },
+      ],
     });
   } catch (err) {
     throw errorClaude(err);
@@ -96,8 +108,8 @@ function sinTexto(): never {
  * Respuesta estructurada. `temperature` viene de cuando era Gemini: Claude no la usa, pero sirve de pista
  * del tipo de pedido. Lo preciso y rápido (@prodi, memoria: ≤ 0,3) va con poco esfuerzo; lo creativo, medio.
  */
-export async function generarJSON<T>(prompt: string, schema: unknown, temperature = 0.6): Promise<T> {
-  if (hayClaude()) return jsonClaude<T>(prompt, schema, temperature <= 0.3 ? "low" : "medium");
+export async function generarJSON<T>(prompt: string, schema: unknown, temperature = 0.6, imagenes: Imagen[] = []): Promise<T> {
+  if (hayClaude()) return jsonClaude<T>(prompt, schema, temperature <= 0.3 ? "low" : "medium", imagenes);
   if (hayGemini()) return gemini.generarJSON<T>(prompt, schema, temperature);
   sinTexto();
 }
@@ -246,4 +258,26 @@ export async function generarImagen(
 ): Promise<{ data: Buffer; mime: string }> {
   const p = await proveedorImagenes();
   return p === "openai" ? imagenOpenAI(prompt, aspectRatio, imagenes) : gemini.generarImagen(prompt, aspectRatio, imagenes);
+}
+
+/** Mensaje de voz a texto: Gemini o, si no hay, ChatGPT (gpt-4o-mini-transcribe). */
+export async function transcribir(data: Buffer, mime: string): Promise<string> {
+  if (hayGemini()) return gemini.transcribirAudio(data, mime);
+  if (hayOpenAI()) {
+    const tipo = mime.split(";")[0] || "audio/webm";
+    const ext = tipo.includes("mp4") || tipo.includes("m4a") ? "m4a" : tipo.includes("ogg") ? "ogg" : tipo.includes("mpeg") ? "mp3" : "webm";
+    const form = new FormData();
+    form.append("file", new Blob([new Uint8Array(data)], { type: tipo }), `audio.${ext}`);
+    form.append("model", "gpt-4o-mini-transcribe");
+    form.append("language", "es");
+    const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY!.trim()}` },
+      body: form,
+    });
+    const json = (await res.json().catch(() => ({}))) as { text?: string; error?: { message?: string } };
+    if (!res.ok) throw new Error(`IA: no se pudo pasar el audio a texto (${json.error?.message ?? res.status})`);
+    return String(json.text ?? "").trim();
+  }
+  throw new Error("Para entender audios falta la clave de Gemini (GEMINI_API_KEY) o de ChatGPT (OPENAI_API_KEY) en Vercel.");
 }

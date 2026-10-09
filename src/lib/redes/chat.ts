@@ -233,7 +233,7 @@ export async function enviarAudio(chat: Chat, by: string, blob: Blob, duracion: 
   const ref = doc(collection(db, CHATS, chat.id, "audios"));
   await setDoc(ref, { data, mime, by, at });
   const texto = `🎤 Mensaje de voz (${duracionTexto(duracion)})`;
-  await addDoc(collection(db, CHATS, chat.id, "mensajes"), {
+  const msgRef = await addDoc(collection(db, CHATS, chat.id, "mensajes"), {
     texto,
     by,
     at,
@@ -255,6 +255,7 @@ export async function enviarAudio(chat: Chat, by: string, blob: Blob, duracion: 
     clave: `chat:${chat.id}`,
     proyectoId: chat.proyecto_id,
   });
+  return msgRef.id;
 }
 
 /** Baja el audio (una sola vez) y devuelve una URL para reproducirlo. */

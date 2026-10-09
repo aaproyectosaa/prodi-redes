@@ -181,3 +181,20 @@ export async function generarMinutaIA(prompt: string, audio?: { data: Buffer; mi
     tareas: (parsed.tareas ?? []).map((t) => ({ tarea: String(t.tarea ?? ""), responsable: t.responsable || null, fecha: t.fecha || null })),
   };
 }
+
+/** Pasa a texto un mensaje de voz (español rioplatense). */
+export async function transcribirAudio(data: Buffer, mime: string): Promise<string> {
+  const json = await call(TEXT_MODEL(), {
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { text: "Transcribí este mensaje de voz en español (Argentina) tal cual lo dice, sin agregar nada. Si no se entiende, devolvé vacío." },
+          { inline_data: { mime_type: mime.split(";")[0] || "audio/webm", data: data.toString("base64") } },
+        ],
+      },
+    ],
+    generationConfig: { temperature: 0 },
+  });
+  return (json?.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? "").join("") ?? "").trim();
+}
