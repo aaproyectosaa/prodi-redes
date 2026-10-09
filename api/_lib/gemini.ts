@@ -4,7 +4,8 @@
 const BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 function key(): string {
-  const k = process.env.GEMINI_API_KEY;
+  // Sin espacios ni comillas pegados al copiarla. Va en el encabezado x-goog-api-key (sirve para las claves AIza… y las nuevas AQ.…).
+  const k = (process.env.GEMINI_API_KEY ?? "").trim().replace(/^["']|["']$/g, "").replace(/\s+/g, "");
   if (!k) throw new Error("Falta GEMINI_API_KEY en Vercel");
   return k;
 }
@@ -13,9 +14,9 @@ export const TEXT_MODEL = () => process.env.GEMINI_TEXT_MODEL || "gemini-2.5-fla
 export const IMAGE_MODEL = () => process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image";
 
 async function call(model: string, payload: unknown): Promise<any> {
-  const res = await fetch(`${BASE}/${model}:generateContent?key=${key()}`, {
+  const res = await fetch(`${BASE}/${model}:generateContent`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": key() },
     body: JSON.stringify(payload),
   });
   const json: any = await res.json().catch(() => ({}));
@@ -99,9 +100,10 @@ const UPLOAD = "https://generativelanguage.googleapis.com/upload/v1beta/files";
 
 /** Sube un archivo grande a la Files API de Gemini y espera a que esté listo. */
 async function subirArchivoGemini(data: Buffer, mime: string, nombre: string): Promise<string> {
-  const start = await fetch(`${UPLOAD}?key=${key()}`, {
+  const start = await fetch(UPLOAD, {
     method: "POST",
     headers: {
+      "x-goog-api-key": key(),
       "X-Goog-Upload-Protocol": "resumable",
       "X-Goog-Upload-Command": "start",
       "X-Goog-Upload-Header-Content-Length": String(data.length),
@@ -122,7 +124,7 @@ async function subirArchivoGemini(data: Buffer, mime: string, nombre: string): P
   if (!file?.uri) throw new Error("IA: la subida del audio no devolvió el archivo");
   for (let i = 0; i < 20 && file.state === "PROCESSING"; i++) {
     await new Promise((r) => setTimeout(r, 1500));
-    const g: any = await (await fetch(`https://generativelanguage.googleapis.com/v1beta/${file.name}?key=${key()}`)).json();
+    const g: any = await (await fetch(`https://generativelanguage.googleapis.com/v1beta/${file.name}`, { headers: { "x-goog-api-key": key() } })).json();
     file = g;
   }
   if (file.state !== "ACTIVE") throw new Error("IA: el audio todavía se está procesando o falló. Probá de nuevo en un minuto.");
