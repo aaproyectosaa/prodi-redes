@@ -184,6 +184,26 @@ export async function editarMensaje(chat: Chat, m: Mensaje, texto: string) {
 export const PRODI_ID = "prodi";
 export const mencionaProdi = (texto: string) => /(^|[\s(])@prodi\b/i.test(texto);
 
+/** Chat personal con Prodi (uno por persona del equipo): ahí no hace falta escribir @prodi. */
+export const chatProdiId = (uid: string) => `prodi_${uid}`;
+
+/** Lo crea la primera vez que la persona entra al chat (si ya está, no hace nada). */
+export async function asegurarChatProdi(uid: string, nombre: string, chats: Chat[]) {
+  if (enModoVista() || chats.some((c) => c.id === chatProdiId(uid))) return;
+  if ((await getDoc(doc(db, CHATS, chatProdiId(uid)))).exists()) return;
+  const at = now();
+  await setDoc(doc(db, CHATS, chatProdiId(uid)), {
+    tipo: "prodi",
+    proyecto_id: null,
+    nombre: "Prodi",
+    miembros: [uid],
+    nombres: { [uid]: nombre },
+    ultimo: { texto: "Hola! Pedime lo que necesites: agendar, tareas, clientes, logos…", by: PRODI_ID, at },
+    leido: {},
+    created_at: at,
+  });
+}
+
 /** Después de guardar el mensaje: Prodi lo lee y contesta en el chat. */
 export function pedirAProdi(chatId: string, mensajeId: string) {
   return callApi<{ ok: true }>("/api/ia/chat-asistente", { chat_id: chatId, mensaje_id: mensajeId });
@@ -265,6 +285,7 @@ export function noLeido(chat: Chat, uid: string | undefined): boolean {
 
 /** Nombre a mostrar de una conversación para este usuario. */
 export function tituloChat(chat: Chat, uid: string | undefined, profiles: Profile[], role?: string): string {
+  if (chat.tipo === "prodi") return "Prodi";
   if (chat.tipo === "equipo") return "Equipo Prodi";
   if (chat.tipo === "cliente") return role === "cliente" || role === "contacto" ? `Prodi · ${chat.nombre ?? ""}` : chat.nombre ?? "Cliente";
   if (chat.tipo === "grupo") return chat.nombre ?? "Grupo";

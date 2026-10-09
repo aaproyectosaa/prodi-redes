@@ -186,7 +186,7 @@ export function ChatLista({
       : filtroOk === "no-leidos"
         ? noLeido(c, uid)
         : filtroOk === "grupos"
-          ? c.tipo !== "directo"
+          ? c.tipo !== "directo" && c.tipo !== "prodi"
           : (prefs.asignaciones[c.id] ?? []).includes(filtroOk.slice(2));
 
   const buscando = q.trim().length > 0;

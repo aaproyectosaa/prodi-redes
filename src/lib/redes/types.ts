@@ -427,7 +427,7 @@ export const DEFAULT_REDES_SETTINGS: RedesSettings = {
 // Chat interno
 // ---------------------------------------------------------------------------
 
-export type TipoChat = "equipo" | "cliente" | "directo" | "grupo";
+export type TipoChat = "equipo" | "cliente" | "directo" | "grupo" | "prodi";
 
 export interface Chat {
   /** Equipo / grupo de cliente que el super admin borró: queda sin miembros y la app no lo vuelve a crear. */

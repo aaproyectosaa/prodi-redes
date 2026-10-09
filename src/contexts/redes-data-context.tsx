@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -22,7 +23,7 @@ import { useAppData } from "@/contexts/app-data-context";
 import { isProjectEnabled } from "@/lib/projectEnabled";
 import { trabajaEnCliente } from "@/lib/roles";
 import { mesActual, sumarMeses } from "@/lib/redes/format";
-import { noLeido, sincronizarChats } from "@/lib/redes/chat";
+import { asegurarChatProdi, noLeido, sincronizarChats } from "@/lib/redes/chat";
 import { asegurarAvatar, avatarAlDia } from "@/lib/redes/avatarLogo";
 import { sincronizarAvatares } from "@/lib/avatares";
 import {
@@ -182,6 +183,7 @@ export function RedesDataProvider({ children }: { children: ReactNode }) {
 
   // ---- Chats (donde el usuario es miembro) ----
   const [chats, setChats] = useState<Chat[]>([]);
+  const [chatsListos, setChatsListos] = useState(false);
   useEffect(() => {
     if (!activo || !uid) {
       setChats([]);
@@ -189,18 +191,21 @@ export function RedesDataProvider({ children }: { children: ReactNode }) {
     }
     return onSnapshot(
       query(collection(db, "chats"), where("miembros", "array-contains", uid)),
-      (snap) =>
+      (snap) => {
+        setChatsListos(true);
         setChats(
           snap.docs
             .map((d) => ({ id: d.id, ...d.data() }) as Chat)
             .sort(
               (a, b) =>
-                // Primero las que tienen mensajes (la más reciente arriba), después los grupos vacíos.
+                // Prodi siempre arriba; después las que tienen mensajes (la más reciente arriba) y los grupos vacíos.
+                Number(b.tipo === "prodi") - Number(a.tipo === "prodi") ||
                 (b.ultimo?.at ?? "").localeCompare(a.ultimo?.at ?? "") ||
                 (a.tipo === "equipo" ? -1 : b.tipo === "equipo" ? 1 : 0) ||
                 (a.nombre ?? "").localeCompare(b.nombre ?? "")
             )
-        ),
+        );
+      },
       (err) => console.error("[redes] chats", err)
     );
   }, [activo, uid]);
@@ -223,6 +228,17 @@ export function RedesDataProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncKey, isAdmin, viewingAs, appLoading]);
+
+  // Cada persona del equipo tiene su chat con Prodi (se crea la primera vez).
+  const yaProdi = useRef(false);
+  useEffect(() => {
+    if (!chatsListos || !uid || viewingAs || yaProdi.current) return;
+    if (!["admin", "productor", "editor", "pauta", "diseno", "administracion"].includes(role ?? "")) return;
+    yaProdi.current = true;
+    const nombre = profiles.find((p) => p.id === uid)?.nombre ?? "";
+    void asegurarChatProdi(uid, nombre, chats).catch((err) => console.warn("[redes] chat Prodi", err));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatsListos, uid, role, viewingAs]);
 
   // Y copia a avatares/ las fotos de perfil (así los clientes ven la del equipo), una vez por sesión.
   useEffect(() => {

@@ -270,6 +270,8 @@ export function ChatConversacion({
   const capturaVideo = useRef<HTMLInputElement>(null);
   const [camara, setCamara] = useState(false);
   const [info, setInfo] = useState(false);
+  // Privado (con una persona o con Prodi): sin info de grupo.
+  const privado = chat.tipo === "directo" || chat.tipo === "prodi";
   const [infoMsg, setInfoMsg] = useState<Mensaje | null>(null);
   const [editMsg, setEditMsg] = useState<Mensaje | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -416,7 +418,7 @@ export function ChatConversacion({
       setMencionados({});
       setRespondiendo(null);
       // @prodi: el servidor lo procesa y contesta en el chat.
-      if (mencionaProdi(t)) {
+      if (mencionaProdi(t) || chat.tipo === "prodi") {
         setPensando(true);
         pedirAProdi(chat.id, id)
           .catch((err) => toast.error(err instanceof Error ? err.message : "Prodi no pudo responder"))
@@ -544,27 +546,29 @@ export function ChatConversacion({
         </button>
         <button
           type="button"
-          onClick={() => chat.tipo !== "directo" && setInfo(true)}
+          onClick={() => !privado && setInfo(true)}
           className={cn(
             "flex min-w-0 flex-1 items-center rounded-lg text-left",
             compacto ? "gap-2" : "gap-3",
-            chat.tipo !== "directo" && "hover:bg-muted/50"
+            !privado && "hover:bg-muted/50"
           )}
-          title={chat.tipo !== "directo" ? "Ver miembros y datos del grupo" : undefined}
-          disabled={chat.tipo === "directo"}
+          title={!privado ? "Ver miembros y datos del grupo" : undefined}
+          disabled={privado}
         >
           <ChatIcon chat={chat} profiles={profiles} uid={uid} color={color} />
           <span className="min-w-0 flex-1">
             <span className="block truncate font-semibold">{tituloChat(chat, uid, profiles, role)}</span>
             <span className="block truncate text-xs text-muted-foreground">
-              {chat.tipo === "directo"
+              {chat.tipo === "prodi"
+                ? "Tu asistente: agenda, tareas, clientes y logos"
+                : chat.tipo === "directo"
                 ? etiquetaPersona(chat.miembros.find((m) => m !== uid) ?? "")
                 : miembros.map((m) => m.nombre?.split(" ")[0]).join(", ")}
             </span>
           </span>
         </button>
         {/* Los contactos (solo chat) no arman reuniones: las crea el equipo o el cliente. */}
-        {role !== "contacto" && (role !== "cliente" || chat.proyecto_id) &&
+        {role !== "contacto" && chat.tipo !== "prodi" && (role !== "cliente" || chat.proyecto_id) &&
           (compacto ? (
             <Button
               size="icon"
@@ -592,7 +596,17 @@ export function ChatConversacion({
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : mensajes.length === 0 && !subidas.length ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">Escribí el primer mensaje.</p>
+          chat.tipo === "prodi" ? (
+            <div className="mx-auto max-w-sm space-y-2 py-10 text-center text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">Tu chat con Prodi</p>
+              <p>Acá no hace falta escribir @prodi. Probá:</p>
+              <p>“Agendame una reunión con Ariel mañana a las 10”</p>
+              <p>“¿Qué videos tiene Natalia en edición?”</p>
+              <p>“Pasame el logo de Sample”</p>
+            </div>
+          ) : (
+            <p className="py-10 text-center text-sm text-muted-foreground">Escribí el primer mensaje.</p>
+          )
         ) : (
           <div className="mx-auto flex max-w-3xl flex-col gap-1.5">
             {mensajes.map((m, i) => {
@@ -1049,7 +1063,7 @@ export function ChatConversacion({
                 mandarArchivos(files);
               }}
               rows={1}
-              placeholder={ayudaCaja}
+              placeholder={chat.tipo === "prodi" ? "Pedile algo a Prodi…" : ayudaCaja}
               className="max-h-36 min-h-[44px] resize-none rounded-2xl"
             />
           </div>
@@ -1066,7 +1080,7 @@ export function ChatConversacion({
         </div>
       </footer>
       {!enCelular && <CamaraDialog open={camara} onOpenChange={setCamara} onFoto={(f) => mandarArchivos([f])} />}
-      {chat.tipo !== "directo" && <InfoChat chat={chat} open={info} onOpenChange={setInfo} onSalio={onBack} />}
+      {!privado && <InfoChat chat={chat} open={info} onOpenChange={setInfo} onSalio={onBack} />}
       <InfoMensaje
         chat={chat}
         m={infoMsg}

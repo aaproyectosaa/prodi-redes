@@ -1,4 +1,4 @@
-import { Users } from "lucide-react";
+import { Sparkles, Users } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useRedes } from "@/contexts/redes-data-context";
@@ -29,6 +29,13 @@ export function ChatIcon({
 }) {
   const { clienteById } = useRedes();
   const tam = className ?? "h-10 w-10";
+  if (chat.tipo === "prodi") {
+    return (
+      <div className={cn("flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#6F40FC] to-[#E040A0] text-white", tam)}>
+        <Sparkles className="h-1/2 w-1/2" />
+      </div>
+    );
+  }
   if (chat.tipo === "directo") {
     const otroId = chat.miembros.find((m) => m !== uid) ?? "";
     const otro =

@@ -138,7 +138,8 @@ export async function atenderMencion(caller: Caller, chatId: unknown, mensajeId:
   const msg = (await db.collection(`chats/${cid}/mensajes`).doc(mensajeId).get()).data();
   if (!msg || msg.by !== caller.uid || msg.by === PRODI_ID || msg.tipo !== "texto") throw new HttpError(403, "Ese mensaje no es tuyo");
   const texto = String(msg.texto ?? "");
-  if (!MENCION_PRODI.test(texto)) throw new HttpError(400, "El mensaje no menciona a @prodi");
+  const propio = chat.tipo === "prodi";
+  if (!propio && !MENCION_PRODI.test(texto)) throw new HttpError(400, "El mensaje no menciona a @prodi");
   if (Date.now() - new Date(String(msg.at)).getTime() > 10 * 60_000) throw new HttpError(409, "Ese mensaje es viejo");
 
   // Límite por persona y un solo procesamiento por mensaje.
@@ -173,7 +174,7 @@ export async function atenderMencion(caller: Caller, chatId: unknown, mensajeId:
     link_texto: conLink?.link_texto ?? null,
     reunion_id: resultados.find((r) => r.reunion_id)?.reunion_id ?? null,
     tarea_id: resultados.find((r) => r.tarea_id)?.tarea_id ?? null,
-    responde_a: { id: mensajeId, by: caller.uid, by_nombre: String(msg.by_nombre ?? caller.nombre ?? ""), texto: texto.slice(0, 160) },
+    responde_a: propio ? null : { id: mensajeId, by: caller.uid, by_nombre: String(msg.by_nombre ?? caller.nombre ?? ""), texto: texto.slice(0, 160) },
   });
   return { ok: true };
 }
@@ -208,7 +209,9 @@ async function interpretarYHacer(
   const hoy = fechaAR();
   const ahora = `${DIAS[diaSemana(hoy)]} ${hoy} ${String(p.h).padStart(2, "0")}:${String(p.min).padStart(2, "0")}`;
   const queChat =
-    chat.tipo === "cliente" ? `grupo del cliente "${proj?.nombre ?? chat.nombre}" (equipo de Prodi + el cliente)` : chat.tipo === "equipo" ? "grupo interno del equipo de Prodi" : "chat privado";
+    chat.tipo === "prodi"
+      ? `chat personal de ${yo.nombre} con vos (no hace falta que escriba @prodi: todo lo que escribe es para vos)`
+      :     chat.tipo === "cliente" ? `grupo del cliente "${proj?.nombre ?? chat.nombre}" (equipo de Prodi + el cliente)` : chat.tipo === "equipo" ? "grupo interno del equipo de Prodi" : "chat privado";
 
   const prompt = `Sos Prodi, el asistente del chat interno de Prodi (agencia argentina de videos y pauta en redes). Te llaman escribiendo "@prodi".
 Ahora en Argentina: ${ahora}.

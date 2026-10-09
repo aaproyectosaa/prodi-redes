@@ -404,6 +404,8 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
           if (esContacto(c)) return (await companeros(c)).has(otro);
           return puedenSumarseSiContacto(c, otro);
         }
+        // Chat personal con Prodi: uno por persona del equipo, solo esa persona.
+        if (despues!.tipo === "prodi") return id === `prodi_${c.uid}` && (esTeam(c) || esFinanzas(c)) && mismoSet(lista(despues!.miembros), [c.uid]);
         // Grupo nuevo: quien lo crea queda como único admin; solo con gente que puede sumar.
         if (despues!.tipo === "grupo") {
           const miembros = lista(despues!.miembros);
