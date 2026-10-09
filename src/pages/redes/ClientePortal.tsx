@@ -70,6 +70,8 @@ export default function ClientePortal() {
   const verificado = useRef(false);
   const [guia, setGuia] = useState(false);
   const [pedirVideo, setPedirVideo] = useState(false);
+  // "Solo edición" desde Mi plan: el pedido arranca con "Yo mando el material".
+  const [soloEdicion, setSoloEdicion] = useState(false);
   const [vista, setVista] = useVista("cliente");
   const guiaMostrada = useRef(false);
   const [planAbierto, setPlanAbierto] = useState<string | null>(null);
@@ -234,7 +236,15 @@ export default function ClientePortal() {
         obligatorio={marcaObligatoria}
         pasoInicial={profile?.guia_cliente_at && marcaObligatoria ? 3 : 0}
       />
-      <PedirVideoDialog open={pedirVideo} onOpenChange={setPedirVideo} cliente={cliente} />
+      <PedirVideoDialog
+        open={pedirVideo}
+        onOpenChange={(v) => {
+          setPedirVideo(v);
+          if (!v) setSoloEdicion(false);
+        }}
+        cliente={cliente}
+        soloEdicion={soloEdicion}
+      />
       <PlanMesCliente proyectoId={cliente.id} mes={planAbierto} open={!!planAbierto} onOpenChange={(o) => !o && setPlanAbierto(null)} />
       {/* Las secciones se eligen desde el menú: sin pestañas repetidas. */}
       <Tabs value={tab} onValueChange={setTab}>
@@ -361,7 +371,13 @@ export default function ClientePortal() {
         </TabsContent>
 
         <TabsContent value="plan">
-          <MiPlan cliente={cliente} email={user?.email ?? undefined} onPedirVideo={() => setPedirVideo(true)} onPedirPieza={() => setPiezaOpen(true)} />
+          <MiPlan cliente={cliente} email={user?.email ?? undefined} onPedirVideo={() => setPedirVideo(true)}
+            onPedirSoloEdicion={() => {
+              setSoloEdicion(true);
+              setPedirVideo(true);
+            }}
+            onPedirPieza={() => setPiezaOpen(true)}
+          />
         </TabsContent>
 
         <TabsContent value="negocio" className="space-y-6">

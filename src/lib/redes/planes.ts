@@ -97,3 +97,7 @@ export function usoPlan(
 
 /** "hasta 1 min", "hasta 1,5 min" (o vacío si no está definido). */
 export const textoDuracion = (min: number | null | undefined) => (min ? `hasta ${String(min).replace(".", ",")} min` : "");
+
+/** Video extra "solo edición" (el cliente manda las tomas): 30% menos. Lo mismo en el servidor (api/pagos). */
+export const DESCUENTO_SOLO_EDICION = 0.3;
+export const precioSoloEdicion = (n: number) => Math.round(n * (1 - DESCUENTO_SOLO_EDICION));

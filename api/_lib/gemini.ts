@@ -23,7 +23,12 @@ async function call(model: string, payload: unknown): Promise<any> {
   });
   const json: any = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const msg = json?.error?.message ?? `Gemini respondió ${res.status}`;
+    const crudo = String(json?.error?.message ?? `Gemini respondió ${res.status}`);
+    // Lo más común: la clave es del plan gratis (o se pasó del límite). Que se entienda qué hacer.
+    const msg =
+      res.status === 429 || /quota|RESOURCE_EXHAUSTED|rate limit/i.test(crudo)
+        ? "Gemini: se terminó la cuota de la clave. Hay que activar la facturación del proyecto en aistudio.google.com (API keys → Configurar facturación) o esperar a que se renueve."
+        : crudo;
     throw new Error(`IA: ${msg}`);
   }
   return json;

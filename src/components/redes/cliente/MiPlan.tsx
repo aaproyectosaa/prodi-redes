@@ -10,7 +10,7 @@ import { CupoVideos } from "@/components/redes/cliente/CupoVideos";
 import { useRedes } from "@/contexts/redes-data-context";
 import { mesAR } from "@/lib/fecha";
 import { fechaCorta, formatARS, hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
-import { extraPorPlataforma, planDe, PLATAFORMAS_EXTRA, textoDuracion, usoPlan, type PlanEfectivo, type PlataformaExtra } from "@/lib/redes/planes";
+import { extraPorPlataforma, planDe, PLATAFORMAS_EXTRA, precioSoloEdicion, textoDuracion, usoPlan, type PlanEfectivo, type PlataformaExtra } from "@/lib/redes/planes";
 import { cupoPiezas, iniciarPago } from "@/lib/redes/piezas";
 import { DIA_PAGO_DESDE, DIA_VENCIMIENTO, diaPago, interesMora, nombrePeriodo, textoMora, textoPlazoPago, totalMensual, useFacturasCliente, type FacturaDoc } from "@/lib/redes/facturacion";
 import { DATOS_COBRO_DEFAULT } from "@/lib/redes/types";
@@ -35,11 +35,14 @@ export function MiPlan({
   cliente,
   email,
   onPedirVideo,
+  onPedirSoloEdicion,
   onPedirPieza,
 }: {
   cliente: Project;
   email?: string;
   onPedirVideo: () => void;
+  /** Pedir un video "solo edición" (el cliente sube las tomas, 30% menos). */
+  onPedirSoloEdicion?: () => void;
   onPedirPieza: () => void;
 }) {
   const { planes, videos, piezas, cobros, settings } = useRedes();
@@ -248,7 +251,7 @@ export function MiPlan({
       {/* 3. Cómo pagás y extras */}
       <div className="grid gap-4 md:grid-cols-2">
         <DebitoCliente cliente={cliente} monto={totalBoleta} comision={settings.comision_mp_pct} email={email} />
-        <ComprarExtras clienteId={cliente.id} plan={plan} />
+        <ComprarExtras clienteId={cliente.id} plan={plan} onSoloEdicion={onPedirSoloEdicion} />
       </div>
 
       {/* 4. Boletas */}
@@ -398,10 +401,13 @@ function Medidor({
   );
 }
 
-function ComprarExtras({ clienteId, plan }: { clienteId: string; plan: PlanEfectivo }) {
+function ComprarExtras({ clienteId, plan, onSoloEdicion }: { clienteId: string; plan: PlanEfectivo; onSoloEdicion?: () => void }) {
   const [cantidad, setCantidad] = useState(1);
   const [plataforma, setPlataforma] = useState<PlataformaExtra>("meta");
-  const precio = plan.precioExtra[plataforma];
+  // Con filmación (lo filmamos nosotros) o solo edición (el cliente sube las tomas: 30% menos).
+  const [modo, setModo] = useState<"completo" | "edicion">("completo");
+  const lleno = plan.precioExtra[plataforma];
+  const precio = modo === "edicion" ? precioSoloEdicion(lleno) : lleno;
   const [loading, setLoading] = useState(false);
   const mes = mesActual();
   const comprar = async () => {
@@ -418,6 +424,26 @@ function ComprarExtras({ clienteId, plan }: { clienteId: string; plan: PlanEfect
     <div className="rounded-2xl border bg-card p-5">
       <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">¿Necesitás más videos?</p>
       <p className="mt-1 text-sm text-muted-foreground">Para una promo o un lanzamiento, sumá videos a este mes.</p>
+      {onSoloEdicion && (
+        <div className="mt-3 grid grid-cols-2 gap-1.5 rounded-xl bg-muted/60 p-1">
+          {(
+            [
+              { v: "completo", t: "Con filmación", d: "Lo filmamos y editamos" },
+              { v: "edicion", t: "Solo edición", d: "Vos subís las tomas · 30% menos" },
+            ] as const
+          ).map((o) => (
+            <button
+              key={o.v}
+              type="button"
+              onClick={() => setModo(o.v)}
+              className={cn("rounded-lg px-2 py-1.5 text-center transition-all", modo === o.v ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}
+            >
+              <span className="block text-xs font-semibold">{o.t}</span>
+              <span className={cn("block text-[10px]", o.v === "edicion" && "text-emerald-600 dark:text-emerald-400")}>{o.d}</span>
+            </button>
+          ))}
+        </div>
+      )}
       {extraPorPlataforma(plan) && (
         <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
           {PLATAFORMAS_EXTRA.map((p) => (
@@ -438,6 +464,10 @@ function ComprarExtras({ clienteId, plan }: { clienteId: string; plan: PlanEfect
       {precio > 0 ? (
         <>
           <div className="mt-4 flex items-center gap-3">
+            {modo === "edicion" ? (
+              <p className="text-xs text-muted-foreground">Pedís el video, subís las tomas desde el celular y lo editamos nosotros.</p>
+            ) : (
+              <>
             <Button size="icon" variant="outline" onClick={() => setCantidad((c) => Math.max(1, c - 1))} aria-label="Uno menos">
               <Minus className="h-4 w-4" />
             </Button>
@@ -445,15 +475,24 @@ function ComprarExtras({ clienteId, plan }: { clienteId: string; plan: PlanEfect
             <Button size="icon" variant="outline" onClick={() => setCantidad((c) => Math.min(10, c + 1))} aria-label="Uno más">
               <Plus className="h-4 w-4" />
             </Button>
+              </>
+            )}
             <span className="ml-auto text-right">
-              <span className="block text-xl font-bold">{formatARS(precio * cantidad)}</span>
+              {modo === "edicion" && <span className="block text-xs text-muted-foreground line-through">{formatARS(lleno)}</span>}
+              <span className="block text-xl font-bold">{formatARS(precio * (modo === "edicion" ? 1 : cantidad))}</span>
               <span className="text-xs text-muted-foreground">{formatARS(precio)} c/u{plan.duracionExtra[plataforma] ? ` · ${textoDuracion(plan.duracionExtra[plataforma])}` : ""}</span>
             </span>
           </div>
-          <Button className="mt-4 w-full" onClick={comprar} disabled={loading}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Pagar con Mercado Pago
-          </Button>
+          {modo === "edicion" && onSoloEdicion ? (
+            <Button className="mt-4 w-full" onClick={onSoloEdicion}>
+              Pedir el video y subir las tomas
+            </Button>
+          ) : (
+            <Button className="mt-4 w-full" onClick={comprar} disabled={loading}>
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Pagar con Mercado Pago
+            </Button>
+          )}
         </>
       ) : (
         <p className="mt-4 text-sm">Escribinos y te pasamos el precio.</p>

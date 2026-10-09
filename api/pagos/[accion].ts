@@ -675,7 +675,10 @@ async function pedirVideo(req: VercelRequest) {
   }
   // El video extra se cobra según para dónde es (Instagram/Facebook, TikTok o YouTube).
   const plataforma = plataformaDe(b.plataforma);
-  const precioVideo = await precioExtra(proj, plataforma);
+  // Solo edición (el cliente manda las tomas o elige material ya cargado): 30% menos.
+  const soloEdicion = tipoMaterial === "existente" || filma;
+  const precioBase = await precioExtra(proj, plataforma);
+  const precioVideo = soloEdicion ? Math.round(precioBase * 0.7) : precioBase;
   incluidos = incluidos || 0;
   const team = (proj.team_roles ?? {}) as Record<string, string[]>;
   const base = appUrl(req);
@@ -719,7 +722,7 @@ async function pedirVideo(req: VercelRequest) {
   // Se pasa del plan: se cobra como video extra.
   if (!(precioVideo > 0)) throw new HttpError(409, "Tu plan no tiene precio de video extra. Escribinos y lo vemos.");
   const [y, m] = mes.split("-").map(Number);
-  const concepto = `Video extra${plataforma === "meta" ? "" : ` (${PLATAFORMA_NOMBRE[plataforma]})`} · ${MESES[m - 1]} ${y}: ${titulo}`.slice(0, 120);
+  const concepto = `Video extra${soloEdicion ? " solo edición" : ""}${plataforma === "meta" ? "" : ` (${PLATAFORMA_NOMBRE[plataforma]})`} · ${MESES[m - 1]} ${y}: ${titulo}`.slice(0, 120);
   const cobroRef = db.collection("cobros").doc();
   await cobroRef.set({
     proyecto_id: b.proyecto_id,

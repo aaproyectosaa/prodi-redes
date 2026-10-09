@@ -36,7 +36,7 @@ import { callApi } from "@/lib/redes/api";
 import { asset } from "@/lib/asset";
 import { formatearFecha } from "@/lib/fecha";
 import { formatARS, hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
-import { extraPorPlataforma, planDe, PLATAFORMAS_EXTRA, textoDuracion, usoPlan, type PlataformaExtra } from "@/lib/redes/planes";
+import { extraPorPlataforma, planDe, PLATAFORMAS_EXTRA, precioSoloEdicion, textoDuracion, usoPlan, type PlataformaExtra } from "@/lib/redes/planes";
 import { quienFilma, soloPauta } from "@/lib/redes/etapas";
 import type { Video } from "@/lib/redes/types";
 import { useOpenVideo } from "@/components/redes/VideoCard";
@@ -91,7 +91,18 @@ interface GrupoMaterial {
  * pantalla completa con la barra de botones abajo (sigue arriba del teclado); en la compu, una ventana.
  * Si entra en su plan del mes se crea al toque; si se pasa, se le cotiza el video extra y lo paga con Mercado Pago.
  */
-export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolean; onOpenChange: (v: boolean) => void; cliente: Project }) {
+export function PedirVideoDialog({
+  open,
+  onOpenChange,
+  cliente,
+  soloEdicion: arrancaSoloEdicion = false,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  cliente: Project;
+  /** Viene de "Solo edición": arranca con "Yo mando el material" elegido. */
+  soloEdicion?: boolean;
+}) {
   const { planes, videos } = useRedes();
   const [paso, setPaso] = useState<Paso>("que");
   const [atras, setAtras] = useState(false);
@@ -161,7 +172,7 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
     setTitulo("");
     setIdea("");
     setObjetivo("");
-    setMaterial(null);
+    setMaterial(arrancaSoloEdicion ? "cliente" : null);
     setArchivos([]);
     setEligiendo(false);
     setPreferencia(null);
@@ -171,7 +182,7 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
     setAviso(null);
     setListo(false);
     setVideoId(null);
-  }, [open]);
+  }, [open, arrancaSoloEdicion]);
 
   // Cada paso arranca arriba.
   useEffect(() => {
@@ -190,7 +201,9 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
   }, [open]);
 
   const plan = planDe(cliente, planes);
-  const precioExtra = plan.precioExtra[plataforma];
+  // Solo edición (manda las tomas o elige material ya cargado): 30% menos.
+  const soloEdicion = materialFinal !== "nueva";
+  const precioExtra = soloEdicion ? precioSoloEdicion(plan.precioExtra[plataforma]) : plan.precioExtra[plataforma];
   const hoy = hoyISO();
   const limite = new Date(`${sumarMeses(hoy, 3)}T12:00:00`);
   // "Esta semana": hasta el domingo.
@@ -650,6 +663,7 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
                                 <p className="font-semibold">Este video es extra: {formatARS(precioExtra)}{plan.duracionExtra[plataforma] ? ` · ${textoDuracion(plan.duracionExtra[plataforma])}` : ""}</p>
                                 <p className="text-sm text-muted-foreground">
                                   Ya usaste los {uso.cupo} videos de {nombreMes(mes)}. Lo pagás con Mercado Pago.
+                                  {soloEdicion && <span className="mt-1 block font-medium text-emerald-600 dark:text-emerald-400">Solo edición (vos mandás las tomas): 30% menos.</span>}
                                 </p>
                               </div>
                             </div>
@@ -668,7 +682,7 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
                                       )}
                                     >
                                       <span className="block">{p.label}</span>
-                                      <span className="block tabular-nums text-muted-foreground">{formatARS(plan.precioExtra[p.v])}</span>
+                                      <span className="block tabular-nums text-muted-foreground">{formatARS(soloEdicion ? precioSoloEdicion(plan.precioExtra[p.v]) : plan.precioExtra[p.v])}</span>
                                       {plan.duracionExtra[p.v] ? <span className="block text-[10px] text-muted-foreground">{textoDuracion(plan.duracionExtra[p.v])}</span> : null}
                                     </button>
                                   ))}
