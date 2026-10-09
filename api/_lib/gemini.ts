@@ -11,7 +11,9 @@ function key(): string {
 }
 
 export const TEXT_MODEL = () => process.env.GEMINI_TEXT_MODEL || "gemini-2.5-flash";
-export const IMAGE_MODEL = () => process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image";
+/** Imágenes: Nano Banana Pro (el más avanzado; escribe bien el texto dentro de la pieza). Si no está disponible, los de respaldo. */
+export const IMAGE_MODEL = () => process.env.GEMINI_IMAGE_MODEL || "gemini-3-pro-image";
+const IMAGE_RESPALDO = ["gemini-nano-banana-2.1", "gemini-2.5-flash-image"];
 
 async function call(model: string, payload: unknown): Promise<any> {
   const res = await fetch(`${BASE}/${model}:generateContent`, {
@@ -71,7 +73,7 @@ export async function generarImagen(
   /** Imágenes de referencia (logo, piezas de la marca). */
   imagenes: { data: Buffer; mime: string }[] = []
 ): Promise<{ data: Buffer; mime: string }> {
-  const json = await call(IMAGE_MODEL(), {
+  const payload = {
     contents: [
       {
         role: "user",
@@ -82,10 +84,23 @@ export async function generarImagen(
       },
     ],
     generationConfig: {
-      responseModalities: ["IMAGE"],
+      responseModalities: ["TEXT", "IMAGE"],
       imageConfig: { aspectRatio },
     },
-  });
+  };
+  // Si el modelo elegido no existe para esta clave (o lo dieron de baja), prueba con los de respaldo.
+  let json: any;
+  const modelos = [IMAGE_MODEL(), ...IMAGE_RESPALDO.filter((m) => m !== IMAGE_MODEL())];
+  for (const [k, m] of modelos.entries()) {
+    try {
+      json = await call(m, payload);
+      break;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (k === modelos.length - 1 || !/not found|is not supported|404|NOT_FOUND/i.test(msg)) throw err;
+      console.warn(`[gemini] ${m} no disponible, pruebo ${modelos[k + 1]}`);
+    }
+  }
   const parts: any[] = json?.candidates?.[0]?.content?.parts ?? [];
   const img = parts.find((p) => p.inlineData?.data || p.inline_data?.data);
   const inline = img?.inlineData ?? img?.inline_data;
