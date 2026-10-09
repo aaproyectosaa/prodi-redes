@@ -14,6 +14,7 @@ import {
   Undo2,
   Upload,
   Maximize2,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,7 @@ import { cn } from "@/lib/utils";
 import type { PiezaIA } from "@/lib/redes/types";
 import { HablarConCliente } from "@/components/redes/HablarConCliente";
 import { EditorPieza } from "@/components/redes/EditorPieza";
+import { NuevaPiezaEquipo } from "@/components/redes/NuevaPiezaEquipo";
 
 const TIPOS_CAL: Record<string, TipoCal> = {
   entregar: { label: "Para entregar", icon: Flag, chip: "bg-amber-500/12 text-amber-700 dark:text-amber-300 border-amber-500/30", dot: "bg-amber-500" },
@@ -80,6 +82,9 @@ export default function Piezas() {
   const { role } = useUserProfileContext();
   const [params, setParams] = useSearchParams();
   const [abierta, setAbierta] = useState<string | null>(null);
+  // "Nueva pieza" la cargan vos y la productora (con las fotos para usar).
+  const [nueva, setNueva] = useState(false);
+  const cargaPiezas = role === "admin" || role === "productor";
   const pieza = piezas.find((p) => p.id === abierta) ?? null;
 
   // Link de un aviso: /piezas?pieza=abc
@@ -123,10 +128,23 @@ export default function Piezas() {
       title="Piezas gráficas"
       subtitle="Posteos, historias, afiches, carteles y banners que piden los clientes. La IA te ayuda; vos decidís qué sale."
       className="max-w-none"
-      actions={piezas.length > 0 ? <SelectorVista vista={vista} onChange={setVista} /> : undefined}
+      actions={
+        <>
+          {piezas.length > 0 && <SelectorVista vista={vista} onChange={setVista} />}
+          {cargaPiezas && (
+            <Button onClick={() => setNueva(true)} className="bg-gradient-to-r from-[#6F40FC] to-[#E040A0] text-white shadow-md transition-transform hover:-translate-y-0.5 hover:opacity-95">
+              <Plus className="mr-2 h-4 w-4" /> Nueva pieza
+            </Button>
+          )}
+        </>
+      }
     >
       {piezas.length === 0 ? (
-        <EmptyState icon={Sparkles} title="Todavía no hay pedidos" description="Los clientes piden piezas desde su panel y te llegan acá." />
+        <EmptyState
+          icon={Sparkles}
+          title="Todavía no hay pedidos"
+          description={cargaPiezas ? "Los clientes las piden desde su panel, o cargala vos con «Nueva pieza»." : "Los clientes piden piezas desde su panel y te llegan acá."}
+        />
       ) : vista === "calendario" ? (
         <CalendarioEventos eventos={eventosCal} tipos={TIPOS_CAL} vacio="No hay piezas para entregar ni entregadas este mes." />
       ) : (
@@ -192,6 +210,7 @@ export default function Piezas() {
       )}
 
       <PiezaTrabajo pieza={pieza} onClose={() => setAbierta(null)} />
+      <NuevaPiezaEquipo open={nueva} onOpenChange={setNueva} onCreada={(id) => setAbierta(id)} />
     </PageShell>
   );
 }
@@ -249,6 +268,8 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
   const [sel, setSel] = useState<string | null>(null);
   // Versión abierta en grande (para verla bien y descargarla).
   const [ver, setVer] = useState<ReturnType<typeof versionesDe>[number] | null>(null);
+  // Foto para usar abierta en grande.
+  const [verFoto, setVerFoto] = useState<{ id: string; drive_file_id: string; name: string; mime_type?: string | null } | null>(null);
   const [mandando, setMandando] = useState(false);
   const [rechazo, setRechazo] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -333,7 +354,7 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
             <EstadoPiezaBadge estado={pieza.estado} vista="equipo" />
             <span>
               {info.medida} ·{" "}
-              {pieza._origen ? "del sistema anterior" : pieza.incluida ? "incluida en el plan" : `pagada ${formatARS(pieza.precio)}`} · pedida{" "}
+              {pieza._origen ? "del sistema anterior" : pieza.incluida ? "incluida en el plan" : pieza.precio ? `pagada ${formatARS(pieza.precio)}` : "sin cargo"} · pedida{" "}
               {fechaHora(pieza.created_at)}
             </span>
           </DialogDescription>
@@ -353,6 +374,26 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                   onAbrir={onClose}
                   className="mt-2 h-8 bg-background/60 text-xs"
                 />
+              </div>
+            )}
+            {(pieza.attachments_crudo?.length ?? 0) > 0 && (
+              <div className="space-y-2 rounded-xl border border-primary/30 bg-primary/[0.04] p-3">
+                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary">
+                  <ImageIcon className="h-3.5 w-3.5" /> Fotos para usar ({pieza.attachments_crudo!.length})
+                </p>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {pieza.attachments_crudo!.map((f) => (
+                    <button
+                      key={f.drive_file_id}
+                      type="button"
+                      onClick={() => setVerFoto({ id: f.drive_file_id, drive_file_id: f.drive_file_id, name: f.name, mime_type: f.mime_type })}
+                      className="aspect-square overflow-hidden rounded-lg border bg-muted transition-transform hover:scale-[1.03]"
+                    >
+                      <VersionImg v={{ drive_file_id: f.drive_file_id, name: f.name }} className="object-cover" />
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-muted-foreground">La IA las usa al generar. Tocá una para verla grande o descargarla.</p>
               </div>
             )}
             <div className="space-y-1.5 rounded-xl border p-3">
@@ -547,6 +588,7 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
             onClose();
           }}
         />
+        <VerVersion v={verFoto} titulo="Foto para usar" onClose={() => setVerFoto(null)} />
         {pieza && ver && ver.mime_type !== "application/pdf" && !["cancelada", "rechazada", "pendiente_pago"].includes(pieza.estado) ? (
           <EditorPieza v={ver} titulo={`${pieza.producto || "Pieza"} · Versión ${versiones.findIndex((x) => x.id === ver.id) + 1}`} piezaId={pieza.id} onClose={() => setVer(null)} />
         ) : (

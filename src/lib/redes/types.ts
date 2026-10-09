@@ -288,6 +288,8 @@ export interface PiezaIA {
   id: string;
   proyecto_id: string;
   solicitado_por: string;
+  /** Fotos para usar que cargó el equipo con el pedido (producto, local, persona). */
+  attachments_crudo?: import("@/integrations/firebase/types").DriveAttachmentRef[];
   /** Qué quiere el cliente, con sus palabras. */
   pedido: string;
   texto_en_pieza: string | null;

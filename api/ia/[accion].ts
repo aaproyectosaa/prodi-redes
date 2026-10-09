@@ -165,13 +165,27 @@ Usá los colores de la marca si están indicados. No inventes logos de otras mar
     imagenes.push(logo);
     guia += "\nLa primera imagen adjunta es el LOGO de la marca: incluilo tal cual, sin redibujarlo, deformarlo ni cambiarle los colores, en un lugar visible y prolijo.";
   }
+  // Fotos que cargó el equipo con el pedido (el producto, el local, la persona): se usan tal cual en la pieza.
+  const fotos = (
+    await Promise.all(
+      ((pz.attachments_crudo ?? []) as { drive_file_id: string; mime_type?: string }[])
+        .filter((f) => !f.mime_type || f.mime_type.startsWith("image/"))
+        .slice(0, 4)
+        .map((f) => descargarDrive(f.drive_file_id, 12 * 1024 * 1024).catch(() => null))
+    )
+  ).filter(Boolean) as { data: Buffer; mime: string }[];
+  if (fotos.length) {
+    const desde = imagenes.length + 1;
+    imagenes.push(...fotos);
+    guia += `\nLas imágenes ${desde}${fotos.length > 1 ? ` a ${desde + fotos.length - 1}` : ""} son FOTOS REALES para usar en la pieza (producto, local o persona): usalas como protagonistas, sin cambiarlas ni inventar otro producto. Podés recortarlas, iluminarlas y armar el diseño alrededor.`;
+  }
   const refs = await Promise.all(
     (archivos.referencias ?? []).slice(0, 3).map((r) => descargarDrive(r.drive_file_id).catch(() => null))
   );
   const refsOk = refs.filter(Boolean) as { data: Buffer; mime: string }[];
   if (refsOk.length) {
     imagenes.push(...refsOk);
-    guia += `\n${imagenes.length > refsOk.length ? "Las demás imágenes" : "Las imágenes adjuntas"} son piezas anteriores de la marca: seguí su estilo (colores, tipografías, tipo de fotos y composición) sin copiarlas.`;
+    guia += `\n${imagenes.length > refsOk.length ? (refsOk.length === 1 ? "La última imagen es una pieza anterior" : `Las últimas ${refsOk.length} imágenes son piezas anteriores`) : "Las imágenes adjuntas son piezas anteriores"} de la marca: seguí su estilo (colores, tipografías, tipo de fotos y composición) sin copiarlas.`;
   }
 
   // Opus hace de director de arte: mira la marca, el logo, las piezas anteriores y el pedido, y le escribe a

@@ -199,3 +199,17 @@ export async function cancelarPieza(pieza: PiezaIA) {
   assertEditable();
   await updateDoc(doc(db, PIEZAS, pieza.id), { estado: "cancelada", updated_at: now() });
 }
+
+export type RespuestaPiezaEquipo =
+  | { estado: "creada"; pieza_id: string }
+  | { estado: "pendiente_cliente"; pieza_id: string; monto: number }
+  | { estado: "sin_cupo"; incluidas: number };
+
+/**
+ * El equipo (productora o admin) carga una pieza para un cliente. Si ya no le quedan piezas del plan,
+ * el servidor devuelve "sin_cupo" y se elige: sin cargo o que la pague el cliente.
+ */
+export function pedirPiezaEquipo(proyectoId: string, datos: DatosPedidoPieza, fueraPlan?: "sin_cargo" | "cobrar") {
+  assertEditable();
+  return callApi<RespuestaPiezaEquipo>("/api/pagos/pedir-pieza", { proyecto_id: proyectoId, ...datos, ...(fueraPlan ? { fuera_plan: fueraPlan } : {}) });
+}

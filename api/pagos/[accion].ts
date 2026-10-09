@@ -425,6 +425,50 @@ async function pedirPieza(req: VercelRequest) {
     data: () => piezaDoc(pid, caller.uid, mes, pedido, true, 0),
   });
 
+  // Cargada por el equipo (productora o admin) y ya no le quedan piezas del plan: se elige en el momento.
+  const delEquipo = caller.role === "admin" || caller.role === "productor";
+  if (!incluida && delEquipo) {
+    const fuera = String(b.fuera_plan ?? "");
+    if (fuera !== "sin_cargo" && fuera !== "cobrar") return { estado: "sin_cupo", incluidas };
+    if (fuera === "sin_cargo") {
+      const d = piezaDoc(pid, caller.uid, mes, pedido, false, 0);
+      await ref.set({
+        ...d,
+        estado: "pagada",
+        historial: [{ at: d.created_at, by: caller.uid, accion: "Cargada por el equipo (sin cargo, fuera del plan)", nota: null }],
+      });
+      await enviarAviso(
+        {
+          destinatarios: await disenadorasDe(pid),
+          titulo: "Nueva pieza para diseñar",
+          cuerpo: `${proj.nombre ?? "Cliente"} · ${FORMATOS_PIEZA[pedido.formato].label} · la cargó el equipo`,
+          link: `/piezas?pieza=${ref.id}`,
+          clave: `pieza_nueva:${ref.id}`,
+          proyectoId: pid,
+        },
+        base
+      );
+      return { estado: "creada", pieza_id: ref.id };
+    }
+    // "Que la pague el cliente": queda pendiente de pago y le avisamos para que la pague desde su panel.
+    const settings = (await db.collection("app_settings").doc("redes").get()).data() ?? {};
+    const monto = precioPieza(settings, pedido.formato);
+    if (!(monto > 0)) throw new HttpError(409, "El precio de las piezas no está configurado (Ajustes).");
+    await ref.set(piezaDoc(pid, caller.uid, mes, pedido, false, monto));
+    await enviarAviso(
+      {
+        destinatarios: await destinatariosDe(pid, ["cliente"], false),
+        titulo: "Te preparamos una pieza",
+        cuerpo: `${FORMATOS_PIEZA[pedido.formato].label} · se paga aparte del plan. Pagala desde tu panel y la empezamos.`,
+        link: `/cliente?tab=piezas&pieza=${ref.id}`,
+        clave: `pieza_cobrar:${ref.id}`,
+        proyectoId: pid,
+      },
+      base
+    ).catch((err) => console.warn("[pieza] aviso al cliente", err));
+    return { estado: "pendiente_cliente", pieza_id: ref.id, monto };
+  }
+
   if (incluida) {
     await enviarAviso(
       {
