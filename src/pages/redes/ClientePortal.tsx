@@ -29,6 +29,7 @@ import { ProximoPaso } from "@/components/redes/cliente/ProximoPaso";
 import { CaminoVideos } from "@/components/redes/cliente/CaminoVideos";
 import { GuiaCliente } from "@/components/redes/cliente/GuiaCliente";
 import { PedirVideoDialog } from "@/components/redes/cliente/PedirVideoDialog";
+import { DatosMarcaCliente, TarjetaPerfil } from "@/components/redes/cliente/PerfilCompleto";
 import { PlanMesCliente } from "@/components/redes/cliente/PlanMesCliente";
 import { usePlanMes } from "@/lib/redes/planMes";
 import { MiPlan } from "@/components/redes/cliente/MiPlan";
@@ -250,6 +251,7 @@ export default function ClientePortal() {
       <Tabs value={tab} onValueChange={setTab}>
 
         <TabsContent value="inicio" className="space-y-8">
+          <TarjetaPerfil cliente={cliente} onCompletar={() => setTab("negocio")} />
           <ProximoPaso pasos={pasos} onPedir={() => setPedirVideo(true)} onIdeas={() => planPend && setPlanAbierto(planPend.mes)} />
           <CupoVideos uso={uso} mes={mes} precioExtra={plan.precioVideoExtra} onPedir={() => setPedirVideo(true)} />
           {/* Si hay algo más urgente arriba, las ideas del mes quedan a un toque igual. */}
@@ -381,6 +383,8 @@ export default function ClientePortal() {
         </TabsContent>
 
         <TabsContent value="negocio" className="space-y-6">
+          <TarjetaPerfil cliente={cliente} onCompletar={() => document.getElementById("datos-marca")?.scrollIntoView({ behavior: "smooth", block: "start" })} />
+          <DatosMarcaCliente cliente={cliente} />
           <div className="rounded-2xl border bg-card p-5">
             <p className="font-semibold">Tu marca</p>
             <p className="mb-4 text-sm text-muted-foreground">Tu logo y tus colores: con esto salen las piezas y los videos con tu identidad.</p>

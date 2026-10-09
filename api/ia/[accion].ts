@@ -9,7 +9,7 @@
 // POST /api/ia/marca-avatar  { proyecto_id, de, img } → foto de perfil (JPEG chico) armada en el navegador con el logo
 // POST /api/ia/marca-variante { proyecto_id, drive_file_id, etiqueta?, principal? } → renombra o la hace el logo principal
 // POST /api/ia/marca-colores { proyecto_id, paleta: ["#rrggbb", …], info?: { "#rrggbb": { nombre, uso } } }  (también el cliente)
-// POST /api/ia/marca-info   { proyecto_id, rubro, descripcion, publico?, colores?, instagram? }  (también el cliente)
+// POST /api/ia/marca-info   { proyecto_id, rubro, descripcion, publico?, colores?, instagram?, tono? }  (también el cliente)
 // Plan del mes con IA (ver api/_lib/plan-mes.ts):
 // POST /api/ia/plan-mes      { proyecto_id, mes, idea_id?, pista? }  → arma el borrador (o rehace una idea)
 // POST /api/ia/plan-enviar   { proyecto_id, mes, ideas, nota_equipo } → producción lo revisó: va al cliente
@@ -599,7 +599,7 @@ async function marcaVariante(req: VercelRequest) {
 
 async function marcaInfo(req: VercelRequest) {
   const caller = await requireCaller(req, ROLES_MARCA);
-  const b = body<{ proyecto_id?: string; rubro?: string; descripcion?: string; publico?: string; colores?: string; instagram?: string }>(req);
+  const b = body<{ proyecto_id?: string; rubro?: string; descripcion?: string; publico?: string; colores?: string; instagram?: string; tono?: string }>(req);
   if (!b.proyecto_id) throw new HttpError(400, "Faltan datos");
   await assertProjectAccess(caller, b.proyecto_id);
   const t = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
@@ -608,6 +608,7 @@ async function marcaInfo(req: VercelRequest) {
   if (rubro.length < 3 || descripcion.length < 10) throw new HttpError(400, "Contanos a qué se dedica tu negocio y qué lo hace distinto");
   const datos: Record<string, string> = { "marca.rubro": rubro, "marca.descripcion": descripcion };
   if (t(b.publico, 200)) datos["marca.publico"] = t(b.publico, 200);
+  if (t(b.tono, 200)) datos["marca.tono"] = t(b.tono, 200);
   if (t(b.colores, 120)) datos["marca.colores"] = t(b.colores, 120);
   if (t(b.instagram, 60)) datos["redes.instagram"] = t(b.instagram, 60);
   await adminDb().collection("projects").doc(b.proyecto_id).update(datos);

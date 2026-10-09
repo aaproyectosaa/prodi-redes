@@ -20,6 +20,8 @@ import { BotonInstalarChat } from "@/components/InstalarChat";
 import { BotonOcultarMontos } from "@/components/OcultarMontos";
 import type { Profile, UserRole } from "@/integrations/firebase/types";
 import { TituloSeccion, useSeccionesPlegables } from "@/components/SeccionNav";
+import { useRedes } from "@/contexts/redes-data-context";
+import { AnilloPerfilMenu } from "@/components/redes/cliente/PerfilCompleto";
 
 const STORAGE_KEY = "sidebar-collapsed";
 
@@ -41,6 +43,8 @@ interface AppSidebarProps {
 
 export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
   const navigate = useNavigate();
+  // Cliente: su negocio, para el anillo de "perfil completo".
+  const { clientes } = useRedes();
   const location = useLocation();
   const { theme, setTheme } = useTheme();
   const { unreadCount } = useInAppNotifications(profile?.id);
@@ -228,6 +232,7 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
               <RoleBadge label={roleLabel} />
             </div>
           )}
+          {!collapsed && role === "cliente" && <AnilloPerfilMenu cliente={clientes[0]} />}
         </button>
         <Button
           variant="ghost"

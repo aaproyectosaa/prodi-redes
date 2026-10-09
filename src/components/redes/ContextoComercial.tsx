@@ -1,3 +1,4 @@
+import { refrescarPerfilCliente } from "@/components/redes/cliente/PerfilCompleto";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarRange, Loader2, Package, Plus, Star, Target, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -69,7 +70,10 @@ export function ContextoComercialEditor({
     setBusy(true);
     try {
       const r = await guardarComercial(proyectoId, c);
-      if (cliente) setGuardado(r.comercial ?? c);
+      if (cliente) {
+        setGuardado(r.comercial ?? c);
+        refrescarPerfilCliente(proyectoId);
+      }
       setDirty(false);
       toast.success(cliente ? "¡Gracias! Con esto armamos tus videos y piezas" : "Listo: la IA ya lo tiene en cuenta");
     } catch (e) {

@@ -19,6 +19,8 @@ import { VerComoBoton, VerComoDialog } from "@/components/redes/VerComo";
 import { BotonInstalar } from "@/components/InstalarApp";
 import { BotonInstalarChat } from "@/components/InstalarChat";
 import { BotonOcultarMontos } from "@/components/OcultarMontos";
+import { useRedes } from "@/contexts/redes-data-context";
+import { AnilloPerfilMenu } from "@/components/redes/cliente/PerfilCompleto";
 import type { Profile, UserRole } from "@/integrations/firebase/types";
 import { TituloSeccion, useSeccionesPlegables } from "@/components/SeccionNav";
 import { esCampoDeTexto } from "@/hooks/use-alto-visible";
@@ -30,6 +32,7 @@ interface Props {
 
 /** Encabezado del celular: logo, avisos y menú completo. */
 export const MobileAppHeader = ({ profile, role }: Props) => {
+  const { clientes } = useRedes();
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, setTheme } = useTheme();
@@ -98,6 +101,7 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
                 <p className="truncate font-semibold">{profile?.nombre ?? "Mi perfil"}</p>
                 <RoleBadge label={getRoleInfo(role).label} />
               </div>
+              {role === "cliente" && <AnilloPerfilMenu cliente={clientes[0]} />}
             </button>
           </SheetHeader>
           <nav className="flex-1 space-y-3 overflow-y-auto p-3">
