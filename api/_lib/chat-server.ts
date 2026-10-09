@@ -34,7 +34,7 @@ export async function publicarEnChat(chatId: string, msg: Data, id?: string): Pr
 export async function mensajeProdi(
   chatId: string,
   texto: string,
-  extra: { link?: string | null; link_texto?: string | null; responde_a?: string | null; reunion_id?: string | null; tarea_id?: string | null } = {}
+  extra: { link?: string | null; link_texto?: string | null; responde_a?: { id: string; by: string; by_nombre: string; texto: string } | null; reunion_id?: string | null; tarea_id?: string | null } = {}
 ) {
   return publicarEnChat(chatId, {
     texto: texto.slice(0, 1500),

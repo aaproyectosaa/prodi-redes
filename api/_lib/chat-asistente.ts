@@ -11,11 +11,12 @@ import { HttpError, type Caller } from "./http";
 import { generarJSON } from "./ia";
 import { enviarAviso } from "./notify";
 import { fechaAR, partesAR, sumarDias } from "./fecha";
-import { chatDeMiembro, mensajeProdi, PRODI_ID } from "./chat-server";
+import { chatDeMiembro, mensajeProdi, PRODI_ID, publicarEnChat } from "./chat-server";
 import { guardarNotasChat, limpiarHecho, normalizar } from "./chat-memoria";
 import { crearTarea } from "./tareas";
 import { sincronizarCalendario } from "./calendario";
 import { marcaTexto } from "./marca";
+import { clientesNombrados, contextoSistema, type Proyecto } from "./chat-contexto";
 
 export const MENCION_PRODI = /(^|[\s(])@prodi\b/i;
 const POR_MINUTO = 4;
@@ -39,6 +40,7 @@ interface AccionIA {
   personas?: string[];
   vence?: string;
   texto?: string;
+  cliente?: string;
 }
 
 const ESQUEMA = {
@@ -49,7 +51,7 @@ const ESQUEMA = {
       items: {
         type: "OBJECT",
         properties: {
-          tipo: { type: "STRING", enum: ["crear_reunion", "crear_tarea", "recordar", "responder", "preguntar"] },
+          tipo: { type: "STRING", enum: ["crear_reunion", "crear_tarea", "recordar", "mandar_logo", "responder", "preguntar"] },
           titulo: { type: "STRING" },
           fecha: { type: "STRING" },
           hora: { type: "STRING" },
@@ -57,6 +59,7 @@ const ESQUEMA = {
           personas: { type: "ARRAY", items: { type: "STRING" } },
           vence: { type: "STRING" },
           texto: { type: "STRING" },
+          cliente: { type: "STRING" },
         },
         required: ["tipo"],
       },
@@ -170,7 +173,7 @@ export async function atenderMencion(caller: Caller, chatId: unknown, mensajeId:
     link_texto: conLink?.link_texto ?? null,
     reunion_id: resultados.find((r) => r.reunion_id)?.reunion_id ?? null,
     tarea_id: resultados.find((r) => r.tarea_id)?.tarea_id ?? null,
-    responde_a: mensajeId,
+    responde_a: { id: mensajeId, by: caller.uid, by_nombre: String(msg.by_nombre ?? caller.nombre ?? ""), texto: texto.slice(0, 160) },
   });
   return { ok: true };
 }
@@ -187,6 +190,11 @@ async function interpretarYHacer(
   const yo: Persona = personas.find((p) => p.id === caller.uid) ?? { id: caller.uid, nombre: caller.nombre || "vos", role: caller.role };
   const proj = typeof chat.proyecto_id === "string" ? (await db.collection("projects").doc(chat.proyecto_id).get()).data() ?? null : null;
   const nombres = (chat.nombres ?? {}) as Record<string, string>;
+  // El equipo ve todo el sistema (clientes, videos, tareas, marcas); la plata solo administración.
+  const esTeam = TEAM.includes(caller.role);
+  const ctx = esTeam
+    ? await contextoSistema({ finanzas: caller.role === "admin" || caller.role === "administracion", texto, proyectoChat: typeof chat.proyecto_id === "string" ? chat.proyecto_id : null })
+    : null;
 
   const prev = await db.collection(`chats/${cid}/mensajes`).orderBy("at", "desc").limit(16).get();
   const historial = prev.docs
@@ -205,7 +213,7 @@ async function interpretarYHacer(
   const prompt = `Sos Prodi, el asistente del chat interno de Prodi (agencia argentina de videos y pauta en redes). Te llaman escribiendo "@prodi".
 Ahora en Argentina: ${ahora}.
 Chat: ${queChat}. Te escribe: ${yo.nombre}.
-${chat.tipo === "cliente" && proj ? `\nIdentidad de marca del cliente (para contestar sobre logos, colores, tipografías y reglas de uso):\n${marcaTexto(proj)}\n` : ""}
+${ctx ? `${ctx.texto}\n` : ""}${!ctx && chat.tipo === "cliente" && proj ? `\nIdentidad de marca del cliente (para contestar sobre logos, colores, tipografías y reglas de uso):\n${marcaTexto(proj)}\n` : ""}
 Personas que se pueden sumar (nombre completo · rol):
 ${personas.map((x) => `- ${x.nombre} · ${x.role}`).join("\n")}
 
@@ -217,8 +225,10 @@ Pedido: ${texto}
 Devolvé las acciones (máximo 3):
 - crear_reunion: titulo corto (ej. "Reunión con Ariel y Pato"); fecha YYYY-MM-DD (si no dice el día, hoy; calculá "mañana", "el viernes", etc. a partir de ahora); hora HH:MM en 24 h ("5 pm" = 17:00; si no dice la hora, no la pongas); duracion_min (60 si no dice); personas: los nombres de la lista tal cual (si usan un apodo como "Pato", poné el nombre de la lista que le corresponde; si no está, ponelo como lo escribieron). No incluyas a ${yo.nombre}: ya va.
 - crear_tarea: cuando pide recordarle algo a alguien o dejar una tarea ("recordale a Lucía que mande el guion el viernes"). titulo: la tarea corta en infinitivo ("Mandar el guion"); personas: a quién se le asigna (vacío si es para quien escribe); vence YYYY-MM-DD si dice cuándo (si no, vacío).
+- mandar_logo: cuando pide el logo (o los logos) de un cliente para mandarlo al chat. cliente: el nombre del cliente tal cual la lista.
 - recordar: solo cuando pide que te acuerdes de algo del cliente ("acordate que…", "tené en cuenta que…"). texto: el dato en una oración, en tercera persona sobre el cliente.
-- responder: texto corto si es una pregunta o un saludo que podés contestar con lo que hay en el chat. No inventes datos.
+- responder: si es una pregunta o un saludo. Contestá con lo que hay en el chat${ctx ? " y en los DATOS DEL SISTEMA (clientes, equipo, videos, tareas, marcas: colores, tipografías, tono)" : ""}. Corto y claro; si piden una lista, una línea por ítem. No inventes datos.
+- No podés borrar ni modificar tareas, videos ni clientes: eso se hace a mano en el sistema.
 - preguntar: texto con UNA pregunta corta si falta algo importante (por ejemplo la hora de la reunión) o no se entiende el pedido.
 Español rioplatense con voseo.`;
 
@@ -230,8 +240,54 @@ Español rioplatense con voseo.`;
   for (const a of acciones) {
     const tipo = String(a.tipo ?? "");
     if (tipo === "responder" || tipo === "preguntar") {
-      const t = String(a.texto ?? "").trim().slice(0, 600);
+      const t = String(a.texto ?? "").trim().slice(0, 1400);
       if (t) out.push({ texto: t });
+      continue;
+    }
+
+    if (tipo === "mandar_logo") {
+      // En el grupo de un cliente, solo el logo de ese cliente (no se mezclan marcas entre clientes).
+      const delChat = typeof chat.proyecto_id === "string" && proj ? ({ id: chat.proyecto_id, ...proj } as Proyecto) : null;
+      const candidatos = chat.tipo === "cliente" || !ctx ? (delChat ? [delChat] : []) : ctx.proyectos;
+      const pedido = String(a.cliente ?? "").trim();
+      const encontrados = pedido ? clientesNombrados(pedido, candidatos) : delChat ? [delChat] : [];
+      if (encontrados.length !== 1) {
+        out.push({
+          texto: !candidatos.length
+            ? "Los logos los mando en el grupo del cliente o en los chats del equipo."
+            : encontrados.length > 1
+              ? `¿De cuál: ${lista(encontrados.slice(0, 5).map((x) => x.nombre))}?`
+              : `No encontré${pedido ? ` a “${pedido}”` : " el cliente"}. ¿De qué cliente querés el logo?`,
+        });
+        continue;
+      }
+      const cli = encontrados[0];
+      const ma = (cli.marca_archivos ?? {}) as { logo?: { drive_file_id: string; name?: string; mime_type?: string }; variantes?: { drive_file_id: string; name?: string; mime_type?: string; etiqueta?: string }[] };
+      const archivos = [...(ma.logo ? [{ ...ma.logo, etiqueta: "Logo principal" }] : []), ...(ma.variantes ?? [])]
+        .filter((x, i, arr) => x?.drive_file_id && arr.findIndex((y) => y.drive_file_id === x.drive_file_id) === i)
+        .slice(0, 6);
+      if (!archivos.length) {
+        out.push({ texto: `${cli.nombre} no tiene el logo cargado. Se sube en su ficha → Configuración → Marca.` });
+        continue;
+      }
+      for (const [k, f] of archivos.entries()) {
+        const name = f.name || `${cli.nombre} logo.png`;
+        const ext = name.split(".").pop()?.toLowerCase() ?? "";
+        const mime = f.mime_type || ({ png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif", svg: "image/svg+xml", pdf: "application/pdf" } as Record<string, string>)[ext] || "application/octet-stream";
+        const leyenda = `${cli.nombre} · ${f.etiqueta || "Logo"}`;
+        await publicarEnChat(cid, {
+          texto: `📷 ${leyenda}`,
+          leyenda,
+          by: PRODI_ID,
+          by_nombre: "Prodi",
+          at: new Date(Date.now() + k).toISOString(),
+          tipo: "archivo",
+          link: null,
+          reunion_id: null,
+          archivo: { drive_file_id: f.drive_file_id, name, mime_type: mime, size: 0 },
+        });
+      }
+      out.push({ texto: `Ahí van ${archivos.length === 1 ? "el logo" : `los ${archivos.length} logos`} de ${cli.nombre}.` });
       continue;
     }
 
