@@ -334,6 +334,8 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
             piezas_mes: form.ovPiezas === "" ? null : Number(form.ovPiezas),
             precio_extra_tiktok: form.ovExtraTiktok === "" ? null : Number(form.ovExtraTiktok),
             precio_extra_youtube: form.ovExtraYoutube === "" ? null : Number(form.ovExtraYoutube),
+            precio_extra_short: form.ovExtraShort === "" ? null : Number(form.ovExtraShort),
+            duracion_extra: Object.fromEntries(Object.entries(form.ovDuracion).map(([k, v]) => [k, v === "" ? null : Number(v)])),
             redes: form.ovRedes,
             pauta: { incluida: form.ovPauta || form.servicio === "solo_pauta", monto: (form.ovPauta || form.servicio === "solo_pauta") && form.ovPautaMonto !== "" ? Number(form.ovPautaMonto) : null },
             administracion_redes: form.ovAdminRedes,
@@ -442,19 +444,39 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
               </div>
             </div>
             <div>
-              <p className="mb-1.5 text-xs text-muted-foreground">Precio del video extra según para dónde es (vacío en TikTok o YouTube = el mismo que Instagram)</p>
-              <div className="grid grid-cols-3 gap-2">
+              <p className="mb-1.5 text-xs text-muted-foreground">Video extra según para dónde es: precio y hasta cuántos minutos dura (vacío = el mismo precio que Instagram)</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div className="space-y-1">
-                  <Label className="text-xs">Instagram / Facebook $</Label>
+                  <Label className="text-xs">Instagram/FB $</Label>
                   <InputNumero value={form.ovExtra} onChange={(e) => set("ovExtra", e.target.value.replace(/\D/g, ""))} />
+                  <div className="flex items-center gap-1.5">
+                    <InputNumero decimales className="h-8 w-14 shrink-0 text-center text-xs" value={form.ovDuracion.meta} onChange={(e) => set("ovDuracion", { ...form.ovDuracion, meta: e.target.value })} placeholder="—" aria-label="Minutos" />
+                    <span className="text-[11px] text-muted-foreground">min máx</span>
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">TikTok $</Label>
                   <InputNumero value={form.ovExtraTiktok} onChange={(e) => set("ovExtraTiktok", e.target.value.replace(/\D/g, ""))} placeholder={form.ovExtra ? "igual" : ""} />
+                  <div className="flex items-center gap-1.5">
+                    <InputNumero decimales className="h-8 w-14 shrink-0 text-center text-xs" value={form.ovDuracion.tiktok} onChange={(e) => set("ovDuracion", { ...form.ovDuracion, tiktok: e.target.value })} placeholder="—" aria-label="Minutos" />
+                    <span className="text-[11px] text-muted-foreground">min máx</span>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">YT Shorts $</Label>
+                  <InputNumero value={form.ovExtraShort} onChange={(e) => set("ovExtraShort", e.target.value.replace(/\D/g, ""))} placeholder={form.ovExtra ? "igual" : ""} />
+                  <div className="flex items-center gap-1.5">
+                    <InputNumero decimales className="h-8 w-14 shrink-0 text-center text-xs" value={form.ovDuracion.short} onChange={(e) => set("ovDuracion", { ...form.ovDuracion, short: e.target.value })} placeholder="—" aria-label="Minutos" />
+                    <span className="text-[11px] text-muted-foreground">min máx</span>
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">YouTube $</Label>
                   <InputNumero value={form.ovExtraYoutube} onChange={(e) => set("ovExtraYoutube", e.target.value.replace(/\D/g, ""))} placeholder={form.ovExtra ? "igual" : ""} />
+                  <div className="flex items-center gap-1.5">
+                    <InputNumero decimales className="h-8 w-14 shrink-0 text-center text-xs" value={form.ovDuracion.youtube} onChange={(e) => set("ovDuracion", { ...form.ovDuracion, youtube: e.target.value })} placeholder="—" aria-label="Minutos" />
+                    <span className="text-[11px] text-muted-foreground">min máx</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -755,6 +777,8 @@ function toForm(c: Project) {
     ovPiezas: o.piezas_mes != null ? String(o.piezas_mes) : "",
     ovExtraTiktok: o.precio_extra_tiktok != null ? String(o.precio_extra_tiktok) : "",
     ovExtraYoutube: o.precio_extra_youtube != null ? String(o.precio_extra_youtube) : "",
+    ovExtraShort: o.precio_extra_short != null ? String(o.precio_extra_short) : "",
+    ovDuracion: { meta: o.duracion_extra?.meta != null ? String(o.duracion_extra.meta) : "", tiktok: o.duracion_extra?.tiktok != null ? String(o.duracion_extra.tiktok) : "", youtube: o.duracion_extra?.youtube != null ? String(o.duracion_extra.youtube) : "", short: o.duracion_extra?.short != null ? String(o.duracion_extra.short) : "" },
     ovRedes: { instagram: !!o.redes?.instagram, facebook: !!o.redes?.facebook, tiktok: !!o.redes?.tiktok, youtube: !!o.redes?.youtube },
     ovPauta: !!o.pauta?.incluida,
     ovPautaMonto: o.pauta?.monto != null ? String(o.pauta.monto) : "",

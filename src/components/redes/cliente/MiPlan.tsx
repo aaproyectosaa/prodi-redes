@@ -10,7 +10,7 @@ import { CupoVideos } from "@/components/redes/cliente/CupoVideos";
 import { useRedes } from "@/contexts/redes-data-context";
 import { mesAR } from "@/lib/fecha";
 import { fechaCorta, formatARS, hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
-import { extraPorPlataforma, planDe, PLATAFORMAS_EXTRA, usoPlan, type PlanEfectivo, type PlataformaExtra } from "@/lib/redes/planes";
+import { extraPorPlataforma, planDe, PLATAFORMAS_EXTRA, textoDuracion, usoPlan, type PlanEfectivo, type PlataformaExtra } from "@/lib/redes/planes";
 import { cupoPiezas, iniciarPago } from "@/lib/redes/piezas";
 import { DIA_PAGO_DESDE, DIA_VENCIMIENTO, diaPago, interesMora, nombrePeriodo, textoMora, textoPlazoPago, totalMensual, useFacturasCliente, type FacturaDoc } from "@/lib/redes/facturacion";
 import { DATOS_COBRO_DEFAULT } from "@/lib/redes/types";
@@ -359,7 +359,7 @@ function ComprarExtras({ clienteId, plan }: { clienteId: string; plan: PlanEfect
       <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">¿Necesitás más videos?</p>
       <p className="mt-1 text-sm text-muted-foreground">Para una promo o un lanzamiento, sumá videos a este mes.</p>
       {extraPorPlataforma(plan) && (
-        <div className="mt-3 grid grid-cols-3 gap-1.5">
+        <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
           {PLATAFORMAS_EXTRA.map((p) => (
             <button
               key={p.v}
@@ -387,7 +387,7 @@ function ComprarExtras({ clienteId, plan }: { clienteId: string; plan: PlanEfect
             </Button>
             <span className="ml-auto text-right">
               <span className="block text-xl font-bold">{formatARS(precio * cantidad)}</span>
-              <span className="text-xs text-muted-foreground">{formatARS(precio)} c/u</span>
+              <span className="text-xs text-muted-foreground">{formatARS(precio)} c/u{plan.duracionExtra[plataforma] ? ` · ${textoDuracion(plan.duracionExtra[plataforma])}` : ""}</span>
             </span>
           </div>
           <Button className="mt-4 w-full" onClick={comprar} disabled={loading}>

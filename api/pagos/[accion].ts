@@ -51,9 +51,9 @@ export const config = { maxDuration: 30 };
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
 /** Para dónde es un video extra: Instagram/Facebook ("meta", el de siempre), TikTok o YouTube. */
-type Plataforma = "meta" | "tiktok" | "youtube";
-const PLATAFORMA_NOMBRE: Record<Plataforma, string> = { meta: "Instagram/Facebook", tiktok: "TikTok", youtube: "YouTube" };
-const plataformaDe = (v: unknown): Plataforma => (v === "tiktok" || v === "youtube" ? v : "meta");
+type Plataforma = "meta" | "tiktok" | "short" | "youtube";
+const PLATAFORMA_NOMBRE: Record<Plataforma, string> = { meta: "Instagram/Facebook", tiktok: "TikTok", short: "YouTube Shorts", youtube: "YouTube" };
+const plataformaDe = (v: unknown): Plataforma => (v === "tiktok" || v === "short" || v === "youtube" ? v : "meta");
 
 /** Precio del video extra de un cliente para esa plataforma (TikTok y YouTube, si no tienen uno propio, el de Instagram). */
 async function precioExtra(proj: Data, plataforma: Plataforma): Promise<number> {
@@ -63,7 +63,7 @@ async function precioExtra(proj: Data, plataforma: Plataforma): Promise<number> 
     const plan = (await adminDb().collection("planes_redes").doc(String(proj.plan_redes_id)).get()).data();
     meta = plan?.precio_video_extra ?? null;
   }
-  const propio = plataforma === "tiktok" ? o.precio_extra_tiktok : plataforma === "youtube" ? o.precio_extra_youtube : null;
+  const propio = plataforma === "tiktok" ? o.precio_extra_tiktok : plataforma === "short" ? o.precio_extra_short : plataforma === "youtube" ? o.precio_extra_youtube : null;
   return Number(propio ?? meta ?? 0) || 0;
 }
 

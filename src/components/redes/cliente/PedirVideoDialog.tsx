@@ -36,7 +36,7 @@ import { callApi } from "@/lib/redes/api";
 import { asset } from "@/lib/asset";
 import { formatearFecha } from "@/lib/fecha";
 import { formatARS, hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
-import { extraPorPlataforma, planDe, PLATAFORMAS_EXTRA, usoPlan, type PlataformaExtra } from "@/lib/redes/planes";
+import { extraPorPlataforma, planDe, PLATAFORMAS_EXTRA, textoDuracion, usoPlan, type PlataformaExtra } from "@/lib/redes/planes";
 import { quienFilma, soloPauta } from "@/lib/redes/etapas";
 import type { Video } from "@/lib/redes/types";
 import { useOpenVideo } from "@/components/redes/VideoCard";
@@ -647,7 +647,7 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
                             <div className="flex items-start gap-3">
                               <CreditCard className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
                               <div>
-                                <p className="font-semibold">Este video es extra: {formatARS(precioExtra)}</p>
+                                <p className="font-semibold">Este video es extra: {formatARS(precioExtra)}{plan.duracionExtra[plataforma] ? ` · ${textoDuracion(plan.duracionExtra[plataforma])}` : ""}</p>
                                 <p className="text-sm text-muted-foreground">
                                   Ya usaste los {uso.cupo} videos de {nombreMes(mes)}. Lo pagás con Mercado Pago.
                                 </p>
@@ -656,7 +656,7 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
                             {extraPorPlataforma(plan) && (
                               <div className="space-y-1.5">
                                 <p className="text-xs font-medium">¿Para dónde es?</p>
-                                <div className="grid grid-cols-3 gap-1.5">
+                                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
                                   {PLATAFORMAS_EXTRA.map((p) => (
                                     <button
                                       key={p.v}
@@ -669,6 +669,7 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
                                     >
                                       <span className="block">{p.label}</span>
                                       <span className="block tabular-nums text-muted-foreground">{formatARS(plan.precioExtra[p.v])}</span>
+                                      {plan.duracionExtra[p.v] ? <span className="block text-[10px] text-muted-foreground">{textoDuracion(plan.duracionExtra[p.v])}</span> : null}
                                     </button>
                                   ))}
                                 </div>
