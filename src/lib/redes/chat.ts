@@ -12,7 +12,7 @@ import type { Profile, Project } from "@/integrations/firebase/types";
 import { avisar } from "./avisos";
 import { callApi } from "./api";
 import { assertEditable, enModoVista } from "./vistaComo";
-import type { Chat, Mensaje, TipoMensaje } from "./types";
+import type { Chat, Mensaje, ReferenciaChat, TipoMensaje } from "./types";
 
 export const CHATS = "chats";
 const TEAM = ["admin", "productor", "editor", "pauta", "diseno", "administracion"];
@@ -117,6 +117,8 @@ export async function enviarMensaje(
     respondeA?: Mensaje | null;
     /** Personas del chat mencionadas con @nombre. */
     menciones?: string[];
+    /** Tarjeta del video o pieza de la que se habla. */
+    referencia?: ReferenciaChat | null;
   } = {}
 ) {
   assertEditable();
@@ -133,6 +135,7 @@ export async function enviarMensaje(
     reunion_id: opts.reunion_id ?? null,
     ...(r ? { responde_a: { id: r.id, by: r.by, by_nombre: r.by_nombre ?? "", texto: (r.texto || r.leyenda || (r.audio ? "🎤 Audio" : "📎 Archivo")).slice(0, 160) } } : {}),
     ...(menciones.length ? { menciones } : {}),
+    ...(opts.referencia ? { referencia: opts.referencia } : {}),
   };
   const ref = await addDoc(collection(db, CHATS, chat.id, "mensajes"), msg);
   await updateDoc(doc(db, CHATS, chat.id), {

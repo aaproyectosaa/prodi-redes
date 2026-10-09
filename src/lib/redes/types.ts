@@ -494,6 +494,18 @@ export interface Mensaje {
   reacciones?: Record<string, string[]>;
   /** Si el autor lo corrigió después de mandarlo. */
   editado_at?: string | null;
+  /** Video o pieza de la que se habla ("Hablarlo con el cliente"): se ve como tarjeta. */
+  referencia?: ReferenciaChat | null;
+}
+
+export interface ReferenciaChat {
+  tipo: "video" | "pieza";
+  id: string;
+  titulo: string;
+  /** En qué está (etapa) o el cliente. */
+  detalle?: string | null;
+  /** La corrección que pidió el cliente, entera. */
+  correccion?: string | null;
 }
 
 /** Tareas que deja @prodi ("recordale a Lucía que mande el guion el viernes"). */

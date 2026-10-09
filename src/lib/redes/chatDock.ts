@@ -1,5 +1,6 @@
 // Chat flotante: varias conversaciones abiertas (minimizadas o desplegadas) y la lista. Se guarda por dispositivo.
 import { useSyncExternalStore } from "react";
+import type { ReferenciaChat } from "./types";
 
 /** En `desplegados`: la lista de chats. */
 export const LISTA = "lista";
@@ -198,11 +199,15 @@ export function abrirEnDock(chatId: string | null | undefined): boolean {
 
 // Mensaje a medio escribir para cuando se abre una conversación desde otra pantalla
 // (por ejemplo "Hablarlo con el cliente" desde una corrección): la caja aparece con ese texto.
-const borradores = new Map<string, string>();
-export function prepararBorrador(chatId: string, texto: string) {
-  borradores.set(chatId, texto);
+export type Borrador = { texto: string; referencia?: ReferenciaChat | null };
+const borradores = new Map<string, Borrador>();
+export const EVENTO_BORRADOR = "prodi-chat-borrador";
+export function prepararBorrador(chatId: string, b: Borrador) {
+  borradores.set(chatId, b);
+  // Si la conversación ya está abierta (en el chat flotante), lo toma ahora.
+  window.dispatchEvent(new CustomEvent(EVENTO_BORRADOR, { detail: chatId }));
 }
-export function tomarBorrador(chatId: string): string | null {
+export function tomarBorrador(chatId: string): Borrador | null {
   const t = borradores.get(chatId) ?? null;
   borradores.delete(chatId);
   return t;

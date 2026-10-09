@@ -1,23 +1,30 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRedes } from "@/contexts/redes-data-context";
 import { chatClienteId } from "@/lib/redes/chat";
 import { abrirEnDock, prepararBorrador } from "@/lib/redes/chatDock";
+import type { ReferenciaChat } from "@/lib/redes/types";
 
 /**
- * "Hablarlo con el cliente": abre el grupo del cliente con el mensaje empezado sobre esa corrección
- * (qué video o pieza y el pedido), para preguntarle o avisarle sin salir a buscar el chat.
+ * "Hablarlo con el cliente": abre el grupo del cliente con la tarjeta del video o la pieza y la corrección
+ * entera lista para mandar; solo falta escribir la pregunta o el aviso.
  */
-export function HablarConCliente({ proyectoId, que, pedido, className }: { proyectoId: string; que: string; pedido: string; className?: string }) {
+export function HablarConCliente({ proyectoId, referencia, className, onAbrir }: { proyectoId: string; referencia: ReferenciaChat; className?: string; onAbrir?: () => void }) {
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const { chats } = useRedes();
   const id = chatClienteId(proyectoId);
   if (!chats.some((c) => c.id === id)) return null;
   const abrir = () => {
-    const primera = pedido.split("\n").map((l) => l.trim()).find((l) => l && !/:$/.test(l)) ?? pedido.trim();
-    const cita = primera.replace(/^[-•*]\s*/, "").slice(0, 90);
-    prepararBorrador(id, `Sobre ${que}, lo que pediste${cita ? ` (“${cita}${primera.length > 90 ? "…" : ""}”)` : ""}: `);
+    prepararBorrador(id, { texto: "", referencia });
+    // Se cierra el panel del video para que el chat flotante quede a la vista.
+    if (params.has("video")) {
+      const next = new URLSearchParams(params);
+      next.delete("video");
+      setParams(next, { replace: true });
+    }
+    onAbrir?.();
     if (!abrirEnDock(id)) navigate(`/chat?c=${id}`);
   };
   return (

@@ -25,6 +25,7 @@ import {
 } from "@/lib/redes/chat";
 import { limpiarSubidasListas, subirArchivosChat, useSubidasChat, CHAT_MAX_MB } from "@/lib/redes/chatArchivos";
 import { TextoIA } from "@/components/redes/TextoIA";
+import { TarjetaReferencia } from "./TarjetaReferencia";
 import { AudioMensaje, BarraGrabando, BotonMic, useGrabadorVoz } from "@/components/redes/chat/Voz";
 import { ArchivoMensaje, SubidaBurbuja } from "@/components/redes/chat/Archivo";
 import { ChatIcon } from "@/components/redes/chat/ChatIcon";
@@ -36,9 +37,9 @@ import { comprimirFoto } from "@/lib/imagen";
 import { crearReunion } from "@/lib/redes/reuniones";
 import { getRoleInfo } from "@/lib/roles";
 import { cn } from "@/lib/utils";
-import { chatEnPantalla, tomarBorrador } from "@/lib/redes/chatDock";
+import { chatEnPantalla, EVENTO_BORRADOR, tomarBorrador } from "@/lib/redes/chatDock";
 import { fechaAR, formatearFecha, hoyAR, sumarDias } from "@/lib/fecha";
-import type { Chat as ChatT, Mensaje } from "@/lib/redes/types";
+import type { Chat as ChatT, Mensaje, ReferenciaChat } from "@/lib/redes/types";
 import type { Profile } from "@/integrations/firebase/types";
 
 function diaLabel(iso: string) {
@@ -261,18 +262,26 @@ export function ChatConversacion({
   const [sugerir, setSugerir] = useState<{ desde: number; q: string } | null>(null);
   const [mencionados, setMencionados] = useState<Record<string, string>>({});
   const [respondiendo, setRespondiendo] = useState<Mensaje | null>(null);
+  const [referencia, setReferencia] = useState<ReferenciaChat | null>(null);
   const [tareaMsg, setTareaMsg] = useState<Mensaje | null>(null);
   const fin = useRef<HTMLDivElement>(null);
   const caja = useRef<HTMLTextAreaElement>(null);
   // Abierto desde otra pantalla con un mensaje empezado (ej. "Hablarlo con el cliente" en una corrección).
   useEffect(() => {
-    const b = tomarBorrador(chat.id);
-    if (!b) return;
-    setTexto(b);
-    requestAnimationFrame(() => {
-      caja.current?.focus();
-      caja.current?.setSelectionRange(b.length, b.length);
-    });
+    const tomar = () => {
+      const b = tomarBorrador(chat.id);
+      if (!b) return;
+      setTexto(b.texto);
+      setReferencia(b.referencia ?? null);
+      requestAnimationFrame(() => {
+        caja.current?.focus();
+        caja.current?.setSelectionRange(b.texto.length, b.texto.length);
+      });
+    };
+    tomar();
+    const alLlegar = (e: Event) => (e as CustomEvent<string>).detail === chat.id && tomar();
+    window.addEventListener(EVENTO_BORRADOR, alLlegar);
+    return () => window.removeEventListener(EVENTO_BORRADOR, alLlegar);
   }, [chat.id]);
   const elegirArchivo = useRef<HTMLInputElement>(null);
   const elegirDocumento = useRef<HTMLInputElement>(null);
@@ -415,7 +424,7 @@ export function ChatConversacion({
   };
 
   const enviar = async () => {
-    const t = texto.trim();
+    const t = texto.trim() || (referencia ? `Sobre ${referencia.titulo}` : "");
     if (!t) return;
     setEnviando(true);
     setSugerir(null);
@@ -424,10 +433,11 @@ export function ChatConversacion({
       const menciones = Object.entries(mencionados)
         .filter(([, etiqueta]) => new RegExp(`@${etiqueta}(?![\\p{L}])`, "u").test(t))
         .map(([id]) => id);
-      const id = await enviarMensaje(chat, uid, t, { remitente: nombre, respondeA: respondiendo, menciones });
+      const id = await enviarMensaje(chat, uid, t, { remitente: nombre, respondeA: respondiendo, menciones, referencia });
       setTexto("");
       setMencionados({});
       setRespondiendo(null);
+      setReferencia(null);
       // @prodi: el servidor lo procesa y contesta en el chat.
       if (mencionaProdi(t) || chat.tipo === "prodi") {
         setPensando(true);
@@ -729,6 +739,7 @@ export function ChatConversacion({
                           <span className={cn("line-clamp-2", mio ? "text-primary-foreground/80" : "text-muted-foreground")}>{m.responde_a.texto}</span>
                         </button>
                       )}
+                      {m.referencia && <TarjetaReferencia r={m.referencia} mio={mio} />}
                       {m.tipo === "archivo" && m.archivo ? (
                         <div className="space-y-1">
                           <ArchivoMensaje archivo={m.archivo} mio={mio} />
@@ -885,6 +896,16 @@ export function ChatConversacion({
         )}
         style={compacto ? { paddingBottom: "calc(0.75rem + var(--abajo-seguro))" } : undefined}
       >
+        {referencia && (
+          <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <TarjetaReferencia r={referencia} compacta />
+            </div>
+            <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => setReferencia(null)} aria-label="Sacar la tarjeta">
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
         {respondiendo && (
           <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 rounded-xl border-l-4 border-primary bg-muted/60 py-1.5 pl-3 pr-1 animate-in fade-in slide-in-from-bottom-1 motion-reduce:animate-none">
             <Reply className="h-4 w-4 shrink-0 text-primary" />

@@ -345,8 +345,8 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                 <p className="mt-1 whitespace-pre-wrap">{pieza.feedback_cliente}</p>
                 <HablarConCliente
                   proyectoId={pieza.proyecto_id}
-                  que={`la pieza ${info.label.toLowerCase()}${pieza.producto ? ` de ${pieza.producto}` : ""}`.replace(/\s+/g, " ")}
-                  pedido={pieza.feedback_cliente}
+                  referencia={{ tipo: "pieza", id: pieza.id, titulo: [info.label, pieza.producto].filter(Boolean).join(" · "), detalle: info.medida, correccion: pieza.feedback_cliente }}
+                  onAbrir={onClose}
                   className="mt-2 h-8 bg-background/60 text-xs"
                 />
               </div>

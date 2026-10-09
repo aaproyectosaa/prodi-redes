@@ -237,7 +237,11 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
             <p className="mt-1 whitespace-pre-wrap text-sm">{feedback}</p>
             {(video.feedback_marcas?.length ?? 0) > 0 && <MarcasEdicion video={video} marcas={video.feedback_marcas!} />}
             {video.feedback_cliente && (
-              <HablarConCliente proyectoId={video.proyecto_id} que={`el video “${video.titulo}”`} pedido={feedback} className="mt-2 h-8 bg-background/60 text-xs" />
+              <HablarConCliente
+                proyectoId={video.proyecto_id}
+                referencia={{ tipo: "video", id: video.id, titulo: video.titulo, detalle: etapaInfo(video.etapa).label, correccion: video.feedback_cliente }}
+                className="mt-2 h-8 bg-background/60 text-xs"
+              />
             )}
           </div>
         )}
