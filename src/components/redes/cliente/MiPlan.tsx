@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { AlertTriangle, CheckCircle2, ChevronRight, Clapperboard, Copy, Image as ImageIcon, Loader2, Megaphone, Minus, Plus, Receipt, Smartphone } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronRight, Clapperboard, Copy, Image as ImageIcon, Loader2, Megaphone, Minus, Plus, Receipt, Smartphone, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Section } from "@/components/redes/PageShell";
@@ -157,70 +157,92 @@ export function MiPlan({
       <CupoVideos uso={uso} mes={mes} precioExtra={plan.precioVideoExtra} onPedir={onPedirVideo} />
 
       {/* 2. Qué incluye y cuánto usaste */}
-      <div className="rounded-2xl border bg-card p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Tu plan</p>
-            <p className="mt-0.5 text-2xl font-bold">{plan.nombre}</p>
-            <p className="text-sm text-muted-foreground">
-              {formatARS(plan.precioMensual)} por mes{plan.precioMensual ? " · " : ""}incluye {plan.videosMes} videos con publicidad
-              {cupoP.incluidas ? ` y ${cupoP.incluidas} piezas gráficas` : ""} por mes
-            </p>
+      <div className="overflow-hidden rounded-3xl border bg-card shadow-sm">
+        {/* Encabezado con color: el plan, lo que paga y lo que incluye por mes. */}
+        <div className="relative overflow-hidden bg-gradient-to-br from-[#6F40FC] via-[#8B5CF6] to-[#E040A0] p-6 text-white">
+          <span className="pointer-events-none absolute -right-10 -top-12 h-44 w-44 rounded-full bg-white/15 blur-2xl" />
+          <span className="pointer-events-none absolute -bottom-16 left-1/3 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
+          <div className="relative flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-white/80">
+                <Sparkles className="h-3.5 w-3.5" /> Tu plan
+              </p>
+              <p className="mt-1 text-3xl font-bold tracking-tight">{plan.nombre}</p>
+              <p className="mt-1 text-sm text-white/85">
+                {plan.videosMes} videos con publicidad{cupoP.incluidas ? ` y ${cupoP.incluidas} piezas gráficas` : ""} por mes
+              </p>
+            </div>
+            {plan.precioMensual > 0 && (
+              <div className="rounded-2xl bg-white/15 px-4 py-2.5 text-right backdrop-blur">
+                <p className="text-2xl font-bold tabular-nums">{formatARS(plan.precioMensual)}</p>
+                <p className="text-[11px] text-white/80">por mes</p>
+              </div>
+            )}
           </div>
         </div>
-        {(plan.redes.length > 0 || plan.pauta?.incluida || plan.administracionRedes) && (
-          <ul className="mt-4 grid gap-2 sm:grid-cols-3">
-            {plan.redes.length > 0 && (
-              <li className="flex items-start gap-2.5 rounded-xl border bg-background/60 p-3">
-                <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <span className="text-sm">
-                  <b className="block">Redes</b>
-                  <span className="text-muted-foreground">{plan.redes.join(", ")}</span>
-                </span>
-              </li>
-            )}
-            {plan.pauta?.incluida && (
-              <li className="flex items-start gap-2.5 rounded-xl border bg-background/60 p-3">
-                <Megaphone className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <span className="text-sm">
-                  <b className="block">Pauta</b>
-                  <span className="text-muted-foreground">
-                    {plan.pauta.monto ? `${formatARS(plan.pauta.monto)} por mes de inversión en publicidad` : "Incluida: armamos y manejamos tus anuncios"}
-                  </span>
-                </span>
-              </li>
-            )}
-            {plan.administracionRedes && (
-              <li className="flex items-start gap-2.5 rounded-xl border bg-background/60 p-3">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <span className="text-sm">
-                  <b className="block">Administración de redes</b>
-                  <span className="text-muted-foreground">Publicamos y mantenemos tu perfil. No incluye responder mensajes.</span>
-                </span>
-              </li>
-            )}
-          </ul>
-        )}
-        <p className="mt-5 text-sm font-semibold">Lo que usaste en {mesLabel(mes).split(" ")[0].toLowerCase()}</p>
-        <div className="mt-2 grid gap-3 sm:grid-cols-2">
-          <Medidor
-            icono={Clapperboard}
-            titulo="Videos"
-            usados={uso.usados}
-            total={uso.cupo}
-            nota={uso.creditosExtra ? `incluye ${uso.creditosExtra} extra que compraste` : undefined}
-            accion={{ label: uso.disponibles > 0 || !uso.cupo ? "Pedir un video" : "Pedir un video extra", onClick: onPedirVideo }}
-          />
-          <Medidor
-            icono={ImageIcon}
-            titulo="Piezas gráficas"
-            usados={cupoP.usadas}
-            total={cupoP.incluidas}
-            nota={cupoP.incluidas ? undefined : "Tu plan no incluye piezas: se pagan aparte"}
-            accion={{ label: "Pedir una pieza", onClick: onPedirPieza }}
-          />
+
+        <div className="space-y-6 p-5 sm:p-6">
+          {(plan.redes.length > 0 || plan.pauta?.incluida || plan.administracionRedes) && (
+            <div>
+              <p className="mb-2.5 text-sm font-semibold">Qué hacemos por vos</p>
+              <ul className="grid gap-3 sm:grid-cols-3">
+                {plan.redes.length > 0 && (
+                  <Incluye i={0} icono={Smartphone} color="from-sky-500/15 to-sky-500/5 text-sky-600 dark:text-sky-300" titulo="Tus redes">
+                    <span className="mt-1.5 flex flex-wrap gap-1.5">
+                      {plan.redes.map((r) => (
+                        <span key={r} className="rounded-full border bg-background px-2 py-0.5 text-[11px] font-medium text-foreground">
+                          {r}
+                        </span>
+                      ))}
+                    </span>
+                  </Incluye>
+                )}
+                {plan.pauta?.incluida && (
+                  <Incluye i={1} icono={Megaphone} color="from-amber-500/20 to-amber-500/5 text-amber-600 dark:text-amber-300" titulo="Publicidad">
+                    {plan.pauta.monto ? (
+                      <>
+                        <span className="block text-lg font-bold tabular-nums text-foreground">{formatARS(plan.pauta.monto)}</span>
+                        <span>por mes invertidos en tus anuncios</span>
+                      </>
+                    ) : (
+                      "Armamos y manejamos tus anuncios"
+                    )}
+                  </Incluye>
+                )}
+                {plan.administracionRedes && (
+                  <Incluye i={2} icono={CheckCircle2} color="from-emerald-500/20 to-emerald-500/5 text-emerald-600 dark:text-emerald-300" titulo="Administración de redes">
+                    Publicamos y cuidamos tu perfil. <span className="whitespace-nowrap">No incluye responder mensajes.</span>
+                  </Incluye>
+                )}
+              </ul>
+            </div>
+          )}
+
+          <div>
+            <div className="mb-2.5 flex items-baseline justify-between gap-2">
+              <p className="text-sm font-semibold">Lo que usaste en {mesLabel(mes).split(" ")[0].toLowerCase()}</p>
+              <p className="text-[11px] text-muted-foreground">Vuelve a empezar el 1 de cada mes</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Medidor
+                icono={Clapperboard}
+                titulo="Videos"
+                usados={uso.usados}
+                total={uso.cupo}
+                nota={uso.creditosExtra ? `incluye ${uso.creditosExtra} extra que compraste` : undefined}
+                accion={{ label: uso.disponibles > 0 || !uso.cupo ? "Pedir un video" : "Pedir un video extra", onClick: onPedirVideo }}
+              />
+              <Medidor
+                icono={ImageIcon}
+                titulo="Piezas gráficas"
+                usados={cupoP.usadas}
+                total={cupoP.incluidas}
+                nota={cupoP.incluidas ? undefined : "Tu plan no incluye piezas: se pagan aparte"}
+                accion={{ label: "Pedir una pieza", onClick: onPedirPieza }}
+              />
+            </div>
+          </div>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">El contador vuelve a empezar el 1 de cada mes.</p>
       </div>
 
       {/* 3. Cómo pagás y extras */}
@@ -292,6 +314,22 @@ function FilaBoleta({ f, hoy, onClick }: { f: FacturaDoc; hoy: string; onClick: 
   );
 }
 
+/** Una cosa que incluye el plan: ícono con color, título y detalle. Entra con una animación suave. */
+function Incluye({ i, icono: Icono, color, titulo, children }: { i: number; icono: React.ElementType; color: string; titulo: string; children: React.ReactNode }) {
+  return (
+    <li
+      className="tour-subir group rounded-2xl border bg-background/60 p-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+      style={{ animationDelay: `${i * 90}ms` }}
+    >
+      <span className={cn("mb-2.5 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br transition-transform duration-300 group-hover:scale-110", color)}>
+        <Icono className="h-5 w-5" />
+      </span>
+      <b className="block text-sm">{titulo}</b>
+      <span className="block text-sm text-muted-foreground">{children}</span>
+    </li>
+  );
+}
+
 function Medidor({
   icono: Icono,
   titulo,
@@ -309,28 +347,50 @@ function Medidor({
 }) {
   const quedan = Math.max(0, total - usados);
   const pct = total ? Math.min(100, Math.round((usados / total) * 100)) : 0;
+  // Anillo: se llena al aparecer.
+  const [lleno, setLleno] = useState(0);
+  useEffect(() => {
+    const t = window.setTimeout(() => setLleno(pct), 120);
+    return () => window.clearTimeout(t);
+  }, [pct]);
+  const R = 26;
+  const C = 2 * Math.PI * R;
   return (
-    <div className="rounded-xl border p-3.5">
-      <div className="flex items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-sm font-medium">
-          <Icono className="h-4 w-4 text-primary" /> {titulo}
-        </p>
-        {total > 0 && (
-          <p className="text-sm tabular-nums">
-            <b>{usados}</b> <span className="text-muted-foreground">de {total}</span>
-          </p>
-        )}
-      </div>
-      {total > 0 && (
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-          <div className={cn("h-full rounded-full transition-all duration-700", quedan ? "bg-primary" : "bg-amber-500")} style={{ width: `${pct}%` }} />
+    <div className="group flex flex-col rounded-2xl border bg-background/60 p-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
+      <div className="flex items-center gap-4">
+        <div className="relative h-16 w-16 shrink-0">
+          <svg viewBox="0 0 64 64" className="h-16 w-16 -rotate-90">
+            <circle cx="32" cy="32" r={R} fill="none" strokeWidth="7" className="stroke-muted" />
+            {total > 0 && (
+              <circle
+                cx="32"
+                cy="32"
+                r={R}
+                fill="none"
+                strokeWidth="7"
+                strokeLinecap="round"
+                className={cn("transition-[stroke-dashoffset] duration-1000 ease-out", quedan ? "stroke-primary" : "stroke-amber-500")}
+                strokeDasharray={C}
+                strokeDashoffset={C - (C * lleno) / 100}
+              />
+            )}
+          </svg>
+          <span className="absolute inset-0 flex items-center justify-center text-primary transition-transform duration-300 group-hover:scale-110">
+            <Icono className="h-5 w-5" />
+          </span>
         </div>
-      )}
-      <p className="mt-1.5 text-xs text-muted-foreground">
-        {nota ?? (quedan ? `Te ${quedan === 1 ? "queda 1" : `quedan ${quedan}`} este mes` : "Ya usaste todo lo del mes: lo que pidas se paga aparte")}
-      </p>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold">{titulo}</p>
+          {total > 0 && (
+            <p className="text-sm tabular-nums">
+              <span className="text-2xl font-bold">{quedan}</span> <span className="text-muted-foreground">{quedan === 1 ? "te queda" : "te quedan"} de {total}</span>
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">{nota ?? (quedan ? `Usaste ${usados} este mes` : "Ya usaste todo lo del mes: lo que pidas se paga aparte")}</p>
+        </div>
+      </div>
       {accion && (
-        <Button size="sm" variant="outline" className="mt-2.5 h-8 w-full" onClick={accion.onClick}>
+        <Button size="sm" className="mt-3.5 h-9 w-full" variant={quedan > 0 || !total ? "default" : "outline"} onClick={accion.onClick}>
           {accion.label}
         </Button>
       )}
