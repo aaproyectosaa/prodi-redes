@@ -230,7 +230,8 @@ export async function moverPieza(pieza: PiezaIA, destino: "hacer" | "disenando" 
   const accion = destino === "hacer" ? "Vuelta a «Para hacer»" : destino === "disenando" ? "Pasada a «Diseñando»" : "Marcada como entregada por el equipo";
   await updateDoc(doc(db, PIEZAS, pieza.id), {
     estado,
-    ...(estado === "entregada" ? { version_aprobada_id: pieza.version_aprobada_id ?? pieza.version_enviada_id ?? ultima?.id ?? null } : {}),
+    // Entregada: queda aprobada la enviada (o la última). Si sale de "Entregadas", deja de estar aprobada.
+    ...(estado === "entregada" ? { version_aprobada_id: pieza.version_aprobada_id ?? pieza.version_enviada_id ?? ultima?.id ?? null } : { version_aprobada_id: null }),
     updated_at: now(),
     historial: arrayUnion(evento(by, accion)),
   });

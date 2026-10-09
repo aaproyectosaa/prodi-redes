@@ -14,6 +14,7 @@ import {
   Undo2,
   Upload,
   Maximize2,
+  MessageCircle,
   Plus,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -48,6 +49,7 @@ import type { PiezaIA } from "@/lib/redes/types";
 import { HablarConCliente } from "@/components/redes/HablarConCliente";
 import { EditorPieza } from "@/components/redes/EditorPieza";
 import { NuevaPiezaEquipo } from "@/components/redes/NuevaPiezaEquipo";
+import { CompartirPorChat } from "@/components/redes/CompartirChat";
 
 const TIPOS_CAL: Record<string, TipoCal> = {
   entregar: { label: "Para entregar", icon: Flag, chip: "bg-amber-500/12 text-amber-700 dark:text-amber-300 border-amber-500/30", dot: "bg-amber-500" },
@@ -324,6 +326,8 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
   const [ajustes, setAjustes] = useState("");
   const [generando, setGenerando] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
+  // "Mandar por chat": a una persona, un grupo o el chat del cliente.
+  const [compartir, setCompartir] = useState(false);
   // Versión abierta en grande (para verla bien y descargarla).
   const [ver, setVer] = useState<ReturnType<typeof versionesDe>[number] | null>(null);
   // Foto para usar abierta en grande.
@@ -562,12 +566,12 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                       key={v.id}
                       role="button"
                       tabIndex={0}
-                      onClick={() => (puedeTrabajar ? setSel(v.id) : setVer(v))}
+                      onClick={() => (puedeTrabajar ? setSel((s) => (s === v.id ? null : v.id)) : setVer(v))}
                       onDoubleClick={() => setVer(v)}
-                      onKeyDown={(e) => e.key === "Enter" && (puedeTrabajar ? setSel(v.id) : setVer(v))}
+                      onKeyDown={(e) => e.key === "Enter" && (puedeTrabajar ? setSel((s) => (s === v.id ? null : v.id)) : setVer(v))}
                       className={cn(
                         "group relative cursor-pointer overflow-hidden rounded-lg border-2 transition-all animate-in fade-in zoom-in-95",
-                        marcada || aprobada ? "border-primary" : "border-transparent hover:border-primary/40"
+                        marcada ? "border-primary" : "border-transparent hover:border-primary/40"
                       )}
                     >
                       <div className="flex aspect-square items-center justify-center bg-muted">
@@ -577,7 +581,7 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                         v{i + 1} · {v.origen === "ia" ? "IA" : "subida"}
                         {aprobada ? " · aprobada" : enviada ? " · enviada" : ""}
                       </span>
-                      {(marcada || aprobada) && (
+                      {marcada && (
                         <span className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
                           <Check className="h-4 w-4" />
                         </span>
@@ -596,6 +600,11 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                   );
                 })}
               </div>
+            )}
+            {versiones.length > 0 && (
+              <Button variant="outline" className="w-full" onClick={() => setCompartir(true)}>
+                <MessageCircle className="mr-2 h-4 w-4" /> Mandar {sel ? "la elegida" : "la última"} por chat
+              </Button>
             )}
             {puedeTrabajar && (
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -647,6 +656,9 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
           }}
         />
         <VerVersion v={verFoto} titulo="Foto para usar" onClose={() => setVerFoto(null)} />
+        {pieza && (
+          <CompartirPorChat open={compartir} onOpenChange={setCompartir} piezaId={pieza.id} versionId={sel ?? versiones.at(-1)?.id ?? null} proyectoId={pieza.proyecto_id} />
+        )}
         {pieza && ver && ver.mime_type !== "application/pdf" && !["cancelada", "rechazada", "pendiente_pago"].includes(pieza.estado) ? (
           <EditorPieza v={ver} titulo={`${pieza.producto || "Pieza"} · Versión ${versiones.findIndex((x) => x.id === ver.id) + 1}`} piezaId={pieza.id} onClose={() => setVer(null)} />
         ) : (

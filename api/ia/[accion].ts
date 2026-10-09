@@ -2,6 +2,7 @@
 // POST /api/ia/copy   { video_id }              → { opciones: string[] }
 // POST /api/ia/pieza  { pieza_id, ajustes? }    → genera una versión y la guarda en Drive
 // POST /api/ia/pieza-editar { pieza_id, version_id, instruccion, formato? } → edita esa versión con IA (queda como versión nueva)
+// POST /api/ia/pieza-compartir { pieza_id, version_id, chat_id, texto? } → manda esa versión a un chat (imagen + tarjeta)
 // POST /api/ia/guion  { video_id }              → guion y lista de tomas del video
 // POST /api/ia/preparar { proyecto_id, video_ids } → qué tiene que tener listo el cliente para el rodaje
 // POST /api/ia/marca-subir  { proyecto_id, tipo: "logo"|"variante"|"manual"|"referencia", etiqueta?, nombre, mime, data(base64) }
@@ -38,6 +39,7 @@ import { enviarAviso } from "../_lib/notify";
 import { filmaElCliente, videoDesdePedido } from "../_lib/pedidos";
 import { fechaAR, sumarDias } from "../_lib/fecha";
 import { atenderMencion } from "../_lib/chat-asistente";
+import { avisarMensaje, chatDeMiembro, publicarEnChat } from "../_lib/chat-server";
 import { asistenteDueno } from "../_lib/dueno";
 import { linksDeMensaje } from "../_lib/chat-links";
 import { crearTarea } from "../_lib/tareas";
@@ -131,6 +133,49 @@ async function tomarTurnoPieza(piezaId: string) {
     return true;
   });
   if (!libre) throw new HttpError(409, "Ya se está haciendo una versión de esta pieza. Esperá a que termine (≈30 s).");
+}
+
+/**
+ * Mandar una versión de una pieza a un chat (una persona, un grupo o el del cliente): llega la imagen con la
+ * tarjeta de la pieza. Lo publica el servidor porque los mensajes con archivo dan acceso al archivo a todo el chat.
+ */
+async function piezaCompartir(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "productor", "editor", "pauta", "diseno", "administracion"]);
+  const { pieza_id, version_id, chat_id, texto } = body<{ pieza_id?: string; version_id?: string; chat_id?: string; texto?: string }>(req);
+  if (!pieza_id || !version_id || !chat_id) throw new HttpError(400, "Faltan datos");
+  const db = adminDb();
+  const pz = (await db.collection("piezas_ia").doc(pieza_id).get()).data();
+  if (!pz) throw new HttpError(404, "Pieza no encontrada");
+  await assertProjectAccess(caller, pz.proyecto_id);
+  const chat = await chatDeMiembro(chat_id, caller.uid);
+  const v = ((pz.versiones ?? []) as { id: string; drive_file_id: string; name?: string; mime_type?: string; size?: number }[]).find((x) => x.id === version_id);
+  if (!v) throw new HttpError(404, "Versión no encontrada");
+  const p = (await db.collection("projects").doc(pz.proyecto_id).get()).data() ?? {};
+  const fmt = FORMATOS_PIEZA[pz.formato] ?? FORMATOS_PIEZA.cuadrado;
+  const leyenda = String(texto ?? "").trim().slice(0, 1000);
+  const mime = v.mime_type || "image/png";
+  const resumen = `📷 ${p.nombre ?? "Pieza"} · ${fmt.label}${leyenda ? ` · ${leyenda}` : ""}`;
+  const nombre = caller.nombre ?? "";
+  const { id } = await publicarEnChat(String(chat_id), {
+    texto: resumen,
+    leyenda: leyenda || null,
+    by: caller.uid,
+    by_nombre: nombre,
+    at: new Date().toISOString(),
+    tipo: "archivo",
+    link: null,
+    reunion_id: null,
+    archivo: { drive_file_id: v.drive_file_id, name: v.name || `pieza.${mime.includes("jpeg") ? "jpg" : "png"}`, mime_type: mime, size: Number(v.size ?? 0) },
+    referencia: {
+      tipo: "pieza",
+      id: pieza_id,
+      titulo: [fmt.label, pz.producto, p.nombre].filter(Boolean).join(" · "),
+      detalle: pz.estado === "entregada" ? "Entregada" : pz.estado === "para_aprobar" ? "Esperando al cliente" : "En diseño",
+      correccion: null,
+    },
+  });
+  await avisarMensaje(String(chat_id), chat, caller.uid, nombre, resumen, appUrl(req)).catch((err) => console.warn("[pieza-compartir] aviso", err));
+  return { ok: true, mensaje_id: id };
 }
 
 /** Si la generación falla en cualquier paso, la pieza queda libre al toque para reintentar (y el error sigue). */
@@ -1030,6 +1075,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (accion === "copy") res.status(200).json(await copy(req));
     else if (accion === "pieza") res.status(200).json(await pieza(req).catch((e) => liberarTurnoPieza(req, e)));
     else if (accion === "pieza-editar") res.status(200).json(await piezaEditar(req).catch((e) => liberarTurnoPieza(req, e)));
+    else if (accion === "pieza-compartir") res.status(200).json(await piezaCompartir(req));
     else if (accion === "minuta") res.status(200).json(await minuta(req));
     else if (accion === "guion") res.status(200).json(await guion(req));
     else if (accion === "preparar") res.status(200).json(await preparar(req));
