@@ -195,3 +195,15 @@ export function abrirEnDock(chatId: string | null | undefined): boolean {
   dock.abrir(chatId);
   return true;
 }
+
+// Mensaje a medio escribir para cuando se abre una conversación desde otra pantalla
+// (por ejemplo "Hablarlo con el cliente" desde una corrección): la caja aparece con ese texto.
+const borradores = new Map<string, string>();
+export function prepararBorrador(chatId: string, texto: string) {
+  borradores.set(chatId, texto);
+}
+export function tomarBorrador(chatId: string): string | null {
+  const t = borradores.get(chatId) ?? null;
+  borradores.delete(chatId);
+  return t;
+}

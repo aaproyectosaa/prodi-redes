@@ -42,6 +42,7 @@ import { CalendarioEventos, SelectorVista, useVista, type EventoCal, type TipoCa
 import { sinDisenadora } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import type { PiezaIA } from "@/lib/redes/types";
+import { HablarConCliente } from "@/components/redes/HablarConCliente";
 
 const TIPOS_CAL: Record<string, TipoCal> = {
   entregar: { label: "Para entregar", icon: Flag, chip: "bg-amber-500/12 text-amber-700 dark:text-amber-300 border-amber-500/30", dot: "bg-amber-500" },
@@ -342,6 +343,12 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                   <MessageSquareWarning className="h-3.5 w-3.5" /> El cliente pidió cambios
                 </p>
                 <p className="mt-1 whitespace-pre-wrap">{pieza.feedback_cliente}</p>
+                <HablarConCliente
+                  proyectoId={pieza.proyecto_id}
+                  que={`la pieza ${info.label.toLowerCase()}${pieza.producto ? ` de ${pieza.producto}` : ""}`.replace(/\s+/g, " ")}
+                  pedido={pieza.feedback_cliente}
+                  className="mt-2 h-8 bg-background/60 text-xs"
+                />
               </div>
             )}
             <div className="space-y-1.5 rounded-xl border p-3">

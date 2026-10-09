@@ -77,6 +77,7 @@ import type { EtapaVideo, Video } from "@/lib/redes/types";
 import { EtapaBadge } from "./EtapaBadge";
 import { EntregaChip, EntregaEdicionDialog } from "./EntregaEdicion";
 import { ClienteTag } from "./ClienteTag";
+import { HablarConCliente } from "./HablarConCliente";
 import { MaterialElegido, MaterialSlot } from "./MaterialSlot";
 import { TextoConLinks } from "./DelSistemaAnterior";
 import { CorreccionesDialog, MarcasEdicion } from "./MarcasVideo";
@@ -235,6 +236,9 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
             </p>
             <p className="mt-1 whitespace-pre-wrap text-sm">{feedback}</p>
             {(video.feedback_marcas?.length ?? 0) > 0 && <MarcasEdicion video={video} marcas={video.feedback_marcas!} />}
+            {video.feedback_cliente && (
+              <HablarConCliente proyectoId={video.proyecto_id} que={`el video “${video.titulo}”`} pedido={feedback} className="mt-2 h-8 bg-background/60 text-xs" />
+            )}
           </div>
         )}
 

@@ -36,7 +36,7 @@ import { comprimirFoto } from "@/lib/imagen";
 import { crearReunion } from "@/lib/redes/reuniones";
 import { getRoleInfo } from "@/lib/roles";
 import { cn } from "@/lib/utils";
-import { chatEnPantalla } from "@/lib/redes/chatDock";
+import { chatEnPantalla, tomarBorrador } from "@/lib/redes/chatDock";
 import { fechaAR, formatearFecha, hoyAR, sumarDias } from "@/lib/fecha";
 import type { Chat as ChatT, Mensaje } from "@/lib/redes/types";
 import type { Profile } from "@/integrations/firebase/types";
@@ -264,6 +264,16 @@ export function ChatConversacion({
   const [tareaMsg, setTareaMsg] = useState<Mensaje | null>(null);
   const fin = useRef<HTMLDivElement>(null);
   const caja = useRef<HTMLTextAreaElement>(null);
+  // Abierto desde otra pantalla con un mensaje empezado (ej. "Hablarlo con el cliente" en una corrección).
+  useEffect(() => {
+    const b = tomarBorrador(chat.id);
+    if (!b) return;
+    setTexto(b);
+    requestAnimationFrame(() => {
+      caja.current?.focus();
+      caja.current?.setSelectionRange(b.length, b.length);
+    });
+  }, [chat.id]);
   const elegirArchivo = useRef<HTMLInputElement>(null);
   const elegirDocumento = useRef<HTMLInputElement>(null);
   const capturaFoto = useRef<HTMLInputElement>(null);
