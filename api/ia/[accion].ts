@@ -117,6 +117,22 @@ ${video.objetivo ? `Objetivo del video: ${video.objetivo}` : ""}`;
   return { opciones };
 }
 
+/**
+ * Una sola generación o edición a la vez por pieza (un doble toque no paga dos imágenes). El turno se libera
+ * al guardar la versión; si algo falla, vence solo a los 2 minutos.
+ */
+async function tomarTurnoPieza(piezaId: string) {
+  const ref = adminDb().collection("piezas_ia").doc(piezaId);
+  const libre = await adminDb().runTransaction(async (tx) => {
+    const d = (await tx.get(ref)).data() ?? {};
+    const desde = d.generando_at ? new Date(String(d.generando_at)).getTime() : 0;
+    if (Date.now() - desde < 120_000) return false;
+    tx.update(ref, { generando_at: new Date().toISOString() });
+    return true;
+  });
+  if (!libre) throw new HttpError(409, "Ya se está haciendo una versión de esta pieza. Esperá a que termine (≈30 s).");
+}
+
 async function pieza(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "productor", "diseno"]);
   const { pieza_id, ajustes } = body<{ pieza_id?: string; ajustes?: string | null }>(req);
@@ -130,6 +146,7 @@ async function pieza(req: VercelRequest) {
   if (!["pagada", "en_proceso"].includes(pz.estado)) {
     throw new HttpError(409, "La pieza tiene que estar pagada para generarla");
   }
+  await tomarTurnoPieza(pieza_id);
   const p = (await db.collection("projects").doc(pz.proyecto_id).get()).data() ?? {};
 
   const fmt = FORMATOS_PIEZA[pz.formato] ?? FORMATOS_PIEZA.cuadrado;
@@ -215,7 +232,10 @@ ${prompt}${guia}`,
     console.warn("[pieza] brief de Claude", err);
   }
 
-  const img = await generarImagen(final, fmt.ratio, imagenes);
+  const img = await generarImagen(final, fmt.ratio, imagenes).catch(async (err) => {
+    await ref.update({ generando_at: null }).catch(() => undefined);
+    throw err;
+  });
   const n = (pz.versiones?.length ?? 0) + 1;
   const ext = img.mime.includes("jpeg") ? "jpg" : "png";
   const up = await uploadBufferToDrive({
@@ -227,6 +247,7 @@ ${prompt}${guia}`,
   const now = new Date().toISOString();
   await ref.update({
     estado: "en_proceso",
+    generando_at: null,
     updated_at: now,
     versiones: FieldValue.arrayUnion({
       id: `v${n}_${Date.now()}`,
@@ -264,6 +285,7 @@ async function piezaEditar(req: VercelRequest) {
   if (!pz) throw new HttpError(404, "Pieza no encontrada");
   await assertProjectAccess(caller, pz.proyecto_id);
   if (["cancelada", "rechazada", "pendiente_pago"].includes(pz.estado)) throw new HttpError(409, "Esta pieza no se puede editar");
+  await tomarTurnoPieza(pieza_id);
   const v = ((pz.versiones ?? []) as { id: string; drive_file_id: string; mime_type?: string }[]).find((x) => x.id === version_id);
   if (!v) throw new HttpError(404, "Versión no encontrada");
   if (v.mime_type === "application/pdf") throw new HttpError(409, "Los PDF no se editan con IA");
@@ -307,7 +329,10 @@ Escribí UNA instrucción de edición precisa (máximo 90 palabras): qué cambia
     }`,
     destino.ratio,
     marca ? [original, { data: marca, mime: "image/jpeg" }] : [original]
-  );
+  ).catch(async (err) => {
+    await ref.update({ generando_at: null }).catch(() => undefined);
+    throw err;
+  });
   const n = (pz.versiones?.length ?? 0) + 1;
   const ext = img.mime.includes("jpeg") ? "jpg" : "png";
   const up = await uploadBufferToDrive({
@@ -320,6 +345,7 @@ Escribí UNA instrucción de edición precisa (máximo 90 palabras): qué cambia
   const id = `v${n}_${Date.now()}`;
   await ref.update({
     ...(pz.estado === "pagada" ? { estado: "en_proceso" } : {}),
+    generando_at: null,
     updated_at: now,
     versiones: FieldValue.arrayUnion({ id, ...up, prompt: `Edición${z ? " (zona marcada)" : ""}: ${pedido}`, edita_a: version_id, created_at: now, created_by: caller.uid }),
   });
