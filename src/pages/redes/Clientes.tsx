@@ -32,6 +32,7 @@ import { useAppData } from "@/contexts/app-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { LogoCliente } from "@/components/redes/LogoCliente";
 import { QuienSubeDialog } from "@/components/redes/QuienSubeDialog";
+import { ClientesViejos } from "@/components/redes/admin/HistorialFacturas";
 import { formatARS, hoyISO, mesActual } from "@/lib/redes/format";
 import { planDe, usoPlan } from "@/lib/redes/planes";
 
@@ -147,6 +148,7 @@ export default function Clientes() {
         </div>
         </>
       )}
+      {isAdmin && <ClientesViejos />}
       <NuevoClienteDialog open={nuevo} onOpenChange={setNuevo} />
       {isAdmin && <QuienSubeDialog open={quienSube} onOpenChange={setQuienSube} clientes={clientes} />}
     </PageShell>

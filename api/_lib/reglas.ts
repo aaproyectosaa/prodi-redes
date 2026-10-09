@@ -248,6 +248,7 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
       return esFinanzas(c) || (d.uid === c.uid && !d.importado);
     // Facturado por mes de antes del sistema y lo que deben los clientes (planes de pago): solo administración.
     case "historico_mensual":
+    case "historico_facturas":
     case "deudas_clientes":
       return esFinanzas(c);
     case "gastos":
@@ -377,6 +378,7 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
     case "gastos":
     case "obligaciones":
     case "historico_mensual":
+    case "historico_facturas":
     case "deudas_clientes":
       return esFinanzas(c);
     case "planes_redes":

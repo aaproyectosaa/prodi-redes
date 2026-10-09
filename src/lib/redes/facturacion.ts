@@ -771,6 +771,35 @@ export function useHistorico(enabled = true): Record<string, HistoricoMes> {
   return h;
 }
 
+/** Una boleta/factura de antes del sistema (planilla 2025), por cliente. Solo administración. */
+export interface FacturaHistorica {
+  id: string;
+  proyecto_id: string;
+  cliente: string;
+  mes: string;
+  servicio: string;
+  neto: number;
+  bruto: number;
+  cobrado: number;
+  fecha_pago: string | null;
+  forma: string | null;
+}
+
+/** Historial de la planilla de un cliente (o de todos si no se pasa id), del más nuevo al más viejo. */
+export function useFacturasHistoricas(proyectoId: string | null, enabled = true): FacturaHistorica[] {
+  const [l, setL] = useState<FacturaHistorica[]>([]);
+  useEffect(() => {
+    if (!enabled) return;
+    const ref = proyectoId ? query(collection(db, "historico_facturas"), where("proyecto_id", "==", proyectoId)) : collection(db, "historico_facturas");
+    return onSnapshot(
+      ref,
+      (s) => setL(s.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<FacturaHistorica, "id">) })).sort((a, b) => b.mes.localeCompare(a.mes))),
+      () => setL([])
+    );
+  }, [proyectoId, enabled]);
+  return l;
+}
+
 // ---------------------------------------------------------------------------
 // Lo que deben los clientes (planes de pago y deudas viejas)
 // ---------------------------------------------------------------------------

@@ -35,6 +35,7 @@ import { formatARS, mesActual, mesLabel, sumarMeses, fechaCorta } from "@/lib/re
 import { planDe, usoPlan } from "@/lib/redes/planes";
 import { DIA_VENCIMIENTO, totalMensual } from "@/lib/redes/facturacion";
 import { PlazoPago } from "@/components/redes/admin/PlazoPago";
+import { HistorialFacturas } from "@/components/redes/admin/HistorialFacturas";
 import { errorPlazo, plazoInicial, plazoParaGuardar } from "@/lib/redes/plazoPago";
 import { callApi } from "@/lib/redes/api";
 import { CONDICIONES_IVA, type CondicionIva, type Project, type ProjectTeamRole, type QuienFilma, type QuienPublica, type ServicioCliente } from "@/integrations/firebase/types";
@@ -218,6 +219,7 @@ export default function ClienteDetalle() {
                 </div>
               )}
             </Section>
+            <HistorialFacturas proyectoId={cliente.id} />
           </TabsContent>
         )}
       </Tabs>
