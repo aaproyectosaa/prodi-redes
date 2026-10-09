@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputNumero } from "@/components/ui/input-numero";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -267,13 +268,13 @@ function PersonaPago({
             {modo !== "por_unidad" && (
               <div className="space-y-1">
                 <Label className="text-[11px]">{modo === "por_cliente" ? "Fijo por mes (opcional)" : "Fijo por mes"}</Label>
-                <Input inputMode="numeric" value={fijo} onChange={(e) => setFijo(e.target.value.replace(/\D/g, ""))} />
+                <InputNumero value={fijo} onChange={(e) => setFijo(e.target.value.replace(/\D/g, ""))} />
               </div>
             )}
             {modo !== "fijo" && modo !== "por_cliente" && (
               <div className="space-y-1">
                 <Label className="text-[11px]">Por {unidad.label}</Label>
-                <Input inputMode="numeric" value={porUnidad} onChange={(e) => setPorUnidad(e.target.value.replace(/\D/g, ""))} />
+                <InputNumero value={porUnidad} onChange={(e) => setPorUnidad(e.target.value.replace(/\D/g, ""))} />
               </div>
             )}
           </div>
@@ -283,9 +284,8 @@ function PersonaPago({
                 Tildá los clientes que lleva y cuánto le pagás por cada uno. Si uno da más trabajo, cambiale el monto solo a ese.
               </p>
               <div className="flex gap-2">
-                <Input
+                <InputNumero
                   className="h-8"
-                  inputMode="numeric"
                   placeholder="Mismo monto para todos los tildados"
                   value={base}
                   onChange={(e) => setBase(e.target.value.replace(/\D/g, ""))}
@@ -322,9 +322,8 @@ function PersonaPago({
                         {asignados.some((a) => a.id === c.id) && <span className="ml-1.5 text-[10px] text-muted-foreground">asignado</span>}
                       </span>
                       {tildado && (
-                        <Input
+                        <InputNumero
                           className="h-7 w-28 text-right"
-                          inputMode="numeric"
                           placeholder="$"
                           aria-label={`Monto por ${c.nombre}`}
                           value={porCliente[c.id]}
@@ -362,7 +361,7 @@ function PersonaPago({
               <summary className="cursor-pointer rounded-md px-2 py-1.5 text-muted-foreground hover:bg-muted">+ Bono o descuento</summary>
               <div className="mt-2 flex gap-2">
                 <Input className="h-8" value={ajuste.concepto} onChange={(e) => setAjuste((a) => ({ ...a, concepto: e.target.value }))} placeholder="Concepto" />
-                <Input className="h-8 w-28" value={ajuste.monto} onChange={(e) => setAjuste((a) => ({ ...a, monto: e.target.value }))} placeholder="Monto" inputMode="numeric" />
+                <InputNumero negativos className="h-8 w-28" value={ajuste.monto} onChange={(e) => setAjuste((a) => ({ ...a, monto: e.target.value }))} placeholder="Monto" />
                 <Button size="sm" className="h-8" onClick={() => void sumarAjuste()}>
                   Sumar
                 </Button>

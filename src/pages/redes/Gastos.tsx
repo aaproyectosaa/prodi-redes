@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Copy, FileSpreadsheet, Loader2, Pencil, Plus
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputNumero } from "@/components/ui/input-numero";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -262,7 +263,7 @@ function GastoDialog({ gasto, mes, onClose, uid }: { gasto: Gasto | "nuevo" | nu
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label className="text-xs">Monto</Label>
-              <Input inputMode="numeric" value={monto} onChange={(e) => setMonto(e.target.value.replace(/\D/g, ""))} placeholder="$" />
+              <InputNumero value={monto} onChange={(e) => setMonto(e.target.value.replace(/\D/g, ""))} placeholder="$" />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Fecha</Label>

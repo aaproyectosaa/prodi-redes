@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputNumero } from "@/components/ui/input-numero";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -273,8 +274,7 @@ export function DatosFacturacionDialog({ proyectoId, onClose }: { proyectoId: st
           {fijos.map((x, i) => (
             <div key={i} className="flex gap-2">
               <Input value={x.concepto} onChange={(e) => setFijos(fijos.map((y, j) => (j === i ? { ...y, concepto: e.target.value } : y)))} placeholder="Ej.: Combustible" />
-              <Input
-                inputMode="numeric"
+              <InputNumero
                 className="w-28"
                 value={x.neto}
                 onChange={(e) => setFijos(fijos.map((y, j) => (j === i ? { ...y, neto: e.target.value.replace(/\D/g, "") } : y)))}
@@ -372,8 +372,7 @@ export function EditarFacturaDialog({ f, onClose, ivaPct }: { f: FacturaDoc | nu
                 onChange={(e) => setItems((p) => p.map((x) => (x.id === it.id ? { ...x, concepto: e.target.value } : x)))}
                 placeholder="Concepto"
               />
-              <Input
-                inputMode="numeric"
+              <InputNumero
                 className="w-32 text-right"
                 value={String(it.neto)}
                 onChange={(e) => setItems((p) => p.map((x) => (x.id === it.id ? { ...x, neto: Number(e.target.value.replace(/\D/g, "")) || 0 } : x)))}

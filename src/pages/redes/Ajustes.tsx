@@ -6,6 +6,7 @@ import { db } from "@/integrations/firebase/client";
 import { assertEditable } from "@/lib/redes/vistaComo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputNumero } from "@/components/ui/input-numero";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -105,11 +106,11 @@ export default function Ajustes() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Pieza para redes</Label>
-                  <Input inputMode="numeric" value={precioPieza} onChange={(e) => setPrecioPieza(e.target.value.replace(/\D/g, ""))} />
+                  <InputNumero value={precioPieza} onChange={(e) => setPrecioPieza(e.target.value.replace(/\D/g, ""))} />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Pieza para imprimir</Label>
-                  <Input inputMode="numeric" value={precioImpresion} onChange={(e) => setPrecioImpresion(e.target.value.replace(/\D/g, ""))} />
+                  <InputNumero value={precioImpresion} onChange={(e) => setPrecioImpresion(e.target.value.replace(/\D/g, ""))} />
                 </div>
               </div>
               <p className="-mt-2 text-xs text-muted-foreground">
@@ -332,19 +333,19 @@ function PlanRow({ plan }: { plan: PlanRedes }) {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div className="space-y-1">
           <Label className="text-xs">Videos por mes</Label>
-          <Input inputMode="numeric" value={f.videos_mes} onChange={(e) => set({ videos_mes: Number(e.target.value.replace(/\D/g, "")) || 0 })} />
+          <InputNumero value={f.videos_mes} onChange={(e) => set({ videos_mes: Number(e.target.value.replace(/\D/g, "")) || 0 })} />
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Piezas por mes</Label>
-          <Input inputMode="numeric" value={f.piezas_mes ?? 0} onChange={(e) => set({ piezas_mes: Number(e.target.value.replace(/\D/g, "")) || 0 })} />
+          <InputNumero value={f.piezas_mes ?? 0} onChange={(e) => set({ piezas_mes: Number(e.target.value.replace(/\D/g, "")) || 0 })} />
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Abono mensual</Label>
-          <Input inputMode="numeric" value={f.precio_mensual} onChange={(e) => set({ precio_mensual: Number(e.target.value.replace(/\D/g, "")) || 0 })} />
+          <InputNumero value={f.precio_mensual} onChange={(e) => set({ precio_mensual: Number(e.target.value.replace(/\D/g, "")) || 0 })} />
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Video extra</Label>
-          <Input inputMode="numeric" value={f.precio_video_extra} onChange={(e) => set({ precio_video_extra: Number(e.target.value.replace(/\D/g, "")) || 0 })} />
+          <InputNumero value={f.precio_video_extra} onChange={(e) => set({ precio_video_extra: Number(e.target.value.replace(/\D/g, "")) || 0 })} />
         </div>
       </div>
       <div className="flex items-center justify-between gap-2">

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { db } from "@/integrations/firebase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputNumero } from "@/components/ui/input-numero";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -413,19 +414,19 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <div className="space-y-1">
                   <Label className="text-xs">Piezas/mes</Label>
-                  <Input inputMode="numeric" value={form.ovPiezas} onChange={(e) => set("ovPiezas", e.target.value.replace(/\D/g, ""))} />
+                  <InputNumero value={form.ovPiezas} onChange={(e) => set("ovPiezas", e.target.value.replace(/\D/g, ""))} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Videos/mes</Label>
-                  <Input inputMode="numeric" value={form.ovVideos} onChange={(e) => set("ovVideos", e.target.value.replace(/\D/g, ""))} />
+                  <InputNumero value={form.ovVideos} onChange={(e) => set("ovVideos", e.target.value.replace(/\D/g, ""))} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Abono $</Label>
-                  <Input inputMode="numeric" value={form.ovPrecio} onChange={(e) => set("ovPrecio", e.target.value.replace(/\D/g, ""))} />
+                  <InputNumero value={form.ovPrecio} onChange={(e) => set("ovPrecio", e.target.value.replace(/\D/g, ""))} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Video extra $</Label>
-                  <Input inputMode="numeric" value={form.ovExtra} onChange={(e) => set("ovExtra", e.target.value.replace(/\D/g, ""))} />
+                  <InputNumero value={form.ovExtra} onChange={(e) => set("ovExtra", e.target.value.replace(/\D/g, ""))} />
                 </div>
               </div>
             </div>
@@ -599,8 +600,7 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
                     onChange={(e) => set("factFijos", form.factFijos.map((y, j) => (j === i ? { ...y, concepto: e.target.value } : y)))}
                     placeholder="Ej.: Combustible"
                   />
-                  <Input
-                    inputMode="numeric"
+                  <InputNumero
                     className="w-28"
                     value={x.neto}
                     onChange={(e) => set("factFijos", form.factFijos.map((y, j) => (j === i ? { ...y, neto: e.target.value.replace(/\D/g, "") } : y)))}

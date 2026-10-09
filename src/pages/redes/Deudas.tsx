@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputNumero } from "@/components/ui/input-numero";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState, PageShell, Section, StatCard } from "@/components/redes/PageShell";
@@ -261,7 +262,7 @@ function PagarDialog({ o, c, onClose }: { o: Obligacion; c: Cuota; onClose: () =
   const ok = async () => {
     setGuardando(true);
     try {
-      await pagarCuota(o, c.n, medio, Number(monto.replace(/\D/g, "")));
+      await pagarCuota(o, c.n, medio, Number(monto));
       toast.success("Pagada. Ya está en el libro del mes.");
       onClose();
     } catch (e) {
@@ -282,7 +283,7 @@ function PagarDialog({ o, c, onClose }: { o: Obligacion; c: Cuota; onClose: () =
         <div className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="monto-pago">¿Cuánto pagaste?</Label>
-            <Input id="monto-pago" inputMode="numeric" value={monto} onChange={(e) => setMonto(e.target.value)} className="text-lg font-semibold tabular-nums" />
+            <InputNumero decimales id="monto-pago" value={monto} onChange={(e) => setMonto(e.target.value)} className="text-lg font-semibold tabular-nums" />
             {o.tipo === "impuesto" && <p className="text-xs text-muted-foreground">Si este mes vino distinto, poné lo que pagaste de verdad.</p>}
           </div>
           <div className="space-y-1.5">
@@ -308,7 +309,7 @@ function PagarDialog({ o, c, onClose }: { o: Obligacion; c: Cuota; onClose: () =
           <Button variant="ghost" onClick={onClose}>
             Cancelar
           </Button>
-          <Button onClick={ok} disabled={guardando || !Number(monto.replace(/\D/g, ""))}>
+          <Button onClick={ok} disabled={guardando || !Number(monto)}>
             {guardando ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Check className="mr-1.5 h-4 w-4" />} Marcar pagada
           </Button>
         </DialogFooter>
@@ -327,7 +328,7 @@ function DetalleObligacion({ o, hoy, onClose, onPagar }: { o: Obligacion; hoy: s
     try {
       await guardarCuotas(
         o,
-        o.cuotas.map((c) => (montos[c.n] != null ? { ...c, monto: Number(montos[c.n].replace(/\D/g, "")) || c.monto } : c))
+        o.cuotas.map((c) => (montos[c.n] != null ? { ...c, monto: Number(montos[c.n]) || c.monto } : c))
       );
       toast.success("Montos guardados");
       setEditando(false);
@@ -354,9 +355,9 @@ function DetalleObligacion({ o, hoy, onClose, onPagar }: { o: Obligacion; hoy: s
                 <span className="w-8 shrink-0 text-xs text-muted-foreground tabular-nums">{o.tipo === "impuesto" ? MESES_CORTOS[Number(c.vence.slice(5, 7)) - 1] : `#${c.n}`}</span>
                 <span className={cn("w-20 shrink-0 tabular-nums", !c.pagada && c.vence < hoy && "font-medium text-destructive")}>{ddmmaa(c.vence)}</span>
                 {editando && !c.pagada ? (
-                  <Input
+                  <InputNumero
+                    decimales
                     aria-label={`Monto cuota ${c.n}`}
-                    inputMode="numeric"
                     className="h-8 flex-1"
                     value={montos[c.n] ?? String(c.monto)}
                     onChange={(e) => setMontos((m) => ({ ...m, [c.n]: e.target.value }))}
@@ -458,7 +459,7 @@ function NuevaObligacion({ onClose }: { onClose: () => void }) {
   };
   const n = Math.max(1, Math.min(120, Number(cantidad) || 0));
   const pagadas = tipo === "impuesto" ? 0 : Math.max(0, Math.min(n - 1, Number(yaPagadas) || 0));
-  const m = Number(monto.replace(/\D/g, "")) || 0;
+  const m = Number(monto) || 0;
   const cuotas = useMemo(() => {
     if (!primera) return [];
     const base = sumarMeses(primera, -pagadas);
@@ -533,7 +534,7 @@ function NuevaObligacion({ onClose }: { onClose: () => void }) {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ob-monto">{tipo === "impuesto" ? "Monto de cada mes" : "Monto de cada cuota"}</Label>
-                <Input id="ob-monto" inputMode="numeric" placeholder="$" value={monto} onChange={(e) => setMonto(e.target.value)} />
+                <InputNumero decimales id="ob-monto" placeholder="$" value={monto} onChange={(e) => setMonto(e.target.value)} />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ob-primera">{pagadas ? "Próximo vencimiento" : "Primer vencimiento"}</Label>

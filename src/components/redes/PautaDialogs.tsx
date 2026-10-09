@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputNumero } from "@/components/ui/input-numero";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -70,8 +71,7 @@ function PautaFields({
           <div className="grid grid-cols-3 gap-2">
             <div className="col-span-3 space-y-1.5 sm:col-span-1">
               <Label>Presupuesto (ARS)</Label>
-              <Input
-                inputMode="numeric"
+              <InputNumero
                 value={pauta.presupuesto ?? ""}
                 onChange={(e) => setPauta({ ...pauta, presupuesto: num(e.target.value) })}
                 placeholder="50000"
@@ -370,8 +370,7 @@ export function ResultadosDialog({
           {CAMPOS.map((c) => (
             <div key={c.key} className="space-y-1">
               <Label>{c.label}</Label>
-              <Input
-                inputMode="numeric"
+              <InputNumero
                 value={vals[c.key] ?? ""}
                 onChange={(e) => setVals((p) => ({ ...p, [c.key]: e.target.value }))}
                 placeholder="—"
