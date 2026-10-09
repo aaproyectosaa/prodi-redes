@@ -232,7 +232,16 @@ ${prompt}${guia}`,
  */
 async function piezaEditar(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "productor", "diseno"]);
-  const { pieza_id, version_id, instruccion, formato } = body<{ pieza_id?: string; version_id?: string; instruccion?: string; formato?: string }>(req);
+  const { pieza_id, version_id, instruccion, formato, zona, marcada } = body<{
+    pieza_id?: string;
+    version_id?: string;
+    instruccion?: string;
+    formato?: string;
+    /** Zona marcada en el editor (fracciones 0 a 1 de la imagen): solo se cambia ahí. */
+    zona?: { x?: number; y?: number; w?: number; h?: number } | null;
+    /** La misma imagen con la zona pintada en rojo (JPEG en base64), para que Gemini vea dónde. */
+    marcada?: string | null;
+  }>(req);
   const pedido = String(instruccion ?? "").trim().slice(0, 600);
   if (!pieza_id || !version_id || pedido.length < 3) throw new HttpError(400, "Contá qué le querés cambiar");
   const db = adminDb();
@@ -248,14 +257,21 @@ async function piezaEditar(req: VercelRequest) {
   const base = FORMATOS_PIEZA[pz.formato] ?? FORMATOS_PIEZA.cuadrado;
   const destino = formato && FORMATOS_PIEZA[formato] ? FORMATOS_PIEZA[formato] : base;
   const original = await descargarDrive(v.drive_file_id, 15 * 1024 * 1024);
+  const fr = (n: unknown) => Math.min(1, Math.max(0, Number(n) || 0));
+  const z = zona && fr(zona.w) > 0.01 && fr(zona.h) > 0.01 ? { x: fr(zona.x), y: fr(zona.y), w: fr(zona.w), h: fr(zona.h) } : null;
+  const pct = (n: number) => `${Math.round(n * 100)}%`;
+  const dondeTexto = z
+    ? `SOLO en la zona marcada: empieza a ${pct(z.x)} desde la izquierda y ${pct(z.y)} desde arriba, mide ${pct(z.w)} de ancho y ${pct(z.h)} de alto. Fuera de esa zona no cambies nada.`
+    : "";
+  const marca = typeof marcada === "string" && /^[A-Za-z0-9+/=]+$/.test(marcada) && marcada.length < 4_000_000 ? Buffer.from(marcada, "base64") : null;
 
   // Claude: el pedido suelto → instrucción de edición concreta, cuidando la marca y lo que no hay que tocar.
-  let instr = `Editá esta imagen: ${pedido}. Mantené todo lo demás igual (textos, logo, colores y composición), salvo lo que se pide cambiar.`;
+  let instr = `Editá esta imagen: ${pedido}. ${dondeTexto} Mantené todo lo demás igual (textos, logo, colores y composición), salvo lo que se pide cambiar.`;
   try {
     const ver = /^image\/(jpeg|png|gif|webp)$/.test(original.mime) && original.data.length < 4_500_000;
     const r = await generarJSON<{ instruccion?: string }>(
       `Sos director de arte. Hay que editar la pieza adjunta con un editor de imágenes IA (Gemini).
-Pedido del equipo: "${pedido}"${destino !== base ? `\nAdemás hay que adaptarla al formato ${destino.ratio} (${destino.uso}): reacomodá la composición sin cortar textos ni el logo.` : ""}
+Pedido del equipo: "${pedido}"${dondeTexto ? `\nDónde: ${dondeTexto}` : ""}${destino !== base ? `\nAdemás hay que adaptarla al formato ${destino.ratio} (${destino.uso}): reacomodá la composición sin cortar textos ni el logo.` : ""}
 ${marcaTexto(p)}
 Escribí UNA instrucción de edición precisa (máximo 90 palabras): qué cambiar exactamente y qué dejar igual (textos tal cual, logo intacto sin redibujar, colores de marca). No agregues textos nuevos salvo que el pedido lo diga.`,
       { type: "OBJECT", properties: { instruccion: { type: "STRING" } }, required: ["instruccion"] },
@@ -267,7 +283,17 @@ Escribí UNA instrucción de edición precisa (máximo 90 palabras): qué cambia
     console.warn("[pieza-editar] instrucción de Claude", err);
   }
 
-  const img = await generarImagen(`${instr}\nLa imagen adjunta es la pieza a editar: trabajá sobre ella.`, destino.ratio, [original]);
+  const img = await generarImagen(
+    `${instr}\nLa primera imagen adjunta es la pieza a editar: trabajá sobre ella.${
+      marca
+        ? "\nLa segunda imagen es la misma pieza con un recuadro ROJO que marca la zona a cambiar: cambiá solo esa zona y entregá la pieza SIN el recuadro rojo."
+        : z
+          ? `\n${dondeTexto}`
+          : ""
+    }`,
+    destino.ratio,
+    marca ? [original, { data: marca, mime: "image/jpeg" }] : [original]
+  );
   const n = (pz.versiones?.length ?? 0) + 1;
   const ext = img.mime.includes("jpeg") ? "jpg" : "png";
   const up = await uploadBufferToDrive({
@@ -281,7 +307,7 @@ Escribí UNA instrucción de edición precisa (máximo 90 palabras): qué cambia
   await ref.update({
     ...(pz.estado === "pagada" ? { estado: "en_proceso" } : {}),
     updated_at: now,
-    versiones: FieldValue.arrayUnion({ id, ...up, prompt: `Edición de v: ${pedido}`, edita_a: version_id, created_at: now, created_by: caller.uid }),
+    versiones: FieldValue.arrayUnion({ id, ...up, prompt: `Edición${z ? " (zona marcada)" : ""}: ${pedido}`, edita_a: version_id, created_at: now, created_by: caller.uid }),
   });
   return { ok: true, version_id: id };
 }

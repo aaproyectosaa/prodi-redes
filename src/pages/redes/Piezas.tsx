@@ -44,6 +44,7 @@ import { sinDisenadora } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import type { PiezaIA } from "@/lib/redes/types";
 import { HablarConCliente } from "@/components/redes/HablarConCliente";
+import { EditorPieza } from "@/components/redes/EditorPieza";
 
 const TIPOS_CAL: Record<string, TipoCal> = {
   entregar: { label: "Para entregar", icon: Flag, chip: "bg-amber-500/12 text-amber-700 dark:text-amber-300 border-amber-500/30", dot: "bg-amber-500" },
@@ -546,12 +547,11 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
             onClose();
           }}
         />
-        <VerVersion
-          v={ver}
-          titulo={`Versión ${ver ? versiones.findIndex((x) => x.id === ver.id) + 1 : ""}`}
-          onClose={() => setVer(null)}
-          edicion={pieza && !["cancelada", "rechazada", "pendiente_pago"].includes(pieza.estado) ? { piezaId: pieza.id } : undefined}
-        />
+        {pieza && ver && ver.mime_type !== "application/pdf" && !["cancelada", "rechazada", "pendiente_pago"].includes(pieza.estado) ? (
+          <EditorPieza v={ver} titulo={`${pieza.producto || "Pieza"} · Versión ${versiones.findIndex((x) => x.id === ver.id) + 1}`} piezaId={pieza.id} onClose={() => setVer(null)} />
+        ) : (
+          <VerVersion v={ver} titulo={`Versión ${ver ? versiones.findIndex((x) => x.id === ver.id) + 1 : ""}`} onClose={() => setVer(null)} />
+        )}
       </DialogContent>
     </Dialog>
   );
