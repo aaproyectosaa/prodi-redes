@@ -95,7 +95,7 @@ export default function Ajustes() {
           </Section>
 
           <Section title="Con qué IA se hace cada cosa" description="Cada tarea con la que mejor la hace. Las claves se cargan en Vercel (Settings → Environment Variables) y después se hace Redeploy.">
-            <IAConexiones imagenes={settings.ia_imagenes === "gemini" ? "gemini" : "openai"} onImagenes={(v) => void guardar("ia-img", { ia_imagenes: v })} />
+            <IAConexiones />
           </Section>
         </div>
 
@@ -490,10 +490,10 @@ function EjemploCard() {
   );
 }
 
-type EstadoIA = { claude: boolean; openai: boolean; gemini: boolean; modelo_claude: string };
+type EstadoIA = { claude: boolean; gemini: boolean; modelo_claude: string };
 
-/** Qué IA hace cada cosa, si su clave está cargada, y la elección para las imágenes. */
-function IAConexiones({ imagenes, onImagenes }: { imagenes: "openai" | "gemini"; onImagenes: (v: "openai" | "gemini") => void }) {
+/** Qué IA hace cada cosa y si su clave está cargada. */
+function IAConexiones() {
   const [estado, setEstado] = useState<EstadoIA | null>(null);
   useEffect(() => {
     callApi<EstadoIA>("/api/ia/estado", {})
@@ -519,26 +519,13 @@ function IAConexiones({ imagenes, onImagenes }: { imagenes: "openai" | "gemini";
     },
     {
       que: "Imágenes de las piezas",
-      detalle: "ChatGPT escribe mejor el texto dentro de la imagen; Gemini es más rápido y barato",
-      con: (
-        <div className="grid grid-cols-2 gap-1 rounded-lg border bg-muted/40 p-0.5">
-          {(["openai", "gemini"] as const).map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => p !== imagenes && onImagenes(p)}
-              className={cn("rounded-md px-2.5 py-1 text-xs font-medium transition-all", imagenes === p ? "bg-background shadow-sm" : "text-muted-foreground")}
-            >
-              {p === "openai" ? "ChatGPT" : "Gemini"}
-            </button>
-          ))}
-        </div>
-      ),
-      clave: <Clave ok={imagenes === "openai" ? estado?.openai : estado?.gemini} nombre={imagenes === "openai" ? "OPENAI_API_KEY" : "GEMINI_API_KEY"} />,
+      detalle: "Las piezas gráficas con la marca del cliente",
+      con: <b>Gemini</b>,
+      clave: <Clave ok={estado?.gemini} nombre="GEMINI_API_KEY" />,
     },
     {
-      que: "Minutas desde el audio",
-      detalle: "Escucha la grabación de la reunión entera",
+      que: "Audios",
+      detalle: "Minutas desde la grabación de una reunión y mensajes de voz a Prodi",
       con: <b>Gemini</b>,
       clave: <Clave ok={estado?.gemini} nombre="GEMINI_API_KEY" />,
     },

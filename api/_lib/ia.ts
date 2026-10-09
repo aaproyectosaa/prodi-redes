@@ -3,15 +3,13 @@
 //
 // - Texto (copys, guiones, plan del mes, @prodi en el chat, memoria de los chats, minutas escritas): Claude
 //   (ANTHROPIC_API_KEY; modelo en ANTHROPIC_MODEL, por defecto Claude Opus 5.5). Sin esa clave, Gemini.
-// - Imágenes de las piezas: ChatGPT (OPENAI_API_KEY) o Gemini (GEMINI_API_KEY), según Ajustes
-//   (app_settings/redes.ia_imagenes). Si la elegida no tiene clave, se usa la otra.
-// - Minutas desde el audio de una reunión: Gemini (es el que escucha audio largo de una vez).
+// - Imágenes de las piezas, minutas desde el audio de una reunión y mensajes de voz del chat: Gemini
+//   (GEMINI_API_KEY). Claude no hace imágenes ni escucha audio. ChatGPT no se usa.
 //
 // Los esquemas de las respuestas se escriben como antes (formato de Gemini: OBJECT, STRING…) y acá se
 // pasan a JSON Schema para Claude, así no cambia nada en quien los usa.
 
 import Anthropic from "@anthropic-ai/sdk";
-import { adminDb } from "./db";
 import * as gemini from "./gemini";
 
 export type { MinutaIA } from "./gemini";
@@ -23,7 +21,6 @@ type Ratio = "1:1" | "4:5" | "9:16" | "16:9" | "2:3" | "3:4" | "21:9";
 const MODELO = () => process.env.ANTHROPIC_MODEL || "claude-opus-5-5";
 const hayClaude = () => !!(process.env.ANTHROPIC_API_KEY ?? "").replace(/[\s"']/g, "");
 const hayGemini = () => !!process.env.GEMINI_API_KEY?.trim();
-const hayOpenAI = () => !!process.env.OPENAI_API_KEY?.trim();
 
 /** La clave como viene de Vercel, sin espacios, saltos de línea ni comillas pegados al copiarla. */
 const claveClaude = () => (process.env.ANTHROPIC_API_KEY ?? "").trim().replace(/^["']|["']$/g, "").replace(/\s+/g, "");
@@ -187,77 +184,15 @@ export async function generarMinutaIA(prompt: string, audio?: { data: Buffer; mi
 // Imágenes
 // ---------------------------------------------------------------------------
 
-export type ProveedorImagenes = "openai" | "gemini";
-
-/** Con qué se hacen las imágenes: lo elegido en Ajustes, si tiene clave; si no, el que tenga. */
-async function proveedorImagenes(): Promise<ProveedorImagenes> {
-  const cfg = (await adminDb().collection("app_settings").doc("redes").get()).data() ?? {};
-  const elegido: ProveedorImagenes = cfg.ia_imagenes === "gemini" ? "gemini" : "openai";
-  const tiene = (p: ProveedorImagenes) => (p === "openai" ? hayOpenAI() : hayGemini());
-  if (tiene(elegido)) return elegido;
-  const otro: ProveedorImagenes = elegido === "openai" ? "gemini" : "openai";
-  if (tiene(otro)) return otro;
-  throw new Error(
-    elegido === "openai"
-      ? "Falta la clave de ChatGPT (OPENAI_API_KEY) en Vercel para hacer las imágenes."
-      : "Falta la clave de Gemini (GEMINI_API_KEY) en Vercel para hacer las imágenes."
-  );
-}
-
-/** ChatGPT hace 3 tamaños: cuadrado, vertical (2:3) y horizontal (3:2). */
-function tamanoOpenAI(ratio: Ratio): string {
-  if (ratio === "1:1") return "1024x1024";
-  if (ratio === "16:9" || ratio === "21:9") return "1536x1024";
-  return "1024x1536";
-}
-
-async function imagenOpenAI(prompt: string, ratio: Ratio, imagenes: { data: Buffer; mime: string }[]): Promise<{ data: Buffer; mime: string }> {
-  const modelo = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1";
-  const calidad = process.env.OPENAI_IMAGE_QUALITY || "high";
-  const size = tamanoOpenAI(ratio);
-  // El formato exacto va en el pedido (el tamaño de ChatGPT es aproximado: 2:3 para 9:16 o 4:5).
-  const texto = `${prompt}\n\nFormato de la pieza: ${ratio}. Dejá aire en los bordes para que se pueda recortar a ese formato sin cortar texto.`;
-  const headers = { Authorization: `Bearer ${process.env.OPENAI_API_KEY!.trim()}` };
-  let res: Response;
-  if (imagenes.length) {
-    // Con referencias (logo, piezas de la marca): edición con las imágenes de base.
-    const form = new FormData();
-    form.append("model", modelo);
-    form.append("prompt", texto);
-    form.append("size", size);
-    form.append("quality", calidad);
-    imagenes.slice(0, 10).forEach((img, i) => {
-      const ext = img.mime.includes("jpeg") || img.mime.includes("jpg") ? "jpg" : img.mime.includes("webp") ? "webp" : "png";
-      form.append("image[]", new Blob([new Uint8Array(img.data)], { type: img.mime }), `referencia-${i + 1}.${ext}`);
-    });
-    res = await fetch("https://api.openai.com/v1/images/edits", { method: "POST", headers, body: form });
-  } else {
-    res = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: modelo, prompt: texto, size, quality: calidad, n: 1 }),
-    });
-  }
-  const json: any = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    if (res.status === 401) throw new Error("La clave de ChatGPT (OPENAI_API_KEY) no es válida. Revisala en Vercel.");
-    if (res.status === 429) throw new Error("ChatGPT: sin saldo o muchos pedidos seguidos. Revisá el saldo en platform.openai.com.");
-    throw new Error(`ChatGPT no pudo hacer la imagen: ${json?.error?.message ?? res.status}`);
-  }
-  const b64 = json?.data?.[0]?.b64_json;
-  if (!b64) throw new Error("ChatGPT no devolvió una imagen. Probá ajustar el pedido.");
-  return { data: Buffer.from(b64, "base64"), mime: "image/png" };
-}
-
-/** Genera una imagen con el proveedor elegido en Ajustes. Devuelve el binario y su mime. */
+/** Genera una imagen con Gemini. Devuelve el binario y su mime. */
 export async function generarImagen(
   prompt: string,
   aspectRatio: Ratio,
   /** Imágenes de referencia (logo, piezas de la marca). */
   imagenes: { data: Buffer; mime: string }[] = []
 ): Promise<{ data: Buffer; mime: string }> {
-  const p = await proveedorImagenes();
-  return p === "openai" ? imagenOpenAI(prompt, aspectRatio, imagenes) : gemini.generarImagen(prompt, aspectRatio, imagenes);
+  if (!hayGemini()) throw new Error("Falta la clave de Gemini (GEMINI_API_KEY) en Vercel para hacer las imágenes.");
+  return gemini.generarImagen(prompt, aspectRatio, imagenes);
 }
 
 /** Mensaje de voz a texto: Gemini (Claude no recibe audio). */

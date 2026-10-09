@@ -16,7 +16,6 @@ Estado al **8/10/2026** (según los registros de Vercel y la base):
 | `ANTHROPIC_API_KEY` | ❌ "la clave no es válida" (401) | IA de texto: @prodi, copys, guiones, plan del mes, memoria, minutas escritas | console.anthropic.com → Claves de API → Crear clave (**Vence: Nunca**). Cuenta de Lucas (org Prodi) |
 | `RESEND_API_KEY` | ❌ "API key is invalid" (401): **no sale ningún mail** | Todos los mails: boletas, avisos, links de contraseña, recordatorios de cobro | resend.com → API Keys. Antes: Domains → verificar `somosprodi.com` (registros DNS) |
 | `GEMINI_API_KEY` | ❌ falta o no es válida | Minutas desde el audio de las reuniones (y las imágenes si en Ajustes se elige Gemini) | aistudio.google.com/apikey → Create API key → **Set up billing** (pago, así Google no usa los datos) |
-| `OPENAI_API_KEY` | ➕ no está | Imágenes de las piezas gráficas (si en Ajustes está elegido ChatGPT, que es lo que viene) | platform.openai.com → API keys (cargar saldo en Billing) |
 
 ## 2. Base de datos y cuentas
 
@@ -79,7 +78,6 @@ Prueba: Mi perfil → Notificaciones → "Mandar notificación de prueba".
 | Variable | Para qué |
 |---|---|
 | `ANTHROPIC_MODEL` | Modelo de Claude. Sin cargar = `claude-opus-5-5` (el mejor). **No cargarla** salvo que se quiera otro |
-| `OPENAI_IMAGE_MODEL`, `OPENAI_IMAGE_QUALITY` | Modelo y calidad de imágenes de ChatGPT (por defecto `gpt-image-1`, `high`) |
 | `GEMINI_TEXT_MODEL`, `GEMINI_IMAGE_MODEL` | Modelos de Gemini (por defecto los actuales) |
 | `VITE_CHAT_URL` | `https://prodi-chat.vercel.app` **solo** después de agregar ese dominio en Settings → Domains. Separa los avisos del chat (van solo a Prodi Chat) |
 | `VITE_APK_URL` | Link al instalador de Android, si hay |

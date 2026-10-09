@@ -888,7 +888,6 @@ async function estadoIA(req: VercelRequest) {
   const hay = (k: string) => !!process.env[k]?.trim();
   return {
     claude: hay("ANTHROPIC_API_KEY"),
-    openai: hay("OPENAI_API_KEY"),
     gemini: hay("GEMINI_API_KEY"),
     modelo_claude: process.env.ANTHROPIC_MODEL || "claude-opus-5-5",
   };
