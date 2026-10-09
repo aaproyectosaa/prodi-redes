@@ -26,7 +26,11 @@ export type AnimRecorrido =
   | "subir-material"
   | "boleta"
   | "resultados"
-  | "cupo";
+  | "cupo"
+  | "meta-copiar"
+  | "meta-pegar"
+  | "meta-datos"
+  | "hablar-cliente";
 
 export interface Diapositiva {
   titulo: string;
@@ -55,8 +59,48 @@ const CHAT: Diapositiva[] = [
   { titulo: "Pedile a @prodi", texto: "Escribí @prodi y lo que necesitás: agenda reuniones, deja tareas y recuerda cosas del cliente.", anim: "prodi" },
 ];
 
+/** Pauta: el ID del anuncio de Meta en cada video, y los resultados llegan solos. */
+const META: Diapositiva[] = [
+  {
+    titulo: "1. Copiá el ID del anuncio",
+    texto: "En el Administrador de anuncios de Meta, en la columna «ID del anuncio», copiá el número del anuncio de ese video.",
+    anim: "meta-copiar",
+  },
+  {
+    titulo: "2. Pegalo en el video",
+    texto: "Al marcarlo publicado (o en «Editar pauta») pegalo en «ID del anuncio en Meta» y guardá.",
+    anim: "meta-pegar",
+  },
+  {
+    titulo: "3. Los números llegan solos",
+    texto: "Alcance, reproducciones, mensajes e inversión se actualizan todos los días a las 8. Si los querés ya, en «Resultados» tocá «Traer de Meta».",
+    anim: "meta-datos",
+  },
+];
+
+/** Edición y diseño: hablar una corrección con el cliente con la tarjeta del video o la pieza. */
+const HABLAR_CLIENTE: Diapositiva = {
+  titulo: "¿Una duda con la corrección?",
+  texto: "Debajo de los cambios que pidió el cliente tocá «Hablarlo con el cliente»: se abre su grupo con la tarjeta del video o la pieza y la corrección entera. Escribís tu pregunta y listo.",
+  anim: "hablar-cliente",
+};
+
 /** Novedades, de la más nueva a la más vieja. */
 export const NOVEDADES: Novedad[] = [
+  {
+    id: "2026-10-meta-id",
+    fecha: "2026-10-09",
+    titulo: "Los resultados de Meta, solos",
+    roles: ["pauta"],
+    diapositivas: META,
+  },
+  {
+    id: "2026-10-hablar-cliente",
+    fecha: "2026-10-09",
+    titulo: "Correcciones: hablalo con el cliente",
+    roles: ["editor", "diseno"],
+    diapositivas: [HABLAR_CLIENTE],
+  },
   {
     id: "2026-10-cliente",
     fecha: "2026-10-08",
@@ -135,6 +179,7 @@ export function bienvenidaDe(role: string | undefined, enChat: boolean): Diaposi
       return [
         { titulo: "Lo que te toca editar", texto: "En «Mis videos» están los que tienen el crudo listo. Bajás el material, editás y subís el final.", anim: "videos" },
         { titulo: "Primero lo urgente", texto: "Cada video dice para cuándo hay que entregarlo. Lo más urgente queda arriba.", anim: "entrega" },
+        HABLAR_CLIENTE,
         ...chat,
         { titulo: "Mis ganancias", texto: "En el menú ves lo que llevás ganado en el mes y lo que tenés en camino.", anim: "ganancias" },
         avisos,
@@ -142,6 +187,7 @@ export function bienvenidaDe(role: string | undefined, enChat: boolean): Diaposi
     case "pauta":
       return [
         { titulo: "Lo que hay que publicar", texto: "En «Mis videos» están los aprobados por el cliente, listos para publicar y pautar.", anim: "videos" },
+        ...META,
         ...chat,
         { titulo: "Mis ganancias", texto: "En el menú ves lo que llevás ganado en el mes.", anim: "ganancias" },
         avisos,
@@ -149,6 +195,7 @@ export function bienvenidaDe(role: string | undefined, enChat: boolean): Diaposi
     case "diseno":
       return [
         { titulo: "Piezas gráficas", texto: "En «Piezas gráficas» están los pedidos de cada cliente. Diseñás, subís la versión y el cliente la aprueba.", anim: "piezas" },
+        HABLAR_CLIENTE,
         ...chat,
         { titulo: "Mis ganancias", texto: "En el menú ves lo que llevás ganado en el mes.", anim: "ganancias" },
         avisos,

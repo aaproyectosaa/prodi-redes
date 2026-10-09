@@ -1,4 +1,4 @@
-import { Bell, CalendarClock, Clapperboard, HandCoins, Hand, Images, LayoutGrid, ListTodo, Pencil, Receipt, Reply, Sparkles, Upload } from "lucide-react";
+import { Bell, CalendarClock, Clapperboard, HandCoins, Hand, Images, LayoutGrid, ListTodo, MessageCircle, Pencil, Receipt, RefreshCw, Reply, Sparkles, Upload } from "lucide-react";
 import type { AnimRecorrido } from "@/lib/novedades";
 import { cn } from "@/lib/utils";
 
@@ -330,6 +330,107 @@ function Icono({ icon: Icon, texto }: { icon: React.ElementType; texto: string }
   );
 }
 
+/** Administrador de anuncios: la columna "ID del anuncio" y se copia. */
+function MetaCopiar() {
+  return (
+    <Pantalla>
+      <div className="relative w-64 space-y-2">
+        <div className="overflow-hidden rounded-xl border bg-card text-[10px] shadow-sm">
+        <div className="grid grid-cols-[1fr_auto] gap-2 border-b bg-muted/60 px-2 py-1 font-semibold text-muted-foreground">
+          <span>Anuncio</span>
+          <span>ID del anuncio</span>
+        </div>
+        <div className="grid grid-cols-[1fr_auto] gap-2 px-2 py-1.5 text-muted-foreground">
+          <span className="truncate">Reel promo marzo</span>
+          <span className="tabular-nums">1202…4410</span>
+        </div>
+        <div className="grid grid-cols-[1fr_auto] items-center gap-2 bg-primary/[0.07] px-2 py-1.5">
+          <span className="truncate font-medium">Fío y Ema pin pong</span>
+          <span className="tour-latir rounded bg-primary px-1.5 py-0.5 font-mono tabular-nums text-primary-foreground">120212345678</span>
+        </div>
+        </div>
+        <p className="text-center">
+          <span className="tour-aparecer inline-block rounded-full bg-emerald-500 px-2.5 py-0.5 text-[10px] font-semibold text-white">Copiado ✓</span>
+        </p>
+        <Dedo className="right-6 top-14" />
+      </div>
+    </Pantalla>
+  );
+}
+
+/** En el video: se pega el ID en "ID del anuncio en Meta". */
+function MetaPegar() {
+  return (
+    <Pantalla>
+      <div className="relative w-60 space-y-1.5 rounded-xl border bg-card p-3 shadow-sm">
+        <p className="text-[11px] font-semibold">ID del anuncio en Meta</p>
+        <div className="rounded-lg border bg-background px-2 py-1.5 font-mono text-xs">
+          <span className="tour-escribir inline-block align-bottom" style={{ "--ancho": "12ch" } as React.CSSProperties}>
+            120212345678
+          </span>
+        </div>
+        <div className="flex justify-end">
+          <span className="rounded-md bg-primary px-2.5 py-1 text-[10px] font-semibold text-primary-foreground">Guardar</span>
+        </div>
+        <Dedo className="bottom-1 right-3" />
+      </div>
+    </Pantalla>
+  );
+}
+
+/** Los números de Meta llegan solos al video. */
+function MetaDatos() {
+  const datos = [
+    ["Alcance", "12.480"],
+    ["Reproducciones", "8.902"],
+    ["Mensajes", "37"],
+    ["Inversión", "$ 45.000"],
+  ];
+  return (
+    <Pantalla>
+      <div className="w-64 space-y-2">
+        <div className="grid grid-cols-2 gap-1.5">
+          {datos.map(([k, v], i) => (
+            <div key={k} className="tour-subir rounded-lg border bg-card px-2 py-1.5" style={{ animationDelay: `${i * 160}ms` }}>
+              <p className="text-[9px] text-muted-foreground">{k}</p>
+              <p className="text-xs font-bold tabular-nums">{v}</p>
+            </div>
+          ))}
+        </div>
+        <p className="flex items-center justify-center gap-1 text-[10px] text-muted-foreground">
+          <RefreshCw className="tour-latir h-3 w-3 text-primary" /> Se actualiza solo todos los días a las 8
+        </p>
+      </div>
+    </Pantalla>
+  );
+}
+
+/** Corrección del cliente → "Hablarlo con el cliente" → la tarjeta en el chat. */
+function HablarCliente() {
+  return (
+    <Pantalla>
+      <div className="relative flex w-72 items-center gap-2">
+        <div className="w-32 shrink-0 rounded-xl border border-orange-500/40 bg-orange-500/[0.08] p-2 text-[9px]">
+          <p className="font-semibold text-orange-600 dark:text-orange-300">Cambios pedidos</p>
+          <p className="mt-0.5 text-muted-foreground">-Rever título…</p>
+          <span className="tour-latir mt-1.5 flex items-center justify-center gap-1 rounded-md border bg-background px-1 py-1 font-semibold">
+            <MessageCircle className="h-2.5 w-2.5" /> Hablarlo
+          </span>
+        </div>
+        <span className="text-primary">→</span>
+        <div className="tour-aparecer flex-1 space-y-1 rounded-xl bg-primary p-1.5 text-primary-foreground">
+          <div className="rounded-lg bg-white/15 px-1.5 py-1 text-[9px]">
+            <p className="font-semibold">🎬 Fío y Ema pin pong</p>
+            <p className="opacity-80">-Rever título…</p>
+          </div>
+          <p className="px-0.5 text-[9px]">¿Te gusta así?</p>
+        </div>
+        <Dedo className="bottom-3 left-12" />
+      </div>
+    </Pantalla>
+  );
+}
+
 /** La ilustración animada de cada diapositiva. */
 export function Ilustracion({ anim }: { anim: AnimRecorrido }) {
   switch (anim) {
@@ -371,6 +472,14 @@ export function Ilustracion({ anim }: { anim: AnimRecorrido }) {
       return <Resultados />;
     case "cupo":
       return <Cupo />;
+    case "meta-copiar":
+      return <MetaCopiar />;
+    case "meta-pegar":
+      return <MetaPegar />;
+    case "meta-datos":
+      return <MetaDatos />;
+    case "hablar-cliente":
+      return <HablarCliente />;
     case "pagos":
       return <Icono icon={HandCoins} texto="Pagos al equipo" />;
     default:
