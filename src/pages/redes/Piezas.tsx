@@ -13,6 +13,7 @@ import {
   Star,
   Undo2,
   Upload,
+  Maximize2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageShell, EmptyState } from "@/components/redes/PageShell";
 import { ClienteTag } from "@/components/redes/ClienteTag";
-import { EnfoqueBadge, EstadoPiezaBadge, VersionImg, driveDownload, driveThumb } from "@/components/redes/PiezaDialogs";
+import { EnfoqueBadge, EstadoPiezaBadge, VerVersion, VersionImg, driveThumb } from "@/components/redes/PiezaDialogs";
 import { NotaDialog } from "@/components/redes/PautaDialogs";
 import { DelSistemaAnterior } from "@/components/redes/DelSistemaAnterior";
 import { useRedes } from "@/contexts/redes-data-context";
@@ -245,6 +246,8 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
   const [ajustes, setAjustes] = useState("");
   const [generando, setGenerando] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
+  // Versión abierta en grande (para verla bien y descargarla).
+  const [ver, setVer] = useState<ReturnType<typeof versionesDe>[number] | null>(null);
   const [mandando, setMandando] = useState(false);
   const [rechazo, setRechazo] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -455,13 +458,15 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                   const enviada = v.id === pieza.version_enviada_id;
                   const esPdf = v.mime_type === "application/pdf";
                   return (
-                    <button
+                    <div
                       key={v.id}
-                      type="button"
-                      disabled={!puedeTrabajar}
-                      onClick={() => setSel(v.id)}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => (puedeTrabajar ? setSel(v.id) : setVer(v))}
+                      onDoubleClick={() => setVer(v)}
+                      onKeyDown={(e) => e.key === "Enter" && (puedeTrabajar ? setSel(v.id) : setVer(v))}
                       className={cn(
-                        "relative overflow-hidden rounded-lg border-2 transition-all animate-in fade-in zoom-in-95",
+                        "group relative cursor-pointer overflow-hidden rounded-lg border-2 transition-all animate-in fade-in zoom-in-95",
                         marcada || aprobada ? "border-primary" : "border-transparent hover:border-primary/40"
                       )}
                     >
@@ -477,16 +482,17 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                           <Check className="h-4 w-4" />
                         </span>
                       )}
-                      <a
-                        href={driveDownload(v.drive_file_id)}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white"
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setVer(v);
+                        }}
+                        className="absolute bottom-1.5 right-1.5 inline-flex items-center gap-1 rounded-md bg-black/70 px-2 py-1 text-[11px] font-medium text-white transition-transform hover:scale-105"
                       >
-                        <Download className="h-3 w-3" /> Descargar
-                      </a>
-                    </button>
+                        <Maximize2 className="h-3 w-3" /> Ver
+                      </button>
+                    </div>
                   );
                 })}
               </div>
@@ -540,6 +546,7 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
             onClose();
           }}
         />
+        <VerVersion v={ver} titulo={`Versión ${ver ? versiones.findIndex((x) => x.id === ver.id) + 1 : ""}`} onClose={() => setVer(null)} />
       </DialogContent>
     </Dialog>
   );

@@ -16,6 +16,7 @@ import {
   ThumbsUp,
 } from "lucide-react";
 import { toast } from "sonner";
+import { getDriveMediaPlayUrl } from "@/utils/drive/driveMediaUrl";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -664,6 +665,60 @@ export function PedirPiezaDialog({
               {entra ? "Pedir" : "Pagar y pedir"}
             </Button>
           )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * La versión en grande: se abre tocando la miniatura. La imagen se baja por el sistema (con permiso solo para
+ * ese archivo), así se ve y se descarga aunque el archivo de Drive no sea público.
+ */
+export function VerVersion({ v, titulo, onClose }: { v: (Pick<VersionPieza, "drive_file_id" | "name"> & { mime_type?: string | null }) | null; titulo?: string; onClose: () => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    setUrl(null);
+    setError(false);
+    if (!v) return;
+    if (v.drive_file_id.startsWith("demo/") || v.drive_file_id.startsWith("data:") || v.drive_file_id.startsWith("blob:")) {
+      setUrl(driveThumb(v.drive_file_id, 2000));
+      return;
+    }
+    let vivo = true;
+    getDriveMediaPlayUrl(v.drive_file_id)
+      .then((u) => vivo && setUrl(u))
+      .catch(() => vivo && setError(true));
+    return () => {
+      vivo = false;
+    };
+  }, [v]);
+  const esPdf = v?.mime_type === "application/pdf";
+  return (
+    <Dialog open={!!v} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-4xl gap-3 p-3 sm:p-4">
+        <DialogHeader className="px-1">
+          <DialogTitle className="truncate text-base">{titulo ?? v?.name ?? "Pieza"}</DialogTitle>
+        </DialogHeader>
+        <div className="fondo-transparencia flex max-h-[75vh] min-h-[40vh] items-center justify-center overflow-hidden rounded-xl bg-muted">
+          {error ? (
+            <p className="p-6 text-sm text-muted-foreground">No se pudo abrir la imagen. Probá de nuevo en un rato.</p>
+          ) : !url ? (
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          ) : esPdf ? (
+            <iframe src={url} title={v?.name} className="h-[75vh] w-full" />
+          ) : (
+            <img src={url} alt={v?.name} className="max-h-[75vh] w-auto max-w-full animate-in fade-in zoom-in-95 object-contain" />
+          )}
+        </div>
+        <DialogFooter className="gap-2 sm:justify-between">
+          <p className="self-center truncate px-1 text-xs text-muted-foreground">{v?.name}</p>
+          <Button asChild disabled={!url}>
+            <a href={url ?? "#"} download={v?.name ?? "pieza"} target="_blank" rel="noreferrer">
+              <Download className="mr-2 h-4 w-4" /> Descargar
+            </a>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
