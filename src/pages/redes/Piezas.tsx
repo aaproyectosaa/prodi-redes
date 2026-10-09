@@ -36,6 +36,7 @@ import {
   formatoInfo,
   generarVersion,
   mandarAlCliente,
+  moverPieza,
   rechazarPieza,
   versionesDe,
 } from "@/lib/redes/piezas";
@@ -99,6 +100,27 @@ export default function Piezas() {
   }, [deLink]);
 
   const [vista, setVista] = useVista("piezas");
+  // Arrastrar tarjetas entre columnas (admin, diseño y productora). "Entregadas" solo el admin.
+  const { user } = useUserProfileContext();
+  const arrastra = !!user && ["admin", "diseno", "productor"].includes(role ?? "");
+  const [arrastrando, setArrastrando] = useState<string | null>(null);
+  const [sobre, setSobre] = useState<string | null>(null);
+  const soltar = async (destino: Columna["id"], id: string) => {
+    setArrastrando(null);
+    setSobre(null);
+    const p = piezas.find((x) => x.id === id);
+    if (!p || !user) return;
+    if (destino === "listas" && role !== "admin") {
+      toast.error("Las da por entregadas el cliente al aprobarlas (o el admin).");
+      return;
+    }
+    try {
+      await moverPieza(p, destino as "hacer" | "disenando" | "cliente" | "listas", clienteById(p.proyecto_id), user.uid);
+      toast.success(destino === "cliente" ? "Le llegó al cliente para aprobar" : "Movida");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo mover");
+    }
+  };
   // Calendario: lo pendiente en la fecha que lo necesita el cliente (o 5 días después del pedido
   // si no puso fecha) y lo entregado el día que se aprobó.
   const eventosCal = useMemo<EventoCal[]>(
@@ -158,9 +180,30 @@ export default function Piezas() {
                   <div
                     key={col.id}
                     className={cn(
-                      "flex w-[82vw] shrink-0 snap-start flex-col rounded-2xl border sm:w-72",
-                      activa ? "border-primary/40 bg-primary/[0.05]" : "bg-muted/30"
+                      "flex w-[82vw] shrink-0 snap-start flex-col rounded-2xl border transition-colors sm:w-72",
+                      activa ? "border-primary/40 bg-primary/[0.05]" : "bg-muted/30",
+                      arrastrando && sobre === col.id && "border-primary bg-primary/10 ring-2 ring-primary/30"
                     )}
+                    onDragOver={
+                      arrastra
+                        ? (ev) => {
+                            if (!arrastrando) return;
+                            ev.preventDefault();
+                            ev.dataTransfer.dropEffect = "move";
+                            if (sobre !== col.id) setSobre(col.id);
+                          }
+                        : undefined
+                    }
+                    onDragLeave={arrastra ? (ev) => !ev.currentTarget.contains(ev.relatedTarget as Node) && setSobre(null) : undefined}
+                    onDrop={
+                      arrastra
+                        ? (ev) => {
+                            ev.preventDefault();
+                            const id = ev.dataTransfer.getData("text/pieza-id") || arrastrando;
+                            if (id) void soltar(col.id, id);
+                          }
+                        : undefined
+                    }
                   >
                     <div className="flex items-center justify-between gap-2 px-3 pt-3">
                       <div className="flex items-center gap-2">
@@ -182,10 +225,25 @@ export default function Piezas() {
                     </p>
                     <div className="flex min-h-[120px] flex-col gap-2 px-2 pb-2 md:max-h-[calc(100dvh-230px)] md:overflow-y-auto">
                       {items.map((p, i) => (
-                        <PiezaCard key={p.id} pieza={p} i={i} cliente={clienteById(p.proyecto_id)?.nombre} onClick={() => setAbierta(p.id)} />
+                        <div
+                          key={p.id}
+                          draggable={arrastra}
+                          onDragStart={(ev) => {
+                            ev.dataTransfer.setData("text/pieza-id", p.id);
+                            ev.dataTransfer.effectAllowed = "move";
+                            setArrastrando(p.id);
+                          }}
+                          onDragEnd={() => {
+                            setArrastrando(null);
+                            setSobre(null);
+                          }}
+                          className={cn(arrastra && "cursor-grab active:cursor-grabbing", arrastrando === p.id && "opacity-40")}
+                        >
+                          <PiezaCard pieza={p} i={i} cliente={clienteById(p.proyecto_id)?.nombre} onClick={() => setAbierta(p.id)} />
+                        </div>
                       ))}
                       {items.length === 0 && (
-                        <p className="py-6 text-center text-xs text-muted-foreground/70">{col.tuya ? "Nada pendiente 👌" : "Vacío"}</p>
+                        <p className="py-6 text-center text-xs text-muted-foreground/70">{arrastrando ? "Soltala acá" : col.tuya ? "Nada pendiente 👌" : "Vacío"}</p>
                       )}
                     </div>
                   </div>

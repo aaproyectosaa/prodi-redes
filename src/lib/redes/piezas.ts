@@ -213,3 +213,25 @@ export function pedirPiezaEquipo(proyectoId: string, datos: DatosPedidoPieza, fu
   assertEditable();
   return callApi<RespuestaPiezaEquipo>("/api/pagos/pedir-pieza", { proyecto_id: proyectoId, ...datos, ...(fueraPlan ? { fuera_plan: fueraPlan } : {}) });
 }
+
+/**
+ * Arrastrar una pieza a otra columna del tablero. "cliente" la manda con la última versión (tiene que haber
+ * una); "listas" la da por entregada (lo hace el admin, por ejemplo si el cliente la aprobó por WhatsApp).
+ */
+export async function moverPieza(pieza: PiezaIA, destino: "hacer" | "disenando" | "cliente" | "listas", project: Project | undefined, by: string) {
+  assertEditable();
+  const ultima = versionesDe(pieza).at(-1);
+  if (destino === "cliente") {
+    if (!ultima) throw new Error("Primero generá o subí una versión: no hay nada para mandarle al cliente.");
+    return mandarAlCliente(pieza, pieza.version_enviada_id ?? ultima.id, project, by);
+  }
+  const estado = destino === "hacer" ? "pagada" : destino === "disenando" ? "en_proceso" : "entregada";
+  if (estado === pieza.estado) return;
+  const accion = destino === "hacer" ? "Vuelta a «Para hacer»" : destino === "disenando" ? "Pasada a «Diseñando»" : "Marcada como entregada por el equipo";
+  await updateDoc(doc(db, PIEZAS, pieza.id), {
+    estado,
+    ...(estado === "entregada" ? { version_aprobada_id: pieza.version_aprobada_id ?? pieza.version_enviada_id ?? ultima?.id ?? null } : {}),
+    updated_at: now(),
+    historial: arrayUnion(evento(by, accion)),
+  });
+}
