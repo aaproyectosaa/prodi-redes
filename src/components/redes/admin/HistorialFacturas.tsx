@@ -35,7 +35,7 @@ export function HistorialFacturas({ proyectoId, lista, abierto = false }: { proy
             <li key={f.id} className="flex items-center gap-3 px-4 py-2">
               <span className="w-28 shrink-0 capitalize">{nombreMes(f.mes)}</span>
               <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                {[f.servicio !== "REDES" ? f.servicio.toLowerCase() : null, f.fecha_pago ? `pagó el ${ddmmaa(f.fecha_pago)}` : "sin fecha de pago", f.forma?.toLowerCase()].filter(Boolean).join(" · ")}
+                {[f.servicio !== "REDES" ? f.servicio.toLowerCase() : null, f.fecha_pago ? `pagó el ${ddmmaa(f.fecha_pago)}` : null, f.forma?.toLowerCase()].filter(Boolean).join(" · ")}
               </span>
               <span className="tabular-nums">{formatARS(f.cobrado || f.bruto || f.neto)}</span>
             </li>
