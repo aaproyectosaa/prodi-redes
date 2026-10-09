@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { getDriveMediaPlayUrl } from "@/utils/drive/driveMediaUrl";
+import { callApi } from "@/lib/redes/api";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -675,9 +676,46 @@ export function PedirPiezaDialog({
  * La versión en grande: se abre tocando la miniatura. La imagen se baja por el sistema (con permiso solo para
  * ese archivo), así se ve y se descarga aunque el archivo de Drive no sea público.
  */
-export function VerVersion({ v, titulo, onClose }: { v: (Pick<VersionPieza, "drive_file_id" | "name"> & { mime_type?: string | null }) | null; titulo?: string; onClose: () => void }) {
+/** Retoques rápidos con IA (Opus arma la instrucción y Gemini edita la imagen). */
+const RETOQUES: { label: string; pedido: string; formato?: string }[] = [
+  { label: "✨ Más luz y contraste", pedido: "Más luminosa y con más contraste, colores más vivos sin cambiar la paleta de la marca" },
+  { label: "🎨 Otro fondo", pedido: "Cambiá el fondo por otro más limpio y atractivo, acorde a la marca" },
+  { label: "🔠 Texto más grande", pedido: "Hacé el texto principal más grande y legible en el celular" },
+  { label: "🧹 Más simple", pedido: "Simplificá la composición: menos elementos, más aire, un solo mensaje claro" },
+  { label: "📱 Pasar a historia", pedido: "Adaptala a formato historia vertical", formato: "vertical" },
+  { label: "⬛ Pasar a cuadrado", pedido: "Adaptala a formato posteo cuadrado", formato: "cuadrado" },
+];
+
+export function VerVersion({
+  v,
+  titulo,
+  onClose,
+  edicion,
+}: {
+  v: (Pick<VersionPieza, "drive_file_id" | "name"> & { mime_type?: string | null; id?: string }) | null;
+  titulo?: string;
+  onClose: () => void;
+  /** Si viene: herramientas de IA para editar esta versión (queda como versión nueva). */
+  edicion?: { piezaId: string };
+}) {
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState(false);
+  const [pedido, setPedido] = useState("");
+  const [editando, setEditando] = useState<string | null>(null);
+  const editar = async (instruccion: string, formato?: string, etiqueta = "Editando") => {
+    if (!edicion || !v?.id || instruccion.trim().length < 3) return;
+    setEditando(etiqueta);
+    try {
+      await callApi("/api/ia/pieza-editar", { pieza_id: edicion.piezaId, version_id: v.id, instruccion, formato: formato ?? null });
+      toast.success("Listo: quedó como versión nueva");
+      setPedido("");
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo editar");
+    } finally {
+      setEditando(null);
+    }
+  };
   useEffect(() => {
     setUrl(null);
     setError(false);
@@ -697,11 +735,11 @@ export function VerVersion({ v, titulo, onClose }: { v: (Pick<VersionPieza, "dri
   const esPdf = v?.mime_type === "application/pdf";
   return (
     <Dialog open={!!v} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-4xl gap-3 p-3 sm:p-4">
+      <DialogContent className="max-h-[94vh] max-w-4xl gap-3 overflow-y-auto p-3 sm:p-4">
         <DialogHeader className="px-1">
           <DialogTitle className="truncate text-base">{titulo ?? v?.name ?? "Pieza"}</DialogTitle>
         </DialogHeader>
-        <div className="fondo-transparencia flex max-h-[75vh] min-h-[40vh] items-center justify-center overflow-hidden rounded-xl bg-muted">
+        <div className={cn("fondo-transparencia flex items-center justify-center overflow-hidden rounded-xl bg-muted", edicion ? "max-h-[52vh] min-h-[30vh]" : "max-h-[75vh] min-h-[40vh]")}>
           {error ? (
             <p className="p-6 text-sm text-muted-foreground">No se pudo abrir la imagen. Probá de nuevo en un rato.</p>
           ) : !url ? (
@@ -709,9 +747,54 @@ export function VerVersion({ v, titulo, onClose }: { v: (Pick<VersionPieza, "dri
           ) : esPdf ? (
             <iframe src={url} title={v?.name} className="h-[75vh] w-full" />
           ) : (
-            <img src={url} alt={v?.name} className="max-h-[75vh] w-auto max-w-full animate-in fade-in zoom-in-95 object-contain" />
+            <img src={url} alt={v?.name} className={cn("w-auto max-w-full animate-in fade-in zoom-in-95 object-contain", edicion ? "max-h-[52vh]" : "max-h-[75vh]")} />
           )}
         </div>
+        {edicion && v?.id && !esPdf && (
+          <div className="space-y-2.5 rounded-xl border bg-gradient-to-br from-primary/[0.07] to-transparent p-3">
+            <p className="flex items-center gap-1.5 text-sm font-semibold">
+              <Sparkles className="h-4 w-4 text-primary" /> Editar con IA
+              <span className="text-xs font-normal text-muted-foreground">· queda como versión nueva, esta no se toca</span>
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {RETOQUES.map((r) => (
+                <button
+                  key={r.label}
+                  type="button"
+                  disabled={!!editando}
+                  onClick={() => void editar(r.pedido, r.formato, r.label)}
+                  className="rounded-full border bg-background px-3 py-1 text-xs font-medium transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-sm disabled:opacity-50"
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Textarea
+                value={pedido}
+                onChange={(e) => setPedido(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void editar(pedido);
+                  }
+                }}
+                rows={1}
+                placeholder="O pedí lo que quieras: «poné el logo más chico», «sacá a la chica de la izquierda», «fondo verde»…"
+                className="min-h-10 resize-none bg-background text-sm"
+                disabled={!!editando}
+              />
+              <Button onClick={() => void editar(pedido)} disabled={!!editando || pedido.trim().length < 3} className="shrink-0">
+                <Sparkles className="mr-1.5 h-4 w-4" /> Aplicar
+              </Button>
+            </div>
+            {editando && (
+              <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> {editando}… (≈30 s)
+              </p>
+            )}
+          </div>
+        )}
         <DialogFooter className="gap-2 sm:justify-between">
           <p className="self-center truncate px-1 text-xs text-muted-foreground">{v?.name}</p>
           <Button asChild disabled={!url}>

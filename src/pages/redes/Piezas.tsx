@@ -546,7 +546,12 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
             onClose();
           }}
         />
-        <VerVersion v={ver} titulo={`Versión ${ver ? versiones.findIndex((x) => x.id === ver.id) + 1 : ""}`} onClose={() => setVer(null)} />
+        <VerVersion
+          v={ver}
+          titulo={`Versión ${ver ? versiones.findIndex((x) => x.id === ver.id) + 1 : ""}`}
+          onClose={() => setVer(null)}
+          edicion={pieza && !["cancelada", "rechazada", "pendiente_pago"].includes(pieza.estado) ? { piezaId: pieza.id } : undefined}
+        />
       </DialogContent>
     </Dialog>
   );

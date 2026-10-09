@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // POST /api/ia/copy   { video_id }              → { opciones: string[] }
 // POST /api/ia/pieza  { pieza_id, ajustes? }    → genera una versión y la guarda en Drive
+// POST /api/ia/pieza-editar { pieza_id, version_id, instruccion, formato? } → edita esa versión con IA (queda como versión nueva)
 // POST /api/ia/guion  { video_id }              → guion y lista de tomas del video
 // POST /api/ia/preparar { proyecto_id, video_ids } → qué tiene que tener listo el cliente para el rodaje
 // POST /api/ia/marca-subir  { proyecto_id, tipo: "logo"|"variante"|"manual"|"referencia", etiqueta?, nombre, mime, data(base64) }
@@ -222,6 +223,67 @@ ${prompt}${guia}`,
     }),
   });
   return { ok: true };
+}
+
+/**
+ * Editar una versión con IA: "cambiá el fondo", "más luz", "pasalo a historia"… Claude convierte el pedido en
+ * una instrucción precisa (mirando la imagen y la marca) y Gemini edita sobre esa misma imagen. Queda como
+ * versión nueva; la original no se toca.
+ */
+async function piezaEditar(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "productor", "diseno"]);
+  const { pieza_id, version_id, instruccion, formato } = body<{ pieza_id?: string; version_id?: string; instruccion?: string; formato?: string }>(req);
+  const pedido = String(instruccion ?? "").trim().slice(0, 600);
+  if (!pieza_id || !version_id || pedido.length < 3) throw new HttpError(400, "Contá qué le querés cambiar");
+  const db = adminDb();
+  const ref = db.collection("piezas_ia").doc(pieza_id);
+  const pz = (await ref.get()).data();
+  if (!pz) throw new HttpError(404, "Pieza no encontrada");
+  await assertProjectAccess(caller, pz.proyecto_id);
+  if (["cancelada", "rechazada", "pendiente_pago"].includes(pz.estado)) throw new HttpError(409, "Esta pieza no se puede editar");
+  const v = ((pz.versiones ?? []) as { id: string; drive_file_id: string; mime_type?: string }[]).find((x) => x.id === version_id);
+  if (!v) throw new HttpError(404, "Versión no encontrada");
+  if (v.mime_type === "application/pdf") throw new HttpError(409, "Los PDF no se editan con IA");
+  const p = (await db.collection("projects").doc(pz.proyecto_id).get()).data() ?? {};
+  const base = FORMATOS_PIEZA[pz.formato] ?? FORMATOS_PIEZA.cuadrado;
+  const destino = formato && FORMATOS_PIEZA[formato] ? FORMATOS_PIEZA[formato] : base;
+  const original = await descargarDrive(v.drive_file_id, 15 * 1024 * 1024);
+
+  // Claude: el pedido suelto → instrucción de edición concreta, cuidando la marca y lo que no hay que tocar.
+  let instr = `Editá esta imagen: ${pedido}. Mantené todo lo demás igual (textos, logo, colores y composición), salvo lo que se pide cambiar.`;
+  try {
+    const ver = /^image\/(jpeg|png|gif|webp)$/.test(original.mime) && original.data.length < 4_500_000;
+    const r = await generarJSON<{ instruccion?: string }>(
+      `Sos director de arte. Hay que editar la pieza adjunta con un editor de imágenes IA (Gemini).
+Pedido del equipo: "${pedido}"${destino !== base ? `\nAdemás hay que adaptarla al formato ${destino.ratio} (${destino.uso}): reacomodá la composición sin cortar textos ni el logo.` : ""}
+${marcaTexto(p)}
+Escribí UNA instrucción de edición precisa (máximo 90 palabras): qué cambiar exactamente y qué dejar igual (textos tal cual, logo intacto sin redibujar, colores de marca). No agregues textos nuevos salvo que el pedido lo diga.`,
+      { type: "OBJECT", properties: { instruccion: { type: "STRING" } }, required: ["instruccion"] },
+      0.3,
+      ver ? [{ data: original.data, mime: original.mime as "image/jpeg" | "image/png" | "image/gif" | "image/webp" }] : []
+    );
+    if (String(r.instruccion ?? "").trim().length > 20) instr = String(r.instruccion).trim();
+  } catch (err) {
+    console.warn("[pieza-editar] instrucción de Claude", err);
+  }
+
+  const img = await generarImagen(`${instr}\nLa imagen adjunta es la pieza a editar: trabajá sobre ella.`, destino.ratio, [original]);
+  const n = (pz.versiones?.length ?? 0) + 1;
+  const ext = img.mime.includes("jpeg") ? "jpg" : "png";
+  const up = await uploadBufferToDrive({
+    path: [String(p.nombre ?? "Cliente"), "Piezas IA"],
+    name: `pieza-${pieza_id.slice(0, 6)}-v${n}.${ext}`,
+    mime: img.mime,
+    data: img.data,
+  });
+  const now = new Date().toISOString();
+  const id = `v${n}_${Date.now()}`;
+  await ref.update({
+    ...(pz.estado === "pagada" ? { estado: "en_proceso" } : {}),
+    updated_at: now,
+    versiones: FieldValue.arrayUnion({ id, ...up, prompt: `Edición de v: ${pedido}`, edita_a: version_id, created_at: now, created_by: caller.uid }),
+  });
+  return { ok: true, version_id: id };
 }
 
 async function minuta(req: VercelRequest) {
@@ -891,6 +953,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const accion = String(req.query.accion ?? "");
     if (accion === "copy") res.status(200).json(await copy(req));
     else if (accion === "pieza") res.status(200).json(await pieza(req));
+    else if (accion === "pieza-editar") res.status(200).json(await piezaEditar(req));
     else if (accion === "minuta") res.status(200).json(await minuta(req));
     else if (accion === "guion") res.status(200).json(await guion(req));
     else if (accion === "preparar") res.status(200).json(await preparar(req));
