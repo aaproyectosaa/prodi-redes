@@ -260,32 +260,13 @@ export async function generarImagen(
   return p === "openai" ? imagenOpenAI(prompt, aspectRatio, imagenes) : gemini.generarImagen(prompt, aspectRatio, imagenes);
 }
 
-/** Mensaje de voz a texto: Gemini o, si no hay, ChatGPT (gpt-4o-mini-transcribe). */
+/** Mensaje de voz a texto: Gemini (Claude no recibe audio). */
 export async function transcribir(data: Buffer, mime: string): Promise<string> {
-  if (hayGemini()) {
-    try {
-      return await gemini.transcribirAudio(data, mime);
-    } catch (err) {
-      const m = err instanceof Error ? err.message : String(err);
-      if (!hayOpenAI()) throw new Error(/API key|PERMISSION_DENIED/i.test(m) ? "Para entender audios: la clave de Gemini (GEMINI_API_KEY) no es válida. Hay que cargar una nueva en Vercel." : m);
-      console.warn("[ia] Gemini no pudo con el audio, pruebo con ChatGPT", m);
-    }
+  if (!hayGemini()) throw new Error("Para entender audios falta la clave de Gemini (GEMINI_API_KEY) en Vercel.");
+  try {
+    return await gemini.transcribirAudio(data, mime);
+  } catch (err) {
+    const m = err instanceof Error ? err.message : String(err);
+    throw new Error(/API key|PERMISSION_DENIED/i.test(m) ? "Para entender audios: la clave de Gemini (GEMINI_API_KEY) no es válida. Hay que cargar una nueva en Vercel." : m);
   }
-  if (hayOpenAI()) {
-    const tipo = mime.split(";")[0] || "audio/webm";
-    const ext = tipo.includes("mp4") || tipo.includes("m4a") ? "m4a" : tipo.includes("ogg") ? "ogg" : tipo.includes("mpeg") ? "mp3" : "webm";
-    const form = new FormData();
-    form.append("file", new Blob([new Uint8Array(data)], { type: tipo }), `audio.${ext}`);
-    form.append("model", "gpt-4o-mini-transcribe");
-    form.append("language", "es");
-    const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY!.trim()}` },
-      body: form,
-    });
-    const json = (await res.json().catch(() => ({}))) as { text?: string; error?: { message?: string } };
-    if (!res.ok) throw new Error(`IA: no se pudo pasar el audio a texto (${json.error?.message ?? res.status})`);
-    return String(json.text ?? "").trim();
-  }
-  throw new Error("Para entender audios falta la clave de Gemini (GEMINI_API_KEY) o de ChatGPT (OPENAI_API_KEY) en Vercel.");
 }
