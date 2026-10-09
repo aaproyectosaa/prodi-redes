@@ -29,6 +29,7 @@ import {
   useFacturas,
   useGastos,
   useLiquidaciones,
+  useHistorico,
   useObligaciones,
   type TipoObligacion,
 } from "@/lib/redes/facturacion";
@@ -141,6 +142,7 @@ export function EstadisticasAnio({ equipoActual }: { equipoActual: number }) {
   const gastos = useGastos(desde);
   const liqs = useLiquidaciones(desde);
   const obligaciones = useObligaciones();
+  const historico = useHistorico();
   const videos = useVideosDelAnio(anio);
   const cobros = useCobrosDelAnio(anio);
   const mrr = clientes.reduce((a, c) => a + planDe(c, planes).precioMensual, 0);
@@ -162,9 +164,11 @@ export function EstadisticasAnio({ equipoActual }: { equipoActual: number }) {
           )
           .reduce((a, c) => a + c.monto, 0);
         const estimado = m === actual && fs.length === 0;
+        // Meses de antes del sistema: lo facturado según la planilla (sin boletas cargadas).
+        const hist = fs.length === 0 ? historico[m] : undefined;
         // Ingresos en neto: el IVA de las boletas no es de PRODI (y el estimado con el abono ya es neto).
         const ingresos =
-          (estimado ? mrr : fs.reduce((a, f) => a + f.neto, 0)) + extras;
+          (hist ? hist.ingresos : estimado ? mrr : fs.reduce((a, f) => a + f.neto, 0)) + extras;
         const liqMes = liqs
           .filter((l) => l.mes === m && l.estado === "pagado")
           .reduce((a, l) => a + (l.total_pagado ?? 0), 0);
@@ -231,6 +235,7 @@ export function EstadisticasAnio({ equipoActual }: { equipoActual: number }) {
       equipoActual,
       gastos,
       obligaciones,
+      historico,
       videos,
       clientes.length,
     ],

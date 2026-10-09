@@ -102,7 +102,14 @@ function PagosEquipo({ mes }: { mes: string }) {
   const { videos, piezas, clientes } = useRedes();
   const cfg = useConfigPagos();
   const liqs = useLiquidaciones(mes);
-  const equipo = profiles.filter((p) => ["productor", "editor", "pauta", "diseno"].includes(p.role ?? "") && p.activo !== false);
+  // El equipo actual, más quien tenga algo liquidado ese mes (los que ya no están, o los de la planilla sin usuario).
+  const conLiq = new Set(liqs.filter((l) => l.mes === mes).map((l) => l.uid));
+  const equipo = [
+    ...profiles.filter((p) => (["productor", "editor", "pauta", "diseno"].includes(p.role ?? "") && p.activo !== false) || conLiq.has(p.id)),
+    ...liqs
+      .filter((l) => l.mes === mes && !profiles.some((p) => p.id === l.uid))
+      .map((l) => ({ id: l.uid, nombre: l.nombre ?? "Sin usuario", email: "" }) as unknown as (typeof profiles)[number]),
+  ];
 
   const filas = equipo.map((p) => {
     const unidades = unidadesDelMes(p.id, p.role ?? "", mes, videos, piezas);
@@ -146,7 +153,7 @@ function PersonaPago({
 }: {
   p: ReturnType<typeof useAppData>["profiles"][number];
   unidades: number;
-  liq?: { ajustes: AjustePago[]; estado: string; total_pagado?: number | null };
+  liq?: { ajustes: AjustePago[]; estado: string; total_pagado?: number | null; importado?: boolean; detalle?: string | null };
   calc: ReturnType<typeof calcularPago>;
   cfg?: ConfigPago;
   mes: string;
@@ -234,7 +241,13 @@ function PersonaPago({
           <p className={cn("text-[11px] font-medium", pagado ? "text-emerald-600" : "text-muted-foreground")}>{pagado ? "Pagado" : "A pagar"}</p>
         </div>
       </div>
-      {detalle && <p className="text-xs text-muted-foreground">{detalle}</p>}
+      {liq?.importado ? (
+        <p className="text-xs text-muted-foreground">
+          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">De la planilla</span> {liq.detalle}
+        </p>
+      ) : (
+        detalle && <p className="text-xs text-muted-foreground">{detalle}</p>
+      )}
 
       {editando ? (
         <div className="space-y-2 rounded-xl border bg-muted/30 p-3">

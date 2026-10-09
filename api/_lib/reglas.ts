@@ -244,7 +244,12 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
     case "equipo_pagos":
       return esFinanzas(c) || id === c.uid;
     case "equipo_liquidaciones":
-      return esFinanzas(c) || d.uid === c.uid;
+      // El historial cargado de la planilla (importado) lo ve solo administración; cada uno ve lo suyo de ahora en adelante.
+      return esFinanzas(c) || (d.uid === c.uid && !d.importado);
+    // Facturado por mes de antes del sistema y lo que deben los clientes (planes de pago): solo administración.
+    case "historico_mensual":
+    case "deudas_clientes":
+      return esFinanzas(c);
     case "gastos":
     case "obligaciones":
       return esFinanzas(c);
@@ -371,6 +376,8 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
     case "equipo_liquidaciones":
     case "gastos":
     case "obligaciones":
+    case "historico_mensual":
+    case "deudas_clientes":
       return esFinanzas(c);
     case "planes_redes":
       return esAdmin(c);

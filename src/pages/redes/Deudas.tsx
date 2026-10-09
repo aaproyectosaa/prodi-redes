@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState, PageShell, Section, StatCard } from "@/components/redes/PageShell";
+import { DeudasClientes } from "@/components/redes/admin/DeudasClientes";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { sumarDias } from "@/lib/fecha";
 import { formatARS, hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
@@ -180,6 +181,10 @@ export default function Deudas() {
           })}
         </div>
       )}
+
+      <div className="mt-8">
+        <DeudasClientes />
+      </div>
 
       {nuevo && <NuevaObligacion onClose={() => setNuevo(false)} />}
       {detalle && <DetalleObligacion o={detalle} hoy={hoy} onClose={() => setAbierta(null)} onPagar={(c) => setPagar({ o: detalle, c })} />}

@@ -20,6 +20,9 @@ import { cn } from "@/lib/utils";
 
 const nombreMes = (m: string) => mesLabel(m).split(" ")[0].toLowerCase();
 
+/** Desde cuándo cada uno ve sus ganancias en el sistema (lo anterior quedó en la planilla). */
+const DESDE_GANANCIAS = "2026-10";
+
 /** Lo que tiene en la mano y todavía no cuenta (cuando lo termine, suma). */
 function enCamino(uid: string, role: string, videos: Video[], piezas: PiezaIA[], misClientes: Set<string>): { cantidad: number; texto: string } {
   const mio = (v: Video, campo: "productor_id" | "editor_id" | "pauta_id") => v[campo] === uid || (!v[campo] && misClientes.has(v.proyecto_id));
@@ -75,13 +78,16 @@ export default function MisGanancias() {
   const esEsteMes = mes === mesActual();
   const camino = enCamino(uid, rol, videos, piezas, misClientes);
   const porUnidad = cfg && cfg.modo !== "fijo" && cfg.modo !== "por_cliente" ? Number(cfg.por_unidad) || 0 : 0;
-  const historial = Array.from({ length: 6 }, (_, i) => sumarMeses(mesActual(), -i)).map((m) => ({ mes: m, ...delMes(m) }));
+  // Lo de antes del sistema (planilla) lo ve solo administración: acá, de octubre 2026 en adelante.
+  const historial = Array.from({ length: 6 }, (_, i) => sumarMeses(mesActual(), -i))
+    .filter((m) => m >= DESDE_GANANCIAS)
+    .map((m) => ({ mes: m, ...delMes(m) }));
 
   return (
     <PageShell
       title="Mis ganancias"
       subtitle="Lo que llevás ganado, lo que ya te pagamos y lo que tenés en camino."
-      actions={<MesNav mes={mes} setMes={setMes} max={mesActual()} />}
+      actions={<MesNav mes={mes} setMes={(m) => setMes(m < DESDE_GANANCIAS ? DESDE_GANANCIAS : m)} max={mesActual()} />}
     >
       {!cfg ? (
         <div className="rounded-2xl border border-dashed p-6 text-center">

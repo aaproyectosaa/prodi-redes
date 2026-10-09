@@ -312,6 +312,10 @@ export interface Liquidacion {
   pagado_at?: string | null;
   total_pagado?: number | null;
   detalle?: string | null;
+  /** Cargada de la planilla de antes del sistema (la ve solo administración). */
+  importado?: boolean;
+  /** Nombre, para quien no tiene usuario en el sistema. */
+  nombre?: string | null;
 }
 
 export const UNIDAD_POR_ROL: Record<string, { label: string; plural: string }> = {
@@ -739,3 +743,84 @@ export function cuotasPagadasDelMes(lista: Obligacion[], mes: string) {
       }))
   );
 }
+
+// ---------------------------------------------------------------------------
+// Historial de antes del sistema (planilla): facturado por mes
+// ---------------------------------------------------------------------------
+
+/** Lo facturado en un mes de antes del sistema (sin detalle por cliente). Id = YYYY-MM. */
+export interface HistoricoMes {
+  /** Facturado neto (sin IVA). */
+  ingresos: number;
+  /** Facturado con IVA. */
+  bruto?: number | null;
+  fuente?: string;
+}
+
+/** Meses cargados de la planilla (solo administración). Se usan en las estadísticas cuando el mes no tiene boletas. */
+export function useHistorico(enabled = true): Record<string, HistoricoMes> {
+  const [h, setH] = useState<Record<string, HistoricoMes>>({});
+  useEffect(() => {
+    if (!enabled) return;
+    return onSnapshot(
+      collection(db, "historico_mensual"),
+      (s) => setH(Object.fromEntries(s.docs.map((d) => [d.id, d.data() as HistoricoMes]))),
+      () => setH({})
+    );
+  }, [enabled]);
+  return h;
+}
+
+// ---------------------------------------------------------------------------
+// Lo que deben los clientes (planes de pago y deudas viejas)
+// ---------------------------------------------------------------------------
+
+export interface DeudaCliente {
+  id: string;
+  /** Nombre del cliente (puede no estar cargado en el sistema). */
+  cliente: string;
+  proyecto_id?: string | null;
+  /** De qué es la deuda ("julio y octubre", "diciembre y préstamo"…). */
+  detalle?: string | null;
+  /** Deuda original, antes de financiarla. */
+  base?: number | null;
+  /** Interés por atraso pactado (texto, ej. "0,8% diario"). */
+  interes?: string | null;
+  cuotas: Cuota[];
+  /** Ya no se espera cobrarla. */
+  incobrable?: boolean;
+  activa: boolean;
+  nota?: string | null;
+  created_at: string;
+  created_by: string;
+}
+
+export function useDeudasClientes(enabled = true): DeudaCliente[] {
+  const [lista, setLista] = useState<DeudaCliente[]>([]);
+  useEffect(() => {
+    if (!enabled) return;
+    return onSnapshot(
+      collection(db, "deudas_clientes"),
+      (s) => setLista(s.docs.map((d) => ({ id: d.id, ...d.data() }) as DeudaCliente).sort((a, b) => a.cliente.localeCompare(b.cliente))),
+      () => setLista([])
+    );
+  }, [enabled]);
+  return lista;
+}
+
+/** Marca una cuota como cobrada (o la vuelve a pendiente). */
+export async function cobrarCuotaCliente(d: DeudaCliente, n: number, cobrada: boolean, medio: MedioCobro | null = null) {
+  assertEditable();
+  const cuotas = d.cuotas.map((c) =>
+    c.n === n ? { ...c, pagada: cobrada, pagada_at: cobrada ? new Date().toISOString() : null, medio: cobrada ? medio : null } : c
+  );
+  await updateDoc(doc(db, "deudas_clientes", d.id), { cuotas, activa: cuotas.some((c) => !c.pagada) && !d.incobrable });
+}
+
+export async function marcarIncobrable(d: DeudaCliente, incobrable: boolean) {
+  assertEditable();
+  await updateDoc(doc(db, "deudas_clientes", d.id), { incobrable, activa: !incobrable && d.cuotas.some((c) => !c.pagada) });
+}
+
+/** Lo que falta cobrar (sin las incobrables). */
+export const saldoDeudaCliente = (d: DeudaCliente) => (d.incobrable ? 0 : d.cuotas.filter((c) => !c.pagada).reduce((a, c) => a + c.monto, 0));
