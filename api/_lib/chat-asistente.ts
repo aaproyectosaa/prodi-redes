@@ -268,7 +268,7 @@ Devolvé las acciones (máximo 3):
 - crear_reunion: titulo corto (ej. "Reunión con Ariel y Pato"); fecha YYYY-MM-DD (si no dice el día, hoy; calculá "mañana", "el viernes", etc. a partir de ahora); hora HH:MM en 24 h ("5 pm" = 17:00; si no dice la hora, no la pongas); duracion_min (60 si no dice); personas: los nombres de la lista tal cual (si usan un apodo como "Pato", poné el nombre de la lista que le corresponde; si no está, ponelo como lo escribieron). No incluyas a ${yo.nombre}: ya va.
 - crear_tarea: cuando pide recordarle algo a alguien o dejar una tarea ("recordale a Lucía que mande el guion el viernes"). titulo: la tarea corta en infinitivo ("Mandar el guion"); personas: a quién se le asigna (vacío si es para quien escribe); vence YYYY-MM-DD si dice cuándo (si no, vacío).
 - mandar_logo: cuando pide el logo (o los logos) de un cliente para mandarlo al chat. cliente: el nombre del cliente tal cual la lista.
-- recordar: solo cuando pide que te acuerdes de algo del cliente ("acordate que…", "tené en cuenta que…"). texto: el dato en una oración, en tercera persona sobre el cliente.
+- recordar: solo cuando pide que te acuerdes de algo de un cliente ("acordate que…", "tené en cuenta que…"). texto: el dato en una oración, en tercera persona sobre el cliente; cliente: el nombre del cliente si no es el del grupo.
 - responder: si es una pregunta o un saludo. Contestá con lo que hay en el chat${ctx ? " y en los DATOS DEL SISTEMA (clientes, equipo, videos, tareas, marcas: colores, tipografías, tono)" : ""}. Corto y ordenado: si la respuesta tiene varias partes, separalas en bloques con un título en negrita (**Equipo**, **Videos**…), una línea en blanco entre bloques y los datos como lista con "- " (sublistas con dos espacios y "- "). Nada de párrafos largos. No inventes datos.
 - No podés borrar ni modificar tareas, videos ni clientes: eso se hace a mano en el sistema.
 - preguntar: texto con UNA pregunta corta si falta algo importante (por ejemplo la hora de la reunión) o no se entiende el pedido.
@@ -459,8 +459,20 @@ Español rioplatense con voseo.`;
     }
 
     if (tipo === "recordar") {
-      if (typeof chat.proyecto_id !== "string") {
-        out.push({ texto: "Lo del cliente lo anoto solo en el grupo de ese cliente. Escribímelo ahí." });
+      // En el grupo de un cliente, es de ese cliente. En otros chats (el personal con Prodi, el del equipo),
+      // del cliente que se nombra (solo el equipo).
+      let destino: { id: string; nombre: string } | null =
+        typeof chat.proyecto_id === "string" ? { id: chat.proyecto_id, nombre: String(proj?.nombre ?? "el cliente") } : null;
+      if (!destino && ctx) {
+        const n = clientesNombrados(`${a.cliente ?? ""} ${texto}`, ctx.proyectos);
+        if (n.length > 1) {
+          out.push({ texto: `¿De qué cliente: ${lista(n.slice(0, 5).map((x) => x.nombre))}?` });
+          continue;
+        }
+        if (n.length === 1) destino = { id: n[0].id, nombre: n[0].nombre };
+      }
+      if (!destino) {
+        out.push({ texto: "¿De qué cliente es el dato? Decime el nombre y lo anoto." });
         continue;
       }
       const dato = limpiarHecho(a.texto);
@@ -468,8 +480,8 @@ Español rioplatense con voseo.`;
         out.push({ texto: "Eso no lo anoto: guardo solo datos del negocio para el marketing (nada de teléfonos, documentos ni cosas personales)." });
         continue;
       }
-      await guardarNotasChat(chat.proyecto_id, cid, [dato], caller.uid);
-      out.push({ texto: `Anotado para ${proj?.nombre ?? "el cliente"}: “${dato}”. Lo voy a tener en cuenta en los próximos planes.` });
+      await guardarNotasChat(destino.id, cid, [dato], caller.uid);
+      out.push({ texto: `Anotado para ${destino.nombre}: “${dato}”. Lo voy a tener en cuenta en los próximos planes.` });
       continue;
     }
   }

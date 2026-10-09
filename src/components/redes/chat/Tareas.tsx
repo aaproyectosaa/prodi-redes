@@ -57,7 +57,7 @@ export function TareasSheet({
                 key={t}
                 type="button"
                 onClick={() => setTab(t)}
-                className={cn("rounded-lg py-1.5 font-medium", tab === t ? "bg-background shadow-sm" : "text-muted-foreground")}
+                className={cn("rounded-lg py-1.5 font-medium", tab === t ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground")}
               >
                 {t === "mias" ? `Para mí${mias.filter((x) => !x.hecha).length ? ` (${mias.filter((x) => !x.hecha).length})` : ""}` : "Pedidas por mí"}
               </button>

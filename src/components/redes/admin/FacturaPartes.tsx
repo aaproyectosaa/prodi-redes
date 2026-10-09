@@ -253,7 +253,7 @@ export function DatosFacturacionDialog({ proyectoId, onClose }: { proyectoId: st
               key={t}
               type="button"
               onClick={() => setTipo(t)}
-              className={cn("rounded-lg py-1.5 text-sm font-medium transition-all", tipo === t ? "bg-background shadow-sm" : "text-muted-foreground")}
+              className={cn("rounded-lg py-1.5 text-sm font-medium transition-all", tipo === t ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground")}
             >
               {t === "boleta" ? "Boleta (sin IVA)" : "Factura (con IVA)"}
             </button>
@@ -358,7 +358,7 @@ export function EditarFacturaDialog({ f, onClose, ivaPct }: { f: FacturaDoc | nu
               key={t}
               type="button"
               onClick={() => setTipo(t)}
-              className={cn("rounded-lg py-1.5 text-sm font-medium transition-all", tipo === t ? "bg-background shadow-sm" : "text-muted-foreground")}
+              className={cn("rounded-lg py-1.5 text-sm font-medium transition-all", tipo === t ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground")}
             >
               {t === "boleta" ? "Boleta (sin IVA)" : `Factura (IVA ${ivaPct}%)`}
             </button>

@@ -436,10 +436,10 @@ function ComprarExtras({ clienteId, plan, onSoloEdicion }: { clienteId: string; 
               key={o.v}
               type="button"
               onClick={() => setModo(o.v)}
-              className={cn("rounded-lg px-2 py-1.5 text-center transition-all", modo === o.v ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}
+              className={cn("rounded-lg px-2 py-1.5 text-center transition-all", modo === o.v ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
             >
               <span className="block text-xs font-semibold">{o.t}</span>
-              <span className={cn("block text-[10px]", o.v === "edicion" && "text-emerald-600 dark:text-emerald-400")}>{o.d}</span>
+              <span className={cn("block text-[10px]", modo === o.v ? "text-primary-foreground/85" : o.v === "edicion" && "text-emerald-600 dark:text-emerald-400")}>{o.d}</span>
             </button>
           ))}
         </div>

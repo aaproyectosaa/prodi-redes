@@ -124,7 +124,7 @@ export function InstalarDialog({
                   onClick={() => setPlat(v)}
                   className={cn(
                     "rounded-lg py-1.5 text-sm font-medium transition-all",
-                    plat === v ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
+                    plat === v ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                   )}
                 >
                   {l}

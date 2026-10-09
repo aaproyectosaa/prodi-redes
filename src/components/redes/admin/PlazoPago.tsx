@@ -68,10 +68,10 @@ export function PlazoPago({
             key={m.value}
             type="button"
             onClick={() => onModo(m.value)}
-            className={cn("rounded-lg px-2 py-1.5 text-left transition-all", modo === m.value ? "bg-background shadow-sm" : "text-muted-foreground")}
+            className={cn("rounded-lg px-2 py-1.5 text-left transition-all", modo === m.value ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground")}
           >
             <span className="block text-sm font-medium">{m.label}</span>
-            <span className="block text-[11px] text-muted-foreground">{m.desc}</span>
+            <span className={cn("block text-[11px]", modo === m.value ? "text-primary-foreground/80" : "text-muted-foreground")}>{m.desc}</span>
           </button>
         ))}
       </div>

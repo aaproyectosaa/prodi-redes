@@ -575,7 +575,7 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
                   key={t}
                   type="button"
                   onClick={() => set("factTipo", t)}
-                  className={cn("rounded-lg py-1.5 text-sm font-medium transition-all", form.factTipo === t ? "bg-background shadow-sm" : "text-muted-foreground")}
+                  className={cn("rounded-lg py-1.5 text-sm font-medium transition-all", form.factTipo === t ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground")}
                 >
                   {t === "boleta" ? "Boleta (sin IVA)" : "Factura (con IVA)"}
                 </button>
