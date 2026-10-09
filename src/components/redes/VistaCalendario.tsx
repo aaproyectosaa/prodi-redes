@@ -6,6 +6,7 @@ import { useRedes } from "@/contexts/redes-data-context";
 import { diaSemana, diasDelMes, formatearFecha, sumarDias } from "@/lib/fecha";
 import { hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import { cn } from "@/lib/utils";
+import { especialesDe } from "@/lib/feriados";
 import type { Video } from "@/lib/redes/types";
 
 // ---------------------------------------------------------------------------
@@ -192,6 +193,12 @@ export function CalendarioEventos({ eventos, tipos, vacio }: { eventos: EventoCa
           )}
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-red-500" /> Feriado
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-fuchsia-500" /> Fecha comercial
+          </span>
           {Object.keys(tipos).map((t) => {
             const T = tipos[t];
             return (
@@ -217,6 +224,10 @@ export function CalendarioEventos({ eventos, tipos, vacio }: { eventos: EventoCa
             const evs = porDia.get(c.fecha) ?? [];
             const sel = dia === c.fecha;
             const esHoy = c.fecha === hoy;
+            // Feriados de Argentina y fechas comerciales (Día de la Madre, Black Friday…).
+            const esp = especialesDe(c.fecha);
+            const feriado = esp.find((x) => x.tipo === "feriado");
+            const efemeride = esp.find((x) => x.tipo === "efemeride");
             return (
               <button
                 key={c.fecha}
@@ -226,20 +237,40 @@ export function CalendarioEventos({ eventos, tipos, vacio }: { eventos: EventoCa
                   "flex min-h-[56px] flex-col items-stretch gap-1 border-b border-r p-1 text-left transition-colors md:min-h-[112px] md:p-1.5",
                   (i + 1) % 7 === 0 && "border-r-0",
                   !c.delMes && "bg-muted/20 text-muted-foreground/60",
+                  feriado && c.delMes && !sel && "bg-red-500/[0.06]",
                   sel ? "bg-primary/[0.08] ring-1 ring-inset ring-primary/50" : "hover:bg-muted/40"
                 )}
-                aria-label={`${c.num}: ${evs.length} evento${evs.length === 1 ? "" : "s"}`}
+                aria-label={`${c.num}${feriado ? ` (feriado: ${feriado.nombre})` : ""}${efemeride ? ` (${efemeride.nombre})` : ""}: ${evs.length} evento${evs.length === 1 ? "" : "s"}`}
+                title={esp.map((x) => (x.tipo === "feriado" ? `Feriado: ${x.nombre}` : x.nombre)).join(" · ") || undefined}
               >
                 <span
                   className={cn(
                     "flex h-6 w-6 items-center justify-center self-start rounded-full text-xs tabular-nums",
-                    esHoy && "bg-primary font-bold text-primary-foreground"
+                    esHoy && "bg-primary font-bold text-primary-foreground",
+                    !esHoy && feriado && "font-bold text-red-600 dark:text-red-400",
+                    !esHoy && !feriado && efemeride && "font-semibold text-fuchsia-600 dark:text-fuchsia-400"
                   )}
                 >
                   {c.num}
                 </span>
+                {/* Compu: el nombre del feriado o la fecha comercial. */}
+                {c.delMes &&
+                  esp.map((x) => (
+                    <span
+                      key={x.nombre}
+                      className={cn(
+                        "hidden truncate rounded px-1 text-[10px] font-medium leading-4 md:block",
+                        x.tipo === "feriado" ? "bg-red-500/10 text-red-700 dark:text-red-300" : "bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300"
+                      )}
+                    >
+                      {x.tipo === "feriado" ? "" : "🎉 "}
+                      {x.nombre}
+                    </span>
+                  ))}
                 {/* Celular: puntitos. Compu: chips con el nombre del video. */}
                 <span className="flex flex-wrap gap-0.5 md:hidden">
+                  {c.delMes && feriado && <span className="h-1.5 w-1.5 rounded-full bg-red-500" />}
+                  {c.delMes && efemeride && <span className="h-1.5 w-1.5 rounded-full bg-fuchsia-500" />}
                   {evs.slice(0, 4).map((e) => (
                     <span key={e.key} className={cn("h-1.5 w-1.5 rounded-full", tipos[e.tipo].dot)} />
                   ))}
@@ -274,6 +305,24 @@ export function CalendarioEventos({ eventos, tipos, vacio }: { eventos: EventoCa
                 .replace(/^./, (c) => c.toUpperCase())
             : "Elegí un día"}
         </p>
+        {dia &&
+          especialesDe(dia).map((x) => (
+            <div
+              key={x.nombre}
+              className={cn(
+                "mb-2 flex items-start gap-2.5 rounded-xl border p-2.5 text-sm",
+                x.tipo === "feriado" ? "border-red-500/30 bg-red-500/[0.06]" : "border-fuchsia-500/30 bg-fuchsia-500/[0.06]"
+              )}
+            >
+              {x.tipo === "feriado" ? <Flag className="mt-0.5 h-4 w-4 shrink-0 text-red-500" /> : <span className="text-lg leading-none">🎉</span>}
+              <span>
+                <b>{x.tipo === "feriado" ? `Feriado: ${x.nombre}` : x.nombre}</b>
+                <span className="block text-xs text-muted-foreground">
+                  {x.tipo === "feriado" ? "Pensá horarios del local y contenido de la fecha." : `Idea: ${x.idea}`}
+                </span>
+              </span>
+            </div>
+          ))}
         {lista.length === 0 ? (
           <p className="px-1 pb-1 text-xs text-muted-foreground">
             {delMes === 0 ? vacio : "Nada este día. Tocá otro día del calendario."}
