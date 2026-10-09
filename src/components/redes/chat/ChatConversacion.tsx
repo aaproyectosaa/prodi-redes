@@ -18,6 +18,8 @@ import {
   mencionaProdi,
   noLeido,
   pedirAProdi,
+  guardarLinks,
+  tieneLink,
   reaccionar,
   puedeEditarMensaje,
   PRODI_ID,
@@ -438,6 +440,7 @@ export function ChatConversacion({
       setMencionados({});
       setRespondiendo(null);
       setReferencia(null);
+      if (tieneLink(t) && chat.tipo !== "prodi") guardarLinks(chat.id, id);
       // @prodi: el servidor lo procesa y contesta en el chat.
       if (mencionaProdi(t) || chat.tipo === "prodi") {
         setPensando(true);

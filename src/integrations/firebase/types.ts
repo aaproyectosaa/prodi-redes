@@ -276,6 +276,8 @@ export interface Project {
     instagram?: string;
     facebook?: string;
     tiktok?: string;
+    /** Página web (también la carga sola Prodi si alguien pasa el link en un chat). */
+    web?: string;
   } | null;
   /**
    * Conexión con Meta (a futuro): publicar y pautar desde el sistema.

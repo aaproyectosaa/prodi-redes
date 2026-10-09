@@ -695,7 +695,7 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
             </Label>
             <Input value={form.emails} onChange={(e) => set("emails", e.target.value)} placeholder="duenio@marca.com, socio@marca.com" disabled={!isAdmin} />
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1.5">
               <Label>Instagram</Label>
               <Input value={form.redes.instagram ?? ""} onChange={(e) => set("redes", { ...form.redes, instagram: e.target.value })} placeholder="@usuario" />
@@ -707,6 +707,10 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
             <div className="space-y-1.5">
               <Label>TikTok</Label>
               <Input value={form.redes.tiktok ?? ""} onChange={(e) => set("redes", { ...form.redes, tiktok: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Página web</Label>
+              <Input value={form.redes.web ?? ""} onChange={(e) => set("redes", { ...form.redes, web: e.target.value })} placeholder="https://…" />
             </div>
           </div>
           <div className="rounded-lg border border-dashed p-3">

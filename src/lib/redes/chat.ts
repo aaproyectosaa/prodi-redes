@@ -207,6 +207,14 @@ export async function asegurarChatProdi(uid: string, nombre: string, chats: Chat
   });
 }
 
+/** ¿El texto tiene un link? (web, Instagram, etc.) */
+export const tieneLink = (texto: string) => /\bhttps?:\/\/|\bwww\.|\b[a-z0-9-]+\.(com|ar|net|org|shop|store)\b/i.test(texto);
+
+/** Links del mensaje: Prodi los guarda en la ficha del cliente y en su memoria (no bloquea ni avisa si falla). */
+export function guardarLinks(chatId: string, mensajeId: string) {
+  void callApi("/api/ia/links-chat", { chat_id: chatId, mensaje_id: mensajeId }).catch((err) => console.warn("[chat] links", err));
+}
+
 /** Después de guardar el mensaje: Prodi lo lee y contesta en el chat. */
 export function pedirAProdi(chatId: string, mensajeId: string) {
   return callApi<{ ok: true }>("/api/ia/chat-asistente", { chat_id: chatId, mensaje_id: mensajeId });

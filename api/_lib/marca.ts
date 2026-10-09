@@ -37,6 +37,9 @@ export function marcaTexto(p: Record<string, any>): string {
     a.manuales?.length && `Tiene manual de marca cargado (${a.manuales.length} archivo${a.manuales.length > 1 ? "s" : ""}).`,
     m.notas && `Reglas de uso de la marca: ${m.notas}`,
     p.redes?.instagram && `Instagram: ${p.redes.instagram}`,
+    p.redes?.facebook && `Facebook: ${p.redes.facebook}`,
+    p.redes?.tiktok && `TikTok: ${p.redes.tiktok}`,
+    p.redes?.web && `Página web: ${p.redes.web}`,
   ]
     .filter(Boolean)
     .join("\n");
