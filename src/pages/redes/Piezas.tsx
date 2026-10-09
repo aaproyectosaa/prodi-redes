@@ -237,7 +237,7 @@ export default function Piezas() {
                             setArrastrando(null);
                             setSobre(null);
                           }}
-                          className={cn(arrastra && "cursor-grab active:cursor-grabbing", arrastrando === p.id && "opacity-40")}
+                          className={cn("min-w-0", arrastra && "cursor-grab active:cursor-grabbing", arrastrando === p.id && "opacity-40")}
                         >
                           <PiezaCard pieza={p} i={i} cliente={clienteById(p.proyecto_id)?.nombre} onClick={() => setAbierta(p.id)} />
                         </div>
@@ -287,7 +287,7 @@ function PiezaCard({ pieza: p, cliente, onClick, i }: { pieza: PiezaIA; cliente?
       onClick={onClick}
       style={{ animationDelay: `${i * 40}ms` }}
       className={cn(
-        "flex gap-3 rounded-xl border bg-card p-2.5 text-left transition-all animate-in fade-in slide-in-from-bottom-1 fill-mode-both hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-sm motion-reduce:animate-none",
+        "flex w-full min-w-0 gap-3 rounded-xl border bg-card p-2.5 text-left transition-all animate-in fade-in slide-in-from-bottom-1 fill-mode-both hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-sm motion-reduce:animate-none",
         conCambios && "border-orange-500/50"
       )}
       title={cliente}
