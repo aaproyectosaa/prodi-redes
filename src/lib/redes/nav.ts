@@ -84,6 +84,7 @@ export function navForRole(role: UserRole | undefined): NavSection[] {
           items: [
             { label: "Mis videos", icon: LayoutGrid, path: "/videos", mobile: true },
             { label: "Rodajes", icon: CalendarDays, path: "/rodajes", mobile: true },
+            { label: "Piezas gráficas", icon: ImageIcon, path: "/piezas" },
             { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
             { label: "Clientes", icon: Building2, path: "/clientes", mobile: true },
             { label: "Reuniones", icon: VideoIcon, path: "/reuniones" },

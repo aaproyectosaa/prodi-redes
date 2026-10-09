@@ -18,6 +18,7 @@ import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { ETAPAS, estaTrabado, etapaInfo } from "@/lib/redes/etapas";
 import { mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import { canManageProduction } from "@/lib/roles";
+import { BotonNuevaPieza } from "@/components/redes/NuevaPiezaEquipo";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { forzarEtapa } from "@/lib/redes/videos";
@@ -74,6 +75,7 @@ function TableroEquipo({ tablero }: { tablero: TableroRol }) {
           {esProd && (
             <>
               <BotonArmarMes clienteId={cliente === "todos" ? null : cliente} />
+              <BotonNuevaPieza clienteId={cliente === "todos" ? null : cliente} />
               <Button variant="outline" onClick={() => setRodaje(true)}>
                 <CalendarPlus className="mr-2 h-4 w-4" /> Agendar rodaje
               </Button>
@@ -213,6 +215,7 @@ function CircuitoCompleto() {
         canManageProduction(role) && (
           <>
             <BotonArmarMes clienteId={cliente === "todos" ? null : cliente} />
+            <BotonNuevaPieza clienteId={cliente === "todos" ? null : cliente} />
             <Button variant="outline" onClick={() => setPlanificar("filmado")} title="Fuiste a grabar sin planificar: creás el video y subís el material">
               <Clapperboard className="mr-2 h-4 w-4" /> Ya lo filmé
             </Button>

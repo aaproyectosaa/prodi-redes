@@ -37,6 +37,7 @@ import { planDe, REDES_PLAN, usoPlan } from "@/lib/redes/planes";
 import { DIA_VENCIMIENTO, totalMensual } from "@/lib/redes/facturacion";
 import { PlazoPago } from "@/components/redes/admin/PlazoPago";
 import { HistorialFacturas } from "@/components/redes/admin/HistorialFacturas";
+import { BotonNuevaPieza } from "@/components/redes/NuevaPiezaEquipo";
 import { errorPlazo, plazoInicial, plazoParaGuardar } from "@/lib/redes/plazoPago";
 import { callApi } from "@/lib/redes/api";
 import { CONDICIONES_IVA, type CondicionIva, type Project, type ProjectTeamRole, type QuienFilma, type QuienPublica, type ServicioCliente } from "@/integrations/firebase/types";
@@ -112,6 +113,7 @@ export default function ClienteDetalle() {
             </SelectContent>
           </Select>
           <BotonArmarMes clienteId={cliente.id} />
+          {(isAdmin || role === "productor") && <BotonNuevaPieza clienteId={cliente.id} />}
           {chats.some((c) => c.id === chatClienteId(cliente.id)) && (
             <Button
               variant="outline"

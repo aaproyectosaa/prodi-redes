@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, Gift, ImagePlus, Loader2, Megaphone, Receipt, Search, ShoppingBag, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +23,18 @@ const normal = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLower
  * quedan piezas del plan se elige sin cargo o que la pague él. Las fotos quedan en la pieza (las ve diseño y
  * las usa la IA al generarla).
  */
-export function NuevaPiezaEquipo({ open, onOpenChange, onCreada }: { open: boolean; onOpenChange: (v: boolean) => void; onCreada: (id: string) => void }) {
+export function NuevaPiezaEquipo({
+  open,
+  onOpenChange,
+  onCreada,
+  clienteInicial,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onCreada: (id: string) => void;
+  /** Desde la ficha de un cliente: ya viene elegido. */
+  clienteInicial?: string | null;
+}) {
   const { clientes, planes, piezas, settings } = useRedes();
   const { user } = useUserProfileContext();
   const { connection } = useDriveConnection();
@@ -46,7 +58,7 @@ export function NuevaPiezaEquipo({ open, onOpenChange, onCreada }: { open: boole
 
   useEffect(() => {
     if (!open) return;
-    setClienteId(clientes.length === 1 ? clientes[0].id : null);
+    setClienteId(clienteInicial ?? (clientes.length === 1 ? clientes[0].id : null));
     setBusca("");
     setFotos([]);
     setFormato("posteo_vertical");
@@ -356,5 +368,22 @@ function Paso({ n, titulo, ayuda, children }: { n: number; titulo: string; ayuda
       </div>
       {children}
     </section>
+  );
+}
+
+/**
+ * Botón "Pieza gráfica" para cargar una pieza desde cualquier pantalla de la productora (Mis videos, la ficha
+ * del cliente). Al cargarla abre la pieza en Piezas gráficas.
+ */
+export function BotonNuevaPieza({ clienteId, className }: { clienteId?: string | null; className?: string }) {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button variant="outline" onClick={() => setOpen(true)} className={className} title="Cargar un pedido de pieza gráfica para diseño (con las fotos)">
+        <ImagePlus className="mr-2 h-4 w-4" /> Pieza gráfica
+      </Button>
+      <NuevaPiezaEquipo open={open} onOpenChange={setOpen} clienteInicial={clienteId ?? null} onCreada={(id) => navigate(`/piezas?pieza=${id}`)} />
+    </>
   );
 }

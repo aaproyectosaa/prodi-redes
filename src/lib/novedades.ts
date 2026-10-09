@@ -88,6 +88,24 @@ const HABLAR_CLIENTE: Diapositiva = {
 /** Novedades, de la más nueva a la más vieja. */
 export const NOVEDADES: Novedad[] = [
   {
+    id: "2026-10-nueva-pieza",
+    fecha: "2026-10-10",
+    titulo: "Cargá piezas gráficas para diseño",
+    roles: ["productor"],
+    diapositivas: [
+      {
+        titulo: "Botón «Pieza gráfica»",
+        texto: "Está en Mis videos y en la ficha de cada cliente. Elegís el cliente, subís las fotos (producto, local, persona), qué pieza es y qué hay que hacer. A diseño le llega al toque.",
+        anim: "piezas",
+      },
+      {
+        titulo: "Las fotos se usan tal cual",
+        texto: "La diseñadora las ve en la pieza y la IA las pone de protagonistas al generarla. Si al cliente no le quedan piezas del plan, elegís sin cargo o que la pague él.",
+        anim: "subir-material",
+      },
+    ],
+  },
+  {
     id: "2026-10-meta-id",
     fecha: "2026-10-09",
     titulo: "Los resultados de Meta, solos",
