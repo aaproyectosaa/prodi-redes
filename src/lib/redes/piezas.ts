@@ -135,7 +135,7 @@ export function pedirPieza(proyectoId: string, datos: DatosPedidoPieza) {
 
 /** Crea la preferencia de Mercado Pago y devuelve el link de pago. */
 export async function iniciarPago(
-  body: { tipo: "pieza_ia"; pieza_id: string } | { tipo: "video_extra"; proyecto_id: string; mes: string; cantidad: number }
+  body: { tipo: "pieza_ia"; pieza_id: string } | { tipo: "video_extra"; proyecto_id: string; mes: string; cantidad: number; plataforma?: string }
 ): Promise<{ init_point: string; cobro_id: string }> {
   assertEditable();
   return callApi("/api/pagos/crear", body);

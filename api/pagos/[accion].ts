@@ -50,9 +50,26 @@ export const config = { maxDuration: 30 };
 
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
+/** Para dónde es un video extra: Instagram/Facebook ("meta", el de siempre), TikTok o YouTube. */
+type Plataforma = "meta" | "tiktok" | "youtube";
+const PLATAFORMA_NOMBRE: Record<Plataforma, string> = { meta: "Instagram/Facebook", tiktok: "TikTok", youtube: "YouTube" };
+const plataformaDe = (v: unknown): Plataforma => (v === "tiktok" || v === "youtube" ? v : "meta");
+
+/** Precio del video extra de un cliente para esa plataforma (TikTok y YouTube, si no tienen uno propio, el de Instagram). */
+async function precioExtra(proj: Data, plataforma: Plataforma): Promise<number> {
+  const o = (proj.plan_redes_override ?? {}) as Data;
+  let meta = o.precio_video_extra ?? null;
+  if (meta == null && proj.plan_redes_id) {
+    const plan = (await adminDb().collection("planes_redes").doc(String(proj.plan_redes_id)).get()).data();
+    meta = plan?.precio_video_extra ?? null;
+  }
+  const propio = plataforma === "tiktok" ? o.precio_extra_tiktok : plataforma === "youtube" ? o.precio_extra_youtube : null;
+  return Number(propio ?? meta ?? 0) || 0;
+}
+
 async function crear(req: VercelRequest) {
   const caller = await requireCaller(req, ["cliente", "admin", "productor"]);
-  const b = body<{ tipo?: string; pieza_id?: string; proyecto_id?: string; mes?: string; cantidad?: number }>(req);
+  const b = body<{ tipo?: string; pieza_id?: string; proyecto_id?: string; mes?: string; cantidad?: number; plataforma?: string }>(req);
   const db = adminDb();
   const base = appUrl(req);
   const settings = (await db.collection("app_settings").doc("redes").get()).data() ?? {};
@@ -90,15 +107,12 @@ async function crear(req: VercelRequest) {
     proyectoId = b.proyecto_id;
     cantidad = Math.min(10, Math.max(1, Math.floor(Number(b.cantidad) || 1)));
     const proj = (await db.collection("projects").doc(proyectoId).get()).data() ?? {};
-    let unit = proj.plan_redes_override?.precio_video_extra ?? null;
-    if (unit == null && proj.plan_redes_id) {
-      const plan = (await db.collection("planes_redes").doc(proj.plan_redes_id).get()).data();
-      unit = plan?.precio_video_extra ?? null;
-    }
+    const plataforma = plataformaDe(b.plataforma);
+    const unit = await precioExtra(proj, plataforma);
     if (!(Number(unit) > 0)) throw new HttpError(409, "Este plan no tiene precio de video extra");
     monto = Number(unit) * cantidad;
     const [y, m] = String(b.mes).split("-").map(Number);
-    concepto = `${cantidad} video${cantidad === 1 ? "" : "s"} extra · ${MESES[m - 1]} ${y}`;
+    concepto = `${cantidad} video${cantidad === 1 ? "" : "s"} extra${plataforma === "meta" ? "" : ` para ${PLATAFORMA_NOMBRE[plataforma]}`} · ${MESES[m - 1]} ${y}`;
     refId = String(b.mes);
     tab = "plan";
   } else {
@@ -602,6 +616,8 @@ async function pedirVideo(req: VercelRequest) {
     filma_cliente?: boolean;
     /** Con qué material: { tipo: "existente", archivos: [drive_file_id] } | { tipo: "nueva", preferencia? } | { tipo: "cliente" }. */
     material?: { tipo?: unknown; archivos?: unknown; preferencia?: unknown };
+    /** Si es extra: para dónde es (meta | tiktok | youtube), cambia el precio. */
+    plataforma?: string;
   }>(req);
   // Con fecha, el mes sale de la fecha (no puede ser pasada). Con o sin fecha, el mes tiene que ser
   // este o uno de los 3 siguientes (hora de Argentina): si no, cada mes viejo o lejano daría su cupo gratis.
@@ -653,12 +669,13 @@ async function pedirVideo(req: VercelRequest) {
     material_base,
   };
   let incluidos = Number(proj.plan_redes_override?.videos_mes ?? NaN);
-  let precioExtra = Number(proj.plan_redes_override?.precio_video_extra ?? NaN);
-  if (proj.plan_redes_id && (isNaN(incluidos) || isNaN(precioExtra))) {
+  if (proj.plan_redes_id && isNaN(incluidos)) {
     const plan = (await db.collection("planes_redes").doc(proj.plan_redes_id).get()).data() ?? {};
-    if (isNaN(incluidos)) incluidos = Number(plan.videos_mes ?? 0);
-    if (isNaN(precioExtra)) precioExtra = Number(plan.precio_video_extra ?? 0);
+    incluidos = Number(plan.videos_mes ?? 0);
   }
+  // El video extra se cobra según para dónde es (Instagram/Facebook, TikTok o YouTube).
+  const plataforma = plataformaDe(b.plataforma);
+  const precioVideo = await precioExtra(proj, plataforma);
   incluidos = incluidos || 0;
   const team = (proj.team_roles ?? {}) as Record<string, string[]>;
   const base = appUrl(req);
@@ -700,9 +717,9 @@ async function pedirVideo(req: VercelRequest) {
   }
 
   // Se pasa del plan: se cobra como video extra.
-  if (!(precioExtra > 0)) throw new HttpError(409, "Tu plan no tiene precio de video extra. Escribinos y lo vemos.");
+  if (!(precioVideo > 0)) throw new HttpError(409, "Tu plan no tiene precio de video extra. Escribinos y lo vemos.");
   const [y, m] = mes.split("-").map(Number);
-  const concepto = `Video extra · ${MESES[m - 1]} ${y}: ${titulo}`.slice(0, 120);
+  const concepto = `Video extra${plataforma === "meta" ? "" : ` (${PLATAFORMA_NOMBRE[plataforma]})`} · ${MESES[m - 1]} ${y}: ${titulo}`.slice(0, 120);
   const cobroRef = db.collection("cobros").doc();
   await cobroRef.set({
     proyecto_id: b.proyecto_id,
@@ -710,7 +727,7 @@ async function pedirVideo(req: VercelRequest) {
     concepto,
     ref_id: mes,
     cantidad: 1,
-    monto: precioExtra,
+    monto: precioVideo,
     moneda: "ARS",
     estado: "pendiente",
     pedido,
@@ -719,7 +736,7 @@ async function pedirVideo(req: VercelRequest) {
   });
   const pref = await crearPreferencia({
     titulo: `Prodi · ${concepto}`,
-    monto: precioExtra,
+    monto: precioVideo,
     cantidad: 1,
     externalReference: cobroRef.id,
     notificationUrl: `${base}/api/pagos/webhook`,
@@ -727,7 +744,7 @@ async function pedirVideo(req: VercelRequest) {
     email: caller.email,
   });
   await cobroRef.update({ mp_preference_id: pref.id, mp_init_point: pref.init_point });
-  return { estado: "pago", init_point: pref.init_point, cobro_id: cobroRef.id, monto: precioExtra };
+  return { estado: "pago", init_point: pref.init_point, cobro_id: cobroRef.id, monto: precioVideo };
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

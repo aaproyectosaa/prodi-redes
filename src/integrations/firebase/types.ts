@@ -201,6 +201,15 @@ export interface Project {
     piezas_mes?: number | null;
     precio_mensual?: number | null;
     precio_video_extra?: number | null;
+    /** Video extra para TikTok y para YouTube (el de arriba es el de Instagram/Facebook). Vacío = el mismo. */
+    precio_extra_tiktok?: number | null;
+    precio_extra_youtube?: number | null;
+    /** En qué redes trabajamos. */
+    redes?: { instagram?: boolean; facebook?: boolean; tiktok?: boolean; youtube?: boolean } | null;
+    /** Si incluye pauta y cuánto se invierte por mes (lo pone el cliente en Meta). */
+    pauta?: { incluida: boolean; monto?: number | null } | null;
+    /** Administración de redes (publicar, ordenar el perfil, historias). No incluye responder mensajes. */
+    administracion_redes?: boolean | null;
   } | null;
   /** Cómo se le factura el día 27 (lo maneja el super admin). */
   facturacion?: {

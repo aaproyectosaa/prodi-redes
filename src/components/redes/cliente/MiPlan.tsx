@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { AlertTriangle, CheckCircle2, ChevronRight, Clapperboard, Copy, Image as ImageIcon, Loader2, Minus, Plus, Receipt } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronRight, Clapperboard, Copy, Image as ImageIcon, Loader2, Megaphone, Minus, Plus, Receipt, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Section } from "@/components/redes/PageShell";
@@ -10,7 +10,7 @@ import { CupoVideos } from "@/components/redes/cliente/CupoVideos";
 import { useRedes } from "@/contexts/redes-data-context";
 import { mesAR } from "@/lib/fecha";
 import { fechaCorta, formatARS, hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
-import { planDe, usoPlan } from "@/lib/redes/planes";
+import { extraPorPlataforma, planDe, PLATAFORMAS_EXTRA, usoPlan, type PlanEfectivo, type PlataformaExtra } from "@/lib/redes/planes";
 import { cupoPiezas, iniciarPago } from "@/lib/redes/piezas";
 import { DIA_PAGO_DESDE, DIA_VENCIMIENTO, diaPago, interesMora, nombrePeriodo, textoMora, textoPlazoPago, totalMensual, useFacturasCliente, type FacturaDoc } from "@/lib/redes/facturacion";
 import { DATOS_COBRO_DEFAULT } from "@/lib/redes/types";
@@ -168,6 +168,39 @@ export function MiPlan({
             </p>
           </div>
         </div>
+        {(plan.redes.length > 0 || plan.pauta?.incluida || plan.administracionRedes) && (
+          <ul className="mt-4 grid gap-2 sm:grid-cols-3">
+            {plan.redes.length > 0 && (
+              <li className="flex items-start gap-2.5 rounded-xl border bg-background/60 p-3">
+                <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <span className="text-sm">
+                  <b className="block">Redes</b>
+                  <span className="text-muted-foreground">{plan.redes.join(", ")}</span>
+                </span>
+              </li>
+            )}
+            {plan.pauta?.incluida && (
+              <li className="flex items-start gap-2.5 rounded-xl border bg-background/60 p-3">
+                <Megaphone className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <span className="text-sm">
+                  <b className="block">Pauta</b>
+                  <span className="text-muted-foreground">
+                    {plan.pauta.monto ? `${formatARS(plan.pauta.monto)} por mes de inversión en publicidad` : "Incluida: armamos y manejamos tus anuncios"}
+                  </span>
+                </span>
+              </li>
+            )}
+            {plan.administracionRedes && (
+              <li className="flex items-start gap-2.5 rounded-xl border bg-background/60 p-3">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <span className="text-sm">
+                  <b className="block">Administración de redes</b>
+                  <span className="text-muted-foreground">Publicamos y mantenemos tu perfil. No incluye responder mensajes.</span>
+                </span>
+              </li>
+            )}
+          </ul>
+        )}
         <p className="mt-5 text-sm font-semibold">Lo que usaste en {mesLabel(mes).split(" ")[0].toLowerCase()}</p>
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
           <Medidor
@@ -193,7 +226,7 @@ export function MiPlan({
       {/* 3. Cómo pagás y extras */}
       <div className="grid gap-4 md:grid-cols-2">
         <DebitoCliente cliente={cliente} monto={totalBoleta} comision={settings.comision_mp_pct} email={email} />
-        <ComprarExtras clienteId={cliente.id} precio={plan.precioVideoExtra} />
+        <ComprarExtras clienteId={cliente.id} plan={plan} />
       </div>
 
       {/* 4. Boletas */}
@@ -305,14 +338,16 @@ function Medidor({
   );
 }
 
-function ComprarExtras({ clienteId, precio }: { clienteId: string; precio: number }) {
+function ComprarExtras({ clienteId, plan }: { clienteId: string; plan: PlanEfectivo }) {
   const [cantidad, setCantidad] = useState(1);
+  const [plataforma, setPlataforma] = useState<PlataformaExtra>("meta");
+  const precio = plan.precioExtra[plataforma];
   const [loading, setLoading] = useState(false);
   const mes = mesActual();
   const comprar = async () => {
     setLoading(true);
     try {
-      const { init_point } = await iniciarPago({ tipo: "video_extra", proyecto_id: clienteId, mes, cantidad });
+      const { init_point } = await iniciarPago({ tipo: "video_extra", proyecto_id: clienteId, mes, cantidad, plataforma });
       window.location.href = init_point;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo iniciar el pago");
@@ -323,6 +358,23 @@ function ComprarExtras({ clienteId, precio }: { clienteId: string; precio: numbe
     <div className="rounded-2xl border bg-card p-5">
       <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">¿Necesitás más videos?</p>
       <p className="mt-1 text-sm text-muted-foreground">Para una promo o un lanzamiento, sumá videos a este mes.</p>
+      {extraPorPlataforma(plan) && (
+        <div className="mt-3 grid grid-cols-3 gap-1.5">
+          {PLATAFORMAS_EXTRA.map((p) => (
+            <button
+              key={p.v}
+              type="button"
+              onClick={() => setPlataforma(p.v)}
+              className={cn(
+                "rounded-xl border px-2 py-1.5 text-center text-xs transition-colors",
+                plataforma === p.v ? "border-primary bg-primary/10 font-semibold text-primary" : "hover:border-primary/50"
+              )}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      )}
       {precio > 0 ? (
         <>
           <div className="mt-4 flex items-center gap-3">

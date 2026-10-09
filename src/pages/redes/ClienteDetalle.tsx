@@ -33,7 +33,7 @@ import { useAppData } from "@/contexts/app-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { ETAPAS, quienFilma } from "@/lib/redes/etapas";
 import { formatARS, mesActual, mesLabel, sumarMeses, fechaCorta } from "@/lib/redes/format";
-import { planDe, usoPlan } from "@/lib/redes/planes";
+import { planDe, REDES_PLAN, usoPlan } from "@/lib/redes/planes";
 import { DIA_VENCIMIENTO, totalMensual } from "@/lib/redes/facturacion";
 import { PlazoPago } from "@/components/redes/admin/PlazoPago";
 import { HistorialFacturas } from "@/components/redes/admin/HistorialFacturas";
@@ -322,6 +322,11 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
             precio_mensual: form.ovPrecio === "" ? null : Number(form.ovPrecio),
             precio_video_extra: form.ovExtra === "" ? null : Number(form.ovExtra),
             piezas_mes: form.ovPiezas === "" ? null : Number(form.ovPiezas),
+            precio_extra_tiktok: form.ovExtraTiktok === "" ? null : Number(form.ovExtraTiktok),
+            precio_extra_youtube: form.ovExtraYoutube === "" ? null : Number(form.ovExtraYoutube),
+            redes: form.ovRedes,
+            pauta: { incluida: form.ovPauta, monto: form.ovPauta && form.ovPautaMonto !== "" ? Number(form.ovPautaMonto) : null },
+            administracion_redes: form.ovAdminRedes,
           },
           facturacion: {
             // Lo que se maneja desde Cobros (pausada, recordatorios) no se pierde.
@@ -424,11 +429,64 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
                   <Label className="text-xs">Abono $</Label>
                   <InputNumero value={form.ovPrecio} onChange={(e) => set("ovPrecio", e.target.value.replace(/\D/g, ""))} />
                 </div>
+              </div>
+            </div>
+            <div>
+              <p className="mb-1.5 text-xs text-muted-foreground">Precio del video extra según para dónde es (vacío en TikTok o YouTube = el mismo que Instagram)</p>
+              <div className="grid grid-cols-3 gap-2">
                 <div className="space-y-1">
-                  <Label className="text-xs">Video extra $</Label>
+                  <Label className="text-xs">Instagram / Facebook $</Label>
                   <InputNumero value={form.ovExtra} onChange={(e) => set("ovExtra", e.target.value.replace(/\D/g, ""))} />
                 </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">TikTok $</Label>
+                  <InputNumero value={form.ovExtraTiktok} onChange={(e) => set("ovExtraTiktok", e.target.value.replace(/\D/g, ""))} placeholder={form.ovExtra ? "igual" : ""} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">YouTube $</Label>
+                  <InputNumero value={form.ovExtraYoutube} onChange={(e) => set("ovExtraYoutube", e.target.value.replace(/\D/g, ""))} placeholder={form.ovExtra ? "igual" : ""} />
+                </div>
               </div>
+            </div>
+            <div className="space-y-3 rounded-xl border p-3">
+              <p className="text-xs font-semibold">Qué incluye (lo ve el cliente en «Mi plan»)</p>
+              <div>
+                <p className="mb-1.5 text-xs text-muted-foreground">Redes en las que trabajamos</p>
+                <div className="flex flex-wrap gap-2">
+                  {REDES_PLAN.map((r) => (
+                    <button
+                      key={r.k}
+                      type="button"
+                      onClick={() => set("ovRedes", { ...form.ovRedes, [r.k]: !form.ovRedes[r.k] })}
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                        form.ovRedes[r.k] ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground hover:border-primary/50"
+                      )}
+                    >
+                      {form.ovRedes[r.k] ? "✓ " : ""}
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <Switch checked={form.ovPauta} onCheckedChange={(v) => set("ovPauta", v)} /> Incluye pauta
+                </label>
+                {form.ovPauta && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-muted-foreground">Inversión por mes $</span>
+                    <InputNumero className="h-8 w-32" value={form.ovPautaMonto} onChange={(e) => set("ovPautaMonto", e.target.value.replace(/\D/g, ""))} placeholder="Ej: 100.000" />
+                  </div>
+                )}
+              </div>
+              <label className="flex items-start gap-2 text-sm">
+                <Switch checked={form.ovAdminRedes} onCheckedChange={(v) => set("ovAdminRedes", v)} className="mt-0.5" />
+                <span>
+                  Administración de redes
+                  <span className="block text-xs text-muted-foreground">Publicamos y mantenemos el perfil. No incluye responder mensajes.</span>
+                </span>
+              </label>
             </div>
           </div>
         </Section>
@@ -749,6 +807,12 @@ function toForm(c: Project) {
     ovPrecio: o.precio_mensual != null ? String(o.precio_mensual) : "",
     ovExtra: o.precio_video_extra != null ? String(o.precio_video_extra) : "",
     ovPiezas: o.piezas_mes != null ? String(o.piezas_mes) : "",
+    ovExtraTiktok: o.precio_extra_tiktok != null ? String(o.precio_extra_tiktok) : "",
+    ovExtraYoutube: o.precio_extra_youtube != null ? String(o.precio_extra_youtube) : "",
+    ovRedes: { instagram: !!o.redes?.instagram, facebook: !!o.redes?.facebook, tiktok: !!o.redes?.tiktok, youtube: !!o.redes?.youtube },
+    ovPauta: !!o.pauta?.incluida,
+    ovPautaMonto: o.pauta?.monto != null ? String(o.pauta.monto) : "",
+    ovAdminRedes: !!o.administracion_redes,
     factTipo: (c.facturacion?.tipo ?? "factura") as "boleta" | "factura",
     factRazon: c.facturacion?.razon_social ?? "",
     factCuit: c.facturacion?.cuit ?? "",

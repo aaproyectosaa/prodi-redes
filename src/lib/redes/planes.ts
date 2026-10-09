@@ -3,26 +3,56 @@ import type { PlanRedes, Video } from "./types";
 
 export const PLANES = "planes_redes";
 
+/** Para dónde es un video extra: el precio cambia (reel de Instagram/Facebook, TikTok o YouTube). */
+export type PlataformaExtra = "meta" | "tiktok" | "youtube";
+export const PLATAFORMAS_EXTRA: { v: PlataformaExtra; label: string }[] = [
+  { v: "meta", label: "Instagram / Facebook" },
+  { v: "tiktok", label: "TikTok" },
+  { v: "youtube", label: "YouTube" },
+];
+
+export const REDES_PLAN = [
+  { k: "instagram", label: "Instagram" },
+  { k: "facebook", label: "Facebook" },
+  { k: "tiktok", label: "TikTok" },
+  { k: "youtube", label: "YouTube" },
+] as const;
+
 export interface PlanEfectivo {
   plan: PlanRedes | null;
   nombre: string;
   videosMes: number;
   precioMensual: number;
+  /** Video extra de Instagram/Facebook (el de siempre). */
   precioVideoExtra: number;
+  /** Video extra por plataforma (TikTok y YouTube caen al de Instagram/Facebook si no tienen uno propio). */
+  precioExtra: Record<PlataformaExtra, number>;
+  /** Redes en las que trabajamos (nombres). */
+  redes: string[];
+  pauta: { incluida: boolean; monto: number | null } | null;
+  administracionRedes: boolean;
 }
 
 /** Plan del cliente con los ajustes puntuales aplicados. */
 export function planDe(project: Project | undefined, planes: PlanRedes[]): PlanEfectivo {
   const plan = planes.find((p) => p.id === project?.plan_redes_id) ?? null;
   const o = project?.plan_redes_override ?? {};
+  const meta = o.precio_video_extra ?? plan?.precio_video_extra ?? 0;
   return {
     plan,
     nombre: plan?.nombre ?? "Sin plan",
     videosMes: o.videos_mes ?? plan?.videos_mes ?? 0,
     precioMensual: o.precio_mensual ?? plan?.precio_mensual ?? 0,
-    precioVideoExtra: o.precio_video_extra ?? plan?.precio_video_extra ?? 0,
+    precioVideoExtra: meta,
+    precioExtra: { meta, tiktok: o.precio_extra_tiktok ?? meta, youtube: o.precio_extra_youtube ?? meta },
+    redes: REDES_PLAN.filter((r) => o.redes?.[r.k]).map((r) => r.label),
+    pauta: o.pauta ? { incluida: !!o.pauta.incluida, monto: o.pauta.monto ?? null } : null,
+    administracionRedes: !!o.administracion_redes,
   };
 }
+
+/** ¿Los precios del video extra cambian según la plataforma? (si no, no hace falta preguntar). */
+export const extraPorPlataforma = (p: PlanEfectivo) => new Set(Object.values(p.precioExtra)).size > 1;
 
 export interface UsoPlan {
   /** Videos que incluye el plan este mes + extras comprados. */

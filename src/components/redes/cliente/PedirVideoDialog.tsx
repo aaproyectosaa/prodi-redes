@@ -36,7 +36,7 @@ import { callApi } from "@/lib/redes/api";
 import { asset } from "@/lib/asset";
 import { formatearFecha } from "@/lib/fecha";
 import { formatARS, hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
-import { planDe, usoPlan } from "@/lib/redes/planes";
+import { extraPorPlataforma, planDe, PLATAFORMAS_EXTRA, usoPlan, type PlataformaExtra } from "@/lib/redes/planes";
 import { quienFilma, soloPauta } from "@/lib/redes/etapas";
 import type { Video } from "@/lib/redes/types";
 import { useOpenVideo } from "@/components/redes/VideoCard";
@@ -108,6 +108,8 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
   const [mesFinal, setMesFinal] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  // Si es extra: para dónde es (el precio cambia entre Instagram/Facebook, TikTok y YouTube).
+  const [plataforma, setPlataforma] = useState<PlataformaExtra>("meta");
   const [listo, setListo] = useState(false);
   const [videoId, setVideoId] = useState<string | null>(null);
   const tituloRef = useRef<HTMLInputElement>(null);
@@ -188,6 +190,7 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
   }, [open]);
 
   const plan = planDe(cliente, planes);
+  const precioExtra = plan.precioExtra[plataforma];
   const hoy = hoyISO();
   const limite = new Date(`${sumarMeses(hoy, 3)}T12:00:00`);
   // "Esta semana": hasta el domingo.
@@ -287,6 +290,7 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
         titulo,
         idea,
         objetivo,
+        plataforma,
         // El servidor lo decide con la ficha del cliente (y valida que los archivos sean suyos).
         filma_cliente: filmaCliente,
         material: {
@@ -643,12 +647,33 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
                             <div className="flex items-start gap-3">
                               <CreditCard className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
                               <div>
-                                <p className="font-semibold">Este video es extra: {formatARS(plan.precioVideoExtra)}</p>
+                                <p className="font-semibold">Este video es extra: {formatARS(precioExtra)}</p>
                                 <p className="text-sm text-muted-foreground">
                                   Ya usaste los {uso.cupo} videos de {nombreMes(mes)}. Lo pagás con Mercado Pago.
                                 </p>
                               </div>
                             </div>
+                            {extraPorPlataforma(plan) && (
+                              <div className="space-y-1.5">
+                                <p className="text-xs font-medium">¿Para dónde es?</p>
+                                <div className="grid grid-cols-3 gap-1.5">
+                                  {PLATAFORMAS_EXTRA.map((p) => (
+                                    <button
+                                      key={p.v}
+                                      type="button"
+                                      onClick={() => setPlataforma(p.v)}
+                                      className={cn(
+                                        "rounded-xl border px-2 py-2 text-center text-xs transition-colors",
+                                        plataforma === p.v ? "border-primary bg-primary/10 font-semibold text-primary" : "bg-card hover:border-primary/50"
+                                      )}
+                                    >
+                                      <span className="block">{p.label}</span>
+                                      <span className="block tabular-nums text-muted-foreground">{formatARS(plan.precioExtra[p.v])}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                             {cuando === "asap" && usoSiguiente.disponibles > 0 && (
                               <button
                                 type="button"
@@ -710,10 +735,10 @@ export function PedirVideoDialog({ open, onOpenChange, cliente }: { open: boolea
                       if (err) setAviso(err);
                       else void pedir(mes);
                     }}
-                    disabled={enviando || (!!cuando && !entra && !(plan.precioVideoExtra > 0))}
+                    disabled={enviando || (!!cuando && !entra && !(precioExtra > 0))}
                   >
                     {enviando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {!cuando || entra ? "Pedir video" : `Pagar ${formatARS(plan.precioVideoExtra)}`}
+                    {!cuando || entra ? "Pedir video" : `Pagar ${formatARS(precioExtra)}`}
                   </Button>
                 )}
               </div>

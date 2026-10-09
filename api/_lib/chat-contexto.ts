@@ -59,7 +59,15 @@ export async function contextoSistema(opts: { finanzas: boolean; texto: string; 
       const porEtapa = Object.entries(suyos.reduce<Record<string, number>>((a, v) => ((a[String(v.etapa)] = (a[String(v.etapa)] ?? 0) + 1), a), {}))
         .map(([e, n]) => `${n} ${ETAPA[e] ?? e}`)
         .join(", ");
-      const abono = opts.finanzas ? Number((p.plan_redes_override as Data | undefined)?.precio_mensual ?? 0) : 0;
+      const ov = (p.plan_redes_override ?? {}) as Data;
+      const abono = opts.finanzas ? Number(ov.precio_mensual ?? 0) : 0;
+      const redesPlan = Object.entries((ov.redes ?? {}) as Record<string, boolean>).filter(([, v]) => v).map(([k]) => k);
+      const pautaPlan = (ov.pauta ?? null) as { incluida?: boolean; monto?: number | null } | null;
+      const incluye = [
+        redesPlan.length ? `redes: ${redesPlan.join(", ")}` : null,
+        pautaPlan?.incluida ? `con pauta${opts.finanzas && pautaPlan.monto ? ` ($${Number(pautaPlan.monto).toLocaleString("es-AR")}/mes)` : ""}` : null,
+        ov.administracion_redes ? "administración de redes (sin responder mensajes)" : null,
+      ].filter(Boolean);
       return [
         `- ${p.nombre}`,
         m.rubro && `rubro: ${m.rubro}`,
@@ -70,6 +78,7 @@ export async function contextoSistema(opts: { finanzas: boolean; texto: string; 
         tr.pauta?.length && `pauta: ${quien(tr.pauta)}`,
         tr.diseno?.length && `diseño: ${quien(tr.diseno)}`,
         tr.cliente?.length && `usuarios del cliente: ${quien(tr.cliente)}`,
+        incluye.length ? `incluye ${incluye.join(", ")}` : null,
         porEtapa && `videos en curso: ${porEtapa}`,
         abono ? `abono: $${abono.toLocaleString("es-AR")}` : null,
       ]
