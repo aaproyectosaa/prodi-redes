@@ -570,6 +570,26 @@ function PasoCobrar({ lista, hoy, cobro, onVer }: { lista: FacturaDoc[]; hoy: st
               <Copy className="mr-1 h-3.5 w-3.5" /> Recordatorio
             </Button>
             <MenuCobrar label="Cobrada" onElegir={(m) => void cobrar([f], m)} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Más opciones">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {/* Nunca se le mandó (p. ej. se registró un pago en el mes equivocado y se deshizo): vuelve a Emitir. */}
+                {!f.emitida_por && (
+                  <DropdownMenuItem onClick={() => void volverASinEmitir(f).then(() => toast.success(`${f.cliente}: vuelve a «Emitir»`)).catch(err)}>
+                    <Undo2 className="mr-2 h-4 w-4" /> Volver a «Emitir» (no se la mandé)
+                  </DropdownMenuItem>
+                )}
+                {!f.arca?.cae && (
+                  <DropdownMenuItem className="text-destructive" onClick={() => void anularFactura(f).then(() => toast.success("No se le factura este mes")).catch(err)}>
+                    <Trash2 className="mr-2 h-4 w-4" /> No facturarle este mes
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </Fila>
         );
       })}
