@@ -495,14 +495,20 @@ function PasoEmitir({
                               <Banknote className="mr-2 h-4 w-4" /> {m.label}
                             </DropdownMenuItem>
                           ))}
-                          {r.doc && (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-destructive" onClick={() => void anularFactura(r.doc!).then(() => toast.success("No se le factura este mes")).catch(err)}>
-                                <Trash2 className="mr-2 h-4 w-4" /> No facturarle este mes
-                              </DropdownMenuItem>
-                            </>
-                          )}
+                          <DropdownMenuSeparator />
+                          {/* Este mes no contrató (o no corresponde): no se le arma ni se le manda nada. Se puede volver a facturar abajo. */}
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            disabled={!!busy}
+                            onClick={() =>
+                              void asegurarDoc(r)
+                                .then(anularFactura)
+                                .then(() => toast.success(`${r.f.cliente}: no se le factura este mes`))
+                                .catch(err)
+                            }
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" /> No facturarle este mes
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
