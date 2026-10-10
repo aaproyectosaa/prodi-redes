@@ -1,9 +1,35 @@
 import { Fragment } from "react";
+import { Link } from "react-router-dom";
+import { ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/** **negrita** dentro de una línea. */
+/** Solo se abren rutas de la app (videos, clientes, piezas, reuniones): nada de links de afuera. */
+const RUTA_OK = /^\/(videos\?video=|clientes\/|piezas\?pieza=|reuniones\?r=)[A-Za-z0-9_-]{1,100}$/;
+
+/** **negrita** dentro de un pedazo de texto. */
+function negritas(l: string, k: string) {
+  return l.split(/(\*\*[^*]+\*\*)/g).map((p, i) => (p.startsWith("**") && p.endsWith("**") && p.length > 4 ? <b key={`${k}${i}`}>{p.slice(2, -2)}</b> : <Fragment key={`${k}${i}`}>{p}</Fragment>));
+}
+
+/** Una línea: **negritas** y [nombre](/ruta) como botón que abre eso. */
 function linea(l: string) {
-  return l.split(/(\*\*[^*]+\*\*)/g).map((p, i) => (p.startsWith("**") && p.endsWith("**") && p.length > 4 ? <b key={i}>{p.slice(2, -2)}</b> : <Fragment key={i}>{p}</Fragment>));
+  return l.split(/(\[[^\]]{1,160}\]\([^)\s]{1,200}\))/g).map((p, i) => {
+    const m = p.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    if (m && RUTA_OK.test(m[2]))
+      return (
+        <Link
+          key={i}
+          to={m[2]}
+          className="mx-0.5 inline-flex items-center gap-0.5 rounded-md bg-[#6F40FC]/10 px-1.5 py-0.5 font-medium text-[#6F40FC] transition-colors hover:bg-[#6F40FC]/20 dark:text-violet-300"
+        >
+          {m[1].replace(/\*\*/g, "")}
+          <ArrowUpRight className="h-3 w-3 shrink-0" />
+        </Link>
+      );
+    // Un link que no es de la app: se muestra solo el nombre.
+    if (m) return <Fragment key={i}>{negritas(m[1], `l${i}-`)}</Fragment>;
+    return <Fragment key={i}>{negritas(p, `t${i}-`)}</Fragment>;
+  });
 }
 
 /**

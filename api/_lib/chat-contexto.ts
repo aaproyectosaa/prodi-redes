@@ -35,11 +35,12 @@ export function clientesNombrados(texto: string, proyectos: Proyecto[]): Proyect
 
 export async function contextoSistema(opts: { finanzas: boolean; texto: string; proyectoChat: string | null }): Promise<{ texto: string; proyectos: Proyecto[] }> {
   const db = adminDb();
-  const [pSnap, perfSnap, vSnap, tSnap] = await Promise.all([
+  const [pSnap, perfSnap, vSnap, tSnap, pzSnap] = await Promise.all([
     db.collection("projects").get(),
     db.collection("profiles").get(),
     db.collection("videos").where("etapa", "!=", "publicado").get(),
     db.collection("tareas").where("hecha", "==", false).get(),
+    db.collection("piezas_ia").where("estado", "in", ["pagada", "en_proceso", "para_aprobar"]).get(),
   ]);
   const proyectos = pSnap.docs
     .map((d) => ({ id: d.id, ...(d.data() ?? {}) }) as Proyecto)
@@ -47,7 +48,7 @@ export async function contextoSistema(opts: { finanzas: boolean; texto: string; 
   const nombre = new Map(perfSnap.docs.map((d) => [d.id, String(d.data()?.nombre ?? "").trim() || "?"]));
   const quien = (ids: unknown) => (Array.isArray(ids) ? ids.map((x) => nombre.get(String(x)) ?? "?").join(", ") : "");
   const deProyecto = new Map(proyectos.map((p) => [p.id, p.nombre]));
-  const videos = vSnap.docs.map((d) => d.data() ?? {}).filter((v) => deProyecto.has(String(v.proyecto_id)));
+  const videos = vSnap.docs.map((d) => ({ id: d.id, ...(d.data() ?? {}) }) as Data & { id: string }).filter((v) => deProyecto.has(String(v.proyecto_id)));
 
   const clientes = proyectos
     .sort((a, b) => a.nombre.localeCompare(b.nombre))
@@ -69,7 +70,7 @@ export async function contextoSistema(opts: { finanzas: boolean; texto: string; 
         ov.administracion_redes ? "administración de redes (sin responder mensajes)" : null,
       ].filter(Boolean);
       return [
-        `- ${p.nombre}`,
+        `- ${p.nombre} [link /clientes/${p.id}]`,
         m.rubro && `rubro: ${m.rubro}`,
         prod.servicio === "solo_pauta" ? "solo pauta" : null,
         prod.filma && prod.filma !== "prodi" ? `filma: ${prod.filma === "cliente" ? "el cliente" : "los dos"}` : null,
@@ -91,8 +92,15 @@ export async function contextoSistema(opts: { finanzas: boolean; texto: string; 
     .slice(0, 120)
     .map((v) => {
       const resp = [v.productor_id && `prod. ${nombre.get(String(v.productor_id))}`, v.editor_id && `edita ${nombre.get(String(v.editor_id))}`].filter(Boolean).join(", ");
-      return `- ${deProyecto.get(String(v.proyecto_id))} · "${String(v.titulo ?? "").slice(0, 80)}" · ${ETAPA[String(v.etapa)] ?? v.etapa} hace ${dias(v.etapa_desde)} días${v.entrega_edicion ? ` · entrega ${v.entrega_edicion}` : ""}${resp ? ` · ${resp}` : ""}`;
+      return `- ${deProyecto.get(String(v.proyecto_id))} · "${String(v.titulo ?? "").slice(0, 80)}" · ${ETAPA[String(v.etapa)] ?? v.etapa} hace ${dias(v.etapa_desde)} días${v.entrega_edicion ? ` · entrega ${v.entrega_edicion}` : ""}${resp ? ` · ${resp}` : ""} [link /videos?video=${v.id}]`;
     });
+
+  const ESTADO_PIEZA: Record<string, string> = { pagada: "para hacer", en_proceso: "diseñando", para_aprobar: "esperando al cliente" };
+  const piezas = pzSnap.docs
+    .map((d) => ({ id: d.id, ...(d.data() ?? {}) }) as Data & { id: string })
+    .filter((x) => deProyecto.has(String(x.proyecto_id)))
+    .slice(0, 60)
+    .map((x) => `- ${deProyecto.get(String(x.proyecto_id))} · "${String(x.producto || x.pedido || "pieza").slice(0, 70)}" · ${ESTADO_PIEZA[String(x.estado)] ?? x.estado} [link /piezas?pieza=${x.id}]`);
 
   const hoy = fechaAR();
   const tareas = tSnap.docs
@@ -112,11 +120,15 @@ export async function contextoSistema(opts: { finanzas: boolean; texto: string; 
 
   const texto = `
 DATOS DEL SISTEMA (hoy ${hoy}). Usalos para contestar; si algo no está acá, decí que no lo tenés.
+Cada cliente, video y pieza tiene su [link /ruta]. Cuando nombres uno en tu respuesta, ponelo como link así: [nombre](/ruta) (ej. [¿Qué bolsa necesitás?](/videos?video=abc123)), con la ruta exacta de acá; nunca inventes rutas. Así se abre con un toque.
 Clientes activos (${clientes.length}):
 ${clientes.join("\n")}
 
 Videos en curso (${enCurso.length}${videos.length > enCurso.length ? ` de ${videos.length}` : ""}):
 ${enCurso.join("\n") || "- ninguno"}
+
+Piezas gráficas en curso (${piezas.length}):
+${piezas.join("\n") || "- ninguna"}
 
 Tareas pendientes (${tareas.length}):
 ${tareas.join("\n") || "- ninguna"}
