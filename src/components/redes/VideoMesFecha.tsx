@@ -10,13 +10,15 @@ import type { Video } from "@/lib/redes/types";
 
 /**
  * De qué mes del plan es el video y para cuándo se publica. Así lo que se planifica para el mes que viene
- * descuenta del plan de ese mes (y no se pasa el de este). Lo cambian producción y el admin hasta que se publica.
+ * descuenta del plan de ese mes (y no se pasa el de este). Lo cambian producción y el admin; ya publicado, solo el mes
+ * (por si quedó contado en otro mes) y no la fecha.
  */
 export function VideoMesFecha({ video, editable, uid }: { video: Video; editable: boolean; uid: string }) {
   const { clienteById, planes, videos } = useRedes();
   const fechaRef = useRef<HTMLInputElement>(null);
   const cliente = clienteById(video.proyecto_id);
-  if (!editable || video.etapa === "publicado") return <span className="text-xs text-muted-foreground">{mesLabel(video.mes)}</span>;
+  if (!editable) return <span className="text-xs text-muted-foreground">{mesLabel(video.mes)}</span>;
+  const publicado = video.etapa === "publicado";
 
   const meses = Array.from(new Set([sumarMeses(mesActual(), -1), mesActual(), sumarMeses(mesActual(), 1), sumarMeses(mesActual(), 2), sumarMeses(mesActual(), 3), video.mes])).sort();
   const cupo = (m: string) => {
@@ -67,6 +69,7 @@ export function VideoMesFecha({ video, editable, uid }: { video: Video; editable
           ))}
         </SelectContent>
       </Select>
+      {!publicado && (
       <span className="relative inline-flex">
         <button
           type="button"
@@ -104,6 +107,7 @@ export function VideoMesFecha({ video, editable, uid }: { video: Video; editable
           aria-label="Fecha de publicación"
         />
       </span>
+      )}
     </span>
   );
 }
