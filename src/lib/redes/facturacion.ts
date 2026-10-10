@@ -171,6 +171,12 @@ export async function volverAPendiente(f: FacturaDoc) {
   await updateDoc(doc(db, "facturas", f.id), { estado: "pendiente", medio: null, cobrado_at: null, interes_cobrado: null });
 }
 
+/** Se marcó "ya pagó" sin habérsela emitido (o en el mes equivocado): vuelve a "Emitir", como si nada. */
+export async function volverASinEmitir(f: FacturaDoc) {
+  assertEditable();
+  await updateDoc(doc(db, "facturas", f.id), { estado: "borrador", medio: null, cobrado_at: null, interes_cobrado: null, emitida_at: null });
+}
+
 /** Una que estaba en "no facturar" vuelve a revisión. */
 export async function reactivarFactura(f: FacturaDoc) {
   assertEditable();

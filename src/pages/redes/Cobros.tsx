@@ -54,6 +54,7 @@ import {
   textoCobro,
   useFacturas,
   volverAPendiente,
+  volverASinEmitir,
   type Factura,
   type FacturaDoc,
   type MedioCobro,
@@ -269,18 +270,30 @@ export default function Cobros() {
                     <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setVerId(f.id)} aria-label="Ver boleta">
                       <Eye className="h-4 w-4" />
                     </Button>
-                    {f.medio !== "mercadopago" && f.medio !== "adelantado" && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8"
-                        onClick={() => void volverAPendiente(f).then(() => toast.success("Volvió a “por cobrar”")).catch(err)}
-                        aria-label="No estaba cobrada"
-                        title="No estaba cobrada"
-                      >
-                        <Undo2 className="h-4 w-4" />
-                      </Button>
-                    )}
+                    {f.medio !== "mercadopago" && f.medio !== "adelantado" &&
+                      (f.emitida_por ? (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8"
+                          onClick={() => void volverAPendiente(f).then(() => toast.success("Volvió a “por cobrar”")).catch(err)}
+                          aria-label="No estaba cobrada"
+                          title="No estaba cobrada"
+                        >
+                          <Undo2 className="h-4 w-4" />
+                        </Button>
+                      ) : (
+                        // Se marcó "ya pagó" sin emitirla: se deshace del todo (vuelve a "Emitir" de este mes).
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2 text-xs"
+                          onClick={() => void volverASinEmitir(f).then(() => toast.success(`${f.cliente}: se deshizo el pago, vuelve a «Emitir»`)).catch(err)}
+                          title="Me equivoqué: no pagó este mes"
+                        >
+                          <Undo2 className="mr-1 h-3.5 w-3.5" /> Deshacer
+                        </Button>
+                      ))}
                   </div>
                 ))}
               </div>

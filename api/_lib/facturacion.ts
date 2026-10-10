@@ -82,6 +82,8 @@ export interface Factura {
   creada_at: string;
   creada_por: string;
   emitida_at?: string | null;
+  /** Quién se la mandó al cliente (al emitir). Si falta, nunca se le mandó (p. ej. se marcó "ya pagó" sin emitir). */
+  emitida_por?: string | null;
   /** Factura electrónica autorizada en ARCA (solo las de tipo "factura"). Lo escribe el servidor. */
   arca?: DatosArca | null;
   /** Último rechazo de ARCA, para mostrarlo. */
