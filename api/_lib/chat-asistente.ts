@@ -11,12 +11,13 @@ import { HttpError, type Caller } from "./http";
 import { generarJSON, transcribir, type Imagen } from "./ia";
 import { descargarDrive } from "./drive-stream";
 import { enviarAviso } from "./notify";
-import { fechaAR, partesAR, sumarDias } from "./fecha";
+import { fechaAR, mesAR, partesAR, sumarDias } from "./fecha";
 import { chatDeMiembro, mensajeProdi, PRODI_ID, publicarEnChat } from "./chat-server";
 import { guardarNotasChat, limpiarHecho, normalizar } from "./chat-memoria";
 import { crearTarea } from "./tareas";
 import { sincronizarCalendario } from "./calendario";
 import { marcaTexto } from "./marca";
+import { soloPauta } from "./pedidos";
 import { clientesNombrados, contextoSistema, type Proyecto } from "./chat-contexto";
 
 export const MENCION_PRODI = /(^|[\s(])@prodi\b/i;
@@ -25,6 +26,10 @@ const TEAM = ["admin", "productor", "editor", "pauta", "diseno", "administracion
 const DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 const HORA = /^([01]?\d|2[0-3]):([0-5]\d)$/;
+/** Cuántas cosas puede hacer Prodi con un mensaje (ej. cargar los 5 videos que se filmaron). */
+const MAX_ACCIONES = 12;
+/** Quiénes pueden cargar videos en Producción (igual que «Planificar» en la app). */
+const CARGAN_VIDEOS = ["admin", "productor"];
 
 interface Persona {
   id: string;
@@ -42,6 +47,8 @@ interface AccionIA {
   vence?: string;
   texto?: string;
   cliente?: string;
+  /** crear_video: ya se filmó (queda listo para subir el crudo). */
+  filmado?: boolean;
 }
 
 const ESQUEMA = {
@@ -52,7 +59,7 @@ const ESQUEMA = {
       items: {
         type: "OBJECT",
         properties: {
-          tipo: { type: "STRING", enum: ["crear_reunion", "crear_tarea", "recordar", "mandar_logo", "responder", "preguntar"] },
+          tipo: { type: "STRING", enum: ["crear_reunion", "crear_tarea", "crear_video", "recordar", "mandar_logo", "responder", "preguntar"] },
           titulo: { type: "STRING" },
           fecha: { type: "STRING" },
           hora: { type: "STRING" },
@@ -61,6 +68,7 @@ const ESQUEMA = {
           vence: { type: "STRING" },
           texto: { type: "STRING" },
           cliente: { type: "STRING" },
+          filmado: { type: "BOOLEAN" },
         },
         required: ["tipo"],
       },
@@ -128,6 +136,8 @@ interface Resultado {
   link_texto?: string;
   reunion_id?: string;
   tarea_id?: string;
+  /** Videos cargados en Producción (se juntan en un solo mensaje). */
+  video?: { id: string; titulo: string; cliente: string; filmado: boolean };
 }
 
 /** Procesa un mensaje con @prodi. No tira error por cosas del pedido: Prodi lo contesta en el chat. */
@@ -182,6 +192,21 @@ export async function atenderMencion(caller: Caller, chatId: unknown, mensajeId:
       },
     ];
   }
+  const videos = resultados.filter((r) => r.video).map((r) => r.video!);
+  if (videos.length) {
+    const clientes = [...new Set(videos.map((v) => v.cliente))];
+    const filmados = videos.every((v) => v.filmado);
+    const bloque = [
+      `Listo: cargué ${videos.length === 1 ? "1 video" : `${videos.length} videos`} en Producción para **${lista(clientes)}**${filmados ? ", como ya filmados: solo falta subir el material crudo" : ""}.`,
+      "",
+      ...videos.map((v) => `- ${v.titulo}`),
+    ].join("\n");
+    const otros = resultados.filter((r) => !r.video);
+    resultados = [
+      { texto: bloque, link: videos.length === 1 ? `/videos?video=${videos[0].id}` : "/videos", link_texto: videos.length === 1 ? "Ver video" : "Ver en Producción" },
+      ...otros,
+    ];
+  }
   const conLink = resultados.find((r) => r.link);
   await mensajeProdi(cid, resultados.map((r) => r.texto).join("\n"), {
     link: conLink?.link ?? null,
@@ -227,10 +252,10 @@ async function interpretarYHacer(
     .map((m) => `${m.by === PRODI_ID ? "Prodi" : nombres[m.by] || m.by_nombre || "?"}: ${queDice(m)}`)
     .join("\n");
 
-  // Las fotos que mandó quien pide en los últimos mensajes (hasta 4): Claude las ve. Los videos no.
+  // Las fotos que mandó quien pide en los últimos mensajes (hasta 4; 8 en su chat con Prodi, ej. capturas de un guion): Claude las ve. Los videos no.
   const fotos = recientes
     .filter((m) => m.tipo === "archivo" && m.by === caller.uid && /^image\/(jpeg|png|gif|webp)$/.test(String((m.archivo as Data | undefined)?.mime_type ?? "")))
-    .slice(-4);
+    .slice(chat.tipo === "prodi" ? -8 : -4);
   const imagenes: Imagen[] = [];
   for (const m of fotos) {
     try {
@@ -264,18 +289,20 @@ Pedido: ${texto}${imagenes.length ? `
 (Te adjunto ${imagenes.length === 1 ? "la foto" : `las ${imagenes.length} fotos`} que mandó ${yo.nombre} en el chat: miralas para responder.)` : ""}
 No podés ver videos: si te piden algo de un video, decí que solo ves fotos y texto, y pedí que te lo cuenten.
 
-Devolvé las acciones (máximo 3):
+Devolvé las acciones (máximo ${MAX_ACCIONES}; una por cada cosa: si pide 5 videos, 5 crear_video):
 - crear_reunion: titulo corto (ej. "Reunión con Ariel y Pato"); fecha YYYY-MM-DD (si no dice el día, hoy; calculá "mañana", "el viernes", etc. a partir de ahora); hora HH:MM en 24 h ("5 pm" = 17:00; si no dice la hora, no la pongas); duracion_min (60 si no dice); personas: los nombres de la lista tal cual (si usan un apodo como "Pato", poné el nombre de la lista que le corresponde; si no está, ponelo como lo escribieron). No incluyas a ${yo.nombre}: ya va.
 - crear_tarea: cuando pide recordarle algo a alguien o dejar una tarea ("recordale a Lucía que mande el guion el viernes"). titulo: la tarea corta en infinitivo ("Mandar el guion"); personas: a quién se le asigna (vacío si es para quien escribe); vence YYYY-MM-DD si dice cuándo (si no, vacío).
+- crear_video: cuando pide cargar videos en Producción ("cargá los videos", "armame los videos de…", "ya grabé estos videos, cargalos"). Uno por video. titulo: el nombre del video tal cual (ej. "¿Qué bolsa necesitás?"); cliente: el nombre del cliente tal cual la lista; texto: la idea o el guion de ESE video, con lo que haya en el chat (tomas, diálogo, texto en pantalla, cierre); filmado: true si dice que ya lo grabó/filmó, false si es para planificar.${CARGAN_VIDEOS.includes(caller.role) ? "" : " (Quien escribe no puede cargar videos: contestá que eso lo hace producción.)"}
 - mandar_logo: cuando pide el logo (o los logos) de un cliente para mandarlo al chat. cliente: el nombre del cliente tal cual la lista.
-- recordar: solo cuando pide que te acuerdes de algo de un cliente ("acordate que…", "tené en cuenta que…"). texto: el dato en una oración, en tercera persona sobre el cliente; cliente: el nombre del cliente si no es el del grupo.
+- recordar: solo cuando pide que te acuerdes de algo de un cliente ("acordate que…", "tené en cuenta que…", "guardalo en el contexto de…"). texto: el dato en UNA oración corta (máx. 250 caracteres), en tercera persona sobre el cliente; si son varios datos, un recordar por cada uno. cliente: el nombre del cliente si no es el del grupo.
 - responder: si es una pregunta o un saludo. Contestá con lo que hay en el chat${ctx ? " y en los DATOS DEL SISTEMA (clientes, equipo, videos, tareas, marcas: colores, tipografías, tono)" : ""}. Corto y ordenado: si la respuesta tiene varias partes, separalas en bloques con un título en negrita (**Equipo**, **Videos**…), una línea en blanco entre bloques y los datos como lista con "- " (sublistas con dos espacios y "- "). Nada de párrafos largos. No inventes datos.
 - No podés borrar ni modificar tareas, videos ni clientes: eso se hace a mano en el sistema.
+- En "responder" NO digas que hiciste algo (cargar, anotar, agendar): eso lo informa el sistema con lo que realmente se hizo. Si además hacés acciones, el responder es solo para lo que falte decir (o no lo pongas).
 - preguntar: texto con UNA pregunta corta si falta algo importante (por ejemplo la hora de la reunión) o no se entiende el pedido.
 Español rioplatense con voseo.`;
 
   const r = await generarJSON<{ acciones?: AccionIA[] }>(prompt, ESQUEMA, 0.2, imagenes);
-  const acciones = (r.acciones ?? []).slice(0, 3);
+  const acciones = (r.acciones ?? []).slice(0, MAX_ACCIONES);
   if (!acciones.length) return [{ texto: "No entendí qué necesitás. ¿Me lo decís de otra forma?" }];
 
   const out: Resultado[] = [];
@@ -458,6 +485,87 @@ Español rioplatense con voseo.`;
       continue;
     }
 
+    if (tipo === "crear_video") {
+      if (!CARGAN_VIDEOS.includes(caller.role)) {
+        if (!out.some((x) => x.texto.startsWith("Los videos los carga"))) out.push({ texto: "Los videos los carga producción en el sistema. Pedíselo a la productora." });
+        continue;
+      }
+      const titulo = String(a.titulo ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
+      if (titulo.length < 3) {
+        out.push({ texto: "¿Cómo se llama el video que querés que cargue?" });
+        continue;
+      }
+      // El cliente: el del grupo, o el que nombra.
+      let cli: Proyecto | null = typeof chat.proyecto_id === "string" && proj ? ({ id: chat.proyecto_id, ...proj } as Proyecto) : null;
+      if (!cli && ctx) {
+        const n = clientesNombrados(`${a.cliente ?? ""}`, ctx.proyectos);
+        const m = n.length ? n : clientesNombrados(texto, ctx.proyectos);
+        if (m.length > 1) {
+          if (!out.some((x) => x.texto.startsWith("¿Para qué cliente"))) out.push({ texto: `¿Para qué cliente son los videos: ${lista(m.slice(0, 5).map((x) => x.nombre))}?` });
+          continue;
+        }
+        cli = m[0] ?? null;
+      }
+      if (!cli) {
+        if (!out.some((x) => x.texto.startsWith("¿Para qué cliente"))) out.push({ texto: "¿Para qué cliente son los videos? Decime el nombre y los cargo." });
+        continue;
+      }
+      // Que no se cargue dos veces el mismo video este mes (si se lo vuelve a pedir).
+      const mes = mesAR();
+      const ya = await db.collection("videos").where("proyecto_id", "==", cli.id).where("mes", "==", mes).get();
+      if (ya.docs.some((d) => normalizar(String(d.data()?.titulo ?? "")) === normalizar(titulo))) {
+        out.push({ texto: `«${titulo}» ya estaba cargado en ${cli.nombre} este mes: no lo dupliqué.` });
+        continue;
+      }
+      const team = (cli.team_roles ?? {}) as Record<string, string[]>;
+      const primero = (rol: string) => (Array.isArray(team[rol]) ? team[rol][0] ?? null : null);
+      const filmado = a.filmado === true;
+      // Si el cliente filma siempre él (y no se filmó ya), arranca esperando su material (como en la app).
+      const filmaCliente = !filmado && (soloPauta(cli) || (cli.produccion as Data | undefined)?.filma === "cliente");
+      const ts = new Date().toISOString();
+      const ref = db.collection("videos").doc();
+      await ref.create({
+        proyecto_id: cli.id,
+        titulo,
+        idea: String(a.texto ?? "").trim().slice(0, 4000) || null,
+        objetivo: null,
+        referencias: null,
+        mes,
+        extra: false,
+        etapa: filmaCliente ? "material_cliente" : "planificado",
+        filma_cliente: filmaCliente,
+        etapa_desde: ts,
+        rodaje_id: null,
+        productor_id: primero("productor"),
+        editor_id: primero("editor"),
+        pauta_id: primero("pauta"),
+        attachments_crudo: [],
+        attachments_finalizado: [],
+        copy: null,
+        feedback_interno: null,
+        feedback_cliente: null,
+        rondas: 0,
+        cliente_rating: null,
+        publicacion: null,
+        pauta: null,
+        resultados: null,
+        meta: null,
+        historial: [
+          {
+            at: ts,
+            by: caller.uid,
+            accion: filmado ? "Filmado sin planificar: falta subir el material (lo cargó Prodi)" : filmaCliente ? "Planificado · lo filma el cliente (lo cargó Prodi)" : "Planificado (lo cargó Prodi)",
+            nota: null,
+          },
+        ],
+        created_at: ts,
+        created_by: caller.uid,
+        updated_at: ts,
+      });
+      out.push({ texto: "", video: { id: ref.id, titulo, cliente: cli.nombre, filmado } });
+      continue;
+    }
+
     if (tipo === "recordar") {
       // En el grupo de un cliente, es de ese cliente. En otros chats (el personal con Prodi, el del equipo),
       // del cliente que se nombra (solo el equipo).
@@ -477,7 +585,8 @@ Español rioplatense con voseo.`;
       }
       const dato = limpiarHecho(a.texto);
       if (!dato) {
-        out.push({ texto: "Eso no lo anoto: guardo solo datos del negocio para el marketing (nada de teléfonos, documentos ni cosas personales)." });
+        // Un solo aviso aunque haya varios datos rechazados.
+        if (!out.some((x) => x.texto.startsWith("Uno de los datos no lo anoté"))) out.push({ texto: "Uno de los datos no lo anoté: guardo solo datos del negocio para el marketing (nada de teléfonos, mails, documentos ni cosas personales)." });
         continue;
       }
       await guardarNotasChat(destino.id, cid, [dato], caller.uid);
