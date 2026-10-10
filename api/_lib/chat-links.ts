@@ -57,9 +57,11 @@ export function clientePorNombre(clave: string, proyectos: Proyecto[]): Proyecto
 
 /** Título y descripción de la página (para el contexto de la IA). Solo hosts públicos, rápido y sin seguir a otros lados. */
 export async function leerPagina(u: URL): Promise<string | null> {
-  if (/^(localhost|\d+\.\d+\.\d+\.\d+|\[.*\])$/i.test(u.hostname) || /\.(local|internal)$/i.test(u.hostname)) return null;
+  if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+  if (/^(localhost|\d+\.\d+\.\d+\.\d+|\[.*\])$/i.test(u.hostname) || /\.(local|internal|localhost)$/i.test(u.hostname) || /(^|\.)(nip\.io|sslip\.io|xip\.io|localtest\.me)$/i.test(u.hostname)) return null;
   try {
-    const r = await fetch(u.toString(), { redirect: "follow", signal: AbortSignal.timeout(5000), headers: { "User-Agent": "Mozilla/5.0 (Prodi)" } });
+    // Sin seguir redirecciones: una página pública podría mandar a una dirección interna del servidor.
+    const r = await fetch(u.toString(), { redirect: "manual", signal: AbortSignal.timeout(5000), headers: { "User-Agent": "Mozilla/5.0 (Prodi)" } });
     if (!r.ok || !String(r.headers.get("content-type") ?? "").includes("text/html")) return null;
     const html = (await r.text()).slice(0, 200_000);
     const meta = (n: string) =>

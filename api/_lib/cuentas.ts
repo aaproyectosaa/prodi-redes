@@ -64,7 +64,8 @@ export async function verificarClave(clave: string, guardado: string | null | un
 }
 
 export function validarClave(clave: string) {
-  if (typeof clave !== "string" || clave.length < 6) throw new AuthError("auth/weak-password", "La contraseña tiene que tener al menos 6 caracteres");
+  if (typeof clave !== "string" || clave.length < 8) throw new AuthError("auth/weak-password", "La contraseña tiene que tener al menos 8 caracteres");
+  if (/^(\d+|(.)\2+|12345678\d*|password\d*|contraseña\d*|prodi\d*|qwerty\d*)$/i.test(clave)) throw new AuthError("auth/weak-password", "Esa contraseña es muy fácil de adivinar. Elegí otra.");
 }
 
 // ---------------------------------------------------------------------------
@@ -151,10 +152,50 @@ export async function crearUsuario(datos: { email: string; password?: string | n
   return { uid, email };
 }
 
-export async function iniciarSesion(email: string, clave: string): Promise<{ token: string; usuario: Usuario }> {
-  const u = await porEmail(email);
+// Intentos fallidos de login (para frenar a quien prueba contraseñas): por mail y por IP, en la base.
+let tablaIntentos: Promise<unknown> | null = null;
+function asegurarTablaIntentos() {
+  tablaIntentos ??= getPool()
+    .query("create table if not exists login_intentos (clave text not null, at timestamptz not null default now()); create index if not exists login_intentos_idx on login_intentos (clave, at)")
+    .catch((err) => {
+      tablaIntentos = null;
+      throw err;
+    });
+  return tablaIntentos;
+}
+const MAX_POR_MAIL = 8;
+const MAX_POR_IP = 30;
+async function frenarIntentos(email: string, ip: string | null) {
+  await asegurarTablaIntentos();
+  const r = await getPool().query(
+    "select count(*) filter (where clave = $1)::int as mail, count(*) filter (where clave = $2)::int as ip from login_intentos where at > now() - interval '15 minutes' and clave in ($1, $2)",
+    [`mail:${email}`, `ip:${ip ?? "-"}`]
+  );
+  const { mail, ip: porIp } = r.rows[0] as { mail: number; ip: number };
+  if (mail >= MAX_POR_MAIL || (ip && porIp >= MAX_POR_IP)) {
+    throw new AuthError("auth/too-many-requests", "Demasiados intentos. Esperá 15 minutos y probá de nuevo (o pedile al administrador el link para cambiar la contraseña).");
+  }
+}
+async function anotarIntento(email: string, ip: string | null) {
+  try {
+    // De a un comando por consulta (Postgres no acepta dos con parámetros).
+    await getPool().query("insert into login_intentos (clave) values ($1), ($2)", [`mail:${email}`, `ip:${ip ?? "-"}`]);
+    if (Math.random() < 0.05) await getPool().query("delete from login_intentos where at < now() - interval '1 day'");
+  } catch (err) {
+    console.warn("[login] no se pudo anotar el intento", err);
+  }
+}
+// Para que tarde lo mismo cuando el mail no existe (no se puede saber qué mails están registrados midiendo el tiempo).
+const HASH_FALSO = "scrypt$16384$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+
+export async function iniciarSesion(email: string, clave: string, ip: string | null = null): Promise<{ token: string; usuario: Usuario }> {
+  const mail = String(email ?? "").trim().toLowerCase();
+  await frenarIntentos(mail, ip);
+  const u = await porEmail(mail);
   // Mismo mensaje si no existe, si todavía no creó la clave o si está mal (no revela qué mails están registrados).
-  if (!u || !(await verificarClave(clave, u.clave_hash))) {
+  const ok = await verificarClave(clave, u?.clave_hash ?? HASH_FALSO);
+  if (!u || !u.clave_hash || !ok) {
+    await anotarIntento(mail, ip);
     throw new AuthError("auth/invalid-credential", "Mail o contraseña incorrectos. Si todavía no creaste tu contraseña, pedile al administrador el link.");
   }
   if (u.desactivado) throw new AuthError("auth/user-disabled", "Tu usuario está desactivado");
@@ -183,13 +224,20 @@ export async function verificarSesion(token: string): Promise<Usuario | null> {
   let c = sesiones.get(p.uid);
   // Sin recordar, vencido, o la sesión es de otra versión (cambió la clave en otra instancia): a la base.
   if (!c || c.hasta < Date.now() || c.u?.sesion_ver !== p.v) {
-    c = { u: await porUid(p.uid), hasta: Date.now() + SESION_TTL };
+    const fresco = await porUid(p.uid);
+    // No se guarda el hash de la contraseña en la memoria del servidor.
+    c = { u: fresco ? { ...fresco, clave_hash: null } : null, hasta: Date.now() + SESION_TTL };
     if (sesiones.size > 500) sesiones.clear();
     sesiones.set(p.uid, c);
   }
   const u = c.u;
   if (!u || u.desactivado || u.sesion_ver !== p.v) return null;
   return u;
+}
+
+/** El usuario leído recién de la base (para cambiar la contraseña: nada de lo recordado). */
+export async function usuarioFresco(uid: string): Promise<Usuario | null> {
+  return porUid(uid);
 }
 
 export async function cambiarClave(uid: string, nueva: string): Promise<string> {
@@ -216,7 +264,7 @@ export async function usarLinkDeClave(token: string, nueva: string): Promise<{ t
   const p = abrir(token);
   if (!p || p.t !== "r") throw new AuthError("auth/link-invalido", "El link venció o ya se usó. Pedí uno nuevo.");
   const u = await porUid(p.uid);
-  if (!u || u.desactivado || huella(u.clave_hash) !== p.h) throw new AuthError("auth/link-invalido", "El link venció o ya se usó. Pedí uno nuevo.");
+  if (!u || u.desactivado || huella(u.clave_hash) !== p.h || u.sesion_ver !== p.v) throw new AuthError("auth/link-invalido", "El link venció o ya se usó. Pedí uno nuevo.");
   return { token: await cambiarClave(u.uid, nueva), email: u.email };
 }
 

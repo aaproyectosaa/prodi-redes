@@ -92,6 +92,11 @@ async function companeros(c: Contexto): Promise<Set<string>> {
   return c.companeros;
 }
 
+/** Un link que se puede abrir sin riesgo: solo https (nada de javascript: ni data:). */
+const linkOk = (v: unknown) => v == null || v === "" || (typeof v === "string" && v.length <= 500 && /^https:\/\/[^\s"<>`]+$/i.test(v));
+/** Lo que la app deja crear como mensaje (archivos, bots y Prodi los escribe solo el servidor). */
+const TIPOS_MENSAJE = ["texto", "audio", "llamada", "minuta", "sistema"];
+
 const lista = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 const mismoSet = (a: string[], b: string[]) => a.length === b.length && new Set(a).size === a.length && b.every((x) => a.includes(x));
 const MAX_MIEMBROS_GRUPO = 80;
@@ -310,6 +315,8 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       return esAdmin(c) || miembroDelChat(c, padreId!);
     }
     if (sub === "mensajes" && (delServidor(despues) || (delServidor(antes) && !(borra && esAdmin(c))))) return false;
+    // Nadie (ni el admin desde la app) guarda un link que no sea https: un "javascript:" se ejecutaría al tocarlo.
+    if (sub === "mensajes" && despues && (!linkOk(despues.link) || (crea && !TIPOS_MENSAJE.includes(String(despues.tipo ?? "texto"))))) return false;
     if (esAdmin(c)) return true;
     // Editar un mensaje de texto propio: solo el texto (y la marca de editado).
     if (
@@ -340,7 +347,7 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       if (crea) return c.uid === id && despues!.role === "pending";
       return (
         esAdmin(c) ||
-        (c.uid === id && !tocaAlguna(antes, despues, ["role", "dashboard_access", "project_permissions", "activo"]))
+        (c.uid === id && !tocaAlguna(antes, despues, ["role", "dashboard_access", "project_permissions", "activo", "email", "proyecto_id"]))
       );
     case "projects":
       if (crea || borra) return esAdmin(c);
@@ -355,13 +362,21 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       // El cliente aprueba o pide cambios solo por /api/publico/video-cliente (el servidor valida etapa, ronda e historial).
       if (crea) return produceEn(c, despues!.proyecto_id);
       if (borra) return produceEn(c, antes!.proyecto_id);
+      if (!esAdmin(c) && tocaAlguna(antes, despues, ["proyecto_id", "extra", "created_by", "pedido_cliente"])) return false;
       return equipoDe(c, antes!.proyecto_id) && equipoDe(c, despues!.proyecto_id);
     case "rodajes":
       return (crea || produceEn(c, antes!.proyecto_id)) && (borra || produceEn(c, despues!.proyecto_id));
     case "piezas_ia":
       // El cliente aprueba o pide cambios solo por /api/publico/pieza-cliente.
-      if (crea) return produceEn(c, despues!.proyecto_id);
-      if (borra) return esAdmin(c);
+      if (crea || borra) return esAdmin(c);
+      if (!esAdmin(c)) {
+        if (tocaAlguna(antes, despues, ["incluida", "cupo_usado", "precio", "cobro_id", "proyecto_id", "solicitado_por", "mes"])) return false;
+        // Sin pagar, cancelada o rechazada (con reembolso): solo el servidor o el admin.
+        const BLOQUEADOS = ["pendiente_pago", "cancelada", "rechazada"];
+        if (BLOQUEADOS.includes(String(antes!.estado)) || (despues!.estado !== antes!.estado && BLOQUEADOS.includes(String(despues!.estado)))) return false;
+        // "Entregada" la pone el cliente al aprobar (servidor) o el admin.
+        if (despues!.estado === "entregada" && antes!.estado !== "entregada") return false;
+      }
       return (
         (esDiseno(c) && equipoDe(c, antes!.proyecto_id) && equipoDe(c, despues!.proyecto_id)) ||
         (produceEn(c, antes!.proyecto_id) && produceEn(c, despues!.proyecto_id))
@@ -396,7 +411,12 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
         if (esAdmin(c)) return true;
         if (!activo(c) && !esContacto(c)) return false;
         if (despues!.tipo === "directo") {
-          const ok = Array.isArray(despues!.miembros) && despues!.miembros.includes(c.uid) && despues!.miembros.length === 2;
+          const ok =
+            Array.isArray(despues!.miembros) &&
+            despues!.miembros.includes(c.uid) &&
+            despues!.miembros.length === 2 &&
+            new Set(lista(despues!.miembros)).size === 2 &&
+            despues!.proyecto_id == null;
           if (!ok) return false;
           // El contacto solo abre privados con gente con la que ya comparte un chat (equipo del cliente y su empresa).
           // Y nadie abre un privado con un contacto que no conoce (el equipo, solo si trabaja en ese cliente).
@@ -445,11 +465,24 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       if (borra) return esAdmin(c);
       // El evento de Google Calendar lo guarda solo el servidor.
       if (escribeAlguna(antes, despues, CALENDARIO)) return false;
-      if (crea)
-        return (
-          despues!.creada_por === c.uid &&
-          (despues!.proyecto_id == null ? esTeam(c) : equipoDe(c, despues!.proyecto_id) || clienteDe(c, despues!.proyecto_id))
-        );
+      // El link de la videollamada, solo https.
+      if (despues && !linkOk(despues.link)) return false;
+      if (crea) {
+        if (despues!.creada_por !== c.uid) return false;
+        // Archivos no se cargan al crear (daría acceso a archivos ajenos por media-token).
+        if (lista(despues!.versiones).length || lista(despues!.attachments_crudo).length || lista(despues!.attachments_finalizado).length) return false;
+        if (despues!.proyecto_id == null) return esTeam(c);
+        if (equipoDe(c, despues!.proyecto_id)) return true;
+        if (!clienteDe(c, despues!.proyecto_id)) return false;
+        // Un cliente solo invita a gente de su cliente (equipo asignado y sus usuarios): no a cualquiera del sistema.
+        const proy = await leerDoc(c.ex, "projects", String(despues!.proyecto_id));
+        const delCliente = new Set(Object.values((proy?.team_roles ?? {}) as Record<string, unknown>).flatMap((x) => lista(x)));
+        // Y los super admin (no figuran en el equipo del cliente).
+        const admins = await c.ex.query("select id from documentos where coleccion = 'profiles' and data->>'role' = 'admin'");
+        (admins.rows as { id: string }[]).forEach((x) => delCliente.add(x.id));
+        const parts = Array.isArray(despues!.participantes) ? despues!.participantes : [];
+        return parts.length <= 30 && parts.every((u: unknown) => typeof u === "string" && (u === c.uid || delCliente.has(u)));
+      }
       return (
         esAdmin(c) ||
         (esTeam(c) &&

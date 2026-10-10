@@ -50,7 +50,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import StarRating from "@/components/StarRating";
-import { cn } from "@/lib/utils";
+import { cn, hrefSeguro } from "@/lib/utils";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useAppData } from "@/contexts/app-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
@@ -1193,7 +1193,7 @@ function PublicacionBlock({
 function LinkChip({ href, label }: { href: string; label: string }) {
   return (
     <a
-      href={href}
+      href={hrefSeguro(href)}
       target="_blank"
       rel="noreferrer"
       className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs hover:border-primary hover:text-primary"

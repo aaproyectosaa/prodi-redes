@@ -17,7 +17,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import crypto from "crypto";
 import { FieldValue } from "../_lib/db";
 import { adminDb } from "../_lib/db";
-import { adminAuth, crearUsuario, linkDeClave } from "../_lib/cuentas";
+import { adminAuth, crearUsuario, linkDeClave, usuarioFresco } from "../_lib/cuentas";
 import { appUrl, body, HttpError, requireCaller, sendError, type Caller } from "../_lib/http";
 import { enviarMailsLote } from "../_lib/informe";
 import { mailAvisoHtml } from "../_lib/mail-aviso";
@@ -252,6 +252,8 @@ async function contactoDe(req: VercelRequest, caller: Caller) {
 async function contactoActivo(req: VercelRequest, caller: Caller) {
   const { b, p, cliente, uid } = await contactoDe(req, caller);
   const activo = !!b.activo;
+  // Reactivar a alguien que dieron de baja: solo el admin.
+  if (activo && p.activo === false && caller.role !== "admin") throw new HttpError(403, "Solo el administrador puede volver a activar un contacto.");
   await adminAuth().updateUser(uid, { disabled: !activo });
   if (!activo) await adminAuth().revokeRefreshTokens(uid);
   await adminDb().collection("profiles").doc(uid).set({ activo }, { merge: true });
@@ -264,7 +266,9 @@ async function contactoInvitar(req: VercelRequest, caller: Caller) {
   if (p.activo === false) throw new HttpError(409, "El contacto está desactivado");
   const link = await linkContacto(uid, req);
   const mail = await invitarContacto(String(p.email ?? ""), String(p.nombre ?? ""), cliente.nombre, link, req);
-  return { ok: true, link, mail };
+  // Si ya tiene contraseña, el link le llega solo por mail (que nadie del equipo pueda entrar como él).
+  const yaTieneClave = !!(await usuarioFresco(uid))?.clave_hash;
+  return { ok: true, link: yaTieneClave && caller.role !== "admin" ? null : link, mail };
 }
 
 /**

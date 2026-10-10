@@ -68,8 +68,12 @@ export async function assertProjectAccess(caller: Caller, proyectoId: string) {
 
 export function sendError(res: VercelResponse, err: unknown) {
   const status = err instanceof HttpError ? err.status : 500;
-  const msg = err instanceof Error ? err.message : "Error interno";
+  let msg = err instanceof Error ? err.message : "Error interno";
   if (status >= 500) console.error("[api]", err);
+  // Detalles técnicos de la base o de la red no salen (pueden revelar tablas, columnas o direcciones internas).
+  if (status >= 500 && /relation|column|syntax|constraint|duplicate key|violates|ECONN|ETIMEDOUT|getaddrinfo|password authentication|SSL|socket|pg_|sql/i.test(msg)) {
+    msg = "Error interno. Probá de nuevo en un rato.";
+  }
   if (!res.headersSent) res.status(status).json({ error: msg });
 }
 

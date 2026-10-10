@@ -1,4 +1,5 @@
 import { ExternalLink } from "lucide-react";
+import { hrefSeguro } from "@/lib/utils";
 import { StatCard, EmptyState } from "./PageShell";
 import { useOpenVideo } from "./VideoCard";
 import { formatARS, formatNum, fechaCorta } from "@/lib/redes/format";
@@ -111,7 +112,7 @@ export function ResultadosMes({ resumen, grafico }: { resumen: ResumenMes; grafi
                 <td className="px-4 py-2.5 text-right">
                   {v.publicacion?.link_instagram && (
                     <a
-                      href={v.publicacion.link_instagram}
+                      href={hrefSeguro(v.publicacion.link_instagram)}
                       target="_blank"
                       rel="noreferrer"
                       onClick={(e) => e.stopPropagation()}

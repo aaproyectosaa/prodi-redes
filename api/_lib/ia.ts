@@ -51,8 +51,7 @@ function aJsonSchema(s: any): any {
 function errorClaude(err: unknown): Error {
   if (err instanceof Anthropic.AuthenticationError) {
     // Sin mostrar la clave: solo cómo empieza y cuánto mide, para ver si se pegó mal o incompleta.
-    const k = claveClaude();
-    console.error(`[ia] Claude rechazó la clave (empieza con ${k.slice(0, 10)}…, ${k.length} caracteres)`);
+    console.error(`[ia] Claude rechazó la clave (${claveClaude().length} caracteres)`);
     return new Error("IA: la clave de Claude (ANTHROPIC_API_KEY) no es válida. Revisala en Vercel.");
   }
   if (err instanceof Anthropic.PermissionDeniedError) return new Error("IA: la clave de Claude no tiene permiso o la cuenta no tiene saldo.");

@@ -10,13 +10,16 @@
 // POST /api/auth/push         { suscripcion } | { quitar: endpoint | true }  (avisos push de este dispositivo)
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { AuthError, cambiarClave, crearUsuario, iniciarSesion, tokenDeSesion, usarLinkDeClave, verificarClave, verificarSesion } from "../_lib/cuentas";
+import { createHash, timingSafeEqual } from "crypto";
+import { AuthError, cambiarClave, crearUsuario, iniciarSesion, tokenDeSesion, usarLinkDeClave, usuarioFresco, verificarClave, verificarSesion } from "../_lib/cuentas";
 import { extractBearerToken, HttpError } from "../_lib/auth";
 import { body, sendError } from "../_lib/http";
 import { getPool } from "../_lib/db";
 import { borrarSuscripciones, guardarSuscripcion, probarPush } from "../_lib/push";
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Compara dos textos sin que el tiempo revele cuántas letras coinciden. */
+const mismoTexto = (a: string, b: string) => timingSafeEqual(createHash("sha256").update(a).digest(), createHash("sha256").update(b).digest());
 
 async function sesion(req: VercelRequest) {
   const u = await verificarSesion(extractBearerToken(req) ?? "");
@@ -29,7 +32,9 @@ async function handlerAccion(accion: string, req: VercelRequest) {
   switch (accion) {
     case "login": {
       try {
-        const { token, usuario } = await iniciarSesion(String(b.email ?? ""), String(b.password ?? ""));
+        // La IP real la pone Vercel (x-real-ip); sirve para frenar a quien prueba muchas contraseñas.
+        const ip = String(req.headers["x-real-ip"] ?? "").trim() || String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() || null;
+        const { token, usuario } = await iniciarSesion(String(b.email ?? ""), String(b.password ?? ""), ip);
         return { token, uid: usuario.uid, email: usuario.email, nombre: usuario.nombre };
       } catch (err) {
         await espera(400); // frena los intentos a ciegas
@@ -40,7 +45,7 @@ async function handlerAccion(accion: string, req: VercelRequest) {
       // Registrarse solo con el código de invitación del equipo (INVITATION_CODE). Sin código configurado, está cerrado.
       const codigo = process.env.INVITATION_CODE;
       if (!codigo) throw new HttpError(403, "El registro está cerrado. Pedile tu usuario al administrador.");
-      if (String(b.codigo ?? "").trim() !== codigo) {
+      if (!mismoTexto(String(b.codigo ?? "").trim(), codigo)) {
         await espera(400);
         throw new HttpError(403, "Código de invitación inválido");
       }
@@ -57,8 +62,10 @@ async function handlerAccion(accion: string, req: VercelRequest) {
       return { ok: true };
     }
     case "cambiar-clave": {
-      const u = await sesion(req);
-      if (!(await verificarClave(String(b.actual ?? ""), u.clave_hash))) {
+      const s = await sesion(req);
+      // La contraseña actual se compara con la de la base, no con lo recordado.
+      const u = await usuarioFresco(s.uid);
+      if (!u || u.sesion_ver !== s.sesion_ver || !(await verificarClave(String(b.actual ?? ""), u.clave_hash))) {
         await espera(400);
         throw new AuthError("auth/wrong-password", "La contraseña actual no es correcta");
       }

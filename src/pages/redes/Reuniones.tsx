@@ -49,7 +49,7 @@ import { actualizarReunion, compartirMinuta, crearReunion, generarMinuta, minuta
 import { chatClienteId } from "@/lib/redes/chat";
 import { aInputAR, desdeInputAR } from "@/lib/fecha";
 import { fechaHora } from "@/lib/redes/format";
-import { cn } from "@/lib/utils";
+import { cn, hrefSeguro } from "@/lib/utils";
 import type { Minuta, Reunion } from "@/lib/redes/types";
 
 export default function Reuniones() {
@@ -383,7 +383,7 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
         <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild>
-              <a href={reunion.link} target="_blank" rel="noreferrer">
+              <a href={hrefSeguro(reunion.link)} target="_blank" rel="noreferrer">
                 <Video className="mr-2 h-4 w-4" /> Entrar a la videollamada
               </a>
             </Button>

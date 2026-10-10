@@ -89,7 +89,9 @@ async function consultar(req: VercelRequest) {
           pool.query("select id from borrados where coleccion = $1 and rev > $2", [coleccion, desde]),
         ]);
         const quedan = new Set(visibles.map((v) => v.id));
-        const quitar = [...cambiados.rows, ...borrados.rows].map((x: { id: string }) => x.id).filter((id) => !quedan.has(id));
+        // Un usuario pendiente (sin rol todavía) no recibe ids de nada que no pueda ver.
+        const conRol = caller.role !== "pending" && !!caller.role;
+        const quitar = conRol ? [...cambiados.rows, ...borrados.rows].map((x: { id: string }) => x.id).filter((id) => !quedan.has(id)) : [];
         return { docs: visibles, quitar, parcial: true, rev: marca };
       } catch (err) {
         return { error: err instanceof Error ? err.message : "Error" };
@@ -147,7 +149,9 @@ const respuestas = new Map<string, { r: Promise<{ rev: number; colecciones: stri
 
 /** Qué colecciones cambiaron. `rev` es la marca para la próxima vez (con margen por si algo se estaba guardando). */
 async function cambios(req: VercelRequest) {
-  await requireCaller(req);
+  const quien = await requireCaller(req);
+  // Sin rol todavía: no hay nada en vivo que mirar.
+  if (quien.role === "pending" || !quien.role) return { rev: 0, colecciones: [] as string[] };
   const { desde } = body<{ desde?: number | null }>(req);
   const clave = desde == null || !Number.isFinite(Number(desde)) ? "inicio" : String(Number(desde));
   const c = respuestas.get(clave);

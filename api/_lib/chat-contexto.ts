@@ -33,7 +33,13 @@ export function clientesNombrados(texto: string, proyectos: Proyecto[]): Proyect
   });
 }
 
-export async function contextoSistema(opts: { finanzas: boolean; texto: string; proyectoChat: string | null }): Promise<{ texto: string; proyectos: Proyecto[] }> {
+export async function contextoSistema(opts: {
+  finanzas: boolean;
+  texto: string;
+  proyectoChat: string | null;
+  /** Solo estos clientes (el del grupo de un cliente, o los que tiene asignados quien pregunta). Sin esto, todos. */
+  soloClientes?: (p: Proyecto) => boolean;
+}): Promise<{ texto: string; proyectos: Proyecto[] }> {
   const db = adminDb();
   const [pSnap, perfSnap, vSnap, tSnap, pzSnap] = await Promise.all([
     db.collection("projects").get(),
@@ -44,7 +50,8 @@ export async function contextoSistema(opts: { finanzas: boolean; texto: string; 
   ]);
   const proyectos = pSnap.docs
     .map((d) => ({ id: d.id, ...(d.data() ?? {}) }) as Proyecto)
-    .filter((p) => p.enabled !== false && typeof p.nombre === "string" && !/^(test|ds)$/i.test(p.nombre.trim()));
+    .filter((p) => p.enabled !== false && typeof p.nombre === "string" && !/^(test|ds)$/i.test(p.nombre.trim()))
+    .filter((p) => !opts.soloClientes || opts.soloClientes(p));
   const nombre = new Map(perfSnap.docs.map((d) => [d.id, String(d.data()?.nombre ?? "").trim() || "?"]));
   const quien = (ids: unknown) => (Array.isArray(ids) ? ids.map((x) => nombre.get(String(x)) ?? "?").join(", ") : "");
   const deProyecto = new Map(proyectos.map((p) => [p.id, p.nombre]));
@@ -105,6 +112,7 @@ export async function contextoSistema(opts: { finanzas: boolean; texto: string; 
   const hoy = fechaAR();
   const tareas = tSnap.docs
     .map((d) => d.data() ?? {})
+    .filter((t) => !opts.soloClientes || deProyecto.has(String(t.proyecto_id ?? "")))
     .sort((a, b) => String(a.vence ?? "9999").localeCompare(String(b.vence ?? "9999")))
     .slice(0, 80)
     .map(

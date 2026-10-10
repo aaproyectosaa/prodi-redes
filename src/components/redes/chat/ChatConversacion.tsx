@@ -38,7 +38,7 @@ import { CamaraDialog, camaraDelSistema } from "@/components/redes/chat/Camara";
 import { comprimirFoto } from "@/lib/imagen";
 import { crearReunion } from "@/lib/redes/reuniones";
 import { getRoleInfo } from "@/lib/roles";
-import { cn } from "@/lib/utils";
+import { cn, hrefSeguro } from "@/lib/utils";
 import { chatEnPantalla, EVENTO_BORRADOR, tomarBorrador } from "@/lib/redes/chatDock";
 import { fechaAR, formatearFecha, hoyAR, sumarDias } from "@/lib/fecha";
 import type { Chat as ChatT, Mensaje, ReferenciaChat } from "@/lib/redes/types";
@@ -774,9 +774,9 @@ export function ChatConversacion({
                           <p className="flex items-center gap-1.5 font-medium">
                             <Video className="h-4 w-4" /> {m.texto}
                           </p>
-                          {m.link && (
+                          {hrefSeguro(m.link) && (
                             <a
-                              href={m.link}
+                              href={hrefSeguro(m.link)}
                               target="_blank"
                               rel="noreferrer"
                               className={cn(
