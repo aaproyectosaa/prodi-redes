@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
@@ -52,6 +52,7 @@ import {
   emitirAClientes,
   prepararFacturacion,
   marcarCobrada,
+  sincronizarBorrador,
   pagadoDe,
   registrarPago,
   saldoDe,
@@ -92,6 +93,17 @@ export default function Cobros() {
 
   const vivas = facturas.filter((f) => f.estado !== "anulada");
   const borradores = vivas.filter((f) => f.estado === "borrador");
+  // Las armadas que no se emitieron siguen los datos de facturación del cliente (boleta / factura, razón social, CUIT).
+  const sincronizadas = useRef(new Set<string>());
+  useEffect(() => {
+    for (const f of borradores) {
+      const c = clientes.find((x) => x.id === f.proyecto_id);
+      const clave = `${f.id}:${JSON.stringify(c?.facturacion ?? null)}`;
+      if (!c || sincronizadas.current.has(clave)) continue;
+      sincronizadas.current.add(clave);
+      void sincronizarBorrador(f, c, settings.iva_pct ?? 21).catch((e) => console.warn("[cobros] sincronizar", f.id, e));
+    }
+  }, [borradores, clientes, settings.iva_pct]);
   const pendientes = vivas
     .filter((f) => f.estado === "pendiente")
     .sort((a, b) => Number(b.vencimiento < hoy) - Number(a.vencimiento < hoy) || a.vencimiento.localeCompare(b.vencimiento));

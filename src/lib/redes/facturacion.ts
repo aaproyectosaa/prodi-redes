@@ -125,6 +125,21 @@ export async function guardarDatosFacturacion(proyectoId: string, facturacion: N
   await updateDoc(doc(db, "projects", proyectoId), { facturacion });
 }
 
+/**
+ * Boleta armada que todavía no se emitió: toma los datos de facturación actuales del cliente
+ * (si le cambiaron boleta / factura, razón social o CUIT después de armarla). Los ítems no se tocan.
+ */
+export async function sincronizarBorrador(f: FacturaDoc, c: Project, ivaPct: number): Promise<boolean> {
+  if (f.estado !== "borrador" || f.arca?.cae) return false;
+  const fa = c.facturacion ?? {};
+  const tipo: Factura["tipo"] = fa.tipo === "boleta" ? "boleta" : "factura";
+  const razon = fa.razon_social?.trim() || null;
+  const cuit = fa.cuit?.trim() || null;
+  if (f.tipo === tipo && (f.razon_social ?? null) === razon && (f.cuit ?? null) === cuit) return false;
+  await updateDoc(doc(db, "facturas", f.id), { tipo, razon_social: razon, cuit, ...totales(f.items, tipo, ivaPct) });
+  return true;
+}
+
 /** Cambia ítems o tipo y recalcula los totales. */
 export async function editarFactura(f: FacturaDoc, cambios: { items?: ItemFactura[]; tipo?: Factura["tipo"]; vencimiento?: string; nota?: string | null }, ivaPct: number) {
   assertEditable();
