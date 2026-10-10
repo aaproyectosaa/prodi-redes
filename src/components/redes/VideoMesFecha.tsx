@@ -1,4 +1,5 @@
-import { CalendarDays } from "lucide-react";
+import { useRef } from "react";
+import { CalendarDays, X } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRedes } from "@/contexts/redes-data-context";
@@ -13,6 +14,7 @@ import type { Video } from "@/lib/redes/types";
  */
 export function VideoMesFecha({ video, editable, uid }: { video: Video; editable: boolean; uid: string }) {
   const { clienteById, planes, videos } = useRedes();
+  const fechaRef = useRef<HTMLInputElement>(null);
   const cliente = clienteById(video.proyecto_id);
   if (!editable || video.etapa === "publicado") return <span className="text-xs text-muted-foreground">{mesLabel(video.mes)}</span>;
 
@@ -65,21 +67,43 @@ export function VideoMesFecha({ video, editable, uid }: { video: Video; editable
           ))}
         </SelectContent>
       </Select>
-      <label
-        className="relative inline-flex h-7 cursor-pointer items-center gap-1 rounded-full border border-dashed px-2.5 text-xs text-muted-foreground hover:border-primary/50 hover:text-foreground"
-        title="Para cuándo se publica (define el mes del plan)"
-      >
-        <CalendarDays className="h-3.5 w-3.5" />
-        {video.fecha_deseada ? `Publicar ${fechaCorta(video.fecha_deseada)}` : "Fecha de publicación"}
+      <span className="relative inline-flex">
+        <button
+          type="button"
+          onClick={() => {
+            // Abre el calendario del navegador tocando en cualquier parte del botón.
+            const el = fechaRef.current;
+            if (!el) return;
+            try {
+              el.showPicker();
+            } catch {
+              el.focus();
+              el.click();
+            }
+          }}
+          className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed px-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+          title="Para cuándo se publica (define el mes del plan)"
+        >
+          <CalendarDays className="h-3.5 w-3.5" />
+          {video.fecha_deseada ? `Publicar ${fechaCorta(video.fecha_deseada)}` : "Fecha de publicación"}
+        </button>
+        {video.fecha_deseada && (
+          <button type="button" onClick={() => void cambiarFecha("")} className="ml-0.5 rounded-full p-1 text-muted-foreground hover:text-destructive" aria-label="Sacar la fecha">
+            <X className="h-3 w-3" />
+          </button>
+        )}
+        {/* El campo real queda escondido debajo del botón (el calendario se abre desde ahí). */}
         <input
+          ref={fechaRef}
           type="date"
           min={hoyISO()}
           value={video.fecha_deseada ?? ""}
           onChange={(e) => void cambiarFecha(e.target.value)}
-          className="absolute inset-0 cursor-pointer opacity-0"
+          tabIndex={-1}
+          className="pointer-events-none absolute bottom-0 left-0 h-0 w-0 opacity-0"
           aria-label="Fecha de publicación"
         />
-      </label>
+      </span>
     </span>
   );
 }
