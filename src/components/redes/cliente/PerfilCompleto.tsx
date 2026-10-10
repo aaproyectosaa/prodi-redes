@@ -127,22 +127,34 @@ export function TarjetaPerfil({ cliente, onCompletar }: { cliente: Project; onCo
   return (
     <div className="relative overflow-hidden rounded-2xl border bg-card p-5">
       <span className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-gradient-to-br from-[#6F40FC]/15 to-[#E040A0]/15 blur-2xl" />
-      <div className="relative flex flex-wrap items-center gap-5">
-        <AnilloPerfil pct={pct} size={84} grosor={8} />
+      {/* En el celu: anillo y título arriba, lo que falta abajo a todo el ancho y el botón al final. */}
+      <div className="relative space-y-4 sm:flex sm:items-center sm:gap-5 sm:space-y-0">
+        <div className="flex items-center gap-4 sm:contents">
+          <AnilloPerfil pct={pct} size={72} grosor={7} className="sm:hidden" />
+          <AnilloPerfil pct={pct} size={84} grosor={8} className="hidden sm:inline-flex" />
+          <div className="min-w-0 sm:hidden">
+            <p className="flex items-center gap-1.5 text-lg font-semibold leading-tight">
+              <Sparkles className="h-4 w-4 shrink-0 text-primary" /> Completá tu perfil
+            </p>
+            <p className="mt-0.5 text-sm text-muted-foreground">Te {faltan.length === 1 ? "falta 1 cosa" : `faltan ${faltan.length} cosas`}.</p>
+          </div>
+        </div>
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1.5 text-lg font-semibold">
-            <Sparkles className="h-4 w-4 text-primary" /> Completá tu perfil
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Te {faltan.length === 1 ? "falta 1 cosa" : `faltan ${faltan.length} cosas`}. Con todo completo, tus videos y piezas salen mucho mejor.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-1.5">
+          <div className="hidden sm:block">
+            <p className="flex items-center gap-1.5 text-lg font-semibold">
+              <Sparkles className="h-4 w-4 text-primary" /> Completá tu perfil
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Te {faltan.length === 1 ? "falta 1 cosa" : `faltan ${faltan.length} cosas`}. Con todo completo, tus videos y piezas salen mucho mejor.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-1.5 sm:mt-3">
             {items.map((i) => (
               <span
                 key={i.clave}
                 title={i.para}
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs",
+                  "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs",
                   i.listo ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 line-through decoration-emerald-600/40 dark:text-emerald-300" : "bg-background font-medium"
                 )}
               >
@@ -152,7 +164,7 @@ export function TarjetaPerfil({ cliente, onCompletar }: { cliente: Project; onCo
             ))}
           </div>
         </div>
-        <Button onClick={onCompletar} className="bg-gradient-to-r from-[#6F40FC] to-[#E040A0] text-white hover:opacity-90">
+        <Button onClick={onCompletar} className="w-full shrink-0 bg-gradient-to-r from-[#6F40FC] to-[#E040A0] text-white hover:opacity-90 sm:w-auto">
           Completar <ArrowRight className="ml-1.5 h-4 w-4" />
         </Button>
       </div>
