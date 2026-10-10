@@ -29,6 +29,7 @@ import {
   periodoDe,
   unidadesDelMes,
   useConfigPagos,
+  trabajosDelMes,
   useFacturas,
   useGastos,
   useLiquidaciones,
@@ -85,7 +86,8 @@ export default function Administracion() {
   const pagoDe = (uid: string, role: string, m: string) => {
     const liq = liqs.find((l) => l.uid === uid && l.mes === m);
     if (liq?.estado === "pagado") return { pagado: true, monto: liq.total_pagado ?? 0 };
-    return { pagado: false, monto: calcularPago(cfg[uid], unidadesDelMes(uid, role, m, videos, piezas), liq?.ajustes ?? [], clientes.map((c) => c.id)).total };
+    const trabajos = trabajosDelMes(uid, role, m, videos, piezas);
+    return { pagado: false, monto: calcularPago(cfg[uid], trabajos.length, liq?.ajustes ?? [], clientes.map((c) => c.id), { mes: m, trabajos }).total };
   };
   const debeAnt = equipo.filter((p) => !pagoDe(p.id, p.role ?? "", mesAnt).pagado && cfg[p.id]);
   const equipoMes = equipo.map((p) => pagoDe(p.id, p.role ?? "", mes));

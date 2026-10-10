@@ -335,7 +335,24 @@ export function htmlBoleta(f: Factura, cobro: DatosCobro, logoUrl: string): stri
 // Pagos al equipo
 // ---------------------------------------------------------------------------
 
-export type ModoPago = "fijo" | "por_unidad" | "mixto" | "por_cliente";
+export type ModoPago = "fijo" | "por_unidad" | "mixto" | "por_cliente" | "acuerdos";
+
+/**
+ * Acuerdo con una persona por un cliente: un fijo por mes, un monto por cada trabajo de ese cliente, o las dos
+ * cosas. Vale desde `desde` (mes) hasta que haya uno más nuevo del mismo cliente: así lo viejo se sigue
+ * calculando con el acuerdo de entonces. Un acuerdo en 0 y 0 es "dejó de llevar ese cliente".
+ */
+export interface AcuerdoCliente {
+  proyecto_id: string;
+  desde: string;
+  fijo: number;
+  por_unidad: number;
+}
+
+/** El acuerdo que valía para ese cliente en ese mes (el más nuevo que ya empezó). */
+export function acuerdoVigente(acuerdos: AcuerdoCliente[] | undefined, proyectoId: string, mes: string): AcuerdoCliente | null {
+  return (acuerdos ?? []).filter((a) => a.proyecto_id === proyectoId && a.desde <= mes).sort((a, b) => b.desde.localeCompare(a.desde))[0] ?? null;
+}
 
 export interface ConfigPago {
   modo: ModoPago;
@@ -345,6 +362,8 @@ export interface ConfigPago {
   por_unidad: number;
   /** Por cliente: cuánto se le paga por cada cliente que lleva (cada uno editable). */
   por_cliente?: Record<string, number>;
+  /** Modo "acuerdos": un acuerdo por cliente, con historial (cada cambio vale desde un mes). */
+  acuerdos?: AcuerdoCliente[];
   activo?: boolean;
 }
 
@@ -427,12 +446,46 @@ export function unidadesDelMes(uid: string, role: string, mes: string, videos: V
  * Lo que le corresponde en el mes. En "por cliente" suma el monto de cada cliente cargado
  * (si se pasa `clientesActivos`, solo los que siguen activos).
  */
-export function calcularPago(cfg: ConfigPago | undefined, unidades: number, ajustes: AjustePago[] = [], clientesActivos?: string[]) {
+/** Lo de un cliente en el modo "acuerdos": su fijo y sus trabajos del mes. */
+export interface DetalleAcuerdo {
+  proyecto_id: string;
+  fijo: number;
+  unidades: number;
+  por_unidad: number;
+  total: number;
+  /** Trabajó para ese cliente pero no hay acuerdo: se usa el "por trabajo" general. */
+  sinAcuerdo: boolean;
+}
+
+export function calcularPago(
+  cfg: ConfigPago | undefined,
+  unidades: number,
+  ajustes: AjustePago[] = [],
+  clientesActivos?: string[],
+  /** Para el modo "acuerdos": de qué mes es y qué hizo (cada trabajo con su cliente). */
+  delMes?: { mes: string; trabajos: { proyecto_id: string }[] }
+) {
   const c = cfg ?? { modo: "fijo" as ModoPago, fijo: 0, por_unidad: 0 };
   const fijo = c.modo === "por_unidad" ? 0 : Number(c.fijo) || 0;
   let variable = 0;
   let clientes = 0;
-  if (c.modo === "por_cliente") {
+  const detalle: DetalleAcuerdo[] = [];
+  if (c.modo === "acuerdos" && delMes) {
+    const porCliente = delMes.trabajos.reduce<Record<string, number>>((a, t) => ((a[t.proyecto_id] = (a[t.proyecto_id] ?? 0) + 1), a), {});
+    const ids = new Set([...(c.acuerdos ?? []).map((a) => a.proyecto_id), ...Object.keys(porCliente)]);
+    for (const pid of ids) {
+      const ac = acuerdoVigente(c.acuerdos, pid, delMes.mes);
+      const n = porCliente[pid] ?? 0;
+      // El fijo de un cliente cuenta mientras el cliente siga activo; lo hecho, siempre.
+      const fijoC = ac && (!clientesActivos || clientesActivos.includes(pid)) ? Number(ac.fijo) || 0 : 0;
+      const unidadC = ac ? Number(ac.por_unidad) || 0 : Number(c.por_unidad) || 0;
+      const total = fijoC + unidadC * n;
+      if (!total && !n) continue;
+      detalle.push({ proyecto_id: pid, fijo: fijoC, unidades: n, por_unidad: unidadC, total, sinAcuerdo: !ac });
+    }
+    clientes = detalle.filter((d) => d.fijo > 0 || d.unidades > 0).length;
+    variable = detalle.reduce((a, d) => a + d.total, 0);
+  } else if (c.modo === "por_cliente") {
     const montos = Object.entries(c.por_cliente ?? {}).filter(([id, m]) => Number(m) > 0 && (!clientesActivos || clientesActivos.includes(id)));
     clientes = montos.length;
     variable = montos.reduce((a, [, m]) => a + Number(m), 0);
@@ -440,7 +493,7 @@ export function calcularPago(cfg: ConfigPago | undefined, unidades: number, ajus
     variable = (Number(c.por_unidad) || 0) * unidades;
   }
   const extra = ajustes.reduce((a, x) => a + (Number(x.monto) || 0), 0);
-  return { fijo, variable, extra, clientes, total: fijo + variable + extra };
+  return { fijo, variable, extra, clientes, detalle, total: fijo + variable + extra };
 }
 
 export function useConfigPagos(enabled = true): Record<string, ConfigPago> {

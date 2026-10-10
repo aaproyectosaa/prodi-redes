@@ -68,7 +68,7 @@ export default function Escalabilidad() {
         const ref = porMes.find((x) => x.m === mesRef)?.trabajos ?? [];
         const liq = liqs.find((l) => l.uid === p.id && l.mes === mesRef);
         const costo =
-          liq?.estado === "pagado" ? Number(liq.total_pagado ?? 0) : calcularPago(cfg[p.id], ref.length, liq?.ajustes ?? [], ids).total;
+          liq?.estado === "pagado" ? Number(liq.total_pagado ?? 0) : calcularPago(cfg[p.id], ref.length, liq?.ajustes ?? [], ids, { mes: mesRef, trabajos: ref }).total;
         const esteMes = trabajosDelMes(p.id, p.role, mes, videos, piezas).length;
         return { p, promedio: prom(n3) ?? 0, mejor, esteMes, ref, costo, porUnidad: ref.length ? costo / ref.length : null };
       }),

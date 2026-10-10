@@ -66,7 +66,9 @@ import {
   marcarCobrada,
   marcarPagado,
   prepararFacturacion,
-  unidadesDelMes,
+  trabajosDelMes,
+  acuerdoVigente,
+  type AcuerdoCliente,
   useConfigPagos,
   useFacturas,
   useLiquidaciones,
@@ -113,9 +115,10 @@ function PagosEquipo({ mes }: { mes: string }) {
   ];
 
   const filas = equipo.map((p) => {
-    const unidades = unidadesDelMes(p.id, p.role ?? "", mes, videos, piezas);
+    const trabajos = trabajosDelMes(p.id, p.role ?? "", mes, videos, piezas);
+    const unidades = trabajos.length;
     const liq = liqs.find((l) => l.uid === p.id && l.mes === mes);
-    const calc = calcularPago(cfg[p.id], unidades, liq?.ajustes ?? [], clientes.map((c) => c.id));
+    const calc = calcularPago(cfg[p.id], unidades, liq?.ajustes ?? [], clientes.map((c) => c.id), { mes, trabajos });
     return { p, unidades, liq, calc };
   });
   const total = filas.reduce((a, f) => a + (f.liq?.estado === "pagado" ? (f.liq.total_pagado ?? f.calc.total) : f.calc.total), 0);
@@ -169,6 +172,9 @@ function PersonaPago({
   const asignados = clientesDe(p.id, clientes);
   const [porCliente, setPorCliente] = useState<Record<string, string>>(() => montosIniciales(cfg, asignados));
   const [base, setBase] = useState("");
+  // Modo "acuerdos": por cliente, fijo y/o por trabajo, y desde qué mes vale el cambio.
+  const [acuerdos, setAcuerdos] = useState<Record<string, { fijo: string; unidad: string }>>(() => acuerdosIniciales(cfg, asignados, mes));
+  const [desde, setDesde] = useState(mes);
   const [ajuste, setAjuste] = useState({ concepto: "", monto: "" });
   useEffect(() => {
     if (!cfg) return;
@@ -176,8 +182,10 @@ function PersonaPago({
     setFijo(String(cfg.fijo ?? ""));
     setPorUnidad(String(cfg.por_unidad ?? ""));
     setPorCliente(montosIniciales(cfg, asignados));
+    setAcuerdos(acuerdosIniciales(cfg, asignados, mes));
+    setDesde(mes);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cfg]);
+  }, [cfg, mes]);
   const unidad = UNIDAD_POR_ROL[p.role ?? ""] ?? { label: "trabajo", plural: "trabajos" };
   const pagado = liq?.estado === "pagado";
   const ajustes = liq?.ajustes ?? [];
@@ -189,7 +197,27 @@ function PersonaPago({
         toast.error("Tildá al menos un cliente y poné cuánto le pagás por él");
         return;
       }
-      await guardarConfigPago(p.id, { modo, fijo: Number(fijo) || 0, por_unidad: Number(porUnidad) || 0, por_cliente: montos, activo: true });
+      let nuevos: AcuerdoCliente[] | undefined = cfg?.acuerdos;
+      if (modo === "acuerdos") {
+        const previos = (cfg?.acuerdos ?? []).filter((a) => a.desde !== desde);
+        const cambios: AcuerdoCliente[] = [];
+        const ids = new Set([...Object.keys(acuerdos), ...(cfg?.acuerdos ?? []).map((a) => a.proyecto_id)]);
+        for (const pid of ids) {
+          const fila = acuerdos[pid];
+          const f = Number(fila?.fijo) || 0;
+          const u = Number(fila?.unidad) || 0;
+          const antes = acuerdoVigente(previos, pid, desde);
+          // Sin cambios respecto de lo que ya valía ese mes: no se guarda nada nuevo.
+          if ((antes ? antes.fijo : 0) === f && (antes ? antes.por_unidad : 0) === u) continue;
+          cambios.push({ proyecto_id: pid, desde, fijo: f, por_unidad: u });
+        }
+        nuevos = [...previos, ...cambios].sort((a, b) => a.desde.localeCompare(b.desde));
+        if (!nuevos.some((a) => a.fijo > 0 || a.por_unidad > 0)) {
+          toast.error("Tildá al menos un cliente y poné el fijo o cuánto le pagás por cada trabajo");
+          return;
+        }
+      }
+      await guardarConfigPago(p.id, { modo, fijo: Number(fijo) || 0, por_unidad: Number(porUnidad) || 0, por_cliente: montos, acuerdos: nuevos ?? [], activo: true });
       setEditando(false);
       toast.success("Guardado");
     } catch (e) {
@@ -211,7 +239,15 @@ function PersonaPago({
   };
   const detalle = [
     calc.fijo ? `Fijo ${formatARS(calc.fijo)}` : "",
-    calc.variable && cfg?.modo === "por_cliente"
+    cfg?.modo === "acuerdos"
+      ? calc.detalle
+          .map((d) => {
+            const nombre = clientes.find((c) => c.id === d.proyecto_id)?.nombre ?? "Cliente";
+            const partes = [d.fijo ? formatARS(d.fijo) : "", d.unidades ? `${d.unidades} × ${formatARS(d.por_unidad)}` : ""].filter(Boolean).join(" + ");
+            return `${nombre}: ${partes || "$ 0"}${d.sinAcuerdo ? " (sin acuerdo)" : ""}`;
+          })
+          .join(" · ")
+      : calc.variable && cfg?.modo === "por_cliente"
       ? `${calc.clientes} ${calc.clientes === 1 ? "cliente" : "clientes"}: ${Object.entries(cfg.por_cliente ?? {})
           .filter(([id, m]) => m > 0 && clientes.some((c) => c.id === id))
           .map(([id, m]) => `${clientes.find((c) => c.id === id)?.nombre} ${formatARS(m)}`)
@@ -232,8 +268,8 @@ function PersonaPago({
           <p className="truncate font-semibold">{p.nombre}</p>
           <p className="text-xs text-muted-foreground">
             {getRoleInfo(p.role).label} ·{" "}
-            {cfg?.modo === "por_cliente"
-              ? `${calc.clientes} ${calc.clientes === 1 ? "cliente" : "clientes"}`
+            {cfg?.modo === "por_cliente" || cfg?.modo === "acuerdos"
+              ? `${calc.clientes} ${calc.clientes === 1 ? "cliente" : "clientes"}${cfg.modo === "acuerdos" ? ` · ${unidades} ${unidades === 1 ? unidad.label : unidad.plural}` : ""}`
               : `${unidades} ${unidades === 1 ? unidad.label : unidad.plural} en el mes`}
           </p>
         </div>
@@ -262,22 +298,112 @@ function PersonaPago({
               <SelectItem value="por_unidad">Por {unidad.label}</SelectItem>
               <SelectItem value="mixto">Fijo + por {unidad.label}</SelectItem>
               <SelectItem value="por_cliente">Por cliente (y fijo si querés)</SelectItem>
+              <SelectItem value="acuerdos">Acuerdo por cliente (fijo y/o por {unidad.label}, con historial)</SelectItem>
             </SelectContent>
           </Select>
           <div className="grid grid-cols-2 gap-2">
             {modo !== "por_unidad" && (
               <div className="space-y-1">
-                <Label className="text-[11px]">{modo === "por_cliente" ? "Fijo por mes (opcional)" : "Fijo por mes"}</Label>
+                <Label className="text-[11px]">{modo === "por_cliente" || modo === "acuerdos" ? "Fijo general por mes (opcional)" : "Fijo por mes"}</Label>
                 <InputNumero value={fijo} onChange={(e) => setFijo(e.target.value.replace(/\D/g, ""))} />
               </div>
             )}
-            {modo !== "fijo" && modo !== "por_cliente" && (
+            {modo !== "fijo" && modo !== "por_cliente" && modo !== "acuerdos" && (
               <div className="space-y-1">
                 <Label className="text-[11px]">Por {unidad.label}</Label>
                 <InputNumero value={porUnidad} onChange={(e) => setPorUnidad(e.target.value.replace(/\D/g, ""))} />
               </div>
             )}
           </div>
+          {modo === "acuerdos" && (
+            <div className="space-y-2">
+              <p className="text-[11px] text-muted-foreground">
+                Por cada cliente que lleva: un fijo por mes, cuánto por cada {unidad.label} de ese cliente, o las dos cosas. Si cambia el acuerdo, elegí desde qué mes: lo anterior se sigue calculando como estaba.
+              </p>
+              <div className="flex items-center gap-2 rounded-lg border bg-background px-2.5 py-1.5 text-xs">
+                <span className="text-muted-foreground">Estos montos valen desde</span>
+                <Select value={desde} onValueChange={setDesde}>
+                  <SelectTrigger className="h-7 w-auto gap-1 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[-6, -5, -4, -3, -2, -1, 0, 1, 2].map((d) => {
+                      const m = sumarMeses(mes, d);
+                      return (
+                        <SelectItem key={m} value={m} className="text-xs">
+                          {mesLabel(m)}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="divide-y rounded-lg border bg-background sm:max-h-72 sm:overflow-y-auto">
+                <div className="grid grid-cols-[1fr_6.5rem_6.5rem] gap-2 px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">
+                  <span>Cliente</span>
+                  <span className="text-right">Fijo/mes</span>
+                  <span className="text-right">Por {unidad.label}</span>
+                </div>
+                {clientes.map((c) => {
+                  const fila = acuerdos[c.id];
+                  const tildado = fila !== undefined;
+                  const historial = (cfg?.acuerdos ?? []).filter((a) => a.proyecto_id === c.id).sort((a, b) => a.desde.localeCompare(b.desde));
+                  return (
+                    <div key={c.id} className="space-y-0.5 px-2.5 py-1.5">
+                      <div className="grid grid-cols-[1fr_6.5rem_6.5rem] items-center gap-2">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <Checkbox
+                            checked={tildado}
+                            aria-label={`Lleva ${c.nombre}`}
+                            onCheckedChange={() =>
+                              setAcuerdos((m) => {
+                                const n = { ...m };
+                                if (tildado) delete n[c.id];
+                                else n[c.id] = { fijo: "", unidad: "" };
+                                return n;
+                              })
+                            }
+                          />
+                          <span className="min-w-0 truncate text-sm">
+                            {c.nombre}
+                            {asignados.some((a) => a.id === c.id) && <span className="ml-1.5 text-[10px] text-muted-foreground">asignado</span>}
+                          </span>
+                        </span>
+                        {tildado ? (
+                          <>
+                            <InputNumero
+                              className="h-7 text-right"
+                              placeholder="$"
+                              aria-label={`Fijo por ${c.nombre}`}
+                              value={fila.fijo}
+                              onChange={(e) => setAcuerdos((m) => ({ ...m, [c.id]: { ...m[c.id], fijo: e.target.value.replace(/\D/g, "") } }))}
+                            />
+                            <InputNumero
+                              className="h-7 text-right"
+                              placeholder="$"
+                              aria-label={`Por ${unidad.label} de ${c.nombre}`}
+                              value={fila.unidad}
+                              onChange={(e) => setAcuerdos((m) => ({ ...m, [c.id]: { ...m[c.id], unidad: e.target.value.replace(/\D/g, "") } }))}
+                            />
+                          </>
+                        ) : (
+                          <span className="col-span-2" />
+                        )}
+                      </div>
+                      {historial.length > 1 && (
+                        <p className="pl-6 text-[10px] text-muted-foreground">
+                          Historial:{" "}
+                          {historial
+                            .map((a) => `desde ${mesLabel(a.desde, { corto: true })}: ${a.fijo || a.por_unidad ? [a.fijo ? `${formatARS(a.fijo)} fijo` : "", a.por_unidad ? `${formatARS(a.por_unidad)} c/u` : ""].filter(Boolean).join(" + ") : "no lo lleva"}`)
+                            .join(" → ")}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {modo === "por_cliente" && (
             <div className="space-y-2">
               <p className="text-[11px] text-muted-foreground">
@@ -388,6 +514,18 @@ function PersonaPago({
       )}
     </div>
   );
+}
+
+/** Acuerdos para el formulario: lo que valía en ese mes por cliente o, si no hay ninguno, los clientes asignados vacíos. */
+function acuerdosIniciales(cfg: ConfigPago | undefined, asignados: { id: string }[], mes: string): Record<string, { fijo: string; unidad: string }> {
+  const ids = [...new Set((cfg?.acuerdos ?? []).map((a) => a.proyecto_id))];
+  if (!ids.length) return Object.fromEntries(asignados.map((c) => [c.id, { fijo: "", unidad: "" }]));
+  const out: Record<string, { fijo: string; unidad: string }> = {};
+  for (const pid of ids) {
+    const a = acuerdoVigente(cfg?.acuerdos, pid, mes);
+    if (a && (a.fijo > 0 || a.por_unidad > 0)) out[pid] = { fijo: a.fijo ? String(a.fijo) : "", unidad: a.por_unidad ? String(a.por_unidad) : "" };
+  }
+  return out;
 }
 
 /** Montos por cliente para el formulario: lo guardado o, si no hay, los clientes asignados vacíos. */

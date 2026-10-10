@@ -31,6 +31,7 @@ import {
   nombrePeriodo,
   unidadesDelMes,
   useConfigPagos,
+  trabajosDelMes,
   useFacturas,
   useGastos,
   useLiquidaciones,
@@ -90,9 +91,10 @@ export default function Tablero() {
   const equipo = profiles
     .filter((p) => ["productor", "editor", "pauta", "diseno"].includes(p.role ?? "") && p.activo !== false)
     .map((p) => {
-      const unidades = unidadesDelMes(p.id, p.role ?? "", mes, videos, piezas);
+      const trabajos = trabajosDelMes(p.id, p.role ?? "", mes, videos, piezas);
+      const unidades = trabajos.length;
       const liq = liqs.find((l) => l.uid === p.id);
-      const calc = calcularPago(cfgPagos[p.id], unidades, liq?.ajustes ?? [], clientes.map((c) => c.id));
+      const calc = calcularPago(cfgPagos[p.id], unidades, liq?.ajustes ?? [], clientes.map((c) => c.id), { mes, trabajos });
       return { p, unidades, porCliente: cfgPagos[p.id]?.modo === "por_cliente" ? calc.clientes : null, total: liq?.estado === "pagado" ? (liq.total_pagado ?? calc.total) : calc.total, pagado: liq?.estado === "pagado" };
     });
   const costoEquipo = equipo.reduce((a, e) => a + e.total, 0);

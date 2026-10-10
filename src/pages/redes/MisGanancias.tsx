@@ -70,7 +70,7 @@ export default function MisGanancias() {
   const delMes = (m: string) => {
     const trabajos = trabajosDelMes(uid, rol, m, videos, piezas);
     const liq = liqs.find((l) => l.mes === m);
-    const calc = calcularPago(cfg, trabajos.length, liq?.ajustes ?? [], idsClientes);
+    const calc = calcularPago(cfg, trabajos.length, liq?.ajustes ?? [], idsClientes, { mes, trabajos });
     const pagado = liq?.estado === "pagado";
     return { trabajos, liq, calc, pagado, total: pagado ? (liq?.total_pagado ?? calc.total) : calc.total };
   };
@@ -129,7 +129,15 @@ export default function MisGanancias() {
             {/* Cómo se arma */}
             <div className="mt-4 space-y-1.5 rounded-xl bg-background/70 p-3 text-sm">
               {actual.calc.fijo > 0 && <Linea texto="Fijo del mes" monto={actual.calc.fijo} />}
-              {cfg.modo === "por_cliente"
+              {cfg.modo === "acuerdos"
+                ? actual.calc.detalle.map((d) => (
+                    <Linea
+                      key={d.proyecto_id}
+                      texto={`${clientes.find((c) => c.id === d.proyecto_id)?.nombre ?? "Cliente"}${[d.fijo ? " · fijo" : "", d.unidades ? ` · ${d.unidades} × ${formatARS(d.por_unidad)}` : ""].join("")}`}
+                      monto={d.total}
+                    />
+                  ))
+                : cfg.modo === "por_cliente"
                 ? Object.entries(cfg.por_cliente ?? {})
                     .filter(([id, m]) => Number(m) > 0 && idsClientes.includes(id))
                     .map(([id, m]) => <Linea key={id} texto={clientes.find((c) => c.id === id)?.nombre ?? "Cliente"} monto={Number(m)} />)
