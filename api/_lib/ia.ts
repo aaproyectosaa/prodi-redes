@@ -190,7 +190,7 @@ export async function generarImagen(
   aspectRatio: Ratio,
   /** Imágenes de referencia (logo, piezas de la marca). */
   imagenes: { data: Buffer; mime: string }[] = []
-): Promise<{ data: Buffer; mime: string }> {
+): Promise<{ data: Buffer; mime: string; modelo: string }> {
   if (!hayGemini()) throw new Error("Falta la clave de Gemini (GEMINI_API_KEY) en Vercel para hacer las imágenes.");
   return gemini.generarImagen(prompt, aspectRatio, imagenes);
 }

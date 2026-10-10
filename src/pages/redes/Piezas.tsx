@@ -31,7 +31,8 @@ import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { useDriveConnection } from "@/hooks/use-drive-connection";
 import { useDriveUpload } from "@/hooks/use-drive-upload";
 import { useMemoriaIA } from "@/lib/redes/planMes";
-import { enModoVista } from "@/lib/redes/vistaComo";
+import { assertEditable, enModoVista } from "@/lib/redes/vistaComo";
+import { callApi } from "@/lib/redes/api";
 import {
   empezarPieza,
   formatoInfo,
@@ -325,6 +326,8 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
   const { connection } = useDriveConnection();
   const [ajustes, setAjustes] = useState("");
   const [generando, setGenerando] = useState(false);
+  // Con una versión elegida, la IA puede mejorar esa (la usa de base) o hacer una nueva desde cero.
+  const [modoIA, setModoIA] = useState<"mejorar" | "nueva">("mejorar");
   const [sel, setSel] = useState<string | null>(null);
   // "Mandar por chat": a una persona, un grupo o el chat del cliente.
   const [compartir, setCompartir] = useState(false);
@@ -377,6 +380,21 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
       setGenerando(false);
     }
   };
+  const crearConIA = async () => {
+    const base = versiones.find((v) => v.id === sel);
+    if (!base || modoIA === "nueva") return generar();
+    setGenerando(true);
+    try {
+      assertEditable();
+      await callApi("/api/ia/pieza-editar", { pieza_id: pieza.id, version_id: base.id, instruccion: ajustes });
+      setAjustes("");
+      toast.success("Listo: quedó como versión nueva");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo crear");
+    } finally {
+      setGenerando(false);
+    }
+  };
   const subir = async (files: File[]) => {
     if (!files.length) return;
     if (enModoVista()) {
@@ -404,26 +422,59 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
     }
   };
 
+  const elegida = versiones.find((v) => v.id === sel) ?? null;
+  const nElegida = elegida ? versiones.indexOf(elegida) + 1 : 0;
+  const enviadaN = versiones.findIndex((v) => v.id === pieza.version_enviada_id) + 1;
+  const aprobadaV = versiones.find((v) => v.id === pieza.version_aprobada_id) ?? null;
+  const pasos = [
+    { n: 1, t: "Leé el pedido", listo: true },
+    { n: 2, t: "Creá la pieza", listo: versiones.length > 0 },
+    { n: 3, t: "Elegí una versión", listo: !!elegida || pieza.estado === "para_aprobar" || pieza.estado === "entregada" },
+    { n: 4, t: "Entregá al cliente", listo: pieza.estado === "para_aprobar" || pieza.estado === "entregada" },
+  ];
+
   return (
     <Dialog open={!!pieza} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-h-[94dvh] w-[calc(100vw-1.5rem)] max-w-4xl overflow-y-auto rounded-2xl">
-        <DialogHeader className="text-left">
-          <DialogTitle className="flex flex-wrap items-center gap-2">
-            {cliente?.nombre} · {info.label}
-            <EnfoqueBadge enfoque={pieza.enfoque} />
-          </DialogTitle>
-          <DialogDescription className="flex flex-wrap items-center gap-2">
-            <EstadoPiezaBadge estado={pieza.estado} vista="equipo" />
-            <span>
-              {info.medida} ·{" "}
-              {pieza._origen ? "del sistema anterior" : pieza.incluida ? "incluida en el plan" : pieza.precio ? `pagada ${formatARS(pieza.precio)}` : "sin cargo"} · pedida{" "}
-              {fechaHora(pieza.created_at)}
-            </span>
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-5xl gap-0 overflow-hidden rounded-2xl p-0 sm:max-h-[94dvh]">
+        {/* Encabezado: qué pieza es y en qué paso va */}
+        <div className="border-b bg-gradient-to-r from-primary/[0.07] via-background to-fuchsia-500/[0.06] px-5 pb-3 pt-4">
+          <DialogHeader className="space-y-1 text-left">
+            <DialogTitle className="flex flex-wrap items-center gap-2 pr-6 text-lg">
+              {cliente?.nombre} · {info.label}
+              <EnfoqueBadge enfoque={pieza.enfoque} />
+            </DialogTitle>
+            <DialogDescription className="flex flex-wrap items-center gap-2 text-xs">
+              <EstadoPiezaBadge estado={pieza.estado} vista="equipo" />
+              <span>
+                {info.medida} · {pieza._origen ? "del sistema anterior" : pieza.incluida ? "incluida en el plan" : pieza.precio ? `pagada ${formatARS(pieza.precio)}` : "sin cargo"} · pedida {fechaHora(pieza.created_at)}
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <ol className="mt-3 grid grid-cols-4 gap-1.5">
+            {pasos.map((p, i) => {
+              const actual = !p.listo && pasos.slice(0, i).every((x) => x.listo);
+              return (
+                <li
+                  key={p.n}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-colors sm:text-xs",
+                    p.listo ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : actual ? "bg-primary text-primary-foreground shadow-sm" : "bg-muted/60 text-muted-foreground"
+                  )}
+                >
+                  <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold", p.listo ? "bg-emerald-500 text-white" : actual ? "bg-white/25" : "bg-background")}>
+                    {p.listo ? <Check className="h-3 w-3" /> : p.n}
+                  </span>
+                  <span className="truncate">{p.t}</span>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
 
-        <div className="grid gap-5 md:grid-cols-[1fr_1.35fr]">
-          <div className="space-y-3 text-sm">
+        <div className="grid max-h-[calc(94dvh-150px)] gap-0 overflow-y-auto md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.4fr)] md:overflow-hidden">
+          {/* 1. Lo que pidió el cliente */}
+          <div className="space-y-3 border-b p-4 text-sm md:max-h-[calc(94dvh-150px)] md:overflow-y-auto md:border-b-0 md:border-r">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">1 · Lo que pidió</p>
             {(pieza.rondas ?? 0) > 0 && pieza.feedback_cliente && pieza.estado !== "entregada" && (
               <div className="rounded-xl border border-orange-500/40 bg-orange-500/[0.08] p-3">
                 <p className="flex items-center gap-1.5 text-xs font-semibold text-orange-700 dark:text-orange-300">
@@ -438,28 +489,7 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                 />
               </div>
             )}
-            {(pieza.attachments_crudo?.length ?? 0) > 0 && (
-              <div className="space-y-2 rounded-xl border border-primary/30 bg-primary/[0.04] p-3">
-                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary">
-                  <ImageIcon className="h-3.5 w-3.5" /> Fotos para usar ({pieza.attachments_crudo!.length})
-                </p>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {pieza.attachments_crudo!.map((f) => (
-                    <button
-                      key={f.drive_file_id}
-                      type="button"
-                      onClick={() => setVerFoto({ id: f.drive_file_id, drive_file_id: f.drive_file_id, name: f.name, mime_type: f.mime_type })}
-                      className="aspect-square overflow-hidden rounded-lg border bg-muted transition-transform hover:scale-[1.03]"
-                    >
-                      <VersionImg v={{ drive_file_id: f.drive_file_id, name: f.name }} className="object-cover" />
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[11px] text-muted-foreground">La IA las usa al generar. Tocá una para verla grande o descargarla.</p>
-              </div>
-            )}
-            <div className="space-y-1.5 rounded-xl border p-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pedido</p>
+            <div className="space-y-2 rounded-xl border bg-card p-3">
               {pieza.producto && (
                 <p>
                   <span className="text-muted-foreground">Vender:</span> <b>{pieza.producto}</b>
@@ -475,27 +505,43 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                   <span className="text-muted-foreground">Llamado:</span> {pieza.cta}
                 </p>
               )}
-              {pieza.pedido && <p className="whitespace-pre-wrap">{pieza.pedido}</p>}
+              {pieza.pedido && <p className="whitespace-pre-wrap leading-relaxed">{pieza.pedido}</p>}
               {pieza.texto_en_pieza && (
-                <p className="text-xs">
-                  Texto tal cual: <span className="font-semibold">“{pieza.texto_en_pieza}”</span>
-                </p>
+                <div className="rounded-lg bg-muted/60 p-2 text-xs">
+                  <p className="mb-0.5 font-semibold text-muted-foreground">Texto que va en la pieza, tal cual:</p>
+                  <p className="font-medium">“{pieza.texto_en_pieza}”</p>
+                </div>
+              )}
+              {(pieza.attachments_crudo?.length ?? 0) > 0 && (
+                <div>
+                  <p className="mb-1 text-xs font-semibold text-primary">Fotos para usar ({pieza.attachments_crudo!.length}) · tocá para verlas</p>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {pieza.attachments_crudo!.map((f) => (
+                      <button
+                        key={f.drive_file_id}
+                        type="button"
+                        onClick={() => setVerFoto({ id: f.drive_file_id, drive_file_id: f.drive_file_id, name: f.name, mime_type: f.mime_type })}
+                        className="aspect-square overflow-hidden rounded-lg border bg-muted transition-transform hover:scale-[1.04]"
+                      >
+                        <VersionImg v={{ drive_file_id: f.drive_file_id, name: f.name }} className="object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
             <DelSistemaAnterior origen={pieza._origen} viejo={pieza._viejo} nota={pieza.nota_equipo} />
             <div className="space-y-2 rounded-xl border p-3 text-xs text-muted-foreground">
-              <p className="font-semibold uppercase tracking-wider">Marca</p>
               <div className="flex items-center gap-3">
                 {cliente?.marca_archivos?.logo ? (
-                  <img src={driveThumb(cliente.marca_archivos.logo.drive_file_id, 200)} alt="Logo" className="h-12 w-12 rounded-lg border bg-white object-contain p-1" referrerPolicy="no-referrer" />
+                  <img src={driveThumb(cliente.marca_archivos.logo.drive_file_id, 200)} alt="Logo" className="h-11 w-11 rounded-lg border bg-white object-contain p-1" referrerPolicy="no-referrer" />
                 ) : (
                   <span className="text-[11px]">Sin logo cargado</span>
                 )}
                 <div className="space-y-0.5">
-                  {cliente?.marca?.rubro && <p>{cliente.marca.rubro}</p>}
+                  <p className="font-semibold text-foreground">Marca</p>
                   {cliente?.marca?.paleta?.length ? (
                     <p className="flex items-center gap-1">
-                      Colores:
                       {cliente.marca.paleta.map((c) => (
                         <span key={c} title={c} className="inline-block h-4 w-4 rounded-full border" style={{ background: c }} />
                       ))}
@@ -518,110 +564,6 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                 </div>
               )}
             </div>
-            {puedeTrabajar && (
-              <div className="space-y-2 rounded-xl border border-primary/30 bg-primary/[0.04] p-3">
-                <p className="text-xs font-semibold">Hacela con IA</p>
-                <Textarea
-                  rows={2}
-                  value={ajustes}
-                  onChange={(e) => setAjustes(e.target.value)}
-                  placeholder="Indicaciones para la IA (opcional): fondo oscuro, más minimalista, foto de producto grande…"
-                />
-                <Button className="w-full" onClick={() => void generar()} disabled={generando}>
-                  {generando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : versiones.length ? <RefreshCw className="mr-2 h-4 w-4" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                  {generando ? "Generando (≈20 s)…" : versiones.length ? "Otra versión con IA" : "Generar con IA"}
-                </Button>
-                <p className="text-center text-[11px] text-muted-foreground">o</p>
-                <input
-                  ref={input}
-                  type="file"
-                  accept="image/*,application/pdf"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    void subir(Array.from(e.target.files ?? []));
-                    e.target.value = "";
-                  }}
-                />
-                <Button variant="outline" className="w-full" onClick={() => input.current?.click()} disabled={isUploading || connection?.status !== "connected"}>
-                  {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                  Subir mi diseño (imagen o PDF)
-                </Button>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-3">
-            {versiones.length === 0 ? (
-              <EmptyState icon={ImageIcon} title="Sin versiones" description="Generala con IA o subí tu diseño." />
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                {versiones.map((v, i) => {
-                  const marcada = sel === v.id;
-                  const aprobada = v.id === pieza.version_aprobada_id;
-                  const enviada = v.id === pieza.version_enviada_id;
-                  const esPdf = v.mime_type === "application/pdf";
-                  return (
-                    <div
-                      key={v.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => (puedeTrabajar ? setSel((s) => (s === v.id ? null : v.id)) : setVer(v))}
-                      onDoubleClick={() => setVer(v)}
-                      onKeyDown={(e) => e.key === "Enter" && (puedeTrabajar ? setSel((s) => (s === v.id ? null : v.id)) : setVer(v))}
-                      className={cn(
-                        "group relative cursor-pointer overflow-hidden rounded-lg border-2 transition-all animate-in fade-in zoom-in-95",
-                        marcada ? "border-primary" : "border-transparent hover:border-primary/40"
-                      )}
-                    >
-                      <div className="flex aspect-square items-center justify-center bg-muted">
-                        {esPdf ? <span className="text-sm font-semibold text-muted-foreground">PDF</span> : <VersionImg v={v} />}
-                      </div>
-                      <span className="absolute left-1.5 top-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
-                        v{i + 1} · {v.origen === "ia" ? "IA" : "subida"}
-                        {aprobada ? " · aprobada" : enviada ? " · enviada" : ""}
-                      </span>
-                      {marcada && (
-                        <span className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                          <Check className="h-4 w-4" />
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setVer(v);
-                        }}
-                        className="absolute bottom-1.5 right-1.5 inline-flex items-center gap-1 rounded-md bg-black/70 px-2 py-1 text-[11px] font-medium text-white transition-transform hover:scale-105"
-                      >
-                        <Maximize2 className="h-3 w-3" /> Ver
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            {versiones.length > 0 && (
-              <Button variant="outline" className="w-full" onClick={() => setCompartir(true)}>
-                <MessageCircle className="mr-2 h-4 w-4" /> Mandar {sel ? "la elegida" : "la última"} por chat
-              </Button>
-            )}
-            {puedeTrabajar && (
-              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setRechazo(true)}>
-                  <Undo2 className="mr-2 h-4 w-4" /> No se puede hacer
-                </Button>
-                <Button onClick={() => void mandar()} disabled={!sel || mandando}>
-                  {mandando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                  Mandar al cliente para aprobar
-                </Button>
-              </div>
-            )}
-            {pieza.estado === "para_aprobar" && (
-              <p className="rounded-xl border bg-muted/40 p-3 text-xs text-muted-foreground">
-                Se la mandaste {hace(pieza.updated_at)}. Cuando la apruebe o pida cambios te llega el aviso.
-              </p>
-            )}
             {(pieza.historial?.length ?? 0) > 0 && (
               <details className="rounded-xl border px-3 py-2 text-xs">
                 <summary className="cursor-pointer font-medium text-muted-foreground">Historial</summary>
@@ -635,6 +577,192 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                 </ol>
               </details>
             )}
+          </div>
+
+          {/* 2 a 4. Tu trabajo */}
+          <div className="space-y-5 p-4 md:max-h-[calc(94dvh-150px)] md:overflow-y-auto">
+            {puedeTrabajar && (
+              <section className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">2 · Creá la pieza</p>
+                <div className="grid gap-2 sm:grid-cols-[1.6fr_1fr]">
+                  <div className="space-y-2 rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/[0.07] to-fuchsia-500/[0.04] p-3">
+                    <p className="flex items-center gap-1.5 text-sm font-semibold">
+                      <Sparkles className="h-4 w-4 text-primary" /> Con IA
+                    </p>
+                    {elegida && (
+                      <div className="grid grid-cols-2 gap-1 rounded-lg bg-background/70 p-0.5 text-xs">
+                        {(
+                          [
+                            { v: "mejorar", t: `Mejorar la v${nElegida}` },
+                            { v: "nueva", t: "Nueva desde cero" },
+                          ] as const
+                        ).map((o) => (
+                          <button
+                            key={o.v}
+                            type="button"
+                            onClick={() => setModoIA(o.v)}
+                            className={cn("rounded-md py-1.5 font-medium transition-all", modoIA === o.v ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+                          >
+                            {o.t}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <Textarea
+                      rows={2}
+                      value={ajustes}
+                      onChange={(e) => setAjustes(e.target.value)}
+                      placeholder={
+                        elegida && modoIA === "mejorar"
+                          ? `¿Qué le cambio a la v${nElegida}? Ej: sacá la botella verde, no toques las caras`
+                          : "Indicaciones (opcional): fondo oscuro, más minimalista, foto grande…"
+                      }
+                      className="resize-none bg-background"
+                    />
+                    <Button className="w-full bg-gradient-to-r from-[#6F40FC] to-[#E040A0] text-white hover:opacity-90" onClick={() => void crearConIA()} disabled={generando || (!!elegida && modoIA === "mejorar" && ajustes.trim().length < 3)}>
+                      {generando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                      {generando ? "Creando (≈30 s)…" : elegida && modoIA === "mejorar" ? `Mejorar la v${nElegida}` : versiones.length ? "Otra versión nueva" : "Crear con IA"}
+                    </Button>
+                    {elegida && modoIA === "mejorar" && (
+                      <p className="text-[11px] text-muted-foreground">La IA trabaja sobre la v{nElegida} y queda como versión nueva. La v{nElegida} no se toca.</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => input.current?.click()}
+                    disabled={isUploading || connection?.status !== "connected"}
+                    className="flex flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed p-3 text-center text-sm transition-colors hover:border-primary/60 hover:bg-primary/[0.03] disabled:opacity-50"
+                  >
+                    {isUploading ? <Loader2 className="h-6 w-6 animate-spin text-primary" /> : <Upload className="h-6 w-6 text-muted-foreground" />}
+                    <span className="font-semibold">Subí tu diseño</span>
+                    <span className="text-[11px] text-muted-foreground">Imagen o PDF hecho por vos</span>
+                  </button>
+                  <input
+                    ref={input}
+                    type="file"
+                    accept="image/*,application/pdf"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      void subir(Array.from(e.target.files ?? []));
+                      e.target.value = "";
+                    }}
+                  />
+                </div>
+              </section>
+            )}
+
+            <section className="space-y-2">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">3 · Elegí la versión</p>
+                {versiones.length > 0 && <p className="text-[11px] text-muted-foreground">Tocá para elegir · «Ver» para abrirla grande y editarla</p>}
+              </div>
+              {versiones.length === 0 && !generando ? (
+                <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed p-8 text-center">
+                  <ImageIcon className="h-8 w-8 text-muted-foreground/50" />
+                  <p className="text-sm font-medium">Todavía no hay versiones</p>
+                  <p className="text-xs text-muted-foreground">Creala con IA o subí tu diseño (paso 2).</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3">
+                  {versiones.map((v, i) => {
+                    const marcada = sel === v.id;
+                    const aprobada = v.id === pieza.version_aprobada_id;
+                    const enviada = v.id === pieza.version_enviada_id;
+                    const esPdf = v.mime_type === "application/pdf";
+                    return (
+                      <div
+                        key={v.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => (puedeTrabajar ? setSel((s) => (s === v.id ? null : v.id)) : setVer(v))}
+                        onDoubleClick={() => setVer(v)}
+                        onKeyDown={(e) => e.key === "Enter" && (puedeTrabajar ? setSel((s) => (s === v.id ? null : v.id)) : setVer(v))}
+                        className={cn(
+                          "group relative cursor-pointer overflow-hidden rounded-xl border-2 transition-all animate-in fade-in zoom-in-95",
+                          marcada ? "border-primary shadow-lg shadow-primary/20" : "border-transparent hover:-translate-y-0.5 hover:border-primary/40"
+                        )}
+                      >
+                        <div className="flex aspect-[4/5] items-center justify-center bg-muted">
+                          {esPdf ? <span className="text-sm font-semibold text-muted-foreground">PDF</span> : <VersionImg v={v} />}
+                        </div>
+                        <span className="absolute left-1.5 top-1.5 rounded-md bg-black/65 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                          v{i + 1} · {v.origen === "ia" ? (v.modelo ? (v.modelo.includes("pro") ? "IA Pro" : v.modelo.includes("2.5") ? "IA básica" : "IA") : "IA") : "subida"}
+                        </span>
+                        {(aprobada || enviada) && (
+                          <span className={cn("absolute left-1.5 top-7 rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-white", aprobada ? "bg-emerald-600" : "bg-orange-500")}>
+                            {aprobada ? "Aprobada" : "Enviada"}
+                          </span>
+                        )}
+                        {marcada && (
+                          <span className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded-full bg-primary py-0.5 pl-1 pr-2 text-[10px] font-semibold text-primary-foreground">
+                            <Check className="h-3.5 w-3.5" /> Elegida
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setVer(v);
+                          }}
+                          className="absolute bottom-1.5 right-1.5 inline-flex items-center gap-1 rounded-md bg-black/70 px-2 py-1 text-[11px] font-medium text-white transition-transform hover:scale-105"
+                        >
+                          <Maximize2 className="h-3 w-3" /> Ver
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {generando && (
+                    <div className="flex aspect-[4/5] flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border-2 border-dashed border-primary/40 bg-gradient-to-br from-primary/10 to-fuchsia-500/10">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      <span className="text-xs font-medium text-primary">Creando…</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+
+            <section className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">4 · Entregá</p>
+              {pieza.estado === "entregada" ? (
+                <div className="flex items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.07] p-3 text-sm">
+                  <Check className="h-5 w-5 shrink-0 text-emerald-600" />
+                  <span className="flex-1">
+                    <b>El cliente la aprobó.</b> {aprobadaV ? "Abrila con «Ver» para descargarla." : ""}
+                  </span>
+                  {aprobadaV && (
+                    <Button size="sm" variant="outline" onClick={() => setVer(aprobadaV)}>
+                      <Download className="mr-1.5 h-4 w-4" /> Abrir
+                    </Button>
+                  )}
+                </div>
+              ) : pieza.estado === "para_aprobar" ? (
+                <div className="rounded-2xl border border-orange-500/30 bg-orange-500/[0.06] p-3 text-sm">
+                  <b>Esperando al cliente.</b> Le mandaste la v{enviadaN || "?"} {hace(pieza.updated_at)}. Cuando la apruebe o pida cambios te llega el aviso.
+                </div>
+              ) : (
+                puedeTrabajar && (
+                  <Button className="h-12 w-full text-base" onClick={() => void mandar()} disabled={!sel || mandando}>
+                    {mandando ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Send className="mr-2 h-5 w-5" />}
+                    {sel ? `Mandar la v${nElegida} al cliente para aprobar` : versiones.length ? "Elegí una versión para mandarla" : "Primero creá una versión"}
+                  </Button>
+                )
+              )}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                {versiones.length > 0 ? (
+                  <Button variant="outline" size="sm" onClick={() => setCompartir(true)}>
+                    <MessageCircle className="mr-1.5 h-4 w-4" /> Mandar {sel ? `la v${nElegida}` : "la última"} por chat
+                  </Button>
+                ) : (
+                  <span />
+                )}
+                {puedeTrabajar && (
+                  <button type="button" onClick={() => setRechazo(true)} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive">
+                    <Undo2 className="h-3.5 w-3.5" /> No se puede hacer
+                  </button>
+                )}
+              </div>
+            </section>
           </div>
         </div>
 
@@ -656,10 +784,8 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
           }}
         />
         <VerVersion v={verFoto} titulo="Foto para usar" onClose={() => setVerFoto(null)} />
-        {pieza && (
-          <CompartirPorChat open={compartir} onOpenChange={setCompartir} piezaId={pieza.id} versionId={sel ?? versiones.at(-1)?.id ?? null} proyectoId={pieza.proyecto_id} />
-        )}
-        {pieza && ver && ver.mime_type !== "application/pdf" && !["cancelada", "rechazada", "pendiente_pago"].includes(pieza.estado) ? (
+        <CompartirPorChat open={compartir} onOpenChange={setCompartir} piezaId={pieza.id} versionId={sel ?? versiones.at(-1)?.id ?? null} proyectoId={pieza.proyecto_id} />
+        {ver && ver.mime_type !== "application/pdf" && !["cancelada", "rechazada", "pendiente_pago"].includes(pieza.estado) ? (
           <EditorPieza v={ver} titulo={`${pieza.producto || "Pieza"} · Versión ${versiones.findIndex((x) => x.id === ver.id) + 1}`} piezaId={pieza.id} onClose={() => setVer(null)} />
         ) : (
           <VerVersion v={ver} titulo={`Versión ${ver ? versiones.findIndex((x) => x.id === ver.id) + 1 : ""}`} onClose={() => setVer(null)} />

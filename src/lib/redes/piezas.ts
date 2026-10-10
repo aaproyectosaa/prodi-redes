@@ -77,6 +77,8 @@ export interface VersionVista {
   thumbnail_link?: string;
   created_at: string;
   origen: "ia" | "subida";
+  /** Con qué modelo de imágenes se hizo (las de IA). */
+  modelo?: string;
 }
 
 /** Versiones hechas con IA + diseños subidos a mano, en orden. */

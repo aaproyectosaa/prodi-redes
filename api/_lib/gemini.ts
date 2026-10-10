@@ -77,7 +77,7 @@ export async function generarImagen(
   aspectRatio: "1:1" | "4:5" | "9:16" | "16:9" | "2:3" | "3:4" | "21:9",
   /** Imágenes de referencia (logo, piezas de la marca). */
   imagenes: { data: Buffer; mime: string }[] = []
-): Promise<{ data: Buffer; mime: string }> {
+): Promise<{ data: Buffer; mime: string; modelo: string }> {
   const payload = {
     contents: [
       {
@@ -95,10 +95,19 @@ export async function generarImagen(
   };
   // Si el modelo elegido no existe para esta clave (o lo dieron de baja), prueba con los de respaldo.
   let json: any;
+  let usado = IMAGE_MODEL();
   const modelos = [IMAGE_MODEL(), ...IMAGE_RESPALDO.filter((m) => m !== IMAGE_MODEL())];
   for (const [k, m] of modelos.entries()) {
     try {
-      json = await call(m, payload);
+      // El Pro hace la imagen en 2K (más nítida); si no acepta ese tamaño, va en el tamaño base.
+      const conTamano = /pro/i.test(m)
+        ? { ...payload, generationConfig: { ...payload.generationConfig, imageConfig: { aspectRatio, imageSize: "2K" } } }
+        : payload;
+      json = await call(m, conTamano).catch((e) => {
+        if (conTamano !== payload && /imageSize|image_size|Invalid|INVALID_ARGUMENT/i.test(String(e))) return call(m, payload);
+        throw e;
+      });
+      usado = m;
       break;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -113,7 +122,7 @@ export async function generarImagen(
     const why = json?.candidates?.[0]?.finishReason ?? "sin imagen";
     throw new Error(`La IA no devolvió una imagen (${why}). Probá ajustar el pedido.`);
   }
-  return { data: Buffer.from(inline.data, "base64"), mime: inline.mimeType ?? inline.mime_type ?? "image/png" };
+  return { data: Buffer.from(inline.data, "base64"), mime: inline.mimeType ?? inline.mime_type ?? "image/png", modelo: usado };
 }
 
 const UPLOAD = "https://generativelanguage.googleapis.com/upload/v1beta/files";

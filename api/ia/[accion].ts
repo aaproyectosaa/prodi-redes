@@ -307,6 +307,7 @@ ${prompt}${guia}`,
       id: `v${n}_${Date.now()}`,
       ...up,
       prompt: ajustes ? `${pz.pedido} · ajustes: ${ajustes}` : pz.pedido,
+      modelo: img.modelo,
       created_at: now,
       created_by: caller.uid,
     }),
@@ -401,7 +402,7 @@ Escribí UNA instrucción de edición precisa (máximo 90 palabras): qué cambia
     ...(pz.estado === "pagada" ? { estado: "en_proceso" } : {}),
     generando_at: null,
     updated_at: now,
-    versiones: FieldValue.arrayUnion({ id, ...up, prompt: `Edición${z ? " (zona marcada)" : ""}: ${pedido}`, edita_a: version_id, created_at: now, created_by: caller.uid }),
+    versiones: FieldValue.arrayUnion({ id, ...up, prompt: `Edición${z ? " (zona marcada)" : ""}: ${pedido}`, modelo: img.modelo, edita_a: version_id, created_at: now, created_by: caller.uid }),
   });
   return { ok: true, version_id: id };
 }
