@@ -143,7 +143,7 @@ interface Resultado {
   reunion_id?: string;
   tarea_id?: string;
   /** Videos cargados en Producción (se juntan en un solo mensaje). */
-  video?: { id: string; titulo: string; cliente: string; filmado: boolean; sinIdea?: boolean };
+  video?: { id: string; titulo: string; cliente: string; filmado: boolean; sinIdea?: boolean; mes: string };
 }
 
 /** Procesa un mensaje con @prodi. No tira error por cosas del pedido: Prodi lo contesta en el chat. */
@@ -202,8 +202,11 @@ export async function atenderMencion(caller: Caller, chatId: unknown, mensajeId:
   if (videos.length) {
     const clientes = [...new Set(videos.map((v) => v.cliente))];
     const filmados = videos.every((v) => v.filmado);
+    const mesesV = [...new Set(videos.map((v) => v.mes))];
+    const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+    const delPlan = mesesV.length === 1 ? ` (plan de ${MESES[Number(mesesV[0].slice(5, 7)) - 1]})` : "";
     const bloque = [
-      `Listo: cargué ${videos.length === 1 ? "1 video" : `${videos.length} videos`} en Producción para **${lista(clientes)}**${filmados ? ", como ya filmados: solo falta subir el material crudo" : ""}.`,
+      `Listo: cargué ${videos.length === 1 ? "1 video" : `${videos.length} videos`} en Producción para **${lista(clientes)}**${delPlan}${filmados ? ", como ya filmados: solo falta subir el material crudo" : ""}.`,
       "",
       ...videos.map((v) => `- ${v.titulo}${v.sinIdea ? " (sin idea: no encontré el guion en el chat)" : ""}`),
     ].join("\n");
@@ -301,7 +304,7 @@ No podés ver videos: si te piden algo de un video, decí que solo ves fotos y t
 Devolvé las acciones (máximo ${MAX_ACCIONES}; una por cada cosa: si pide 5 videos, 5 crear_video):
 - crear_reunion: titulo corto (ej. "Reunión con Ariel y Pato"); fecha YYYY-MM-DD (si no dice el día, hoy; calculá "mañana", "el viernes", etc. a partir de ahora); hora HH:MM en 24 h ("5 pm" = 17:00; si no dice la hora, no la pongas); duracion_min (60 si no dice); personas: los nombres de la lista tal cual (si usan un apodo como "Pato", poné el nombre de la lista que le corresponde; si no está, ponelo como lo escribieron). No incluyas a ${yo.nombre}: ya va.
 - crear_tarea: cuando pide recordarle algo a alguien o dejar una tarea ("recordale a Lucía que mande el guion el viernes"). titulo: la tarea corta en infinitivo ("Mandar el guion"); personas: a quién se le asigna (vacío si es para quien escribe); vence YYYY-MM-DD si dice cuándo (si no, vacío).
-- crear_video: cuando pide cargar videos en Producción ("cargá los videos", "armame los videos de…", "ya grabé estos videos, cargalos"). Uno por video, SOLO los que aparecen en las fotos o el texto que mandó (no inventes ni agregues de otros lados; si no estás seguro de cuáles son, preguntá antes). titulo: el nombre del video tal cual (ej. "¿Qué bolsa necesitás?"); cliente: el nombre del cliente tal cual la lista; texto (OBLIGATORIO): la idea de ESE video en 1 o 2 oraciones (de qué se trata y qué busca); el guion y las tomas los transcribe el sistema de las fotos; si no tenés el guion de ese video, no lo cargues: preguntá; filmado: true si dice que ya lo grabó/filmó, false si es para planificar.${CARGAN_VIDEOS.includes(caller.role) ? "" : " (Quien escribe no puede cargar videos: contestá que eso lo hace producción.)"}
+- crear_video: cuando pide cargar videos en Producción ("cargá los videos", "armame los videos de…", "ya grabé estos videos, cargalos"). Uno por video, SOLO los que aparecen en las fotos o el texto que mandó (no inventes ni agregues de otros lados; si no estás seguro de cuáles son, preguntá antes). titulo: el nombre del video tal cual (ej. "¿Qué bolsa necesitás?"); cliente: el nombre del cliente tal cual la lista; texto (OBLIGATORIO): la idea de ESE video en 1 o 2 oraciones (de qué se trata y qué busca); el guion y las tomas los transcribe el sistema de las fotos; si no tenés el guion de ese video, no lo cargues: preguntá; filmado: true si dice que ya lo grabó/filmó, false si es para planificar; fecha YYYY-MM-DD si dice para cuándo se publica, o el día 1 del mes si solo dice el mes ("para noviembre" → el 1 de noviembre); si no dice nada, vacío (va al mes actual).${CARGAN_VIDEOS.includes(caller.role) ? "" : " (Quien escribe no puede cargar videos: contestá que eso lo hace producción.)"}
 - editar_video: cuando pide corregir o completar un video que ya está cargado (ponerle la idea/guion, cambiarle el nombre). titulo: el nombre ACTUAL del video tal cual está en el sistema; cliente; texto: la idea/guion completo nuevo (si lo cambia); nuevo_titulo: si le cambia el nombre.
 - borrar_video: cuando pide borrar o sacar un video cargado (ej. "borrá los que no estaban", "sacá ese"). titulo: el nombre actual tal cual; cliente. Solo se pueden borrar los que todavía no tienen material subido.
 - mandar_logo: cuando pide el logo (o los logos) de un cliente para mandarlo al chat. cliente: el nombre del cliente tal cual la lista.
@@ -593,8 +596,9 @@ Español rioplatense con voseo.`;
         if (!out.some((x) => x.texto.startsWith("¿Para qué cliente"))) out.push({ texto: "¿Para qué cliente son los videos? Decime el nombre y los cargo." });
         continue;
       }
-      // Que no se cargue dos veces el mismo video este mes (si se lo vuelve a pedir).
-      const mes = mesAR();
+      // El mes del plan: el de la fecha que dijo ("para noviembre"), si no el actual. Que no se cargue dos veces.
+      const fechaPub = fechaValida(a.fecha) && a.fecha >= sumarDias(hoy, -31) ? a.fecha : null;
+      const mes = fechaPub ? fechaPub.slice(0, 7) : mesAR();
       const ya = await db.collection("videos").where("proyecto_id", "==", cli.id).where("mes", "==", mes).get();
       if (ya.docs.some((d) => normalizar(String(d.data()?.titulo ?? "")) === normalizar(titulo))) {
         out.push({ texto: `«${titulo}» ya estaba cargado en ${cli.nombre} este mes: no lo dupliqué.` });
@@ -616,6 +620,8 @@ Español rioplatense con voseo.`;
         objetivo: null,
         referencias: null,
         mes,
+        // Solo una fecha real de publicación (no el día 1 que se usa para decir "ese mes").
+        fecha_deseada: fechaPub && !fechaPub.endsWith("-01") ? fechaPub : null,
         extra: false,
         etapa: filmaCliente ? "material_cliente" : "planificado",
         filma_cliente: filmaCliente,
@@ -647,7 +653,7 @@ Español rioplatense con voseo.`;
         created_by: caller.uid,
         updated_at: ts,
       });
-      out.push({ texto: "", video: { id: ref.id, titulo, cliente: cli.nombre, filmado, sinIdea: !String(a.texto ?? "").trim() && !String(a.guion ?? "").trim() } });
+      out.push({ texto: "", video: { id: ref.id, titulo, cliente: cli.nombre, filmado, mes, sinIdea: !String(a.texto ?? "").trim() && !String(a.guion ?? "").trim() } });
       continue;
     }
 

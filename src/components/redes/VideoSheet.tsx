@@ -75,6 +75,7 @@ import {
 import { callApi } from "@/lib/redes/api";
 import type { EtapaVideo, Video } from "@/lib/redes/types";
 import { EtapaBadge } from "./EtapaBadge";
+import { VideoMesFecha } from "./VideoMesFecha";
 import { EntregaChip, EntregaEdicionDialog } from "./EntregaEdicion";
 import { ClienteTag } from "./ClienteTag";
 import { HablarConCliente } from "./HablarConCliente";
@@ -201,7 +202,7 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
         <div className="flex flex-wrap items-center gap-2 pr-8">
           <ClienteTag cliente={cliente} size="md" />
           <span className="text-muted-foreground/50">·</span>
-          <span className="text-xs text-muted-foreground">{mesLabel(video.mes)}</span>
+          <VideoMesFecha video={video} editable={isProd} uid={uid} />
           {video.extra && (
             <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
               EXTRA
