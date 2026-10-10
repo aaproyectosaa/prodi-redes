@@ -422,7 +422,7 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
             <TeamBlock video={video} editable={isProd} uid={uid} nombre={nombre} />
 
             {isAdmin && (
-              <Block icon={Pencil} title="Admin">
+              <Block icon={Pencil} title="Solo para vos (admin)">
                 <div className="flex flex-wrap items-center gap-2">
                   <Select
                     value={video.etapa}
@@ -447,7 +447,7 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
                     className="h-8 text-xs text-destructive hover:text-destructive"
                     onClick={() => setDeleteOpen(true)}
                   >
-                    <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Eliminar
+                    <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Borrar este video
                   </Button>
                 </div>
               </Block>
