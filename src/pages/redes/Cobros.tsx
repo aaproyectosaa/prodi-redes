@@ -32,7 +32,9 @@ import { PageShell } from "@/components/redes/PageShell";
 import { ClienteTag } from "@/components/redes/ClienteTag";
 import { BoletaDialog } from "@/components/redes/admin/BoletaDialog";
 import { DatosFacturacionDialog, EditarFacturaDialog, MesNav } from "@/components/redes/admin/FacturaPartes";
-import { armarFactura } from "../../../api/_lib/facturacion";
+import { armarFactura, facturaId } from "../../../api/_lib/facturacion";
+import { doc, getDoc } from "@/lib/db";
+import { db } from "@/integrations/firebase/client";
 import { useRedes } from "@/contexts/redes-data-context";
 import { formatARS, hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import { planDe } from "@/lib/redes/planes";
@@ -332,6 +334,30 @@ function PasoEmitir({
   const totalSel = elegidas.reduce((a, r) => a + r.f.bruto, 0);
   const todas = lista.length > 0 && elegidas.length === lista.length;
 
+  /**
+   * Ya pagó (por transferencia, efectivo…) antes de que se le emitiera: queda cobrada sin mandarle nada.
+   * Si la boleta todavía era una vista previa, primero se arma.
+   */
+  const yaPago = async (r: PorEmitir, medio: MedioCobro) => {
+    setBusy(r.pid);
+    try {
+      let f = r.doc;
+      if (!f) {
+        await prepararFacturacion(mes, [r.pid]);
+        const id = facturaId(r.pid, mes);
+        const snap = await getDoc(doc(db, "facturas", id));
+        if (!snap.exists()) throw new Error("No se pudo armar la boleta");
+        f = { ...(snap.data() as Factura), id } as FacturaDoc;
+      }
+      await marcarCobrada(f, medio);
+      toast.success(`${r.f.cliente}: registrado el pago de ${formatARS(r.f.bruto)}`);
+    } catch (e) {
+      err(e);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const emitir = async (filas: PorEmitir[], clave: string) => {
     setBusy(clave);
     try {
@@ -419,11 +445,15 @@ function PasoEmitir({
                           <DropdownMenuItem onClick={() => onDatos(r.pid)}>
                             <Receipt className="mr-2 h-4 w-4" /> Datos de facturación del cliente
                           </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Ya pagó (sin emitirle):</DropdownMenuLabel>
+                          {MEDIOS.filter((m) => m.value !== "adelantado").map((m) => (
+                            <DropdownMenuItem key={m.value} disabled={!!busy} onClick={() => void yaPago(r, m.value)}>
+                              <Banknote className="mr-2 h-4 w-4" /> {m.label}
+                            </DropdownMenuItem>
+                          ))}
                           {r.doc && (
                             <>
-                              <DropdownMenuItem onClick={() => void marcarCobrada(r.doc!, "transferencia").then(() => toast.success("Marcada como cobrada")).catch(err)}>
-                                <Banknote className="mr-2 h-4 w-4" /> Ya la pagó (sin emitir)
-                              </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem className="text-destructive" onClick={() => void anularFactura(r.doc!).then(() => toast.success("No se le factura este mes")).catch(err)}>
                                 <Trash2 className="mr-2 h-4 w-4" /> No facturarle este mes
