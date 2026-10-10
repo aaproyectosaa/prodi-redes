@@ -70,42 +70,41 @@ export function VideoMesFecha({ video, editable, uid }: { video: Video; editable
         </SelectContent>
       </Select>
       {!publicado && (
-      <span className="relative inline-flex">
-        <button
-          type="button"
-          onClick={() => {
-            // Abre el calendario del navegador tocando en cualquier parte del botón.
-            const el = fechaRef.current;
-            if (!el) return;
-            try {
-              el.showPicker();
-            } catch {
-              el.focus();
-              el.click();
-            }
-          }}
-          className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed px-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
-          title="Para cuándo se publica (define el mes del plan)"
-        >
-          <CalendarDays className="h-3.5 w-3.5" />
-          {video.fecha_deseada ? `Publicar ${fechaCorta(video.fecha_deseada)}` : "Fecha de publicación"}
-        </button>
+      <span className="inline-flex items-center">
+        {/* El "botón" es solo el dibujo: encima va el campo de fecha real, transparente y del mismo tamaño. Así el toque
+            cae en el campo y el iPhone muestra su calendario (Safari no abre un campo escondido). */}
+        <span className="group relative inline-flex">
+          <span
+            aria-hidden
+            className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed px-2.5 text-xs text-muted-foreground transition-colors group-hover:border-primary/50 group-hover:text-foreground"
+          >
+            <CalendarDays className="h-3.5 w-3.5" />
+            {video.fecha_deseada ? `Publicar ${fechaCorta(video.fecha_deseada)}` : "Fecha de publicación"}
+          </span>
+          <input
+            ref={fechaRef}
+            type="date"
+            min={hoyISO()}
+            value={video.fecha_deseada ?? ""}
+            onChange={(e) => void cambiarFecha(e.target.value)}
+            // En la compu el calendario sale solo con el ícono del campo: así se abre tocando en cualquier parte.
+            onClick={(e) => {
+              try {
+                e.currentTarget.showPicker();
+              } catch {
+                /* el navegador lo abre solo */
+              }
+            }}
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            title="Para cuándo se publica (define el mes del plan)"
+            aria-label="Fecha de publicación"
+          />
+        </span>
         {video.fecha_deseada && (
           <button type="button" onClick={() => void cambiarFecha("")} className="ml-0.5 rounded-full p-1 text-muted-foreground hover:text-destructive" aria-label="Sacar la fecha">
             <X className="h-3 w-3" />
           </button>
         )}
-        {/* El campo real queda escondido debajo del botón (el calendario se abre desde ahí). */}
-        <input
-          ref={fechaRef}
-          type="date"
-          min={hoyISO()}
-          value={video.fecha_deseada ?? ""}
-          onChange={(e) => void cambiarFecha(e.target.value)}
-          tabIndex={-1}
-          className="pointer-events-none absolute bottom-0 left-0 h-0 w-0 opacity-0"
-          aria-label="Fecha de publicación"
-        />
       </span>
       )}
     </span>
