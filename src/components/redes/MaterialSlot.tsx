@@ -146,15 +146,15 @@ export function MaterialSlot({
   };
 
   // Sacar un archivo del video (sigue guardado en Drive).
-  const quitar = async (att: DriveAttachmentRef) => {
+  const quitar = async (atts: DriveAttachmentRef[]) => {
     try {
       assertEditable();
       const campo = slot === "crudo" ? "attachments_crudo" : "attachments_finalizado";
       await updateDoc(doc(db, "videos", video.id), {
-        [campo]: attachments.filter((a) => a.drive_file_id !== att.drive_file_id),
+        [campo]: attachments.filter((a) => !atts.some((x) => x.drive_file_id === a.drive_file_id)),
         updated_at: new Date().toISOString(),
       });
-      toast.success("Listo, lo sacamos del video");
+      toast.success(atts.length === 1 ? "Listo, lo sacamos del video" : `Listo, sacamos ${atts.length} archivos`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo sacar");
     }

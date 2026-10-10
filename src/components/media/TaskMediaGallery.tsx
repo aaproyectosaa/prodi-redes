@@ -39,8 +39,8 @@ export interface TaskMediaGalleryProps {
    */
   audience?: "team" | "client";
   className?: string;
-  /** Si viene, aparece "Sacar" para el archivo que se está viendo. */
-  onQuitar?: (att: DriveAttachmentRef) => Promise<void> | void;
+  /** Si viene, aparece "Sacar" (el que se está viendo, o varios marcados con "Elegir varios"). */
+  onQuitar?: (atts: DriveAttachmentRef[]) => Promise<void> | void;
 }
 
 /** Misma reproducción de media que usa el panel PM (ahí el video se ve bien). */
@@ -53,6 +53,8 @@ export function TaskMediaGallery({
   onQuitar,
 }: TaskMediaGalleryProps) {
   const [quitando, setQuitando] = useState(false);
+  // Modo "elegir varios" para sacarlos juntos.
+  const [marcados, setMarcados] = useState<Set<string> | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const isClient = audience === "client";
@@ -60,6 +62,7 @@ export function TaskMediaGallery({
   useEffect(() => {
     setCurrentIndex(0);
     setFullscreenOpen(false);
+    setMarcados(null);
   }, [attachments]);
 
   if (!attachments || attachments.length === 0) {
@@ -167,27 +170,60 @@ export function TaskMediaGallery({
             {currentIndex + 1} de {attachments.length}
           </span>
           <div className="flex items-center gap-1">
-            {onQuitar && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={quitando}
-                onClick={async () => {
-                  if (!window.confirm(`¿Sacar «${current.name}» del video? (Queda guardado en Drive)`)) return;
-                  setQuitando(true);
-                  try {
-                    await onQuitar(current);
-                    setCurrentIndex((i) => Math.max(0, i - 1));
-                  } finally {
-                    setQuitando(false);
-                  }
-                }}
-                className="h-7 gap-1 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Trash2 className="h-3 w-3" />
-                <span>Sacar</span>
-              </Button>
+            {onQuitar && marcados && (
+              <>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  disabled={quitando || !marcados.size}
+                  onClick={async () => {
+                    const lista = attachments.filter((x) => marcados.has(x.drive_file_id));
+                    if (!window.confirm(`¿Sacar ${lista.length === 1 ? "1 archivo" : `${lista.length} archivos`} del video? (Quedan guardados en Drive)`)) return;
+                    setQuitando(true);
+                    try {
+                      await onQuitar(lista);
+                      setMarcados(null);
+                    } finally {
+                      setQuitando(false);
+                    }
+                  }}
+                  className="h-7 gap-1 text-xs"
+                >
+                  <Trash2 className="h-3 w-3" /> Sacar {marcados.size || ""}
+                </Button>
+                <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setMarcados(null)}>
+                  Cancelar
+                </Button>
+              </>
+            )}
+            {onQuitar && !marcados && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={quitando}
+                  onClick={async () => {
+                    if (!window.confirm(`¿Sacar «${current.name}» del video? (Queda guardado en Drive)`)) return;
+                    setQuitando(true);
+                    try {
+                      await onQuitar([current]);
+                    } finally {
+                      setQuitando(false);
+                    }
+                  }}
+                  className="h-7 gap-1 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  <span>Sacar</span>
+                </Button>
+                {attachments.length > 1 && (
+                  <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => setMarcados(new Set())}>
+                    Elegir varios
+                  </Button>
+                )}
+              </>
             )}
             {canExpand && (
               <Button
@@ -234,13 +270,28 @@ export function TaskMediaGallery({
               <button
                 key={att.drive_file_id}
                 type="button"
-                onClick={() => setCurrentIndex(idx)}
-                className={`h-14 w-14 shrink-0 overflow-hidden rounded-md border-2 transition-all ${
-                  idx === currentIndex
-                    ? "border-primary ring-1 ring-primary/30"
-                    : "border-border hover:border-muted-foreground/50"
+                onClick={() => {
+                  if (!marcados) return setCurrentIndex(idx);
+                  const n = new Set(marcados);
+                  if (n.has(att.drive_file_id)) n.delete(att.drive_file_id);
+                  else n.add(att.drive_file_id);
+                  setMarcados(n);
+                }}
+                className={`relative h-14 w-14 shrink-0 overflow-hidden rounded-md border-2 transition-all ${
+                  marcados
+                    ? marcados.has(att.drive_file_id)
+                      ? "border-destructive ring-2 ring-destructive/40"
+                      : "border-border opacity-70"
+                    : idx === currentIndex
+                      ? "border-primary ring-1 ring-primary/30"
+                      : "border-border hover:border-muted-foreground/50"
                 }`}
               >
+                {marcados?.has(att.drive_file_id) && (
+                  <span className="absolute inset-0 z-10 flex items-center justify-center bg-destructive/40">
+                    <Trash2 className="h-4 w-4 text-white" />
+                  </span>
+                )}
                 {isImage(att.mime_type) || isVideo(att.mime_type) ? (
                   <AttachmentPreviewThumb
                     attachment={att}
