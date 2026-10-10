@@ -20,7 +20,7 @@ export type TipoComprobante = "boleta" | "factura";
 /** vencido: el 27 se factura ese mes. adelantado: el 27 se factura el mes que viene. */
 export type ModoCobro = "vencido" | "adelantado";
 export type EstadoFactura = "borrador" | "pendiente" | "cobrada" | "anulada";
-export type MedioCobro = "transferencia" | "efectivo" | "mercadopago" | "adelantado" | "debito" | "otro";
+export type MedioCobro = "transferencia" | "efectivo" | "cheque" | "mercadopago" | "adelantado" | "debito" | "otro";
 
 /** Un pago a cuenta (el cliente paga la boleta en partes). */
 export interface PagoParcial {

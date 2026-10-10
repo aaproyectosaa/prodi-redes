@@ -61,6 +61,7 @@ export const ESTADO_FACTURA: Record<EstadoFactura, { label: string; clase: strin
 export const MEDIOS: { value: MedioCobro; label: string }[] = [
   { value: "transferencia", label: "Transferencia" },
   { value: "efectivo", label: "Efectivo" },
+  { value: "cheque", label: "Cheque" },
   { value: "mercadopago", label: "Mercado Pago" },
   { value: "adelantado", label: "Pagado por adelantado" },
   { value: "otro", label: "Otro" },
@@ -71,6 +72,7 @@ export const MEDIOS_PAGO: { value: MedioCobro; label: string }[] = [
   { value: "transferencia", label: "Transferencia" },
   { value: "debito", label: "Débito automático" },
   { value: "efectivo", label: "Efectivo" },
+  { value: "cheque", label: "Cheque" },
   { value: "otro", label: "Otro (VEP, tarjeta…)" },
 ];
 
