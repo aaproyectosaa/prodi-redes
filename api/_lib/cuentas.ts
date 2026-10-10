@@ -169,10 +169,25 @@ export function tokenDeSesion(u: Pick<Usuario, "uid" | "sesion_ver">): string {
 }
 
 /** Valida un token de sesión. Devuelve el usuario o null (vencido, revocado o desactivado). */
+// La app pregunta cada pocos segundos: el usuario se recuerda 60 s en esta instancia del servidor, así cada
+// pedido no va a la base (es lo que más la mantenía despierta). Desactivar o cambiar la clave se nota en ≤ 60 s.
+const SESION_TTL = 60_000;
+const sesiones = new Map<string, { u: Usuario | null; hasta: number }>();
+export function olvidarSesion(uid: string) {
+  sesiones.delete(uid);
+}
+
 export async function verificarSesion(token: string): Promise<Usuario | null> {
   const p = abrir(token);
   if (!p || p.t !== "s") return null;
-  const u = await porUid(p.uid);
+  let c = sesiones.get(p.uid);
+  // Sin recordar, vencido, o la sesión es de otra versión (cambió la clave en otra instancia): a la base.
+  if (!c || c.hasta < Date.now() || c.u?.sesion_ver !== p.v) {
+    c = { u: await porUid(p.uid), hasta: Date.now() + SESION_TTL };
+    if (sesiones.size > 500) sesiones.clear();
+    sesiones.set(p.uid, c);
+  }
+  const u = c.u;
   if (!u || u.desactivado || u.sesion_ver !== p.v) return null;
   return u;
 }
@@ -185,6 +200,7 @@ export async function cambiarClave(uid: string, nueva: string): Promise<string> 
     [uid, hash]
   );
   if (!r.rowCount) throw new AuthError("auth/user-not-found", "No existe el usuario");
+  olvidarSesion(uid);
   return tokenDeSesion(r.rows[0]);
 }
 
@@ -206,6 +222,7 @@ export async function usarLinkDeClave(token: string, nueva: string): Promise<{ t
 
 export async function cerrarSesiones(uid: string) {
   await getPool().query("update usuarios set sesion_ver = sesion_ver + 1 where uid = $1", [uid]);
+  olvidarSesion(uid);
 }
 
 /** Lo que usaban las funciones con Firebase Auth (mismos nombres). */
@@ -228,10 +245,12 @@ export function adminAuth() {
       if (d.displayName !== undefined) await getPool().query("update usuarios set nombre = $2 where uid = $1", [uid, d.displayName]);
       if (d.disabled !== undefined) await getPool().query("update usuarios set desactivado = $2, sesion_ver = sesion_ver + 1 where uid = $1", [uid, d.disabled]);
       if (d.password) await cambiarClave(uid, d.password);
+      olvidarSesion(uid);
     },
     revokeRefreshTokens: (uid: string) => cerrarSesiones(uid),
     async deleteUser(uid: string) {
       const r = await getPool().query("delete from usuarios where uid = $1", [uid]);
+      olvidarSesion(uid);
       if (!r.rowCount) throw Object.assign(new Error("No existe el usuario"), { code: "auth/user-not-found" });
       await getPool().query("delete from push_suscripciones where uid = $1", [uid]);
     },

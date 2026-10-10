@@ -10,7 +10,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { aplicarEscritura, ejecutarConsulta, enTransaccion, getPool, leerDoc, partirRuta, type Consulta, type OpEscritura } from "../_lib/db";
 import { claveProhibida } from "../_lib/docs";
 import { contexto, paraLaApp, partirColeccion, puedeEscribir, puedeLeer } from "../_lib/reglas";
-import { appUrl, body, HttpError, requireCaller, sendError } from "../_lib/http";
+import { appUrl, body, HttpError, olvidarPerfil, requireCaller, sendError } from "../_lib/http";
 import { sincronizarCalendario } from "../_lib/calendario";
 import type { Data } from "../_lib/db";
 
@@ -126,6 +126,7 @@ async function escribir(req: VercelRequest) {
         if (!(await puedeEscribir(ctx, coleccion, id, antes, despues))) {
           throw new HttpError(403, `No tenés permiso para ${despues ? (antes ? "modificar" : "crear") : "borrar"} esto (${partirColeccion(coleccion).base})`);
         }
+        if (coleccion === "profiles") olvidarPerfil(id);
         const clave = `${coleccion}/${id}`;
         if (CON_CALENDARIO.has(coleccion) && !calendario.has(clave)) calendario.set(clave, { coleccion: coleccion as "reuniones" | "tareas", id, antes });
       });
@@ -139,15 +140,32 @@ async function escribir(req: VercelRequest) {
   return { ok: true };
 }
 
+// Varias pestañas preguntan lo mismo casi al mismo tiempo: la respuesta para una misma marca se reusa 2 s
+// en esta instancia (no dice nada privado: solo qué colecciones cambiaron).
+const CAMBIOS_TTL = 2_000;
+const respuestas = new Map<string, { r: Promise<{ rev: number; colecciones: string[] }>; hasta: number }>();
+
 /** Qué colecciones cambiaron. `rev` es la marca para la próxima vez (con margen por si algo se estaba guardando). */
 async function cambios(req: VercelRequest) {
   await requireCaller(req);
   const { desde } = body<{ desde?: number | null }>(req);
+  const clave = desde == null || !Number.isFinite(Number(desde)) ? "inicio" : String(Number(desde));
+  const c = respuestas.get(clave);
+  if (c && c.hasta > Date.now()) return c.r;
+  if (respuestas.size > 200) respuestas.clear();
+  const r = calcularCambios(clave === "inicio" ? null : Number(desde));
+  respuestas.set(clave, { r, hasta: Date.now() + CAMBIOS_TTL });
+  r.catch(() => respuestas.delete(clave));
+  return r;
+}
+
+async function calcularCambios(desde: number | null) {
   const pool = getPool();
-  if (desde == null || !Number.isFinite(Number(desde))) {
-    const r = await pool.query("select coalesce(max(rev), 0)::bigint as rev from documentos where actualizado < now() - interval '3 seconds'");
-    const b = await pool.query("select coalesce(max(rev), 0)::bigint as rev from borrados where borrado < now() - interval '3 seconds'");
-    return { rev: Math.max(Number(r.rows[0].rev), Number(b.rows[0].rev)), colecciones: [] };
+  if (desde == null) {
+    const r = await pool.query(
+      "select greatest((select coalesce(max(rev), 0) from documentos where actualizado < now() - interval '3 seconds'), (select coalesce(max(rev), 0) from borrados where borrado < now() - interval '3 seconds'))::bigint as rev"
+    );
+    return { rev: Number(r.rows[0].rev), colecciones: [] as string[] };
   }
   const r = await pool.query(
     `with c as (

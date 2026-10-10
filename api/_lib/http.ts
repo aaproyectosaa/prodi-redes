@@ -12,10 +12,25 @@ export interface Caller extends AuthedUser {
 }
 
 /** Valida el token y trae el rol del perfil. */
+// El perfil (rol, activo) se recuerda 30 s en esta instancia: la app pregunta cada pocos segundos y así
+// no va a la base en cada pedido. Un cambio de rol se nota en ≤ 30 s.
+const PERFIL_TTL = 30_000;
+const perfiles = new Map<string, { data: Record<string, unknown>; hasta: number }>();
+export function olvidarPerfil(uid?: string) {
+  if (uid) perfiles.delete(uid);
+  else perfiles.clear();
+}
+
 export async function requireCaller(req: VercelRequest, roles?: Rol[]): Promise<Caller> {
   const user = await requireUser(req);
-  const snap = await adminDb().collection("profiles").doc(user.uid).get();
-  const data = snap.exists ? snap.data() ?? {} : {};
+  let c = perfiles.get(user.uid);
+  if (!c || c.hasta < Date.now()) {
+    const snap = await adminDb().collection("profiles").doc(user.uid).get();
+    c = { data: snap.exists ? snap.data() ?? {} : {}, hasta: Date.now() + PERFIL_TTL };
+    if (perfiles.size > 500) perfiles.clear();
+    perfiles.set(user.uid, c);
+  }
+  const data = c.data;
   // Solo campos propios del perfil: nunca heredados del prototipo.
   const propio = (k: string) => (Object.hasOwn(data, k) ? data[k] : undefined);
   if (propio("activo") === false) throw new HttpError(403, "Tu usuario está desactivado");

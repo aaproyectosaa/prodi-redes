@@ -347,16 +347,34 @@ function refrescarColecciones(patrones: Iterable<string>) {
   });
 }
 
-// Cada 4 s (cada 60 s con la pestaña en segundo plano) pregunta qué cambió. Con la app escondida más de
-// 15 min deja de preguntar hasta que se vuelva a mirar (no gasta tráfico de la base sin que nadie mire).
+// Cuánto pregunta "¿qué cambió?" (cada pregunta despierta la base, que cobra por tiempo despierta):
+// - usándola: cada 6 s;
+// - abierta pero sin tocarla hace 5 min: cada 30 s;
+// - sin tocarla hace 20 min, o escondida hace 2 min: deja de preguntar hasta que se vuelva a usar
+//   (los avisos push siguen llegando). Al volver se pone al día sola (solo lo nuevo).
 let rev: number | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let ocultaDesde: number | null = null;
-const PAUSA_OCULTA = 15 * 60_000;
+let ultimoUso = Date.now();
+let pausada = false;
+const ACTIVA = 6_000;
+const QUIETA = 30_000;
+const QUIETA_DESDE = 5 * 60_000;
+const PAUSA_QUIETA = 20 * 60_000;
+const PAUSA_OCULTA = 2 * 60_000;
+
+function debePausar() {
+  const ahora = Date.now();
+  return (ocultaDesde !== null && ahora - ocultaDesde > PAUSA_OCULTA) || ahora - ultimoUso > PAUSA_QUIETA;
+}
+
 async function sondear() {
   timer = null;
   if (!subs.size || !auth.currentUser) return;
-  if (ocultaDesde && Date.now() - ocultaDesde > PAUSA_OCULTA) return;
+  if (debePausar()) {
+    pausada = true;
+    return;
+  }
   try {
     const r = await api<{ rev: number; colecciones: string[] }>("cambios", { desde: rev });
     const primera = rev === null;
@@ -370,21 +388,46 @@ async function sondear() {
 function programar(ms?: number) {
   if (timer || !subs.size) return;
   const oculto = typeof document !== "undefined" && document.visibilityState === "hidden";
-  timer = setTimeout(sondear, ms ?? (oculto ? 60_000 : 4_000));
+  const quieta = Date.now() - ultimoUso > QUIETA_DESDE;
+  timer = setTimeout(sondear, ms ?? (oculto ? 60_000 : quieta ? QUIETA : ACTIVA));
+}
+/** Se volvió a usar la app: si estaba en pausa, se pone al día y vuelve a preguntar seguido. */
+function despertar() {
+  if (!pausada) return;
+  pausada = false;
+  if (!subs.size) return;
+  if (timer) clearTimeout(timer);
+  timer = null;
+  subs.forEach((s) => void refrescar(s));
+  programar(50);
 }
 if (typeof document !== "undefined") {
+  let ultimoAviso = 0;
+  const uso = () => {
+    const ahora = Date.now();
+    // Si estaba quieta (preguntando cada 30 s), vuelve enseguida al ritmo normal.
+    const veniaQuieta = ahora - ultimoUso > QUIETA_DESDE;
+    ultimoUso = ahora;
+    if (pausada) despertar();
+    else if (veniaQuieta && ahora - ultimoAviso > 1000 && subs.size) {
+      ultimoAviso = ahora;
+      if (timer) clearTimeout(timer);
+      timer = null;
+      programar(50);
+    }
+  };
+  for (const ev of ["pointerdown", "pointermove", "keydown", "wheel", "touchstart"]) window.addEventListener(ev, uso, { passive: true });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
       ocultaDesde = Date.now();
       return;
     }
-    const estuvoPausada = ocultaDesde !== null && Date.now() - ocultaDesde > PAUSA_OCULTA;
     ocultaDesde = null;
+    ultimoUso = Date.now();
+    if (pausada) return despertar();
     if (!subs.size) return;
     if (timer) clearTimeout(timer);
     timer = null;
-    // Si estuvo pausada, se ponen al día las pantallas abiertas (solo lo nuevo).
-    if (estuvoPausada) subs.forEach((s) => void refrescar(s));
     programar(50);
   });
 }
