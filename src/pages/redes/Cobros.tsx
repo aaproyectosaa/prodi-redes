@@ -98,12 +98,13 @@ export default function Cobros() {
   useEffect(() => {
     for (const f of borradores) {
       const c = clientes.find((x) => x.id === f.proyecto_id);
-      const clave = `${f.id}:${JSON.stringify(c?.facturacion ?? null)}`;
+      const abono = c ? planDe(c, planes).precioMensual : 0;
+      const clave = `${f.id}:${abono}:${JSON.stringify(c?.facturacion ?? null)}`;
       if (!c || sincronizadas.current.has(clave)) continue;
       sincronizadas.current.add(clave);
-      void sincronizarBorrador(f, c, settings.iva_pct ?? 21).catch((e) => console.warn("[cobros] sincronizar", f.id, e));
+      void sincronizarBorrador(f, c, abono, settings.iva_pct ?? 21).catch((e) => console.warn("[cobros] sincronizar", f.id, e));
     }
-  }, [borradores, clientes, settings.iva_pct]);
+  }, [borradores, clientes, planes, settings.iva_pct]);
   const pendientes = vivas
     .filter((f) => f.estado === "pendiente")
     .sort((a, b) => Number(b.vencimiento < hoy) - Number(a.vencimiento < hoy) || a.vencimiento.localeCompare(b.vencimiento));

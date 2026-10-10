@@ -92,6 +92,8 @@ export interface Factura {
   creada_at: string;
   creada_por: string;
   emitida_at?: string | null;
+  /** Se cambiaron los ítems a mano ("Editar"): ya no sigue sola el abono del cliente. */
+  editada_a_mano?: boolean;
   /** Quién se la mandó al cliente (al emitir). Si falta, nunca se le mandó (p. ej. se marcó "ya pagó" sin emitir). */
   emitida_por?: string | null;
   /** Factura electrónica autorizada en ARCA (solo las de tipo "factura"). Lo escribe el servidor. */
@@ -261,7 +263,7 @@ type DatosMonto = Pick<DatosCliente, "abono" | "facturacion">;
 const tipoDe = (c: DatosMonto): TipoComprobante => (c.facturacion?.tipo === "boleta" ? "boleta" : "factura");
 
 /** Ítems de la boleta mensual: el abono y los extras fijos. */
-function itemsDe(c: DatosMonto): ItemFactura[] {
+export function itemsDe(c: DatosMonto): ItemFactura[] {
   const items: ItemFactura[] = [];
   if (c.abono > 0) {
     items.push({

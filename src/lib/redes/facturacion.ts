@@ -19,6 +19,7 @@ import {
   planillaCSV,
   textoMora,
   totales,
+  itemsDe,
   type EstadoFactura,
   type Factura,
   type ItemFactura,
@@ -129,14 +130,19 @@ export async function guardarDatosFacturacion(proyectoId: string, facturacion: N
  * Boleta armada que todavía no se emitió: toma los datos de facturación actuales del cliente
  * (si le cambiaron boleta / factura, razón social o CUIT después de armarla). Los ítems no se tocan.
  */
-export async function sincronizarBorrador(f: FacturaDoc, c: Project, ivaPct: number): Promise<boolean> {
+export async function sincronizarBorrador(f: FacturaDoc, c: Project, abono: number, ivaPct: number): Promise<boolean> {
   if (f.estado !== "borrador" || f.arca?.cae) return false;
   const fa = c.facturacion ?? {};
   const tipo: Factura["tipo"] = fa.tipo === "boleta" ? "boleta" : "factura";
   const razon = fa.razon_social?.trim() || null;
   const cuit = fa.cuit?.trim() || null;
-  if (f.tipo === tipo && (f.razon_social ?? null) === razon && (f.cuit ?? null) === cuit) return false;
-  await updateDoc(doc(db, "facturas", f.id), { tipo, razon_social: razon, cuit, ...totales(f.items, tipo, ivaPct) });
+  // El abono y los extras fijos siguen los del cliente, salvo que la hayas editado a mano; lo agregado a mano queda.
+  const auto = (id: string) => id === "abono" || /^fijo\d+$/.test(id);
+  // Sin abono en el plan (cliente sin plan): los ítems se cargan a mano, no se tocan.
+  const items = f.editada_a_mano || !(abono > 0) ? f.items : [...itemsDe({ abono, facturacion: c.facturacion ?? null }), ...f.items.filter((i) => !auto(i.id))];
+  const mismosItems = JSON.stringify(items) === JSON.stringify(f.items);
+  if (mismosItems && f.tipo === tipo && (f.razon_social ?? null) === razon && (f.cuit ?? null) === cuit) return false;
+  await updateDoc(doc(db, "facturas", f.id), { items, tipo, razon_social: razon, cuit, ...totales(items, tipo, ivaPct) });
   return true;
 }
 
@@ -148,6 +154,7 @@ export async function editarFactura(f: FacturaDoc, cambios: { items?: ItemFactur
   await updateDoc(doc(db, "facturas", f.id), {
     items,
     tipo,
+    ...(cambios.items ? { editada_a_mano: true } : {}),
     ...totales(items, tipo, ivaPct),
     ...(cambios.vencimiento ? { vencimiento: cambios.vencimiento } : {}),
     ...(cambios.nota !== undefined ? { nota: cambios.nota } : {}),
