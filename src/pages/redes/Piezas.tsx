@@ -5,6 +5,7 @@ import {
   Download,
   Flag,
   Image as ImageIcon,
+  ImagePlus,
   Loader2,
   MessageSquareWarning,
   RefreshCw,
@@ -352,6 +353,32 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
     taskLabel: pieza?.producto || pieza?.pedido || "Pieza",
   });
 
+  // Material para la IA (fotos, fondos, ejemplos): va a "Material para usar" de la pieza.
+  const inputMaterial = useRef<HTMLInputElement>(null);
+  const { upload: uploadMaterial, isUploading: subiendoMaterial } = useDriveUpload({
+    taskId: pieza?.id ?? "x",
+    collectionName: "piezas_ia",
+    slot: "crudo",
+    connection,
+    projectName: cliente?.nombre ?? "Cliente",
+    taskTipo: "Piezas",
+    taskFecha: (pieza?.created_at ?? "").slice(0, 10),
+    uploaderUid: user?.uid ?? null,
+    taskLabel: `Material · ${pieza?.producto || "pieza"}`,
+  });
+  const subirMaterial = async (files: File[]) => {
+    if (!files.length) return;
+    if (enModoVista()) {
+      toast.error("Estás en modo 'ver como': es solo lectura.");
+      return;
+    }
+    try {
+      await uploadMaterial(files);
+      toast.success("Material sumado: la IA lo va a usar");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo subir");
+    }
+  };
   const versiones = useMemo(() => (pieza ? versionesDe(pieza) : []), [pieza]);
   useEffect(() => {
     setSel(null);
@@ -514,7 +541,7 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
               )}
               {(pieza.attachments_crudo?.length ?? 0) > 0 && (
                 <div>
-                  <p className="mb-1 text-xs font-semibold text-primary">Fotos para usar ({pieza.attachments_crudo!.length}) · tocá para verlas</p>
+                  <p className="mb-1 text-xs font-semibold text-primary">Material para usar ({pieza.attachments_crudo!.length}) · fotos, fondos, ejemplos · tocá para verlos</p>
                   <div className="grid grid-cols-4 gap-1.5">
                     {pieza.attachments_crudo!.map((f) => (
                       <button
@@ -627,16 +654,43 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                       <p className="text-[11px] text-muted-foreground">La IA trabaja sobre la v{nElegida} y queda como versión nueva. La v{nElegida} no se toca.</p>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => input.current?.click()}
-                    disabled={isUploading || connection?.status !== "connected"}
-                    className="flex flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed p-3 text-center text-sm transition-colors hover:border-primary/60 hover:bg-primary/[0.03] disabled:opacity-50"
-                  >
-                    {isUploading ? <Loader2 className="h-6 w-6 animate-spin text-primary" /> : <Upload className="h-6 w-6 text-muted-foreground" />}
-                    <span className="font-semibold">Subí tu diseño</span>
-                    <span className="text-[11px] text-muted-foreground">Imagen o PDF hecho por vos</span>
-                  </button>
+                  <div className="grid gap-2">
+                    <button
+                      type="button"
+                      onClick={() => inputMaterial.current?.click()}
+                      disabled={subiendoMaterial || connection?.status !== "connected"}
+                      className="flex items-center gap-2.5 rounded-2xl border-2 border-dashed p-3 text-left text-sm transition-colors hover:border-primary/60 hover:bg-primary/[0.03] disabled:opacity-50"
+                    >
+                      {subiendoMaterial ? <Loader2 className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <ImagePlus className="h-5 w-5 shrink-0 text-primary" />}
+                      <span>
+                        <span className="block font-semibold">Sumar foto, fondo o ejemplo</span>
+                        <span className="block text-[11px] text-muted-foreground">Para que la IA lo use. Contale en el pedido cómo.</span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => input.current?.click()}
+                      disabled={isUploading || connection?.status !== "connected"}
+                      className="flex items-center gap-2.5 rounded-2xl border-2 border-dashed p-3 text-left text-sm transition-colors hover:border-primary/60 hover:bg-primary/[0.03] disabled:opacity-50"
+                    >
+                      {isUploading ? <Loader2 className="h-5 w-5 shrink-0 animate-spin text-primary" /> : <Upload className="h-5 w-5 shrink-0 text-muted-foreground" />}
+                      <span>
+                        <span className="block font-semibold">Subir mi diseño terminado</span>
+                        <span className="block text-[11px] text-muted-foreground">Lo hiciste en otro programa: queda como versión para mandar.</span>
+                      </span>
+                    </button>
+                  </div>
+                  <input
+                    ref={inputMaterial}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      void subirMaterial(Array.from(e.target.files ?? []));
+                      e.target.value = "";
+                    }}
+                  />
                   <input
                     ref={input}
                     type="file"

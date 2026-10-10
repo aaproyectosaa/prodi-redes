@@ -248,7 +248,7 @@ Usá los colores de la marca si están indicados. No inventes logos de otras mar
   if (fotos.length) {
     const desde = imagenes.length + 1;
     imagenes.push(...fotos);
-    guia += `\nLas imágenes ${desde}${fotos.length > 1 ? ` a ${desde + fotos.length - 1}` : ""} son FOTOS REALES para usar en la pieza (producto, local o persona): usalas como protagonistas, sin cambiarlas ni inventar otro producto. Podés recortarlas, iluminarlas y armar el diseño alrededor.`;
+    guia += `\nLas imágenes ${desde}${fotos.length > 1 ? ` a ${desde + fotos.length - 1}` : ""} son MATERIAL que subió el equipo para esta pieza: fotos reales (producto, local, persona), fondos o ejemplos de estilo. Usá cada una según el pedido: una foto, como protagonista y sin cambiarla (no inventes otro producto ni modifiques caras); un fondo, como fondo; un ejemplo, solo como referencia de estilo. Si no se aclara, tratala como foto para usar.`;
   }
   const refs = await Promise.all(
     (archivos.referencias ?? []).slice(0, 3).map((r) => descargarDrive(r.drive_file_id).catch(() => null))
@@ -374,8 +374,22 @@ Escribí UNA instrucción de edición precisa (máximo 90 palabras): qué cambia
     console.warn("[pieza-editar] instrucción de Claude", err);
   }
 
+  // Material que subió el equipo (fotos, fondos, ejemplos): también sirve al mejorar ("poné este fondo").
+  const material = (
+    await Promise.all(
+      ((pz.attachments_crudo ?? []) as { drive_file_id: string; mime_type?: string }[])
+        .filter((f) => !f.mime_type || f.mime_type.startsWith("image/"))
+        .slice(-3)
+        .map((f) => descargarDrive(f.drive_file_id, 12 * 1024 * 1024).catch(() => null))
+    )
+  ).filter(Boolean) as { data: Buffer; mime: string }[];
+  const desdeMaterial = marca ? 3 : 2;
   const img = await generarImagen(
     `${instr}\nLa primera imagen adjunta es la pieza a editar: trabajá sobre ella.${
+      material.length
+        ? `\nLas imágenes ${desdeMaterial}${material.length > 1 ? ` a ${desdeMaterial + material.length - 1}` : ""} son material que subió el equipo (fotos, fondos o ejemplos): usalas solo si el pedido las menciona o las necesita (por ejemplo "poné este fondo", "agregá esta foto").`
+        : ""
+    }${
       marca
         ? "\nLa segunda imagen es la misma pieza con un recuadro ROJO que marca la zona a cambiar: cambiá solo esa zona y entregá la pieza SIN el recuadro rojo."
         : z
@@ -383,7 +397,7 @@ Escribí UNA instrucción de edición precisa (máximo 90 palabras): qué cambia
           : ""
     }`,
     destino.ratio,
-    marca ? [original, { data: marca, mime: "image/jpeg" }] : [original]
+    [...(marca ? [original, { data: marca, mime: "image/jpeg" }] : [original]), ...material]
   ).catch(async (err) => {
     await ref.update({ generando_at: null }).catch(() => undefined);
     throw err;
