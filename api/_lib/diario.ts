@@ -6,7 +6,7 @@ import { adminDb } from "./db";
 import { enviarAviso } from "./notify";
 import { crearTokenAprobacion } from "./aprobacion";
 import { prepararFacturacion } from "./facturar";
-import { asuntoRecordatorio, interesMora, mailFacturaHtml, nombreMesF, periodoDe, saldoDe, type Factura } from "./facturacion";
+import { asuntoRecordatorio, interesMora, mailFacturaHtml, nombreMesF, periodoDe, saldoDe, pagoUnaParte, type Factura } from "./facturacion";
 import { enviarMail } from "./informe";
 import { hoyAR, sumarDias, sumarMeses } from "./fecha";
 
@@ -239,8 +239,10 @@ export async function recordatoriosCobro(base: string): Promise<number> {
   for (const d of snap.docs) {
     const f = d.data() as Factura & { recordatorios?: Record<string, string>; demo_ejemplo?: boolean };
     // Con débito automático no se recuerda, salvo que haya quedado saldo (el débito no llegó al total).
-    const saldo = f.debitado ? saldoDe(f) : 0;
+    const saldo = pagoUnaParte(f) ? saldoDe(f) : 0;
     if ((f.debito && !saldo) || f.demo_ejemplo) continue;
+    // Nunca se le mandó la boleta (p. ej. se registró un pago a cuenta sin emitirla): no se le recuerda.
+    if (!f.emitida_at) continue;
     const atraso = dias(hoy, f.vencimiento);
     const etapa = atraso === -2 ? "antes" : atraso === 1 ? "d1" : atraso === 7 ? "d7" : atraso === 15 ? "d15" : null;
     if (!etapa || f.recordatorios?.[etapa]) continue;

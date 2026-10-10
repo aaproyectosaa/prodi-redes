@@ -12,6 +12,8 @@ import { fechaAR, hoyAR, mesAR } from "@/lib/fecha";
 import type { DatosCobro, PiezaIA, Video } from "./types";
 import {
   interesMora,
+  pagadoDe,
+  saldoDe,
   leyendaInteres,
   nombrePeriodo,
   planillaCSV,
@@ -40,6 +42,7 @@ export {
   nombrePeriodo,
   periodoDe,
   periodoFactura,
+  pagadoDe,
   saldoDe,
   textoMora,
   textoPlazoPago,
@@ -166,6 +169,28 @@ export async function marcarCobrada(f: FacturaDoc, medio: MedioCobro) {
   });
 }
 
+/**
+ * Pago a cuenta (paga la boleta en partes). Si con este pago llega al total, queda cobrada.
+ * Si todavía no se le emitió, sigue en "Emitir" (con lo pagado anotado).
+ */
+export async function registrarPago(f: FacturaDoc, monto: number, medio: MedioCobro, por: string) {
+  assertEditable();
+  const m = Math.round(monto);
+  if (!(m > 0)) throw new Error("Poné cuánto pagó");
+  const saldoAntes = saldoDe(f);
+  if (m > saldoAntes + 0.5) throw new Error(`Es más de lo que falta pagar (${saldoAntes.toLocaleString("es-AR")})`);
+  const ahora = new Date().toISOString();
+  const pagos = [...(f.pagos ?? []), { monto: m, medio, at: ahora, por }];
+  const completa = saldoDe({ ...f, pagos }) <= 0;
+  await updateDoc(doc(db, "facturas", f.id), {
+    pagos,
+    ...(completa
+      ? { estado: "cobrada", medio, cobrado_at: ahora, emitida_at: f.emitida_at ?? ahora, interes_cobrado: interesMora(f, hoyAR()).interes }
+      : {}),
+  });
+  return { completa, saldo: Math.max(0, saldoAntes - m) };
+}
+
 export async function volverAPendiente(f: FacturaDoc) {
   assertEditable();
   await updateDoc(doc(db, "facturas", f.id), { estado: "pendiente", medio: null, cobrado_at: null, interes_cobrado: null });
@@ -174,7 +199,7 @@ export async function volverAPendiente(f: FacturaDoc) {
 /** Se marcó "ya pagó" sin habérsela emitido (o en el mes equivocado): vuelve a "Emitir", como si nada. */
 export async function volverASinEmitir(f: FacturaDoc) {
   assertEditable();
-  await updateDoc(doc(db, "facturas", f.id), { estado: "borrador", medio: null, cobrado_at: null, interes_cobrado: null, emitida_at: null });
+  await updateDoc(doc(db, "facturas", f.id), { estado: "borrador", medio: null, cobrado_at: null, interes_cobrado: null, emitida_at: null, pagos: null });
 }
 
 /** Una que estaba en "no facturar" vuelve a revisión. */

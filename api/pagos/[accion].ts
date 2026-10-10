@@ -31,7 +31,7 @@ import { aplicarPago, estadoSuscripcion, precioAbono, proyectoDeSuscripcion, reg
 import { destinatariosDe, disenadorasDe, enviarAviso } from "../_lib/notify";
 import { FORMATOS_PIEZA, cupoPieza, leerPedidoPieza, piezaDoc, precioPieza } from "../_lib/piezas";
 import { prepararFacturacion } from "../_lib/facturar";
-import { asuntoFactura, facturaId, mailFacturaHtml, periodoFactura, saldoDe, type Factura } from "../_lib/facturacion";
+import { asuntoFactura, facturaId, mailFacturaHtml, periodoFactura, saldoDe, pagoUnaParte, type Factura } from "../_lib/facturacion";
 import { enviarMail } from "../_lib/informe";
 import {
   archivosBaseDe,
@@ -573,7 +573,7 @@ async function emitir(req: VercelRequest) {
     const ars = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n || 0);
     const vto = f.vencimiento.split("-").reverse().slice(0, 2).join("/");
     // Si el débito automático no cubrió todo (monto viejo en la suscripción), el cliente paga la diferencia.
-    const saldo = f.debitado ? saldoDe(f) : 0;
+    const saldo = pagoUnaParte(f) ? saldoDe(f) : 0;
     await enviarAviso(
       {
         destinatarios: team.cliente ?? [],

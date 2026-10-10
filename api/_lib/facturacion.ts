@@ -22,6 +22,14 @@ export type ModoCobro = "vencido" | "adelantado";
 export type EstadoFactura = "borrador" | "pendiente" | "cobrada" | "anulada";
 export type MedioCobro = "transferencia" | "efectivo" | "mercadopago" | "adelantado" | "debito" | "otro";
 
+/** Un pago a cuenta (el cliente paga la boleta en partes). */
+export interface PagoParcial {
+  monto: number;
+  medio: MedioCobro;
+  at: string;
+  por?: string | null;
+}
+
 export interface ItemFactura {
   id: string;
   concepto: string;
@@ -75,6 +83,8 @@ export interface Factura {
   /** De lo debitado, lo que se quedó Mercado Pago de comisión (no cuenta para pagar la boleta). */
   comision_mp?: number | null;
   medio?: MedioCobro | null;
+  /** Pagos a cuenta (en partes). Cuando cubren el total, la boleta queda cobrada. */
+  pagos?: PagoParcial[] | null;
   cobrado_at?: string | null;
   /** Interés por mora que se cobró al marcarla cobrada (queda fijo para el historial). */
   interes_cobrado?: number | null;
@@ -144,8 +154,15 @@ export function totales(items: ItemFactura[], tipo: TipoComprobante, ivaPct: num
 }
 
 /** Lo que falta cobrar de una boleta (el total menos lo que ya debitó Mercado Pago, sin su comisión). */
-export const saldoDe = (f: Pick<Factura, "bruto" | "debitado" | "comision_mp">) =>
-  Math.max(0, Math.round(Number(f.bruto) - Number(f.debitado ?? 0) + Number(f.comision_mp ?? 0)));
+/** Lo que ya pagó a cuenta (pagos parciales). */
+export const pagadoDe = (f: Pick<Factura, "pagos">) => (f.pagos ?? []).reduce((a, p) => a + (Number(p?.monto) || 0), 0);
+
+/** Lo que falta pagar: el total menos lo debitado (sin la comisión de MP) y lo pagado a cuenta. */
+export const saldoDe = (f: Pick<Factura, "bruto" | "debitado" | "comision_mp" | "pagos">) =>
+  Math.max(0, Math.round(Number(f.bruto) - Number(f.debitado ?? 0) + Number(f.comision_mp ?? 0) - pagadoDe(f)));
+
+/** Ya se pagó una parte (débito que no alcanzó o pagos a cuenta): se avisa el saldo en vez del total. */
+export const pagoUnaParte = (f: Pick<Factura, "debitado" | "pagos">) => !!(f.debitado || f.pagos?.length);
 
 /** Comisión de Mercado Pago válida (más de 0 y menos de 50%, IVA incluido) o 0. */
 export const comisionPct = (v: unknown) => {
@@ -182,7 +199,7 @@ const diasEntre = (desde: string, hasta: string) =>
  * guarda lo que se cobró en `interes_cobrado`.
  */
 export function interesMora(
-  f: Pick<Factura, "estado" | "bruto" | "debitado" | "comision_mp" | "vencimiento">,
+  f: Pick<Factura, "estado" | "bruto" | "debitado" | "comision_mp" | "pagos" | "vencimiento">,
   hoy: string
 ): { dias: number; saldo: number; interes: number; totalConInteres: number } {
   const saldo = saldoDe(f);
@@ -192,7 +209,7 @@ export function interesMora(
 }
 
 /** "Vencida hace 3 días · interés $1.500 · total $101.500" (vacío si no está vencida). */
-export function textoMora(f: Pick<Factura, "estado" | "bruto" | "debitado" | "comision_mp" | "vencimiento">, hoy: string): string {
+export function textoMora(f: Pick<Factura, "estado" | "bruto" | "debitado" | "comision_mp" | "pagos" | "vencimiento">, hoy: string): string {
   const m = interesMora(f, hoy);
   if (!m.dias) return "";
   return `Vencida hace ${m.dias} día${m.dias === 1 ? "" : "s"} · interés ${arsF(m.interes)} · total ${arsF(m.totalConInteres)}`;
@@ -376,10 +393,12 @@ export function mailFacturaHtml(f: Factura, link: string, baseUrl: string, aviso
     )
     .join("");
   // Débito parcial (el débito no llegó al total): se avisa cuánto falta pagar.
-  const saldo = f.debitado ? saldoDe(f) : 0;
+  const saldo = pagoUnaParte(f) ? saldoDe(f) : 0;
   const mora = hoy ? interesMora(f, hoy) : null;
   const bajada =
-    f.debitado && saldo > 0
+    f.pagos?.length && saldo > 0
+      ? `Ya pagaste ${arsF(pagadoDe(f))}. Falta pagar ${arsF(saldo)}. ${leyendaInteres(f.vencimiento, f.pago_desde)}`
+      : f.debitado && saldo > 0
       ? `Mercado Pago ya debitó ${arsF(f.debitado)}${f.comision_mp ? ` (con ${arsF(f.comision_mp)} de comisión)` : ""}. Falta pagar ${arsF(saldo)}. ${leyendaInteres(f.vencimiento, f.pago_desde)}`
       : f.debito
         ? "Se cobra solo por débito automático de Mercado Pago."

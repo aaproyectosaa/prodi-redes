@@ -32,6 +32,8 @@ import { PageShell } from "@/components/redes/PageShell";
 import { ClienteTag } from "@/components/redes/ClienteTag";
 import { BoletaDialog } from "@/components/redes/admin/BoletaDialog";
 import { DatosFacturacionDialog, EditarFacturaDialog, MesNav } from "@/components/redes/admin/FacturaPartes";
+import { PagoParcialDialog } from "@/components/redes/admin/PagoParcialDialog";
+import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { armarFactura, facturaId } from "../../../api/_lib/facturacion";
 import { doc, getDoc } from "@/lib/db";
 import { db } from "@/integrations/firebase/client";
@@ -50,6 +52,9 @@ import {
   emitirAClientes,
   prepararFacturacion,
   marcarCobrada,
+  pagadoDe,
+  registrarPago,
+  saldoDe,
   reactivarFactura,
   textoCobro,
   useFacturas,
@@ -93,7 +98,7 @@ export default function Cobros() {
   const cobradas = vivas.filter((f) => f.estado === "cobrada");
   const anuladas = facturas.filter((f) => f.estado === "anulada");
   const total = vivas.filter((f) => f.estado !== "borrador").reduce((a, f) => a + f.bruto, 0);
-  const cobrado = cobradas.reduce((a, f) => a + f.bruto, 0);
+  const cobrado = cobradas.reduce((a, f) => a + f.bruto, 0) + vivas.filter((f) => f.estado !== "cobrada").reduce((a, f) => a + pagadoDe(f), 0);
 
   // Para emitir: los clientes con plan que todavía no tienen boleta este mes (se arma al emitir)
   // y las que ya estaban armadas (el 27 se arman solas) pero no se mandaron.
@@ -351,17 +356,21 @@ function PasoEmitir({
    * Ya pagó (por transferencia, efectivo…) antes de que se le emitiera: queda cobrada sin mandarle nada.
    * Si la boleta todavía era una vista previa, primero se arma.
    */
+  const { user } = useUserProfileContext();
+  const [parcial, setParcial] = useState<PorEmitir | null>(null);
+  /** La boleta guardada (si todavía era una vista previa, se arma). */
+  const asegurarDoc = async (r: PorEmitir): Promise<FacturaDoc> => {
+    if (r.doc) return r.doc;
+    await prepararFacturacion(mes, [r.pid]);
+    const id = facturaId(r.pid, mes);
+    const snap = await getDoc(doc(db, "facturas", id));
+    if (!snap.exists()) throw new Error("No se pudo armar la boleta");
+    return { ...(snap.data() as Factura), id } as FacturaDoc;
+  };
   const yaPago = async (r: PorEmitir, medio: MedioCobro) => {
     setBusy(r.pid);
     try {
-      let f = r.doc;
-      if (!f) {
-        await prepararFacturacion(mes, [r.pid]);
-        const id = facturaId(r.pid, mes);
-        const snap = await getDoc(doc(db, "facturas", id));
-        if (!snap.exists()) throw new Error("No se pudo armar la boleta");
-        f = { ...(snap.data() as Factura), id } as FacturaDoc;
-      }
+      const f = await asegurarDoc(r);
       await marcarCobrada(f, medio);
       toast.success(`${r.f.cliente}: registrado el pago de ${formatARS(r.f.bruto)}`);
     } catch (e) {
@@ -438,6 +447,11 @@ function PasoEmitir({
                       {r.f.iva ? ` · IVA ${r.f.iva_pct}%` : ""}
                       {yaPaga ? " · ya está paga (por adelantado)" : ""}
                     </p>
+                    {r.doc?.pagos?.length ? (
+                      <p className="mt-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                        Pagó {formatARS(pagadoDe(r.doc))} a cuenta · falta {formatARS(saldoDe(r.doc))}
+                      </p>
+                    ) : null}
                     <div className="mt-2 flex flex-wrap items-center justify-end gap-1">
                       <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => onVer(r.f)}>
                         <Eye className="mr-1 h-3.5 w-3.5" /> Ver
@@ -458,8 +472,11 @@ function PasoEmitir({
                           <DropdownMenuItem onClick={() => onDatos(r.pid)}>
                             <Receipt className="mr-2 h-4 w-4" /> Datos de facturación del cliente
                           </DropdownMenuItem>
+                          <DropdownMenuItem disabled={!!busy} onClick={() => setParcial(r)}>
+                            <Banknote className="mr-2 h-4 w-4" /> Pagó una parte…
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Ya pagó (sin emitirle):</DropdownMenuLabel>
+                          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Ya pagó todo (sin emitirle):</DropdownMenuLabel>
                           {MEDIOS.filter((m) => m.value !== "adelantado").map((m) => (
                             <DropdownMenuItem key={m.value} disabled={!!busy} onClick={() => void yaPago(r, m.value)}>
                               <Banknote className="mr-2 h-4 w-4" /> {m.label}
@@ -493,6 +510,21 @@ function PasoEmitir({
           </div>
         </>
       )}
+      <PagoParcialDialog
+        f={parcial ? parcial.doc ?? parcial.f : null}
+        onClose={() => setParcial(null)}
+        onConfirmar={async (monto, medio) => {
+          if (!parcial) return;
+          try {
+            const f = await asegurarDoc(parcial);
+            const r = await registrarPago(f, monto, medio, user?.uid ?? "");
+            toast.success(r.completa ? `${f.cliente}: completó el pago` : `${f.cliente}: pagó ${formatARS(monto)} · falta ${formatARS(r.saldo)}`);
+          } catch (e) {
+            err(e);
+            throw e;
+          }
+        }}
+      />
       {anuladas.length > 0 && (
         <div className="rounded-2xl border p-3">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">No se les factura este mes</p>
@@ -511,6 +543,8 @@ function PasoEmitir({
 }
 
 function PasoCobrar({ lista, hoy, cobro, onVer }: { lista: FacturaDoc[]; hoy: string; cobro: typeof DATOS_COBRO_DEFAULT; onVer: (f: FacturaDoc) => void }) {
+  const { user } = useUserProfileContext();
+  const [parcial, setParcial] = useState<FacturaDoc | null>(null);
   const [sel, setSel] = useState<Set<string>>(new Set());
   useEffect(() => setSel((prev) => new Set([...prev].filter((id) => lista.some((f) => f.id === id)))), [lista]);
   const elegidas = lista.filter((f) => sel.has(f.id));
@@ -524,8 +558,25 @@ function PasoCobrar({ lista, hoy, cobro, onVer }: { lista: FacturaDoc[]; hoy: st
     }
   };
   if (!lista.length) return <Vacio texto="No hay nada por cobrar 🙌" />;
+  const dialogoParcial = (
+    <PagoParcialDialog
+      f={parcial}
+      onClose={() => setParcial(null)}
+      onConfirmar={async (monto, medio) => {
+        if (!parcial) return;
+        try {
+          const r = await registrarPago(parcial, monto, medio, user?.uid ?? "");
+          toast.success(r.completa ? `${parcial.cliente}: completó el pago` : `${parcial.cliente}: pagó ${formatARS(monto)} · falta ${formatARS(r.saldo)}`);
+        } catch (e) {
+          err(e);
+          throw e;
+        }
+      }}
+    />
+  );
   return (
     <div className="space-y-3">
+      {dialogoParcial}
       <Ayuda>
         Cuando te paguen, tocá <b>Cobrada</b> y elegí cómo pagó. Las vencidas aparecen primero, con el interés del 0,5% por día a hoy (queda
         guardado lo que se cobró al marcarla). A los que deben les mandamos un recordatorio solo (2 días antes y a los 1, 7 y 15 días de vencida).
@@ -549,6 +600,11 @@ function PasoCobrar({ lista, hoy, cobro, onVer }: { lista: FacturaDoc[]; hoy: st
                 {vencida ? <AlertTriangle className="mr-1 inline h-3 w-3" /> : null}
                 {vencida ? "Venció" : "Vence"} el {f.vencimiento.split("-").reverse().slice(0, 2).join("/")}
                 {mora ? <span className="block">{mora}</span> : null}
+                {f.pagos?.length ? (
+                  <span className="block font-medium text-emerald-700 dark:text-emerald-400">
+                    Pagó {formatARS(pagadoDe(f))} a cuenta · falta {formatARS(saldoDe(f))}
+                  </span>
+                ) : null}
                 {(f as FacturaDoc & { mail_enviado_at?: string }).mail_enviado_at ? (
                   <span className="ml-2 text-muted-foreground">
                     <Mail className="mr-0.5 inline h-3 w-3" /> mail enviado
@@ -577,6 +633,9 @@ function PasoCobrar({ lista, hoy, cobro, onVer }: { lista: FacturaDoc[]; hoy: st
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setParcial(f)}>
+                  <Banknote className="mr-2 h-4 w-4" /> Pagó una parte…
+                </DropdownMenuItem>
                 {/* Nunca se le mandó (p. ej. se registró un pago en el mes equivocado y se deshizo): vuelve a Emitir. */}
                 {!f.emitida_por && (
                   <DropdownMenuItem onClick={() => void volverASinEmitir(f).then(() => toast.success(`${f.cliente}: vuelve a «Emitir»`)).catch(err)}>
