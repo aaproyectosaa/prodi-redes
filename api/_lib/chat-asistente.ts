@@ -6,7 +6,7 @@
 // las personas, fechas y permisos los valida el servidor antes de hacer nada. Si algo no cierra, Prodi pregunta.
 
 import crypto from "crypto";
-import { adminDb, type Data } from "./db";
+import { adminDb, FieldValue, type Data } from "./db";
 import { HttpError, type Caller } from "./http";
 import { generarJSON, transcribir, type Imagen } from "./ia";
 import { descargarDrive } from "./drive-stream";
@@ -49,6 +49,8 @@ interface AccionIA {
   cliente?: string;
   /** crear_video: ya se filmó (queda listo para subir el crudo). */
   filmado?: boolean;
+  /** editar_video: el título nuevo (si lo cambia). */
+  nuevo_titulo?: string;
 }
 
 const ESQUEMA = {
@@ -59,7 +61,7 @@ const ESQUEMA = {
       items: {
         type: "OBJECT",
         properties: {
-          tipo: { type: "STRING", enum: ["crear_reunion", "crear_tarea", "crear_video", "recordar", "mandar_logo", "responder", "preguntar"] },
+          tipo: { type: "STRING", enum: ["crear_reunion", "crear_tarea", "crear_video", "editar_video", "borrar_video", "recordar", "mandar_logo", "responder", "preguntar"] },
           titulo: { type: "STRING" },
           fecha: { type: "STRING" },
           hora: { type: "STRING" },
@@ -69,6 +71,7 @@ const ESQUEMA = {
           texto: { type: "STRING" },
           cliente: { type: "STRING" },
           filmado: { type: "BOOLEAN" },
+          nuevo_titulo: { type: "STRING" },
         },
         required: ["tipo"],
       },
@@ -137,7 +140,7 @@ interface Resultado {
   reunion_id?: string;
   tarea_id?: string;
   /** Videos cargados en Producción (se juntan en un solo mensaje). */
-  video?: { id: string; titulo: string; cliente: string; filmado: boolean };
+  video?: { id: string; titulo: string; cliente: string; filmado: boolean; sinIdea?: boolean };
 }
 
 /** Procesa un mensaje con @prodi. No tira error por cosas del pedido: Prodi lo contesta en el chat. */
@@ -199,7 +202,7 @@ export async function atenderMencion(caller: Caller, chatId: unknown, mensajeId:
     const bloque = [
       `Listo: cargué ${videos.length === 1 ? "1 video" : `${videos.length} videos`} en Producción para **${lista(clientes)}**${filmados ? ", como ya filmados: solo falta subir el material crudo" : ""}.`,
       "",
-      ...videos.map((v) => `- ${v.titulo}`),
+      ...videos.map((v) => `- ${v.titulo}${v.sinIdea ? " (sin idea: no encontré el guion en el chat)" : ""}`),
     ].join("\n");
     const otros = resultados.filter((r) => !r.video);
     resultados = [
@@ -236,8 +239,10 @@ async function interpretarYHacer(
     ? await contextoSistema({ finanzas: caller.role === "admin" || caller.role === "administracion", texto, proyectoChat: typeof chat.proyecto_id === "string" ? chat.proyecto_id : null })
     : null;
 
-  const prev = await db.collection(`chats/${cid}/mensajes`).orderBy("at", "desc").limit(16).get();
-  const recientes = prev.docs.map((d) => d.data()!).reverse();
+  // En su chat con Prodi se mira más atrás (40 mensajes): las capturas de un guion suelen quedar lejos después de charlar.
+  const prev = await db.collection(`chats/${cid}/mensajes`).orderBy("at", "desc").limit(chat.tipo === "prodi" ? 40 : 16).get();
+  const todos = prev.docs.map((d) => d.data()!).reverse();
+  const recientes = todos.slice(-16);
   const queDice = (m: Data) => {
     if (m.tipo === "audio") return m.transcripcion ? `(audio) ${String(m.transcripcion).slice(0, 600)}` : "(mandó un audio)";
     if (m.tipo === "archivo") {
@@ -253,9 +258,10 @@ async function interpretarYHacer(
     .join("\n");
 
   // Las fotos que mandó quien pide en los últimos mensajes (hasta 4; 8 en su chat con Prodi, ej. capturas de un guion): Claude las ve. Los videos no.
-  const fotos = recientes
+  const hace12h = new Date(Date.now() - 12 * 3600_000).toISOString();
+  const fotos = (chat.tipo === "prodi" ? todos.filter((m) => String(m.at ?? "") > hace12h) : recientes)
     .filter((m) => m.tipo === "archivo" && m.by === caller.uid && /^image\/(jpeg|png|gif|webp)$/.test(String((m.archivo as Data | undefined)?.mime_type ?? "")))
-    .slice(chat.tipo === "prodi" ? -8 : -4);
+    .slice(chat.tipo === "prodi" ? -10 : -4);
   const imagenes: Imagen[] = [];
   for (const m of fotos) {
     try {
@@ -292,11 +298,13 @@ No podés ver videos: si te piden algo de un video, decí que solo ves fotos y t
 Devolvé las acciones (máximo ${MAX_ACCIONES}; una por cada cosa: si pide 5 videos, 5 crear_video):
 - crear_reunion: titulo corto (ej. "Reunión con Ariel y Pato"); fecha YYYY-MM-DD (si no dice el día, hoy; calculá "mañana", "el viernes", etc. a partir de ahora); hora HH:MM en 24 h ("5 pm" = 17:00; si no dice la hora, no la pongas); duracion_min (60 si no dice); personas: los nombres de la lista tal cual (si usan un apodo como "Pato", poné el nombre de la lista que le corresponde; si no está, ponelo como lo escribieron). No incluyas a ${yo.nombre}: ya va.
 - crear_tarea: cuando pide recordarle algo a alguien o dejar una tarea ("recordale a Lucía que mande el guion el viernes"). titulo: la tarea corta en infinitivo ("Mandar el guion"); personas: a quién se le asigna (vacío si es para quien escribe); vence YYYY-MM-DD si dice cuándo (si no, vacío).
-- crear_video: cuando pide cargar videos en Producción ("cargá los videos", "armame los videos de…", "ya grabé estos videos, cargalos"). Uno por video. titulo: el nombre del video tal cual (ej. "¿Qué bolsa necesitás?"); cliente: el nombre del cliente tal cual la lista; texto: la idea o el guion de ESE video, con lo que haya en el chat (tomas, diálogo, texto en pantalla, cierre); filmado: true si dice que ya lo grabó/filmó, false si es para planificar.${CARGAN_VIDEOS.includes(caller.role) ? "" : " (Quien escribe no puede cargar videos: contestá que eso lo hace producción.)"}
+- crear_video: cuando pide cargar videos en Producción ("cargá los videos", "armame los videos de…", "ya grabé estos videos, cargalos"). Uno por video, SOLO los que aparecen en las fotos o el texto que mandó (no inventes ni agregues de otros lados; si no estás seguro de cuáles son, preguntá antes). titulo: el nombre del video tal cual (ej. "¿Qué bolsa necesitás?"); cliente: el nombre del cliente tal cual la lista; texto (OBLIGATORIO): la idea y el guion de ESE video copiados de las fotos o del chat (video/tomas, diálogo, texto en pantalla, cierre o CTA), ordenado en líneas; si no tenés el guion de ese video, no lo cargues: preguntá; filmado: true si dice que ya lo grabó/filmó, false si es para planificar.${CARGAN_VIDEOS.includes(caller.role) ? "" : " (Quien escribe no puede cargar videos: contestá que eso lo hace producción.)"}
+- editar_video: cuando pide corregir o completar un video que ya está cargado (ponerle la idea/guion, cambiarle el nombre). titulo: el nombre ACTUAL del video tal cual está en el sistema; cliente; texto: la idea/guion completo nuevo (si lo cambia); nuevo_titulo: si le cambia el nombre.
+- borrar_video: cuando pide borrar o sacar un video cargado (ej. "borrá los que no estaban", "sacá ese"). titulo: el nombre actual tal cual; cliente. Solo se pueden borrar los que todavía no tienen material subido.
 - mandar_logo: cuando pide el logo (o los logos) de un cliente para mandarlo al chat. cliente: el nombre del cliente tal cual la lista.
 - recordar: solo cuando pide que te acuerdes de algo de un cliente ("acordate que…", "tené en cuenta que…", "guardalo en el contexto de…"). texto: el dato en UNA oración corta (máx. 250 caracteres), en tercera persona sobre el cliente; si son varios datos, un recordar por cada uno. cliente: el nombre del cliente si no es el del grupo.
 - responder: si es una pregunta o un saludo. Contestá con lo que hay en el chat${ctx ? " y en los DATOS DEL SISTEMA (clientes, equipo, videos, tareas, marcas: colores, tipografías, tono)" : ""}. Corto y ordenado: si la respuesta tiene varias partes, separalas en bloques con un título en negrita (**Equipo**, **Videos**…), una línea en blanco entre bloques y los datos como lista con "- " (sublistas con dos espacios y "- "). Nada de párrafos largos. No inventes datos.
-- No podés borrar ni modificar tareas, videos ni clientes: eso se hace a mano en el sistema.
+- No podés borrar ni modificar tareas ni clientes: eso se hace a mano en el sistema. Videos sí (editar_video, borrar_video), solo admin y productora.
 - En "responder" NO digas que hiciste algo (cargar, anotar, agendar): eso lo informa el sistema con lo que realmente se hizo. Si además hacés acciones, el responder es solo para lo que falte decir (o no lo pongas).
 - preguntar: texto con UNA pregunta corta si falta algo importante (por ejemplo la hora de la reunión) o no se entiende el pedido.
 Español rioplatense con voseo.`;
@@ -485,6 +493,61 @@ Español rioplatense con voseo.`;
       continue;
     }
 
+    if (tipo === "editar_video" || tipo === "borrar_video") {
+      if (!CARGAN_VIDEOS.includes(caller.role)) {
+        out.push({ texto: "Los videos los maneja producción en el sistema. Pedíselo a la productora." });
+        continue;
+      }
+      const buscado = String(a.titulo ?? "").replace(/\s+/g, " ").trim();
+      if (buscado.length < 3) {
+        out.push({ texto: "¿Qué video? Decime el nombre tal cual está cargado." });
+        continue;
+      }
+      // Entre los videos que no están publicados (de ese cliente si lo nombra o es el grupo de un cliente).
+      let cliId: string | null = typeof chat.proyecto_id === "string" ? chat.proyecto_id : null;
+      if (!cliId && ctx && a.cliente) {
+        const n = clientesNombrados(String(a.cliente), ctx.proyectos);
+        if (n.length === 1) cliId = n[0].id;
+      }
+      const q = cliId ? db.collection("videos").where("proyecto_id", "==", cliId) : db.collection("videos").where("etapa", "!=", "publicado");
+      const snap = await q.get();
+      const k = normalizar(buscado);
+      const candidatos = snap.docs.filter((d) => d.data()?.etapa !== "publicado" && normalizar(String(d.data()?.titulo ?? "")) === k);
+      if (candidatos.length !== 1) {
+        out.push({ texto: candidatos.length ? `Hay ${candidatos.length} videos «${buscado}». Decime de qué cliente.` : `No encontré el video «${buscado}».` });
+        continue;
+      }
+      const vd = candidatos[0];
+      const v = vd.data() ?? {};
+      const ts = new Date().toISOString();
+      if (tipo === "borrar_video") {
+        const conMaterial = (Array.isArray(v.attachments_crudo) && v.attachments_crudo.length) || (Array.isArray(v.attachments_finalizado) && v.attachments_finalizado.length);
+        if (conMaterial || !["planificado", "agendado", "material_cliente"].includes(String(v.etapa))) {
+          out.push({ texto: `«${v.titulo}» ya tiene material o está en edición: ese lo borrás a mano desde el video (así no se pierde nada por error).` });
+          continue;
+        }
+        if (typeof v.rodaje_id === "string" && v.rodaje_id) {
+          await db.collection("rodajes").doc(v.rodaje_id).update({ video_ids: FieldValue.arrayRemove(vd.id) }).catch(() => undefined);
+        }
+        await vd.ref.delete();
+        out.push({ texto: `Borré «${v.titulo}».` });
+        continue;
+      }
+      const cambios: Data = { updated_at: ts };
+      const idea = String(a.texto ?? "").trim().slice(0, 4000);
+      const nuevo = String(a.nuevo_titulo ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
+      if (idea) cambios.idea = idea;
+      if (nuevo.length >= 3) cambios.titulo = nuevo;
+      if (!idea && nuevo.length < 3) {
+        out.push({ texto: `¿Qué le cambio a «${v.titulo}»?` });
+        continue;
+      }
+      cambios.historial = FieldValue.arrayUnion({ at: ts, by: caller.uid, accion: "Corregido por Prodi", nota: null });
+      await vd.ref.update(cambios);
+      out.push({ texto: `Listo, corregí «${nuevo.length >= 3 ? nuevo : v.titulo}»${idea ? ": le puse la idea y el guion" : ""}.`, link: `/videos?video=${vd.id}`, link_texto: "Ver video" });
+      continue;
+    }
+
     if (tipo === "crear_video") {
       if (!CARGAN_VIDEOS.includes(caller.role)) {
         if (!out.some((x) => x.texto.startsWith("Los videos los carga"))) out.push({ texto: "Los videos los carga producción en el sistema. Pedíselo a la productora." });
@@ -562,7 +625,7 @@ Español rioplatense con voseo.`;
         created_by: caller.uid,
         updated_at: ts,
       });
-      out.push({ texto: "", video: { id: ref.id, titulo, cliente: cli.nombre, filmado } });
+      out.push({ texto: "", video: { id: ref.id, titulo, cliente: cli.nombre, filmado, sinIdea: !String(a.texto ?? "").trim() } });
       continue;
     }
 
