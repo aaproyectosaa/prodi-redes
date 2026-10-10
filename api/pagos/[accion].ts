@@ -29,7 +29,7 @@ import {
 } from "../_lib/mercadopago";
 import { aplicarPago, estadoSuscripcion, precioAbono, proyectoDeSuscripcion, registrarAbono } from "../_lib/cobros";
 import { destinatariosDe, disenadorasDe, enviarAviso } from "../_lib/notify";
-import { FORMATOS_PIEZA, leerPedidoPieza, piezaDoc, precioPieza } from "../_lib/piezas";
+import { FORMATOS_PIEZA, cupoPieza, leerPedidoPieza, piezaDoc, precioPieza } from "../_lib/piezas";
 import { prepararFacturacion } from "../_lib/facturar";
 import { asuntoFactura, facturaId, mailFacturaHtml, periodoFactura, saldoDe, type Factura } from "../_lib/facturacion";
 import { enviarMail } from "../_lib/informe";
@@ -375,6 +375,9 @@ async function crearSiHayCupo(o: {
   /** Lo que ya hay del mes (se filtra con `usado`). */
   consulta: Query;
   usado: (d: Data) => boolean;
+  /** Cuánto ocupa cada uno de lo ya usado (por defecto 1) y cuánto ocupa el nuevo. */
+  peso?: (d: Data) => number;
+  ocupa?: number;
   /** Cupo según el cliente (se lee dentro de la transacción: los créditos extra pueden cambiar). */
   cupo: (proyecto: Data) => number;
   ref: DocRef;
@@ -383,8 +386,8 @@ async function crearSiHayCupo(o: {
   return enTransaccion(async (cli) => {
     await cli.query("select pg_advisory_xact_lock(hashtext($1))", [`${o.tipo}:${o.pid}:${o.mes}`]);
     const proyecto = (await leerDoc(cli, "projects", o.pid)) ?? {};
-    const usados = (await ejecutarConsulta(cli, o.consulta.consulta)).filter((f) => o.usado(f.data)).length;
-    if (usados >= o.cupo(proyecto)) return false;
+    const usados = (await ejecutarConsulta(cli, o.consulta.consulta)).filter((f) => o.usado(f.data)).reduce((a, f) => a + (o.peso?.(f.data) ?? 1), 0);
+    if (usados + (o.ocupa ?? 1) > o.cupo(proyecto)) return false;
     await aplicarEscritura(cli, { tipo: "create", coleccion: o.ref.coleccion, id: o.ref.id, data: o.data() });
     return true;
   });
@@ -412,6 +415,9 @@ async function pedirPieza(req: VercelRequest) {
   const mes = mesAR();
   const base = appUrl(req);
   const ref = db.collection("piezas_ia").doc();
+  const settings = (await db.collection("app_settings").doc("redes").get()).data() ?? {};
+  // No todas valen lo mismo: un banner puede ocupar 2 piezas del plan.
+  const ocupa = cupoPieza(settings, pedido.formato);
 
   // Se cuenta y se crea con lock: dos pedidos a la vez no se pasan del plan.
   const incluida = await crearSiHayCupo({
@@ -420,16 +426,18 @@ async function pedirPieza(req: VercelRequest) {
     mes,
     consulta: db.collection("piezas_ia").where("proyecto_id", "==", pid).where("mes", "==", mes),
     usado: (d) => d.incluida === true && !["cancelada", "rechazada"].includes(d.estado),
+    peso: (d) => Number(d.cupo_usado) || 1,
+    ocupa,
     cupo: () => incluidas,
     ref,
-    data: () => piezaDoc(pid, caller.uid, mes, pedido, true, 0),
+    data: () => piezaDoc(pid, caller.uid, mes, pedido, true, 0, ocupa),
   });
 
   // Cargada por el equipo (productora o admin) y ya no le quedan piezas del plan: se elige en el momento.
   const delEquipo = caller.role === "admin" || caller.role === "productor";
   if (!incluida && delEquipo) {
     const fuera = String(b.fuera_plan ?? "");
-    if (fuera !== "sin_cargo" && fuera !== "cobrar") return { estado: "sin_cupo", incluidas };
+    if (fuera !== "sin_cargo" && fuera !== "cobrar") return { estado: "sin_cupo", incluidas, ocupa };
     if (fuera === "sin_cargo") {
       const d = piezaDoc(pid, caller.uid, mes, pedido, false, 0);
       await ref.set({
@@ -451,7 +459,6 @@ async function pedirPieza(req: VercelRequest) {
       return { estado: "creada", pieza_id: ref.id };
     }
     // "Que la pague el cliente": queda pendiente de pago y le avisamos para que la pague desde su panel.
-    const settings = (await db.collection("app_settings").doc("redes").get()).data() ?? {};
     const monto = precioPieza(settings, pedido.formato);
     if (!(monto > 0)) throw new HttpError(409, "El precio de las piezas no está configurado (Ajustes).");
     await ref.set(piezaDoc(pid, caller.uid, mes, pedido, false, monto));
@@ -484,7 +491,6 @@ async function pedirPieza(req: VercelRequest) {
     return { estado: "creada", pieza_id: ref.id };
   }
 
-  const settings = (await db.collection("app_settings").doc("redes").get()).data() ?? {};
   const monto = precioPieza(settings, pedido.formato);
   if (!(monto > 0)) throw new HttpError(409, "El precio de las piezas no está configurado. Escribinos y lo vemos.");
   await ref.set(piezaDoc(pid, caller.uid, mes, pedido, false, monto));

@@ -106,13 +106,22 @@ export const versionFinal = (p: PiezaIA) =>
 /** Piezas del plan este mes: cuántas incluye y cuántas usó. */
 export function cupoPiezas(cliente: Project | undefined, planes: PlanRedes[], piezas: PiezaIA[], mes: string) {
   const incluidas = cliente?.plan_redes_override?.piezas_mes ?? planDe(cliente, planes).plan?.piezas_mes ?? 0;
-  const usadas = piezas.filter(
-    (p) => p.proyecto_id === cliente?.id && p.mes === mes && p.incluida && !["cancelada", "rechazada"].includes(p.estado)
-  ).length;
+  const usadas = piezas
+    .filter((p) => p.proyecto_id === cliente?.id && p.mes === mes && p.incluida && !["cancelada", "rechazada"].includes(p.estado))
+    .reduce((a, p) => a + (p.cupo_usado || 1), 0);
   return { incluidas, usadas, quedan: Math.max(0, incluidas - usadas) };
 }
 
+/** Cuántas piezas del plan ocupa ese tipo (Ajustes). Por defecto 1. */
+export function cupoDe(settings: RedesSettings, formato: FormatoPieza): number {
+  const n = Number(settings.formatos_pieza?.[formato]?.cupo);
+  return n >= 1 ? Math.round(n) : 1;
+}
+
+/** Precio fuera del plan: el de ese tipo o, si no tiene, el general de redes / impresión. */
 export function precioDe(settings: RedesSettings, formato: FormatoPieza): number {
+  const propio = Number(settings.formatos_pieza?.[formato]?.precio);
+  if (propio > 0) return propio;
   return formatoInfo(formato).grupo === "impresion" ? (settings.precio_pieza_impresion ?? settings.precio_pieza_ia) : settings.precio_pieza_ia;
 }
 

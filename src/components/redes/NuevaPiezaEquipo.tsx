@@ -11,7 +11,7 @@ import { useRedes } from "@/contexts/redes-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { useDriveConnection } from "@/hooks/use-drive-connection";
 import { useDriveUploadContext } from "@/contexts/drive-upload-context";
-import { FORMATOS, cupoPiezas, iconoFormato, pedirPiezaEquipo, precioDe } from "@/lib/redes/piezas";
+import { FORMATOS, cupoDe, cupoPiezas, iconoFormato, pedirPiezaEquipo, precioDe } from "@/lib/redes/piezas";
 import { formatARS, hoyISO, mesActual } from "@/lib/redes/format";
 import type { EnfoquePieza, FormatoPieza } from "@/lib/redes/types";
 import { cn } from "@/lib/utils";
@@ -85,7 +85,8 @@ export function NuevaPiezaEquipo({
     return clientes.filter((c) => !q || normal(c.nombre).includes(q)).sort((a, b) => a.nombre.localeCompare(b.nombre));
   }, [clientes, busca]);
   const cupo = cliente ? cupoPiezas(cliente, planes, piezas, mesActual()) : null;
-  const entra = !!cupo && cupo.quedan > 0;
+  const ocupa = cupoDe(settings, formato);
+  const entra = !!cupo && cupo.quedan >= ocupa;
   const precio = precioDe(settings, formato);
   const listo = !!cliente && (pedido.trim().length >= 10 || (enfoque === "comercial" && producto.trim().length > 1));
 
@@ -306,12 +307,12 @@ export function NuevaPiezaEquipo({
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
                   <Check className="h-3.5 w-3.5" />
                 </span>
-                Entra en el plan de {cliente.nombre}: le quedan <b>{cupo.quedan}</b> de {cupo.incluidas} este mes.
+                Entra en el plan de {cliente.nombre}: le quedan <b>{cupo.quedan}</b> de {cupo.incluidas} este mes{ocupa > 1 ? ` (esta ocupa ${ocupa})` : ""}.
               </p>
             ) : (
               <div className="space-y-2">
                 <p className="text-sm">
-                  A {cliente.nombre} {cupo.incluidas ? "ya no le quedan piezas del plan este mes" : "su plan no incluye piezas"}. ¿Cómo la cargamos?
+                  A {cliente.nombre} {cupo.incluidas ? (cupo.quedan > 0 ? `le quedan ${cupo.quedan} del plan y esta ocupa ${ocupa}` : "ya no le quedan piezas del plan este mes") : "su plan no incluye piezas"}. ¿Cómo la cargamos?
                 </p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {(

@@ -39,6 +39,7 @@ import {
   pedirCambiosPieza,
   pedirPieza,
   precioDe,
+  cupoDe,
   versionEnviada,
   versionFinal,
   type FormatoInfo,
@@ -380,7 +381,8 @@ export function PedirPiezaDialog({
 
   const info = formatoInfo(formato);
   const cupo = cupoPiezas(cliente, planes, piezas, mesActual());
-  const entra = cupo.quedan > 0;
+  const ocupa = cupoDe(settings, formato);
+  const entra = cupo.quedan >= ocupa;
   const precio = precioDe(settings, formato);
   const tieneLogo = !!cliente?.marca_archivos?.logo;
 
@@ -438,9 +440,9 @@ export function PedirPiezaDialog({
           <DialogDescription>
             La diseña nuestra diseñadora y te llega para aprobar.{" "}
             {cupo.incluidas > 0
-              ? entra
+              ? cupo.quedan > 0
                 ? `Te ${cupo.quedan === 1 ? "queda 1 pieza" : `quedan ${cupo.quedan} piezas`} del plan este mes.`
-                : "Ya usaste las piezas del plan de este mes: esta se paga aparte."
+                : "Ya usaste las piezas del plan de este mes: se pagan aparte."
               : "Se paga aparte con Mercado Pago."}
           </DialogDescription>
         </DialogHeader>
@@ -479,9 +481,6 @@ export function PedirPiezaDialog({
                 <div key={g} className="space-y-2">
                   <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     <Icono className="h-3.5 w-3.5" /> {t}
-                    {g === "impresion" && settings.precio_pieza_impresion && !entra ? (
-                      <span className="font-normal normal-case tracking-normal">· {formatARS(settings.precio_pieza_impresion)}</span>
-                    ) : null}
                   </p>
                   <div className="grid grid-cols-2 gap-2">
                     {FORMATOS.filter((f) => f.grupo === g).map((f) => (
@@ -500,6 +499,16 @@ export function PedirPiezaDialog({
                         <span className="min-w-0">
                           <span className="block text-sm font-semibold leading-tight">{f.label}</span>
                           <span className="block text-[11px] leading-snug text-muted-foreground">{f.ejemplo}</span>
+                          {(() => {
+                            // Lo que cuesta este tipo: del plan (cuántas ocupa) o el precio aparte.
+                            const n = cupoDe(settings, f.value);
+                            const delPlan = cupo.incluidas > 0 && cupo.quedan >= n;
+                            return (
+                              <span className={cn("mt-1 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold", delPlan ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" : "bg-primary/10 text-primary")}>
+                                {delPlan ? (n === 1 ? "1 pieza del plan" : `${n} piezas del plan`) : formatARS(precioDe(settings, f.value))}
+                              </span>
+                            );
+                          })()}
                         </span>
                       </button>
                     ))}

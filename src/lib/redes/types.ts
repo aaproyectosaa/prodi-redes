@@ -311,6 +311,8 @@ export interface PiezaIA {
   fecha_deseada?: string | null;
   /** Entró en las piezas del plan (no se cobró aparte). */
   incluida?: boolean;
+  /** Piezas del plan que ocupó (según el tipo). Las viejas, 1. */
+  cupo_usado?: number;
   precio: number;
   estado: EstadoPieza;
   cobro_id: string | null;
@@ -391,6 +393,8 @@ export interface RedesSettings {
   precio_pieza_ia: number;
   /** Precio de cada pieza para imprimir (afiche, cartel, banner) fuera del plan. */
   precio_pieza_impresion?: number;
+  /** Por tipo de pieza: su precio fuera del plan y cuántas piezas del plan ocupa (un banner no es un posteo). */
+  formatos_pieza?: Partial<Record<FormatoPieza, { precio?: number | null; cupo?: number | null }>>;
   /** Facturación: día del mes siguiente en que vence (por defecto 5). */
   dia_vencimiento?: number;
   /** Comisión que se queda Mercado Pago en el débito automático (% de lo cobrado, IVA incluido). Se suma al débito. */

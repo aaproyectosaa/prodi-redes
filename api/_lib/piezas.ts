@@ -18,10 +18,23 @@ export const FORMATOS_PIEZA: Record<string, { label: string; ratio: Ratio; uso: 
 
 export type EnfoquePieza = "comercial" | "institucional";
 
+type AjusteFormato = { precio?: number | null; cupo?: number | null };
+const ajusteDe = (settings: Record<string, unknown>, formato: string): AjusteFormato =>
+  ((settings.formatos_pieza as Record<string, AjusteFormato> | undefined) ?? {})[formato] ?? {};
+
+/** Precio fuera del plan: el de ese tipo de pieza (Ajustes) o, si no tiene, el general de redes / impresión. */
 export function precioPieza(settings: Record<string, unknown>, formato: string): number {
+  const propio = Number(ajusteDe(settings, formato).precio);
+  if (propio > 0) return propio;
   const imp = FORMATOS_PIEZA[formato]?.impresion;
   const redes = Number(settings.precio_pieza_ia ?? 15000);
   return imp ? Number(settings.precio_pieza_impresion ?? redes) : redes;
+}
+
+/** Cuántas piezas del plan ocupa ese tipo (no es lo mismo un posteo que un banner). Por defecto 1. */
+export function cupoPieza(settings: Record<string, unknown>, formato: string): number {
+  const n = Number(ajusteDe(settings, formato).cupo);
+  return n >= 1 ? Math.round(n) : 1;
 }
 
 export interface PedidoPieza {
@@ -57,7 +70,7 @@ export function leerPedidoPieza(b: Record<string, unknown>): PedidoPieza | strin
   return p;
 }
 
-export function piezaDoc(proyectoId: string, by: string, mes: string, p: PedidoPieza, incluida: boolean, precio: number) {
+export function piezaDoc(proyectoId: string, by: string, mes: string, p: PedidoPieza, incluida: boolean, precio: number, cupo = 1) {
   const now = new Date().toISOString();
   return {
     proyecto_id: proyectoId,
@@ -66,6 +79,8 @@ export function piezaDoc(proyectoId: string, by: string, mes: string, p: PedidoP
     mes,
     incluida,
     precio,
+    // Piezas del plan que ocupa (las que entran en el plan).
+    cupo_usado: incluida ? cupo : 0,
     estado: incluida ? "pagada" : "pendiente_pago",
     cobro_id: null,
     versiones: [],

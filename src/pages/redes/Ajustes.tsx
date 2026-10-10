@@ -7,6 +7,8 @@ import { assertEditable } from "@/lib/redes/vistaComo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InputNumero } from "@/components/ui/input-numero";
+import { FORMATOS, cupoDe, precioDe } from "@/lib/redes/piezas";
+import type { FormatoPieza, RedesSettings } from "@/lib/redes/types";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -35,6 +37,10 @@ export default function Ajustes() {
   const { planes, settings } = useRedes();
   const [precioPieza, setPrecioPieza] = useState(String(settings.precio_pieza_ia));
   const [precioImpresion, setPrecioImpresion] = useState(String(settings.precio_pieza_impresion ?? 0));
+  // Cada tipo de pieza: precio fuera del plan y cuántas piezas del plan ocupa.
+  const formatosDe = (st: RedesSettings) =>
+    Object.fromEntries(FORMATOS.map((f) => [f.value, { precio: String(precioDe(st, f.value) || ""), cupo: String(cupoDe(st, f.value)) }])) as Record<FormatoPieza, { precio: string; cupo: string }>;
+  const [formatos, setFormatos] = useState(() => formatosDe(settings));
   const [dias, setDias] = useState(String(settings.dias_alerta));
   const [auto, setAuto] = useState(settings.informe_automatico);
   const [enfoque, setEnfoque] = useState(settings.ia_enfoque ?? ENFOQUE_PRODI_DEFAULT);
@@ -47,6 +53,7 @@ export default function Ajustes() {
   useEffect(() => {
     setPrecioPieza(String(settings.precio_pieza_ia));
     setPrecioImpresion(String(settings.precio_pieza_impresion ?? 0));
+    setFormatos(formatosDe(settings));
     setDias(String(settings.dias_alerta));
     setAuto(settings.informe_automatico);
     setEnfoque(settings.ia_enfoque ?? ENFOQUE_PRODI_DEFAULT);
@@ -103,19 +110,40 @@ export default function Ajustes() {
         <div className="space-y-8">
           <Section title="Precios y alertas">
             <div className="space-y-4 rounded-xl border bg-card p-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Pieza para redes</Label>
-                  <InputNumero value={precioPieza} onChange={(e) => setPrecioPieza(e.target.value.replace(/\D/g, ""))} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Pieza para imprimir</Label>
-                  <InputNumero value={precioImpresion} onChange={(e) => setPrecioImpresion(e.target.value.replace(/\D/g, ""))} />
+              <div className="space-y-1.5">
+                <Label>Piezas gráficas</Label>
+                <p className="text-xs text-muted-foreground">
+                  No todas llevan el mismo laburo. «Ocupa» es cuántas piezas del plan descuenta (ej.: un banner = 2). El precio es si se paga aparte, con Mercado Pago.
+                </p>
+                <div className="divide-y overflow-hidden rounded-lg border">
+                  {FORMATOS.map((f) => (
+                    <div key={f.value} className="space-y-1.5 px-2.5 py-2">
+                      <p className="text-sm font-medium">
+                        {f.label} <span className="text-[11px] font-normal text-muted-foreground">· {f.grupo === "impresion" ? "para imprimir" : "redes y pantallas"}</span>
+                      </p>
+                      <div className="grid grid-cols-[minmax(0,1fr)_6.5rem] gap-2">
+                        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                          Precio
+                          <InputNumero
+                            className="h-8"
+                            value={formatos[f.value]?.precio ?? ""}
+                            onChange={(e) => setFormatos((x) => ({ ...x, [f.value]: { ...x[f.value], precio: e.target.value.replace(/\D/g, "") } }))}
+                          />
+                        </label>
+                        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                          Ocupa
+                          <Input
+                            className="h-8 text-center"
+                            inputMode="numeric"
+                            value={formatos[f.value]?.cupo ?? "1"}
+                            onChange={(e) => setFormatos((x) => ({ ...x, [f.value]: { ...x[f.value], cupo: e.target.value.replace(/\D/g, "").slice(0, 2) } }))}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <p className="-mt-2 text-xs text-muted-foreground">
-                Se cobran con Mercado Pago cuando el cliente ya usó las piezas que incluye su plan.
-              </p>
               <div className="space-y-1.5">
                 <Label>Días para marcar un video como trabado</Label>
                 <Input inputMode="numeric" value={dias} onChange={(e) => setDias(e.target.value.replace(/\D/g, ""))} />
@@ -132,6 +160,9 @@ export default function Ajustes() {
                   void guardar("general", {
                     precio_pieza_ia: Number(precioPieza) || 0,
                     precio_pieza_impresion: Number(precioImpresion) || 0,
+                    formatos_pieza: Object.fromEntries(
+                      FORMATOS.map((f) => [f.value, { precio: Number(formatos[f.value]?.precio) || null, cupo: Math.max(1, Number(formatos[f.value]?.cupo) || 1) }])
+                    ),
                     dias_alerta: Math.max(1, Number(dias) || 3),
                     informe_automatico: auto,
                   })
