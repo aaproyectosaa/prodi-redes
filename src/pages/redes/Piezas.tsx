@@ -17,10 +17,15 @@ import {
   Maximize2,
   MessageCircle,
   Plus,
+  Trash2,
+  History,
+  Megaphone,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageShell, EmptyState } from "@/components/redes/PageShell";
 import { ClienteTag } from "@/components/redes/ClienteTag";
@@ -38,6 +43,9 @@ import {
   empezarPieza,
   formatoInfo,
   generarVersion,
+  estaPublicada,
+  marcarPublicada,
+  borrarVersiones,
   mandarAlCliente,
   moverPieza,
   rechazarPieza,
@@ -50,6 +58,7 @@ import { cn } from "@/lib/utils";
 import type { PiezaIA } from "@/lib/redes/types";
 import { HablarConCliente } from "@/components/redes/HablarConCliente";
 import { EditorPieza } from "@/components/redes/EditorPieza";
+import { CompositorFoto } from "@/components/redes/CompositorFoto";
 import { NuevaPiezaEquipo } from "@/components/redes/NuevaPiezaEquipo";
 import { CompartirPorChat } from "@/components/redes/CompartirChat";
 
@@ -74,10 +83,10 @@ const COLUMNAS: Columna[] = [
   {
     id: "listas",
     titulo: "Entregadas",
-    ayuda: "Aprobadas por el cliente (últimos 30 días).",
+    ayuda: "Aprobadas, falta publicarlas. Las publicadas pasan al historial.",
     tuya: false,
     dot: "bg-emerald-500",
-    filtro: (p) => p.estado === "entregada" && p.updated_at >= new Date(Date.now() - 30 * 86_400_000).toISOString(),
+    filtro: (p) => p.estado === "entregada" && !estaPublicada(p) && p.updated_at >= new Date(Date.now() - 30 * 86_400_000).toISOString(),
   },
 ];
 
@@ -89,6 +98,7 @@ export default function Piezas() {
   const [abierta, setAbierta] = useState<string | null>(null);
   // "Nueva pieza" la cargan vos y la productora (con las fotos para usar).
   const [nueva, setNueva] = useState(false);
+  const [historial, setHistorial] = useState(false);
   const cargaPiezas = role === "admin" || role === "productor";
   const pieza = piezas.find((p) => p.id === abierta) ?? null;
 
@@ -148,6 +158,11 @@ export default function Piezas() {
 
   const sinPagar = piezas.filter((p) => p.estado === "pendiente_pago");
   const activas = piezas.filter((p) => ["pagada", "en_proceso", "para_aprobar"].includes(p.estado)).length;
+  // Historial: publicadas o entregadas hace más de 30 días.
+  const enHistorial = useMemo(() => {
+    const corte = new Date(Date.now() - 30 * 86_400_000).toISOString();
+    return piezas.filter((p) => p.estado === "entregada" && (estaPublicada(p) || p.updated_at < corte)).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  }, [piezas]);
 
   return (
     <PageShell
@@ -157,6 +172,11 @@ export default function Piezas() {
       actions={
         <>
           {piezas.length > 0 && <SelectorVista vista={vista} onChange={setVista} />}
+          {enHistorial.length > 0 && (
+            <Button variant="outline" onClick={() => setHistorial(true)}>
+              <History className="mr-2 h-4 w-4" /> Historial ({enHistorial.length})
+            </Button>
+          )}
           {cargaPiezas && (
             <Button onClick={() => setNueva(true)} className="bg-gradient-to-r from-[#6F40FC] to-[#E040A0] text-white shadow-md transition-transform hover:-translate-y-0.5 hover:opacity-95">
               <Plus className="mr-2 h-4 w-4" /> Nueva pieza
@@ -244,6 +264,19 @@ export default function Piezas() {
                           className={cn("min-w-0", arrastra && "cursor-grab active:cursor-grabbing", arrastrando === p.id && "opacity-40")}
                         >
                           <PiezaCard pieza={p} i={i} cliente={clienteById(p.proyecto_id)?.nombre} onClick={() => setAbierta(p.id)} />
+                          {col.id === "listas" && user && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void marcarPublicada(p, user.uid)
+                                  .then(() => toast.success("Pasó al historial"))
+                                  .catch((e) => toast.error(e instanceof Error ? e.message : "No se pudo"))
+                              }
+                              className="mt-1 inline-flex w-full items-center justify-center gap-1 rounded-lg py-1 text-[11px] font-medium text-emerald-700 transition-colors hover:bg-emerald-500/10 dark:text-emerald-300"
+                            >
+                              <Megaphone className="h-3 w-3" /> Ya se publicó
+                            </button>
+                          )}
                         </div>
                       ))}
                       {items.length === 0 && (
@@ -272,8 +305,65 @@ export default function Piezas() {
       )}
 
       <PiezaTrabajo pieza={pieza} onClose={() => setAbierta(null)} />
+      <HistorialPiezas open={historial} onOpenChange={setHistorial} piezas={enHistorial} onAbrir={(id) => setAbierta(id)} />
       <NuevaPiezaEquipo open={nueva} onOpenChange={setNueva} onCreada={(id) => setAbierta(id)} />
     </PageShell>
+  );
+}
+
+/** Lo ya publicado (o entregado hace más de un mes), por mes y con buscador. */
+function HistorialPiezas({ open, onOpenChange, piezas, onAbrir }: { open: boolean; onOpenChange: (o: boolean) => void; piezas: PiezaIA[]; onAbrir: (id: string) => void }) {
+  const { clienteById } = useRedes();
+  const [q, setQ] = useState("");
+  const t = q.trim().toLowerCase();
+  const lista = t
+    ? piezas.filter((p) => [clienteById(p.proyecto_id)?.nombre, p.producto, p.pedido].some((x) => (x ?? "").toLowerCase().includes(t)))
+    : piezas;
+  const meses = new Map<string, PiezaIA[]>();
+  for (const p of lista) {
+    const m = (p.publicada_at ?? p.updated_at).slice(0, 7);
+    meses.set(m, [...(meses.get(m) ?? []), p]);
+  }
+  const nombreMes = (m: string) => new Date(`${m}-15`).toLocaleDateString("es-AR", { month: "long", year: "numeric" });
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[90dvh] w-[calc(100vw-1.5rem)] max-w-3xl flex-col gap-3 rounded-2xl">
+        <DialogHeader className="text-left">
+          <DialogTitle className="flex items-center gap-2">
+            <History className="h-5 w-5 text-primary" /> Historial de piezas
+          </DialogTitle>
+          <DialogDescription>Las publicadas y las entregadas hace más de un mes.</DialogDescription>
+        </DialogHeader>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por cliente o pieza" className="pl-9" />
+        </div>
+        <div className="-mx-1 min-h-0 flex-1 space-y-4 overflow-y-auto px-1">
+          {lista.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No hay nada con esa búsqueda.</p>}
+          {[...meses.entries()].map(([m, ps]) => (
+            <div key={m}>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground first-letter:uppercase">
+                {nombreMes(m)} · {ps.length}
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {ps.map((p, i) => (
+                  <PiezaCard
+                    key={p.id}
+                    pieza={p}
+                    i={i}
+                    cliente={clienteById(p.proyecto_id)?.nombre}
+                    onClick={() => {
+                      onOpenChange(false);
+                      onAbrir(p.id);
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -330,6 +420,12 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
   // Con una versión elegida, la IA puede mejorar esa (la usa de base) o hacer una nueva desde cero.
   const [modoIA, setModoIA] = useState<"mejorar" | "nueva">("mejorar");
   const [sel, setSel] = useState<string | null>(null);
+  // "No tocar la foto": la IA deja un hueco y se pega la foto original (las caras quedan exactas).
+  const [fotoIntacta, setFotoIntacta] = useState(true);
+  const [componerId, setComponerId] = useState<string | null>(null);
+  // Modo borrar: versiones marcadas para sacar.
+  const [aBorrar, setABorrar] = useState<Set<string> | null>(null);
+  const [borrando, setBorrando] = useState(false);
   // "Mandar por chat": a una persona, un grupo o el chat del cliente.
   const [compartir, setCompartir] = useState(false);
   // Versión abierta en grande (para verla bien y descargarla).
@@ -383,6 +479,8 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
   useEffect(() => {
     setSel(null);
     setAjustes("");
+    setABorrar(null);
+    setComponerId(null);
   }, [pieza?.id]);
   // Al aparecer una versión nueva, queda elegida.
   const ultima = versiones[versiones.length - 1]?.id;
@@ -393,14 +491,19 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
   if (!pieza) return null;
   const info = formatoInfo(pieza.formato);
   const puedeTrabajar = pieza.estado === "pagada" || pieza.estado === "en_proceso";
+  const fotosMaterial = (pieza.attachments_crudo ?? []).filter((f) => !f.mime_type || f.mime_type.startsWith("image/"));
+  const hayFotos = fotosMaterial.length > 0;
   const productos = (memoria?.comercial?.productos ?? []).filter((p) => p.destacado).slice(0, 5);
 
   const generar = async () => {
     setGenerando(true);
     try {
-      await generarVersion(pieza.id, ajustes || undefined);
+      const r = await generarVersion(pieza.id, ajustes || undefined, hayFotos && fotoIntacta);
       setAjustes("");
-      toast.success("Nueva versión generada");
+      if (r.hueco_foto) {
+        setComponerId(r.version_id);
+        toast.success("Diseño listo: ahora acomodá la foto original");
+      } else toast.success("Nueva versión generada");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo generar");
     } finally {
@@ -448,6 +551,23 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
       setMandando(false);
     }
   };
+
+  const borrarMarcadas = async () => {
+    if (!aBorrar?.size) return;
+    if (!window.confirm(aBorrar.size === 1 ? "¿Borrar la versión marcada?" : `¿Borrar las ${aBorrar.size} versiones marcadas?`)) return;
+    setBorrando(true);
+    try {
+      await borrarVersiones(pieza, [...aBorrar]);
+      if (sel && aBorrar.has(sel)) setSel(null);
+      setABorrar(null);
+      toast.success("Listo, borradas");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo borrar");
+    } finally {
+      setBorrando(false);
+    }
+  };
+  const componer = versiones.find((v) => v.id === componerId) ?? null;
 
   const elegida = versiones.find((v) => v.id === sel) ?? null;
   const nElegida = elegida ? versiones.indexOf(elegida) + 1 : 0;
@@ -646,6 +766,14 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                       }
                       className="resize-none bg-background"
                     />
+                    {hayFotos && !(elegida && modoIA === "mejorar") && (
+                      <label className="flex cursor-pointer items-start gap-2 rounded-lg bg-background/70 p-2 text-xs">
+                        <input type="checkbox" className="mt-0.5 accent-primary" checked={fotoIntacta} onChange={(e) => setFotoIntacta(e.target.checked)} />
+                        <span>
+                          <b>No tocar la foto</b> (recomendado con personas): la IA diseña alrededor y se pega la foto original, con las caras exactas.
+                        </span>
+                      </label>
+                    )}
                     <Button className="w-full bg-gradient-to-r from-[#6F40FC] to-[#E040A0] text-white hover:opacity-90" onClick={() => void crearConIA()} disabled={generando || (!!elegida && modoIA === "mejorar" && ajustes.trim().length < 3)}>
                       {generando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                       {generando ? "Creando (≈30 s)…" : elegida && modoIA === "mejorar" ? `Mejorar la v${nElegida}` : versiones.length ? "Otra versión nueva" : "Crear con IA"}
@@ -709,7 +837,28 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
             <section className="space-y-2">
               <div className="flex items-baseline justify-between gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">3 · Elegí la versión</p>
-                {versiones.length > 0 && <p className="text-[11px] text-muted-foreground">Tocá para elegir · «Ver» para abrirla grande y editarla</p>}
+                {aBorrar ? (
+                  <div className="flex items-center gap-1.5">
+                    <Button size="sm" variant="destructive" className="h-7 text-xs" disabled={!aBorrar.size || borrando} onClick={() => void borrarMarcadas()}>
+                      {borrando ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Trash2 className="mr-1 h-3.5 w-3.5" />}
+                      Borrar {aBorrar.size || ""}
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setABorrar(null)}>
+                      Cancelar
+                    </Button>
+                  </div>
+                ) : (
+                  versiones.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <p className="hidden text-[11px] text-muted-foreground sm:block">Tocá para elegir · «Ver» para abrirla grande</p>
+                      {puedeTrabajar && (
+                        <button type="button" onClick={() => setABorrar(new Set(sel ? [sel] : []))} className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-destructive">
+                          <Trash2 className="h-3.5 w-3.5" /> Borrar
+                        </button>
+                      )}
+                    </div>
+                  )
+                )}
               </div>
               {versiones.length === 0 && !generando ? (
                 <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed p-8 text-center">
@@ -724,17 +873,32 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                     const aprobada = v.id === pieza.version_aprobada_id;
                     const enviada = v.id === pieza.version_enviada_id;
                     const esPdf = v.mime_type === "application/pdf";
+                    const tocar = () => {
+                      if (aBorrar) {
+                        const n = new Set(aBorrar);
+                        if (n.has(v.id)) n.delete(v.id);
+                        else n.add(v.id);
+                        return setABorrar(n);
+                      }
+                      if (puedeTrabajar) setSel((s) => (s === v.id ? null : v.id));
+                      else setVer(v);
+                    };
+                    const paraBorrar = !!aBorrar?.has(v.id);
                     return (
                       <div
                         key={v.id}
                         role="button"
                         tabIndex={0}
-                        onClick={() => (puedeTrabajar ? setSel((s) => (s === v.id ? null : v.id)) : setVer(v))}
-                        onDoubleClick={() => setVer(v)}
-                        onKeyDown={(e) => e.key === "Enter" && (puedeTrabajar ? setSel((s) => (s === v.id ? null : v.id)) : setVer(v))}
+                        onClick={tocar}
+                        onDoubleClick={() => !aBorrar && setVer(v)}
+                        onKeyDown={(e) => e.key === "Enter" && tocar()}
                         className={cn(
                           "group relative cursor-pointer overflow-hidden rounded-xl border-2 transition-all animate-in fade-in zoom-in-95",
-                          marcada ? "border-primary shadow-lg shadow-primary/20" : "border-transparent hover:-translate-y-0.5 hover:border-primary/40"
+                          paraBorrar
+                            ? "border-destructive opacity-80 shadow-lg shadow-destructive/20"
+                            : marcada && !aBorrar
+                              ? "border-primary shadow-lg shadow-primary/20"
+                              : "border-transparent hover:-translate-y-0.5 hover:border-primary/40"
                         )}
                       >
                         <div className="flex aspect-[4/5] items-center justify-center bg-muted">
@@ -748,7 +912,24 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                             {aprobada ? "Aprobada" : "Enviada"}
                           </span>
                         )}
-                        {marcada && (
+                        {aBorrar && (
+                          <span className={cn("absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white shadow", paraBorrar ? "bg-destructive text-white" : "bg-black/40")}>
+                            {paraBorrar && <Trash2 className="h-3.5 w-3.5" />}
+                          </span>
+                        )}
+                        {v.hueco_foto && !aBorrar && puedeTrabajar && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setComponerId(v.id);
+                            }}
+                            className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground transition-transform hover:scale-105"
+                          >
+                            <ImagePlus className="h-3 w-3" /> Pegar foto
+                          </button>
+                        )}
+                        {marcada && !aBorrar && (
                           <span className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded-full bg-primary py-0.5 pl-1 pr-2 text-[10px] font-semibold text-primary-foreground">
                             <Check className="h-3.5 w-3.5" /> Elegida
                           </span>
@@ -790,7 +971,29 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                     </Button>
                   )}
                 </div>
-              ) : pieza.estado === "para_aprobar" ? (
+              ) : null}
+              {pieza.estado === "entregada" && user && (
+                <div className="flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs">
+                  {pieza.publicada_at ? (
+                    <>
+                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                        <Megaphone className="h-3.5 w-3.5 text-emerald-600" /> Publicada {hace(pieza.publicada_at)} · está en el historial
+                      </span>
+                      <button type="button" className="text-muted-foreground underline hover:text-foreground" onClick={() => void marcarPublicada(pieza, user.uid, false)}>
+                        No, todavía no
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-muted-foreground">{estaPublicada(pieza) ? "Ya pasó la fecha de publicación: está en el historial." : "¿Ya se subió a las redes?"}</span>
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => void marcarPublicada(pieza, user.uid).then(() => toast.success("Pasó al historial"))}>
+                        <Megaphone className="mr-1 h-3.5 w-3.5" /> Ya se publicó
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
+              {pieza.estado === "entregada" ? null : pieza.estado === "para_aprobar" ? (
                 <div className="rounded-2xl border border-orange-500/30 bg-orange-500/[0.06] p-3 text-sm">
                   <b>Esperando al cliente.</b> Le mandaste la v{enviadaN || "?"} {hace(pieza.updated_at)}. Cuando la apruebe o pida cambios te llega el aviso.
                 </div>
@@ -838,6 +1041,15 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
           }}
         />
         <VerVersion v={verFoto} titulo="Foto para usar" onClose={() => setVerFoto(null)} />
+        <CompositorFoto
+          diseno={componer}
+          fotos={fotosMaterial}
+          onGuardar={async (f) => {
+            await empezarPieza(pieza);
+            await upload([f]);
+          }}
+          onClose={() => setComponerId(null)}
+        />
         <CompartirPorChat open={compartir} onOpenChange={setCompartir} piezaId={pieza.id} versionId={sel ?? versiones.at(-1)?.id ?? null} proyectoId={pieza.proyecto_id} />
         {ver && ver.mime_type !== "application/pdf" && !["cancelada", "rechazada", "pendiente_pago"].includes(pieza.estado) ? (
           <EditorPieza v={ver} titulo={`${pieza.producto || "Pieza"} · Versión ${versiones.findIndex((x) => x.id === ver.id) + 1}`} piezaId={pieza.id} onClose={() => setVer(null)} />

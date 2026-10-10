@@ -189,7 +189,7 @@ async function liberarTurnoPieza(req: VercelRequest, err: unknown): Promise<neve
 
 async function pieza(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "productor", "diseno"]);
-  const { pieza_id, ajustes } = body<{ pieza_id?: string; ajustes?: string | null }>(req);
+  const { pieza_id, ajustes, foto_intacta } = body<{ pieza_id?: string; ajustes?: string | null; foto_intacta?: boolean }>(req);
   if (!pieza_id) throw new HttpError(400, "Falta pieza_id");
   const db = adminDb();
   const ref = db.collection("piezas_ia").doc(pieza_id);
@@ -245,7 +245,11 @@ Usá los colores de la marca si están indicados. No inventes logos de otras mar
         .map((f) => descargarDrive(f.drive_file_id, 12 * 1024 * 1024).catch(() => null))
     )
   ).filter(Boolean) as { data: Buffer; mime: string }[];
-  if (fotos.length) {
+  if (fotos.length && foto_intacta) {
+    // "No tocar la foto": la IA no la ve ni la redibuja (las caras quedan exactas). Deja un hueco magenta y la foto
+    // original se pega después encima, en el navegador.
+    guia += "\nIMPORTANTE: NO dibujes personas, caras ni la foto. Dejá un RECTÁNGULO de color magenta puro #FF00FF, liso y sin nada adentro, con bordes rectos, donde va la foto principal: ocupando el área protagonista de la pieza (alrededor del 60-75% del ancho). La foto real se pega después en ese hueco. Diseñá todo lo demás (fondo, marco, textos, logo) alrededor del rectángulo, sin taparlo.";
+  } else if (fotos.length) {
     const desde = imagenes.length + 1;
     imagenes.push(...fotos);
     guia += `\nLas imágenes ${desde}${fotos.length > 1 ? ` a ${desde + fotos.length - 1}` : ""} son MATERIAL que subió el equipo para esta pieza: fotos reales (producto, local, persona), fondos o ejemplos de estilo. Usá cada una según el pedido: una foto, como protagonista y sin cambiarla (no inventes otro producto ni modifiques caras); un fondo, como fondo; un ejemplo, solo como referencia de estilo. Si no se aclara, tratala como foto para usar.`;
@@ -299,20 +303,22 @@ ${prompt}${guia}`,
     data: img.data,
   });
   const now = new Date().toISOString();
+  const vid = `v${n}_${Date.now()}`;
   await ref.update({
     estado: "en_proceso",
     generando_at: null,
-    updated_at: now,
     versiones: FieldValue.arrayUnion({
-      id: `v${n}_${Date.now()}`,
+      id: vid,
       ...up,
       prompt: ajustes ? `${pz.pedido} · ajustes: ${ajustes}` : pz.pedido,
       modelo: img.modelo,
+      // Diseño con hueco magenta para pegar la foto original (modo "no tocar la foto").
+      ...(foto_intacta && fotos.length ? { hueco_foto: true } : {}),
       created_at: now,
       created_by: caller.uid,
     }),
   });
-  return { ok: true };
+  return { ok: true, version_id: vid, hueco_foto: !!(foto_intacta && fotos.length) };
 }
 
 /**

@@ -79,6 +79,8 @@ export interface VersionVista {
   origen: "ia" | "subida";
   /** Con qué modelo de imágenes se hizo (las de IA). */
   modelo?: string;
+  /** Tiene el hueco para pegar la foto original. */
+  hueco_foto?: boolean;
 }
 
 /** Versiones hechas con IA + diseños subidos a mano, en orden. */
@@ -149,9 +151,43 @@ export async function verificarPago(cobroId: string): Promise<{ estado: string }
 }
 
 /** Diseño genera una versión con IA (se guarda en Drive). */
-export async function generarVersion(piezaId: string, ajustes?: string) {
+export async function generarVersion(piezaId: string, ajustes?: string, fotoIntacta?: boolean) {
   assertEditable();
-  return callApi<{ ok: true }>("/api/ia/pieza", { pieza_id: piezaId, ajustes: ajustes ?? null });
+  return callApi<{ ok: true; version_id: string; hueco_foto: boolean }>("/api/ia/pieza", { pieza_id: piezaId, ajustes: ajustes ?? null, foto_intacta: !!fotoIntacta });
+}
+
+/**
+ * Ya publicada: se marcó a mano, o ya pasó la fecha en que el cliente la quería publicada, o vino del sistema
+ * anterior. Esas salen de "Entregadas" y van al historial.
+ */
+export function estaPublicada(p: PiezaIA, hoy = new Date().toISOString().slice(0, 10)): boolean {
+  if (p.estado !== "entregada") return false;
+  return !!p.publicada_at || !!p._origen || (!!p.fecha_deseada && p.fecha_deseada < hoy);
+}
+
+/** Marca (o desmarca) la pieza como publicada. */
+export async function marcarPublicada(pieza: PiezaIA, by: string, publicada = true) {
+  assertEditable();
+  await updateDoc(doc(db, PIEZAS, pieza.id), {
+    publicada_at: publicada ? now() : null,
+    updated_at: now(),
+    historial: arrayUnion(evento(by, publicada ? "Publicada" : "Vuelta a «Entregadas» (sin publicar)")),
+  });
+}
+
+/** Saca versiones de la pieza (el archivo queda en Drive). La que está con el cliente o aprobada no se borra. */
+export async function borrarVersiones(pieza: PiezaIA, ids: string[]) {
+  assertEditable();
+  const fuera = new Set(ids);
+  if (pieza.version_aprobada_id && fuera.has(pieza.version_aprobada_id)) throw new Error("La versión aprobada por el cliente no se puede borrar.");
+  if (pieza.estado === "para_aprobar" && pieza.version_enviada_id && fuera.has(pieza.version_enviada_id))
+    throw new Error("Esa versión la está viendo el cliente: no se puede borrar ahora.");
+  await updateDoc(doc(db, PIEZAS, pieza.id), {
+    versiones: (pieza.versiones ?? []).filter((v) => !fuera.has(v.id)),
+    attachments_finalizado: (pieza.attachments_finalizado ?? []).filter((a) => !fuera.has(a.drive_file_id)),
+    ...(pieza.version_enviada_id && fuera.has(pieza.version_enviada_id) ? { version_enviada_id: null } : {}),
+    updated_at: now(),
+  });
 }
 
 /** Diseño la empieza (al subir un diseño propio). */

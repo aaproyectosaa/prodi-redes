@@ -280,6 +280,10 @@ export interface VersionPieza {
   prompt: string;
   created_at: string;
   created_by: string;
+  /** Con qué modelo de imágenes se hizo. */
+  modelo?: string;
+  /** Diseño con hueco magenta para pegar la foto original ("no tocar la foto"). */
+  hueco_foto?: boolean;
 }
 
 export type EnfoquePieza = "comercial" | "institucional";
@@ -317,6 +321,8 @@ export interface PiezaIA {
   /** La versión que se le mandó al cliente para aprobar. */
   version_enviada_id?: string | null;
   version_aprobada_id: string | null;
+  /** Cuándo se publicó en las redes (sale de "Entregadas" y pasa al historial). */
+  publicada_at?: string | null;
   feedback_cliente?: string | null;
   rondas?: number;
   historial?: HistorialVideo[];
