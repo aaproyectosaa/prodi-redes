@@ -395,6 +395,8 @@ export interface RedesSettings {
   precio_pieza_impresion?: number;
   /** Por tipo de pieza: su precio fuera del plan y cuántas piezas del plan ocupa (un banner no es un posteo). */
   formatos_pieza?: Partial<Record<FormatoPieza, { precio?: number | null; cupo?: number | null }>>;
+  /** Versión de cómo se guardó "Ocupa" (2 = con 0 para "aparte del plan"). */
+  formatos_pieza_v?: number;
   /** Facturación: día del mes siguiente en que vence (por defecto 5). */
   dia_vencimiento?: number;
   /** Comisión que se queda Mercado Pago en el débito automático (% de lo cobrado, IVA incluido). Se suma al débito. */

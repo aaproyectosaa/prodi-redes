@@ -160,6 +160,7 @@ export default function Ajustes() {
                   void guardar("general", {
                     precio_pieza_ia: Number(precioPieza) || 0,
                     precio_pieza_impresion: Number(precioImpresion) || 0,
+                    formatos_pieza_v: 2,
                     formatos_pieza: Object.fromEntries(
                       FORMATOS.map((f) => [f.value, { precio: Number(formatos[f.value]?.precio) || null, cupo: formatos[f.value]?.cupo === "" ? null : Math.max(0, Number(formatos[f.value]?.cupo) || 0) }])
                     ),

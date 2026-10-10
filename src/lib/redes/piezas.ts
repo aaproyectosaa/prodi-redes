@@ -117,7 +117,8 @@ export const EN_PLAN_DEFAULT: FormatoPieza[] = ["cuadrado", "posteo_vertical", "
 
 /** Cuántas piezas del plan ocupa ese tipo (Ajustes). 0 = no entra en el plan, se paga aparte. */
 export function cupoDe(settings: RedesSettings, formato: FormatoPieza): number {
-  const v = settings.formatos_pieza?.[formato]?.cupo;
+  // Lo guardado antes de que existiera "0 = aparte" (versión 1) ponía 1 en todo: no se tiene en cuenta.
+  const v = (settings.formatos_pieza_v ?? 0) >= 2 ? settings.formatos_pieza?.[formato]?.cupo : null;
   if (v == null || isNaN(Number(v))) return EN_PLAN_DEFAULT.includes(formato) ? 1 : 0;
   return Math.max(0, Math.round(Number(v)));
 }
