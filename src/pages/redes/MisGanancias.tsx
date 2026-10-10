@@ -131,7 +131,8 @@ export default function MisGanancias() {
 
             {/* Cómo se arma */}
             <div className="mt-4 space-y-1.5 rounded-xl bg-background/70 p-3 text-sm">
-              {actual.calc.fijo > 0 && <Linea texto="Fijo del mes" monto={actual.calc.fijo} />}
+              <p className="pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Detalle del pago · trabajo de {nombreMes(mes)} {mes.slice(0, 4)}</p>
+              {actual.calc.fijo > 0 && <Linea texto={`Fijo de ${nombreMes(mes)}`} monto={actual.calc.fijo} />}
               {cfg.modo === "acuerdos"
                 ? actual.calc.detalle.map((d) => (
                     <Linea
@@ -154,7 +155,7 @@ export default function MisGanancias() {
                 <Linea key={i} texto={a.concepto} monto={a.monto} />
               ))}
               <div className="flex items-center justify-between border-t pt-1.5 font-semibold">
-                <span>Total</span>
+                <span>Total de {nombreMes(mes)}</span>
                 <span className="tabular-nums">{formatARS(actual.total)}</span>
               </div>
               {!actual.pagado && totalParciales(actual.liq) > 0 && (
