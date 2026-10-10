@@ -27,6 +27,7 @@ import { tableroDe, type TableroRol } from "@/lib/redes/tableros";
 import { SelectorVista, VistaCalendario, useVista } from "@/components/redes/VistaCalendario";
 import { BotonArmarMes, PlanesAviso } from "@/components/redes/PlanesAviso";
 import { ordenEntrega } from "@/lib/redes/entrega";
+import { useBorrarVideos } from "@/components/redes/BorrarVideos";
 
 /** Kanban: el equipo ve su tablero; el admin, todo el recorrido. */
 export default function Circuito() {
@@ -49,6 +50,7 @@ function TableroEquipo({ tablero }: { tablero: TableroRol }) {
     () => videos.filter((v) => tablero.esMio(v, uid) && (cliente === "todos" || v.proyecto_id === cliente)),
     [videos, tablero, uid, cliente]
   );
+  const borrar = useBorrarVideos(mios);
 
   return (
     <PageShell
@@ -91,8 +93,9 @@ function TableroEquipo({ tablero }: { tablero: TableroRol }) {
       }
     >
       {esProd && <PlanesAviso />}
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <SelectorVista vista={vista} onChange={setVista} />
+        {esProd && vista === "kanban" && borrar.boton}
       </div>
       {vista === "calendario" ? (
         <VistaCalendario videos={mios} />
@@ -133,7 +136,7 @@ function TableroEquipo({ tablero }: { tablero: TableroRol }) {
                 </p>
                 <div className="flex min-h-[120px] flex-col gap-2 px-2 pb-2 md:max-h-[calc(100dvh-230px)] md:overflow-y-auto">
                   {items.map((v) => (
-                    <VideoCard key={v.id} video={v} showEtapa={false} accion={col.tuya ? col.accion : undefined} />
+                    <div key={v.id}>{borrar.envolver(v, <VideoCard video={v} showEtapa={false} accion={col.tuya ? col.accion : undefined} />)}</div>
                   ))}
                   {items.length === 0 && (
                     <p className="py-6 text-center text-xs text-muted-foreground/70">
@@ -147,6 +150,7 @@ function TableroEquipo({ tablero }: { tablero: TableroRol }) {
         </div>
       </div>
       )}
+      {esProd && borrar.barra}
       {esProd && (
         <>
           <PlanificarDialog open={!!planificar} onOpenChange={(v) => !v && setPlanificar(false)} modoInicial={planificar || "planificar"} />
@@ -205,6 +209,8 @@ function CircuitoCompleto() {
     (v) => (cliente === "todos" || v.proyecto_id === cliente) && (!q.trim() || v.titulo.toLowerCase().includes(q.trim().toLowerCase()))
   );
   const trabados = filtrados.filter((v) => estaTrabado(v, settings.dias_alerta)).length;
+  const borrar = useBorrarVideos(filtrados);
+  const puedeBorrar = canManageProduction(role);
 
   return (
     <PageShell
@@ -272,6 +278,7 @@ function CircuitoCompleto() {
           Trabados {trabados > 0 && `(${trabados})`}
         </Button>
         )}
+        {vista === "kanban" && puedeBorrar && borrar.boton}
       </div>
 
       {vista === "calendario" ? (
@@ -326,7 +333,7 @@ function CircuitoCompleto() {
                   {items.map((v) => (
                     <div
                       key={v.id}
-                      draggable={arrastra}
+                      draggable={arrastra && !borrar.modo}
                       onDragStart={(ev) => {
                         ev.dataTransfer.setData("text/video-id", v.id);
                         ev.dataTransfer.effectAllowed = "move";
@@ -338,7 +345,7 @@ function CircuitoCompleto() {
                       }}
                       className={cn(arrastra && "cursor-grab active:cursor-grabbing", arrastrando === v.id && "opacity-40")}
                     >
-                      <VideoCard video={v} showEtapa={false} />
+                      {borrar.envolver(v, <VideoCard video={v} showEtapa={false} />)}
                     </div>
                   ))}
                   {items.length === 0 && (
@@ -354,6 +361,7 @@ function CircuitoCompleto() {
       )}
 
       <PlanificarDialog open={!!planificar} onOpenChange={(v) => !v && setPlanificar(false)} modoInicial={planificar || "planificar"} />
+      {puedeBorrar && borrar.barra}
     </PageShell>
   );
 }
