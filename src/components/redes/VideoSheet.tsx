@@ -99,10 +99,12 @@ function Block({
   className?: string;
 }) {
   return (
-    <section className={cn("space-y-2.5", className)}>
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          <Icon className="h-3.5 w-3.5" />
+    <section className={cn("space-y-3 rounded-2xl border bg-card p-4 shadow-sm", className)}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="flex items-center gap-2.5 text-sm font-semibold">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Icon className="h-4 w-4" />
+          </span>
           {title}
         </h3>
         {actions}
@@ -316,7 +318,7 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
                 title="Rodaje"
                 actions={
                   isProd && (
-                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setRodajeOpen(true)}>
+                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setRodajeOpen(true)}>
                       {rodaje ? "Editar" : "Agendar"}
                     </Button>
                   )
@@ -363,7 +365,7 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
                 title="Rodaje"
                 actions={
                   isProd && (
-                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setRodajeOpen(true)}>
+                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setRodajeOpen(true)}>
                       {rodaje ? "Editar" : "Agendar"}
                     </Button>
                   )
@@ -711,7 +713,7 @@ function IdeaBlock({ video, editable, uid }: { video: Video; editable: boolean; 
       actions={
         editable &&
         !editing && (
-          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditing(true)}>
+          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setEditing(true)}>
             Editar
           </Button>
         )
@@ -812,11 +814,11 @@ function GuionBlock({ video, editable }: { video: Video; editable: boolean }) {
         editable &&
         !editing && (
           <div className="flex gap-1">
-            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={generar} disabled={!!busy}>
+            <Button size="sm" className="h-8 bg-gradient-to-r from-[#6F40FC] to-[#E040A0] text-xs text-white shadow-sm hover:opacity-90" onClick={generar} disabled={!!busy}>
               {busy === "ia" ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1 h-3.5 w-3.5" />}
               {tiene ? "Rehacer con IA" : "Armar con IA"}
             </Button>
-            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditing(true)} disabled={!!busy}>
+            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setEditing(true)} disabled={!!busy}>
               <Pencil className="mr-1 h-3.5 w-3.5" />
               {tiene ? "Editar" : "Escribirlo yo"}
             </Button>
@@ -1005,7 +1007,7 @@ function CopyBlock({ video, editable, uid }: { video: Video; editable: boolean; 
               Copiar
             </Button>
           )}
-          <Button size="sm" variant="secondary" className="h-7 text-xs" onClick={generar} disabled={generating}>
+          <Button size="sm" className="h-8 bg-gradient-to-r from-[#6F40FC] to-[#E040A0] text-xs text-white shadow-sm hover:opacity-90" onClick={generar} disabled={generating}>
             {generating ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Sparkles className="mr-1 h-3 w-3" />}
             Generar con IA
           </Button>
@@ -1123,10 +1125,10 @@ function PublicacionBlock({
         canEdit &&
         video.etapa === "publicado" && (
           <div className="flex gap-1">
-            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={onPauta}>
+            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={onPauta}>
               Pauta
             </Button>
-            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={onResultados}>
+            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={onResultados}>
               Resultados
             </Button>
           </div>

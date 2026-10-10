@@ -262,24 +262,27 @@ export function MaterialSlot({
             onFiles(Array.from(e.dataTransfer.files));
           }}
           className={cn(
-            "rounded-xl border border-dashed p-4 text-center transition-colors",
-            dragOver ? "border-primary bg-primary/5" : "border-border",
+            "flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed p-5 text-center transition-all",
+            dragOver ? "scale-[1.01] border-primary bg-primary/10" : "border-primary/30 bg-gradient-to-br from-primary/[0.05] to-fuchsia-500/[0.04] hover:border-primary/60",
             !driveAvailable && "opacity-60"
           )}
         >
-          <p className="text-xs text-muted-foreground">
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/15 text-primary">
+            <Upload className="h-5 w-5" />
+          </span>
+          <p className="text-sm font-semibold">{slot === "crudo" ? "Subí el material filmado" : "Subí el video editado"}</p>
+          <p className="-mt-1 text-xs text-muted-foreground">
             {driveAvailable
               ? slot === "crudo"
-                ? "Arrastrá el material filmado o subilo desde el celular"
-                : "Arrastrá el video editado (MP4) o elegilo"
+                ? "Arrastralo acá o elegilo desde la compu o el celular"
+                : "MP4 · arrastralo acá o elegilo"
               : "Drive no está conectado: pedile al admin que lo conecte en Ajustes."}
           </p>
-          <div className="mt-3 flex flex-wrap justify-center gap-2">
+          <div className="mt-1 flex flex-wrap justify-center gap-2">
             <Button
-              size="sm"
-              variant="secondary"
               disabled={!driveAvailable}
               onClick={() => pickMediaFiles(onFiles)}
+              className="bg-gradient-to-r from-[#6F40FC] to-[#E040A0] text-white shadow-md hover:opacity-90"
             >
               {isUploading ? (
                 <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
@@ -290,9 +293,8 @@ export function MaterialSlot({
             </Button>
             {slot === "crudo" && (
               <Button
-                size="sm"
                 variant="outline"
-                className="md:hidden"
+                className="bg-background md:hidden"
                 disabled={!driveAvailable}
                 onClick={() => pickCaptureMedia(onFiles)}
               >
