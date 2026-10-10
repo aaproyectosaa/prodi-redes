@@ -305,12 +305,12 @@ Devolvé las acciones (máximo ${MAX_ACCIONES}; una por cada cosa: si pide 5 vid
 - crear_reunion: titulo corto (ej. "Reunión con Ariel y Pato"); fecha YYYY-MM-DD (si no dice el día, hoy; calculá "mañana", "el viernes", etc. a partir de ahora); hora HH:MM en 24 h ("5 pm" = 17:00; si no dice la hora, no la pongas); duracion_min (60 si no dice); personas: los nombres de la lista tal cual (si usan un apodo como "Pato", poné el nombre de la lista que le corresponde; si no está, ponelo como lo escribieron). No incluyas a ${yo.nombre}: ya va.
 - crear_tarea: cuando pide recordarle algo a alguien o dejar una tarea ("recordale a Lucía que mande el guion el viernes"). titulo: la tarea corta en infinitivo ("Mandar el guion"); personas: a quién se le asigna (vacío si es para quien escribe); vence YYYY-MM-DD si dice cuándo (si no, vacío).
 - crear_video: cuando pide cargar videos en Producción ("cargá los videos", "armame los videos de…", "ya grabé estos videos, cargalos"). Uno por video, SOLO los que aparecen en las fotos o el texto que mandó (no inventes ni agregues de otros lados; si no estás seguro de cuáles son, preguntá antes). titulo: el nombre del video tal cual (ej. "¿Qué bolsa necesitás?"); cliente: el nombre del cliente tal cual la lista; texto (OBLIGATORIO): la idea de ESE video en 1 o 2 oraciones (de qué se trata y qué busca); el guion y las tomas los transcribe el sistema de las fotos; si no tenés el guion de ese video, no lo cargues: preguntá; filmado: true si dice que ya lo grabó/filmó, false si es para planificar; fecha YYYY-MM-DD si dice para cuándo se publica, o el día 1 del mes si solo dice el mes ("para noviembre" → el 1 de noviembre); si no dice nada, vacío (va al mes actual).${CARGAN_VIDEOS.includes(caller.role) ? "" : " (Quien escribe no puede cargar videos: contestá que eso lo hace producción.)"}
-- editar_video: cuando pide corregir o completar un video que ya está cargado (ponerle la idea/guion, cambiarle el nombre). titulo: el nombre ACTUAL del video tal cual está en el sistema; cliente; texto: la idea/guion completo nuevo (si lo cambia); nuevo_titulo: si le cambia el nombre.
+- editar_video: cuando pide corregir o completar un video que ya está cargado (ponerle la idea/guion, cambiarle el nombre). titulo: el nombre ACTUAL del video tal cual está en el sistema; cliente; texto: la idea/guion completo nuevo (si lo cambia); nuevo_titulo: si le cambia el nombre; fecha YYYY-MM-DD: si cambia para cuándo se publica o de qué mes es ("pasalo a noviembre" → el 1 de noviembre; "publicalo el 15" → esa fecha), eso lo mueve al plan de ese mes; vence YYYY-MM-DD: si cambia la fecha de entrega de la edición (para cuándo lo tiene que entregar el editor). Para varios videos, un editar_video por cada uno.
 - borrar_video: cuando pide borrar o sacar un video cargado (ej. "borrá los que no estaban", "sacá ese"). titulo: el nombre actual tal cual; cliente. Solo se pueden borrar los que todavía no tienen material subido.
 - mandar_logo: cuando pide el logo (o los logos) de un cliente para mandarlo al chat. cliente: el nombre del cliente tal cual la lista.
 - recordar: solo cuando pide que te acuerdes de algo de un cliente ("acordate que…", "tené en cuenta que…", "guardalo en el contexto de…"). texto: el dato en UNA oración corta (máx. 250 caracteres), en tercera persona sobre el cliente; si son varios datos, un recordar por cada uno. cliente: el nombre del cliente si no es el del grupo.
 - responder: si es una pregunta o un saludo. Contestá con lo que hay en el chat${ctx ? " y en los DATOS DEL SISTEMA (clientes, equipo, videos, tareas, marcas: colores, tipografías, tono)" : ""}. Corto y ordenado: si la respuesta tiene varias partes, separalas en bloques con un título en negrita (**Equipo**, **Videos**…), una línea en blanco entre bloques y los datos como lista con "- " (sublistas con dos espacios y "- "). Nada de párrafos largos. No inventes datos.
-- No podés borrar ni modificar tareas ni clientes: eso se hace a mano en el sistema. Videos sí (editar_video, borrar_video), solo admin y productora.
+- No podés borrar ni modificar tareas ni clientes: eso se hace a mano en el sistema. Videos sí (editar_video: nombre, idea, guion, fecha de publicación/mes del plan y fecha de entrega; borrar_video), solo admin y productora.
 - En "responder" NO digas que hiciste algo (cargar, anotar, agendar): eso lo informa el sistema con lo que realmente se hizo. Si además hacés acciones, el responder es solo para lo que falte decir (o no lo pongas).
 - preguntar: texto con UNA pregunta corta si falta algo importante (por ejemplo la hora de la reunión) o no se entiende el pedido.
 Español rioplatense con voseo.`;
@@ -323,7 +323,9 @@ Español rioplatense con voseo.`;
   // Cargar o corregir videos desde capturas: un paso aparte, con atención completa, transcribe de las fotos cada
   // video con su título y guion tal cual. Eso es lo que se guarda (no lo que la IA resumió al decidir qué hacer).
   const ext: { avisos: string[] } = { avisos: [] };
-  if (imagenes.length && acciones.some((x) => x.tipo === "crear_video" || x.tipo === "editar_video")) {
+  // Solo si carga videos o les cambia el contenido (no para mover una fecha).
+  const conContenido = (x: AccionIA) => x.tipo === "crear_video" || (x.tipo === "editar_video" && !!(String(x.texto ?? "").trim() || x.nuevo_titulo));
+  if (imagenes.length && acciones.some(conContenido)) {
     try {
       const g = await extraerGuiones(imagenes, `${historial}\n${yo.nombre}: ${texto}`);
       if (g.length) acciones = combinarConGuiones(acciones, g, ext);
@@ -561,13 +563,30 @@ Español rioplatense con voseo.`;
       if (guion) cambios.guion = guion;
       if (tomas.length) cambios.tomas = tomas;
       if (nuevo.length >= 3) cambios.titulo = nuevo;
-      if (!idea && !guion && nuevo.length < 3) {
+      // Fechas: la de publicación define el mes del plan (el día 1 = solo cambia el mes); la de entrega, la del editor.
+      const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+      const nombreMes = (m: string) => MESES[Number(m.slice(5, 7)) - 1] ?? m;
+      const fechas: string[] = [];
+      if (fechaValida(a.fecha) && a.fecha >= sumarDias(hoy, -31)) {
+        const mesNuevo = a.fecha.slice(0, 7);
+        const soloMes = a.fecha.endsWith("-01");
+        if (mesNuevo !== v.mes) cambios.mes = mesNuevo;
+        cambios.fecha_deseada = soloMes ? (typeof v.fecha_deseada === "string" && v.fecha_deseada.startsWith(mesNuevo) ? v.fecha_deseada : null) : a.fecha;
+        fechas.push(soloMes ? `pasa al plan de ${nombreMes(mesNuevo)}` : `se publica el ${diaTexto(a.fecha)}${mesNuevo !== v.mes ? ` (plan de ${nombreMes(mesNuevo)})` : ""}`);
+      }
+      if (fechaValida(a.vence) && a.vence >= hoy) {
+        cambios.entrega_edicion = a.vence;
+        cambios.entrega_aviso = null;
+        fechas.push(`entrega de edición el ${diaTexto(a.vence)}`);
+      }
+      if (!idea && !guion && nuevo.length < 3 && !fechas.length) {
         out.push({ texto: `¿Qué le cambio a «${v.titulo}»?` });
         continue;
       }
       cambios.historial = FieldValue.arrayUnion({ at: ts, by: caller.uid, accion: "Corregido por Prodi", nota: null });
       await vd.ref.update(cambios);
-      out.push({ texto: `Listo, corregí «${nuevo.length >= 3 ? nuevo : v.titulo}»${guion ? ": le puse la idea, el guion y las tomas" : idea ? ": le puse la idea" : ""}.`, link: `/videos?video=${vd.id}`, link_texto: "Ver video" });
+      const queHice = [guion ? "le puse la idea, el guion y las tomas" : idea ? "le puse la idea" : "", ...fechas].filter(Boolean);
+      out.push({ texto: `Listo, «${nuevo.length >= 3 ? nuevo : v.titulo}»${queHice.length ? `: ${lista(queHice)}` : ": corregido"}.`, link: `/videos?video=${vd.id}`, link_texto: "Ver video" });
       continue;
     }
 
@@ -781,7 +800,7 @@ function combinarConGuiones(acciones: AccionIA[], guiones: GuionVideo[], ext: { 
       out.push({ ...a, titulo: guiones[k].titulo, texto: guiones[k].idea, guion: guiones[k].guion, tomas: guiones[k].tomas });
       continue;
     }
-    if (a.tipo === "editar_video") {
+    if (a.tipo === "editar_video" && (String(a.texto ?? "").trim() || a.nuevo_titulo)) {
       // El título actual sirve para encontrarlo; el guion, de la foto que más se parezca (al título nuevo o al actual).
       const k = mejor(String(a.nuevo_titulo || a.titulo || ""));
       if (k >= 0) {
