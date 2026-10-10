@@ -2,27 +2,19 @@ import { useState } from "react";
 import { asset } from "@/lib/asset";
 import { useLocation, useNavigate } from "react-router-dom";
 import { signOut } from "@/lib/auth";
-import { Bell, ChevronLeft, ChevronRight, HelpCircle, LogOut, Moon, Sun, User } from "lucide-react";
-import { EVENTO_RECORRIDO } from "@/lib/novedades";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { auth } from "@/integrations/firebase/client";
-import { Button } from "@/components/ui/button";
-import UserAvatar from "@/components/UserAvatar";
-import { RoleBadge } from "@/components/RoleBadge";
 import { getRoleInfo } from "@/lib/roles";
 import { navForRoles, type NavItem } from "@/lib/redes/nav";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { useInAppNotifications } from "@/hooks/use-in-app-notifications";
-import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 import { usePendientes } from "@/hooks/use-pendientes";
-import { VerComoBoton } from "@/components/redes/VerComo";
-import { BotonInstalar } from "@/components/InstalarApp";
-import { BotonInstalarChat } from "@/components/InstalarChat";
-import { BotonOcultarMontos } from "@/components/OcultarMontos";
 import type { Profile, UserRole } from "@/integrations/firebase/types";
 import { TituloSeccion, useSeccionesPlegables } from "@/components/SeccionNav";
 import { useRedes } from "@/contexts/redes-data-context";
 import { AnilloPerfilMenu } from "@/components/redes/cliente/PerfilCompleto";
+import { PieSidebar } from "@/components/PieSidebar";
 
 const STORAGE_KEY = "sidebar-collapsed";
 
@@ -47,7 +39,6 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
   // Cliente: su negocio, para el anillo de "perfil completo".
   const { clientes } = useRedes();
   const location = useLocation();
-  const { theme, setTheme } = useTheme();
   const { unreadCount } = useInAppNotifications(profile?.id);
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -175,78 +166,17 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
         )}
       </div>
 
-      <div className="space-y-0.5 border-t border-border p-2">
-        <VerComoBoton collapsed={collapsed} />
-        <BotonInstalar collapsed={collapsed} />
-        <BotonInstalarChat collapsed={collapsed} />
-        {itemBtn(
-          { label: "Avisos", icon: Bell, path: "/notificaciones" },
-          location.pathname === "/notificaciones",
-          unreadCount
-        )}
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new Event(EVENTO_RECORRIDO))}
-          className={cn(
-            "flex h-9 w-full items-center gap-2.5 rounded-lg text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
-            collapsed ? "justify-center" : "px-3"
-          )}
-          title="Cómo se usa"
-        >
-          <HelpCircle className="h-4 w-4" />
-          {!collapsed && <span>¿Cómo se usa?</span>}
-        </button>
-        {(role === "admin" || roles.includes("administracion")) && (
-          <BotonOcultarMontos conTexto={!collapsed} className={cn("h-9 w-full text-muted-foreground", collapsed ? "justify-center" : "px-3")} />
-        )}
-        <button
-          type="button"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          className={cn(
-            "flex h-9 w-full items-center gap-2.5 rounded-lg text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
-            collapsed ? "justify-center" : "px-3"
-          )}
-          title="Cambiar tema"
-          data-tema
-        >
-          {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          {!collapsed && <span>{theme === "dark" ? "Modo claro" : "Modo oscuro"}</span>}
-        </button>
-        <button
-          type="button"
-          onClick={() => navigate("/profile")}
-          className={cn(
-            "flex w-full items-center rounded-lg py-2 text-left transition-colors hover:bg-accent",
-            collapsed ? "justify-center" : "gap-2.5 px-2"
-          )}
-          title={collapsed ? `${profile?.nombre ?? "Mi perfil"} · ${roleLabel}` : "Mi perfil"}
-        >
-          {profile ? (
-            <UserAvatar profile={profile} size="sm" />
-          ) : (
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary">
-              <User className="h-4 w-4 text-muted-foreground" />
-            </div>
-          )}
-          {!collapsed && (
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <p className="truncate text-sm font-semibold leading-none">{profile?.nombre || "Mi perfil"}</p>
-              <RoleBadge label={roleLabel} />
-            </div>
-          )}
-          {!collapsed && role === "cliente" && <AnilloPerfilMenu cliente={clientes[0]} />}
-        </button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleLogout}
-          className={cn("h-9 w-full gap-2.5 text-muted-foreground", collapsed ? "justify-center px-0" : "justify-start px-3")}
-          title={collapsed ? "Cerrar sesión" : undefined}
-        >
-          <LogOut className="h-4 w-4 shrink-0" />
-          {!collapsed && <span className="text-sm">Cerrar sesión</span>}
-        </Button>
-      </div>
+      <PieSidebar
+        collapsed={collapsed}
+        profile={profile}
+        roleLabel={roleLabel}
+        avisos={unreadCount}
+        avisosActivo={location.pathname === "/notificaciones"}
+        onAvisos={() => navigate("/notificaciones")}
+        onPerfil={() => navigate("/profile")}
+        onSalir={() => void handleLogout()}
+        extraTarjeta={role === "cliente" ? <AnilloPerfilMenu cliente={clientes[0]} /> : undefined}
+      />
     </aside>
   );
 };
