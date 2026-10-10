@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowDownRight,
@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { PageShell, Section, StatCard } from "@/components/redes/PageShell";
 import { ClienteTag } from "@/components/redes/ClienteTag";
+import { MesNav } from "@/components/redes/admin/FacturaPartes";
 import UserAvatar from "@/components/UserAvatar";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useAppData } from "@/contexts/app-data-context";
@@ -34,6 +35,7 @@ import {
   trabajosDelMes,
   useFacturas,
   useGastos,
+  pagadoDe,
   useLiquidaciones,
   useObligaciones,
   cuotasDelMes,
@@ -50,7 +52,10 @@ export default function Tablero() {
   const navigate = useNavigate();
   const { clientes, videos, planes, cobros, piezas } = useRedes();
   const { profiles } = useAppData();
-  const mes = mesActual();
+  // Se puede mirar cualquier mes (por defecto el actual); el gráfico muestra los 12 meses hasta ese.
+  const mesHoy = mesActual();
+  const [mes, setMes] = useState(mesHoy);
+  const esMesActual = mes === mesHoy;
   const hoy = hoyISO();
   const dia = diaAR();
   const desde = sumarMeses(mes, -11);
@@ -72,7 +77,7 @@ export default function Tablero() {
   const serie = meses.map((m) => {
     const fs = facturas.filter((f) => f.mes === m && f.estado !== "anulada");
     const extras = extrasDe(m).reduce((a, c) => a + c.monto, 0);
-    const estimado = fs.length === 0 && m === mes;
+    const estimado = fs.length === 0 && m === mesHoy;
     const facturado = estimado ? mrr : fs.reduce((a, f) => a + f.neto, 0);
     return { m, total: facturado + extras, estimado, clientes: estimado ? clientes.length : new Set(fs.map((f) => f.proyecto_id)).size };
   });
@@ -84,7 +89,7 @@ export default function Tablero() {
   const extrasMes = extrasDe(mes).reduce((a, c) => a + c.monto, 0);
   // Cobrado: todo lo que entró por Mercado Pago (abonos debitados, sin la comisión de MP, y extras) + boletas cobradas por otros medios.
   const porMP = cobros.filter((c) => c.estado === "aprobado" && mesAR(c.pagado_at ?? c.created_at) === mes).reduce((a, c) => a + c.monto - (Number(c.comision_mp) || 0), 0);
-  const cobrado = porMP + delMes.filter((f) => f.estado === "cobrada" && f.medio !== "mercadopago").reduce((a, f) => a + f.bruto, 0);
+  const cobrado = porMP + delMes.filter((f) => f.estado === "cobrada" && f.medio !== "mercadopago").reduce((a, f) => a + f.bruto, 0) + delMes.filter((f) => f.estado !== "cobrada").reduce((a, f) => a + pagadoDe(f), 0);
   const vencidas = facturas.filter((f) => f.estado === "pendiente" && f.vencimiento < hoy);
 
   // Equipo: lo que corresponde pagar este mes.
@@ -93,7 +98,7 @@ export default function Tablero() {
     .map((p) => {
       const trabajos = trabajosDelMes(p.id, p.role ?? "", mes, videos, piezas);
       const unidades = trabajos.length;
-      const liq = liqs.find((l) => l.uid === p.id);
+      const liq = liqs.find((l) => l.uid === p.id && l.mes === mes);
       const calc = calcularPago(cfgPagos[p.id], unidades, liq?.ajustes ?? [], clientes.map((c) => c.id), { mes, trabajos });
       return { p, unidades, porCliente: cfgPagos[p.id]?.modo === "por_cliente" ? calc.clientes : null, total: liq?.estado === "pagado" ? (liq.total_pagado ?? calc.total) : calc.total, pagado: liq?.estado === "pagado" };
     });
@@ -161,7 +166,8 @@ export default function Tablero() {
 
   // Ideas para vender más o no perder clientes.
   const oportunidades: { tipo: "venta" | "riesgo" | "dato"; texto: string; ir: string }[] = [];
-  for (const { c, plan, leads, leadsAnt } of filas) {
+  // Las ideas son para el mes en curso (dependen del día de hoy).
+  for (const { c, plan, leads, leadsAnt } of esMesActual ? filas : []) {
     const uso = usoPlan(c, planes, videos, mes);
     if (uso.excedido > 0)
       oportunidades.push({ tipo: "venta", ir: `/clientes/${c.id}`, texto: `${c.nombre} pidió ${uso.excedido} video${uso.excedido === 1 ? "" : "s"} más que su plan: ofrecele el plan siguiente.` });
@@ -174,15 +180,19 @@ export default function Tablero() {
     if (plan.plan === null && !c.plan_redes_override?.precio_mensual)
       oportunidades.push({ tipo: "dato", ir: `/clientes/${c.id}?tab=config`, texto: `${c.nombre} no tiene plan: no se le factura el 27.` });
   }
-  for (const f of vencidas.slice(0, 3))
+  for (const f of esMesActual ? vencidas.slice(0, 3) : [])
     oportunidades.unshift({ tipo: "riesgo", ir: "/cobros", texto: `${f.cliente} tiene vencida la ${f.tipo} de ${nombrePeriodo(f)} (${formatARS(interesMora(f, hoy).totalConInteres)} con interés).` });
 
-  const faltan27 = dia <= 27 ? 27 - dia : null;
+  const faltan27 = esMesActual && dia <= 27 ? 27 - dia : null;
   const paraRevisar = delMes.filter((f) => f.estado === "borrador").length;
   const faltaCobrar = delMes.filter((f) => f.estado === "pendiente").length;
 
   return (
-    <PageShell title="Tablero" subtitle={`Cómo va el negocio · ${mesLabel(mes)}`}>
+    <PageShell
+      title="Tablero"
+      subtitle={`Cómo va el negocio · ${mesLabel(mes)}`}
+      actions={<MesNav mes={mes} setMes={setMes} max={mesHoy} />}
+    >
       <div className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
           label={actual.estimado ? "A facturar este mes" : "Facturado este mes"}
