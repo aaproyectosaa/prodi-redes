@@ -3,7 +3,9 @@ import { Camera, CheckCircle2, Download, ExternalLink, FolderOpen, Loader2, Uplo
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { enModoVista } from "@/lib/redes/vistaComo";
+import { assertEditable, enModoVista } from "@/lib/redes/vistaComo";
+import { doc, updateDoc } from "@/lib/db";
+import { db } from "@/integrations/firebase/client";
 import { useDriveUpload } from "@/hooks/use-drive-upload";
 import { useDriveConnection } from "@/hooks/use-drive-connection";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
@@ -143,6 +145,21 @@ export function MaterialSlot({
     }
   };
 
+  // Sacar un archivo del video (sigue guardado en Drive).
+  const quitar = async (att: DriveAttachmentRef) => {
+    try {
+      assertEditable();
+      const campo = slot === "crudo" ? "attachments_crudo" : "attachments_finalizado";
+      await updateDoc(doc(db, "videos", video.id), {
+        [campo]: attachments.filter((a) => a.drive_file_id !== att.drive_file_id),
+        updated_at: new Date().toISOString(),
+      });
+      toast.success("Listo, lo sacamos del video");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo sacar");
+    }
+  };
+
   const activeUploads = uploads.filter((u) => u.status !== "done");
   // Videos de los sistemas anteriores: el material estaba en una carpeta de Drive (link), no subido al video.
   const linkViejo = String((slot === "crudo" ? video._viejo?.material_crudo : video._viejo?.material_finalizado) ?? "").trim();
@@ -209,7 +226,7 @@ export function MaterialSlot({
           <ClientMediaCarousel attachments={attachments} driveAvailable={driveAvailable} />
         ) : (
           <div className="overflow-hidden rounded-xl border bg-black/90">
-            <TaskMediaGallery attachments={attachments} driveAvailable={driveAvailable} />
+            <TaskMediaGallery attachments={attachments} driveAvailable={driveAvailable} onQuitar={canUpload ? quitar : undefined} />
           </div>
         )
       ) : (

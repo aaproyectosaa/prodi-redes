@@ -6,6 +6,7 @@ import {
   Expand,
   ExternalLink,
   File as FileIcon,
+  Trash2,
   Image as ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,8 @@ export interface TaskMediaGalleryProps {
    */
   audience?: "team" | "client";
   className?: string;
+  /** Si viene, aparece "Sacar" para el archivo que se está viendo. */
+  onQuitar?: (att: DriveAttachmentRef) => Promise<void> | void;
 }
 
 /** Misma reproducción de media que usa el panel PM (ahí el video se ve bien). */
@@ -47,7 +50,9 @@ export function TaskMediaGallery({
   task,
   audience = "team",
   className,
+  onQuitar,
 }: TaskMediaGalleryProps) {
+  const [quitando, setQuitando] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const isClient = audience === "client";
@@ -162,6 +167,28 @@ export function TaskMediaGallery({
             {currentIndex + 1} de {attachments.length}
           </span>
           <div className="flex items-center gap-1">
+            {onQuitar && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={quitando}
+                onClick={async () => {
+                  if (!window.confirm(`¿Sacar «${current.name}» del video? (Queda guardado en Drive)`)) return;
+                  setQuitando(true);
+                  try {
+                    await onQuitar(current);
+                    setCurrentIndex((i) => Math.max(0, i - 1));
+                  } finally {
+                    setQuitando(false);
+                  }
+                }}
+                className="h-7 gap-1 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="h-3 w-3" />
+                <span>Sacar</span>
+              </Button>
+            )}
             {canExpand && (
               <Button
                 type="button"
