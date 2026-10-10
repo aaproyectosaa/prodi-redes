@@ -105,8 +105,8 @@ function sinTexto(): never {
  * Respuesta estructurada. `temperature` viene de cuando era Gemini: Claude no la usa, pero sirve de pista
  * del tipo de pedido. Lo preciso y rápido (@prodi, memoria: ≤ 0,3) va con poco esfuerzo; lo creativo, medio.
  */
-export async function generarJSON<T>(prompt: string, schema: unknown, temperature = 0.6, imagenes: Imagen[] = []): Promise<T> {
-  if (hayClaude()) return jsonClaude<T>(prompt, schema, temperature <= 0.3 ? "low" : "medium", imagenes);
+export async function generarJSON<T>(prompt: string, schema: unknown, temperature = 0.6, imagenes: Imagen[] = [], esfuerzo?: Esfuerzo): Promise<T> {
+  if (hayClaude()) return jsonClaude<T>(prompt, schema, esfuerzo ?? (temperature <= 0.3 ? "low" : "medium"), imagenes);
   if (hayGemini()) return gemini.generarJSON<T>(prompt, schema, temperature);
   sinTexto();
 }

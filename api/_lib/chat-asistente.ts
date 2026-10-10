@@ -309,9 +309,22 @@ Devolvé las acciones (máximo ${MAX_ACCIONES}; una por cada cosa: si pide 5 vid
 - preguntar: texto con UNA pregunta corta si falta algo importante (por ejemplo la hora de la reunión) o no se entiende el pedido.
 Español rioplatense con voseo.`;
 
-  const r = await generarJSON<{ acciones?: AccionIA[] }>(prompt, ESQUEMA, 0.2, imagenes);
-  const acciones = (r.acciones ?? []).slice(0, MAX_ACCIONES);
+  // Con fotos (capturas de un guion) se piensa con más detalle: hay que leer texto chico.
+  const r = await generarJSON<{ acciones?: AccionIA[] }>(prompt, ESQUEMA, 0.2, imagenes, imagenes.length ? "medium" : undefined);
+  let acciones = (r.acciones ?? []).slice(0, MAX_ACCIONES);
   if (!acciones.length) return [{ texto: "No entendí qué necesitás. ¿Me lo decís de otra forma?" }];
+
+  // Cargar o corregir videos desde capturas: un paso aparte, con atención completa, transcribe de las fotos cada
+  // video con su título y guion tal cual. Eso es lo que se guarda (no lo que la IA resumió al decidir qué hacer).
+  const ext: { avisos: string[] } = { avisos: [] };
+  if (imagenes.length && acciones.some((x) => x.tipo === "crear_video" || x.tipo === "editar_video")) {
+    try {
+      const g = await extraerGuiones(imagenes, `${historial}\n${yo.nombre}: ${texto}`);
+      if (g.length) acciones = combinarConGuiones(acciones, g, ext);
+    } catch (err) {
+      console.warn("[prodi] guiones", err);
+    }
+  }
 
   const out: Resultado[] = [];
   for (const a of acciones) {
@@ -657,5 +670,98 @@ Español rioplatense con voseo.`;
       continue;
     }
   }
+  if (ext.avisos.length) {
+    out.push({ texto: `No cargué ${ext.avisos.length === 1 ? `«${ext.avisos[0]}»` : `estos ${ext.avisos.length}: ${lista(ext.avisos.map((t) => `«${t}»`))}`} porque no ${ext.avisos.length === 1 ? "lo encontré" : "los encontré"} en las fotos. Si van, mandame la captura con su guion.` });
+  }
   return out.length ? out : [{ texto: "No entendí qué necesitás. ¿Me lo decís de otra forma?" }];
+}
+
+const ESQUEMA_GUIONES = {
+  type: "OBJECT",
+  properties: {
+    videos: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: { titulo: { type: "STRING" }, guion: { type: "STRING" } },
+        required: ["titulo", "guion"],
+      },
+    },
+  },
+  required: ["videos"],
+};
+
+/**
+ * Lee las capturas (páginas de un documento con ideas de videos) y devuelve cada video con su título y su guion
+ * transcripto tal cual. Las capturas suelen estar en orden y superponerse: se juntan sin repetir.
+ */
+async function extraerGuiones(imagenes: Imagen[], charla: string): Promise<{ titulo: string; guion: string }[]> {
+  const prompt = `Te paso ${imagenes.length} capturas de pantalla, en orden, de un documento con ideas de videos (reels) para un cliente. Pueden superponerse (la misma parte aparece en dos capturas): juntá el texto sin repetir.
+
+Para la conversación de contexto (qué pidió la persona):
+${charla.slice(-3000)}
+
+Devolvé en "videos" cada idea de video que aparece en las capturas, en el orden del documento:
+- titulo: el título de esa idea tal cual figura (lo que está después de "Título:" o el encabezado entre comillas, ej. “¿Qué bolsa necesitás?”). Sin comillas. Si una idea no tiene título propio, usá su primera línea de diálogo corta.
+- guion: TODO el texto de esa idea copiado tal cual, sin resumir ni inventar: Video/tomas, Diálogo, Texto en pantalla, Cierre/CTA y notas. Una línea por renglón del documento, con las etiquetas ("Video:", "Diálogo:", "Texto:", "CTA:") como están.
+No incluyas encabezados de categoría ("Ideas de Reels categoría bolsas") como videos. No dupliques un video si aparece en dos capturas.`;
+  const r = await generarJSON<{ videos?: { titulo?: string; guion?: string }[] }>(prompt, ESQUEMA_GUIONES, 0.5, imagenes, "high");
+  return (r.videos ?? [])
+    .map((v) => ({ titulo: String(v.titulo ?? "").replace(/["“”«»]/g, "").replace(/\s+/g, " ").trim().slice(0, 160), guion: String(v.guion ?? "").trim().slice(0, 4000) }))
+    .filter((v) => v.titulo.length >= 3 && v.guion.length >= 10);
+}
+
+/** Qué tan parecidos son dos títulos (palabras en común sobre el más corto), de 0 a 1. */
+function parecido(a: string, b: string): number {
+  const pa = new Set(normalizar(a).replace(/[^a-z0-9 ]/g, " ").split(" ").filter((w) => w.length >= 3));
+  const pb = new Set(normalizar(b).replace(/[^a-z0-9 ]/g, " ").split(" ").filter((w) => w.length >= 3));
+  if (!pa.size || !pb.size) return 0;
+  let comunes = 0;
+  pa.forEach((w) => pb.has(w) && comunes++);
+  return comunes / Math.min(pa.size, pb.size);
+}
+
+/**
+ * Pone en cada crear_video / editar_video el título y el guion transcriptos de las fotos. Los crear_video que no
+ * aparecen en las fotos no se cargan (se avisa).
+ */
+function combinarConGuiones(acciones: AccionIA[], guiones: { titulo: string; guion: string }[], ext: { avisos: string[] }): AccionIA[] {
+  const usados = new Set<number>();
+  const mejor = (titulo: string) => {
+    let k = -1;
+    let p = 0;
+    guiones.forEach((g, i) => {
+      if (usados.has(i)) return;
+      const x = parecido(titulo, g.titulo);
+      if (x > p) {
+        p = x;
+        k = i;
+      }
+    });
+    return p >= 0.5 ? k : -1;
+  };
+  const out: AccionIA[] = [];
+  for (const a of acciones) {
+    if (a.tipo === "crear_video") {
+      const k = mejor(String(a.titulo ?? ""));
+      if (k < 0) {
+        ext.avisos.push(String(a.titulo ?? "").trim());
+        continue;
+      }
+      usados.add(k);
+      out.push({ ...a, titulo: guiones[k].titulo, texto: guiones[k].guion });
+      continue;
+    }
+    if (a.tipo === "editar_video") {
+      // El título actual sirve para encontrarlo; el guion, de la foto que más se parezca (al título nuevo o al actual).
+      const k = mejor(String(a.nuevo_titulo || a.titulo || ""));
+      if (k >= 0) {
+        usados.add(k);
+        out.push({ ...a, texto: guiones[k].guion, nuevo_titulo: a.nuevo_titulo ? guiones[k].titulo : a.nuevo_titulo });
+        continue;
+      }
+    }
+    out.push(a);
+  }
+  return out;
 }
