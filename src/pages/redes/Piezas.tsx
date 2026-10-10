@@ -124,6 +124,8 @@ export default function Piezas() {
     setSobre(null);
     const p = piezas.find((x) => x.id === id);
     if (!p || !user) return;
+    // Soltada en la misma columna: no pasa nada.
+    if (COLUMNAS.find((c) => c.id === destino)?.filtro(p)) return;
     if (destino === "listas" && role !== "admin") {
       toast.error("Las da por entregadas el cliente al aprobarlas (o el admin).");
       return;
@@ -135,6 +137,72 @@ export default function Piezas() {
       toast.error(err instanceof Error ? err.message : "No se pudo mover");
     }
   };
+
+  // En el celular el arrastre del navegador no anda con el dedo: se mantiene apretada la tarjeta y se mueve.
+  const tablero = useRef<HTMLDivElement>(null);
+  const tactil = useRef<{ id: string; x0: number; y0: number; timer: number } | null>(null);
+  const recienSoltada = useRef(0);
+  const [fantasma, setFantasma] = useState<{ id: string; x: number; y: number } | null>(null);
+  const tocarTarjeta = (ev: React.TouchEvent, id: string) => {
+    if (!arrastra || ev.touches.length !== 1) return;
+    const t = ev.touches[0];
+    const timer = window.setTimeout(() => {
+      navigator.vibrate?.(25);
+      setArrastrando(id);
+      setFantasma({ id, x: t.clientX, y: t.clientY });
+    }, 350);
+    tactil.current = { id, x0: t.clientX, y0: t.clientY, timer };
+  };
+  // Si se mueve antes de tiempo es que quiere scrollear: no arrastra.
+  const moverAntes = (ev: React.TouchEvent) => {
+    const a = tactil.current;
+    if (!a || fantasma) return;
+    const t = ev.touches[0];
+    if (Math.hypot(t.clientX - a.x0, t.clientY - a.y0) > 10) {
+      clearTimeout(a.timer);
+      tactil.current = null;
+    }
+  };
+  const soltarAntes = () => {
+    if (tactil.current && !fantasma) clearTimeout(tactil.current.timer);
+    if (!fantasma) tactil.current = null;
+  };
+  useEffect(() => {
+    if (!fantasma) return;
+    const id = fantasma.id;
+    let destino: string | null = null;
+    let auto = 0;
+    const mover = (e: TouchEvent) => {
+      e.preventDefault();
+      const t = e.touches[0];
+      setFantasma({ id, x: t.clientX, y: t.clientY });
+      const col = (document.elementFromPoint(t.clientX, t.clientY)?.closest("[data-col]") as HTMLElement | null)?.dataset.col ?? null;
+      destino = col;
+      setSobre(col);
+      // Cerca del borde, el tablero se corre solo para llegar a las otras columnas.
+      auto = t.clientX < 40 ? -14 : t.clientX > window.innerWidth - 40 ? 14 : 0;
+    };
+    const intervalo = window.setInterval(() => auto && tablero.current?.scrollBy({ left: auto }), 16);
+    const fin = () => {
+      recienSoltada.current = Date.now();
+      tactil.current = null;
+      setFantasma(null);
+      setArrastrando(null);
+      setSobre(null);
+      if (destino) void soltar(destino, id);
+    };
+    document.addEventListener("touchmove", mover, { passive: false });
+    document.addEventListener("touchend", fin);
+    document.addEventListener("touchcancel", fin);
+    return () => {
+      clearInterval(intervalo);
+      document.removeEventListener("touchmove", mover);
+      document.removeEventListener("touchend", fin);
+      document.removeEventListener("touchcancel", fin);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fantasma?.id]);
+  const piezaFantasma = fantasma ? piezas.find((p) => p.id === fantasma.id) : null;
   // Calendario: lo pendiente en la fecha que lo necesita el cliente (o 5 días después del pedido
   // si no puso fecha) y lo entregado el día que se aprobó.
   const eventosCal = useMemo<EventoCal[]>(
@@ -195,7 +263,7 @@ export default function Piezas() {
         <CalendarioEventos eventos={eventosCal} tipos={TIPOS_CAL} vacio="No hay piezas para entregar ni entregadas este mes." />
       ) : (
         <>
-          <div className="-mx-4 snap-x snap-mandatory scroll-px-4 overflow-x-auto px-4 pb-4 md:-mx-8 md:snap-none md:px-8">
+          <div ref={tablero} className={cn("-mx-4 scroll-px-4 overflow-x-auto px-4 pb-4 md:-mx-8 md:snap-none md:px-8", !fantasma && "snap-x snap-mandatory")}>
             <div className="flex min-w-max gap-3">
               {COLUMNAS.map((col) => {
                 const items = piezas.filter(col.filtro).sort((a, b) => a.updated_at.localeCompare(b.updated_at));
@@ -203,6 +271,7 @@ export default function Piezas() {
                 return (
                   <div
                     key={col.id}
+                    data-col={col.id}
                     className={cn(
                       "flex w-[82vw] shrink-0 snap-start flex-col rounded-2xl border transition-colors sm:w-72",
                       activa ? "border-primary/40 bg-primary/[0.05]" : "bg-muted/30",
@@ -261,9 +330,13 @@ export default function Piezas() {
                             setArrastrando(null);
                             setSobre(null);
                           }}
-                          className={cn("min-w-0", arrastra && "cursor-grab active:cursor-grabbing", arrastrando === p.id && "opacity-40")}
+                          onTouchStart={(ev) => tocarTarjeta(ev, p.id)}
+                          onTouchMove={moverAntes}
+                          onTouchEnd={soltarAntes}
+                          onContextMenu={arrastra ? (ev) => ev.preventDefault() : undefined}
+                          className={cn("min-w-0", arrastra && "cursor-grab select-none active:cursor-grabbing [-webkit-touch-callout:none]", arrastrando === p.id && "opacity-40")}
                         >
-                          <PiezaCard pieza={p} i={i} cliente={clienteById(p.proyecto_id)?.nombre} onClick={() => setAbierta(p.id)} />
+                          <PiezaCard pieza={p} i={i} cliente={clienteById(p.proyecto_id)?.nombre} onClick={() => Date.now() - recienSoltada.current > 500 && setAbierta(p.id)} />
                           {col.id === "listas" && user && (
                             <button
                               type="button"
@@ -304,6 +377,16 @@ export default function Piezas() {
         </>
       )}
 
+      {fantasma && piezaFantasma && (
+        <div
+          className="pointer-events-none fixed z-[100] w-56 -translate-x-1/2 -translate-y-1/2 rotate-2 rounded-xl border border-primary bg-card p-2.5 text-sm shadow-2xl"
+          style={{ left: fantasma.x, top: fantasma.y }}
+        >
+          <p className="truncate text-[11px] text-muted-foreground">{clienteById(piezaFantasma.proyecto_id)?.nombre}</p>
+          <p className="truncate font-medium">{piezaFantasma.producto || piezaFantasma.pedido}</p>
+          <p className="mt-1 text-[11px] font-semibold text-primary">{sobre ? `Soltar en «${COLUMNAS.find((c) => c.id === sobre)?.titulo}»` : "Llevala a otra columna"}</p>
+        </div>
+      )}
       <PiezaTrabajo pieza={pieza} onClose={() => setAbierta(null)} />
       <HistorialPiezas open={historial} onOpenChange={setHistorial} piezas={enHistorial} onAbrir={(id) => setAbierta(id)} />
       <NuevaPiezaEquipo open={nueva} onOpenChange={setNueva} onCreada={(id) => setAbierta(id)} />
