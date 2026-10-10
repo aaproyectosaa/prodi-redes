@@ -1,6 +1,6 @@
 // Facturación del 27 y pagos al equipo (solo super admin).
 import { useEffect, useState } from "react";
-import { addDoc, collection, deleteDoc, doc, onSnapshot, query, setDoc, updateDoc, where } from "@/lib/db";
+import { addDoc, collection, deleteDoc, doc, onSnapshot, query, setDoc, updateDoc, where, writeBatch } from "@/lib/db";
 import { db } from "@/integrations/firebase/client";
 import { callApi } from "@/lib/redes/api";
 import { assertEditable } from "@/lib/redes/vistaComo";
@@ -547,6 +547,37 @@ export async function guardarAjustes(uid: string, mes: string, ajustes: AjustePa
 export async function guardarPagosParciales(uid: string, mes: string, pagos: PagoParcial[]) {
   assertEditable();
   await setDoc(doc(db, "equipo_liquidaciones", `${uid}_${mes}`), { uid, mes, pagos_parciales: pagos }, { merge: true });
+}
+
+/**
+ * Los pagos son a mes vencido: lo trabajado en un mes se paga del 1 al 10 del siguiente. Si se cargó algo en el mes
+ * equivocado (pagos parciales, bonos, descuentos), esto lo pasa al mes anterior y lo junta con lo que ya hubiera.
+ */
+export async function pasarAlMesAnterior(liq: Pick<Liquidacion, "uid" | "mes" | "ajustes" | "pagos_parciales"> & { nombre?: string | null }, anterior: Liquidacion | undefined) {
+  assertEditable();
+  const mesAnt = sumarMesesISO(liq.mes, -1);
+  const batch = writeBatch(db);
+  batch.set(
+    doc(db, "equipo_liquidaciones", `${liq.uid}_${mesAnt}`),
+    {
+      uid: liq.uid,
+      mes: mesAnt,
+      ...(liq.nombre ? { nombre: liq.nombre } : {}),
+      estado: anterior?.estado ?? "pendiente",
+      ajustes: [...(anterior?.ajustes ?? []), ...(liq.ajustes ?? [])],
+      pagos_parciales: [...(anterior?.pagos_parciales ?? []), ...(liq.pagos_parciales ?? [])],
+    },
+    { merge: true }
+  );
+  batch.set(doc(db, "equipo_liquidaciones", `${liq.uid}_${liq.mes}`), { ajustes: [], pagos_parciales: [] }, { merge: true });
+  await batch.commit();
+}
+
+/** "2026-10" + n meses. */
+function sumarMesesISO(mes: string, n: number): string {
+  const [a, m] = mes.split("-").map(Number);
+  const d = new Date(Date.UTC(a, m - 1 + n, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
 export async function marcarPagado(uid: string, mes: string, total: number, detalle: string, pagado: boolean) {

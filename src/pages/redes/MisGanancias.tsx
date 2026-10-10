@@ -52,7 +52,8 @@ function enCamino(uid: string, role: string, videos: Video[], piezas: PiezaIA[],
  * lo que tiene en camino y los meses anteriores.
  */
 export default function MisGanancias() {
-  const [mes, setMes] = useState(mesActual());
+  // A mes vencido: lo que se cobra ahora es lo del mes pasado.
+  const [mes, setMes] = useState(sumarMeses(mesActual(), -1));
   const { user, role } = useUserProfileContext();
   const { videos, piezas, clientes } = useRedes();
   const uid = user?.uid ?? "";
@@ -111,6 +112,7 @@ export default function MisGanancias() {
                   {actual.pagado ? `Te pagamos ${nombreMes(mes)}` : esEsteMes ? `Llevás ganado en ${nombreMes(mes)}` : `Te corresponde de ${nombreMes(mes)}`}
                 </p>
                 <p className="mt-1 text-4xl font-bold tabular-nums tracking-tight">{formatARS(actual.total)}</p>
+                {!actual.pagado && <p className="mt-1 text-xs text-muted-foreground">Se cobra del 1 al 10 de {nombreMes(sumarMeses(mes, 1))} (a mes vencido).</p>}
               </div>
               <span
                 className={cn(

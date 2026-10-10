@@ -62,8 +62,10 @@ import {
   reactivarFactura,
   guardarConfigPago,
   guardarPagosParciales,
+  pasarAlMesAnterior,
   totalParciales,
   type PagoParcial,
+  type Liquidacion,
   clientesDe,
   htmlBoleta,
   marcarCobrada,
@@ -89,13 +91,19 @@ import { MesNav } from "@/components/redes/admin/FacturaPartes";
 
 const err = (e: unknown) => toast.error(e instanceof Error ? e.message : "Algo salió mal");
 
-/** Pagos al equipo: cuánto le corresponde a cada uno este mes y si ya se le pagó. */
+/** Pagos al equipo: cuánto le corresponde a cada uno por un mes de trabajo y si ya se le pagó (a mes vencido). */
 export default function PagosEquipoPage() {
-  const [mes, setMes] = useState(mesActual());
+  // A mes vencido: se abre en el mes trabajado que hay que pagar ahora (el anterior).
+  const [mes, setMes] = useState(sumarMeses(mesActual(), -1));
+  const siguiente = sumarMeses(mes, 1);
   return (
     <PageShell
       title="Pagos al equipo"
-      subtitle="El sistema cuenta lo que hizo cada uno en el mes y calcula lo que le corresponde."
+      subtitle={
+        mes === mesActual()
+          ? `Trabajo de ${mesLabel(mes)}: el mes sigue (se paga del 1 al 10 de ${mesLabel(siguiente).split(" ")[0].toLowerCase()}).`
+          : `Trabajo de ${mesLabel(mes)} · se paga del 1 al 10 de ${mesLabel(siguiente).split(" ")[0].toLowerCase()} (a mes vencido).`
+      }
       actions={<MesNav mes={mes} setMes={setMes} max={mesActual()} />}
     >
       <PagosEquipo mes={mes} />
@@ -108,6 +116,8 @@ function PagosEquipo({ mes }: { mes: string }) {
   const { videos, piezas, clientes } = useRedes();
   const cfg = useConfigPagos();
   const liqs = useLiquidaciones(mes);
+  // Lo que se cargó en el mes siguiente por error (los pagos son a mes vencido): se ofrece pasarlo a este mes.
+  const liqsSig = useLiquidaciones(sumarMeses(mes, 1));
   // El equipo actual, más quien tenga algo liquidado ese mes (los que ya no están, o los de la planilla sin usuario).
   const conLiq = new Set(liqs.filter((l) => l.mes === mes).map((l) => l.uid));
   const equipo = [
@@ -142,7 +152,13 @@ function PagosEquipo({ mes }: { mes: string }) {
       )}
       <div className="grid gap-3 lg:grid-cols-2">
         {filas.map((f) => (
-          <PersonaPago key={f.p.id} {...f} cfg={cfg[f.p.id]} mes={mes} />
+          <PersonaPago
+            key={f.p.id}
+            {...f}
+            cfg={cfg[f.p.id]}
+            mes={mes}
+            delSiguiente={liqsSig.find((l) => l.uid === f.p.id && l.mes === sumarMeses(mes, 1) && l.estado !== "pagado" && ((l.ajustes ?? []).length > 0 || (l.pagos_parciales ?? []).length > 0))}
+          />
         ))}
         {filas.length === 0 && <p className="text-sm text-muted-foreground">Todavía no hay equipo cargado.</p>}
       </div>
@@ -157,7 +173,10 @@ function PersonaPago({
   calc,
   cfg,
   mes,
+  delSiguiente,
 }: {
+  /** Lo cargado en el mes siguiente (parciales, bonos, descuentos) que en realidad sería de este mes. */
+  delSiguiente?: Liquidacion;
   p: ReturnType<typeof useAppData>["profiles"][number];
   unidades: number;
   liq?: { ajustes: AjustePago[]; estado: string; total_pagado?: number | null; importado?: boolean; detalle?: string | null; pagos_parciales?: PagoParcial[] };
@@ -296,6 +315,50 @@ function PersonaPago({
           </p>
         </div>
       </div>
+      {cfg?.modo === "acuerdos" && (cfg.acuerdos ?? []).length > 0 && (cfg.acuerdos ?? []).every((x) => x.desde > mes) && !pagado && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/[0.07] p-2.5 text-xs">
+          <span className="flex-1">
+            Sus acuerdos empiezan en <b>{mesLabel((cfg.acuerdos ?? []).reduce((m, x) => (x.desde < m ? x.desde : m), "9999-99"))}</b>, así que {mesLabel(mes).split(" ")[0].toLowerCase()} no los toma.
+          </span>
+          <Button
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => {
+              // Los del primer mes cargado pasan a valer desde este mes (lo más nuevo queda como estaba).
+              const primero = (cfg.acuerdos ?? []).reduce((m, x) => (x.desde < m ? x.desde : m), "9999-99");
+              void guardarConfigPago(p.id, { ...cfg, acuerdos: (cfg.acuerdos ?? []).map((x) => (x.desde === primero ? { ...x, desde: mes } : x)) })
+                .then(() => toast.success(`Listo: los acuerdos valen desde ${mesLabel(mes)}`))
+                .catch(err);
+            }}
+          >
+            Que valgan desde {mesLabel(mes).split(" ")[0].toLowerCase()}
+          </Button>
+        </div>
+      )}
+      {delSiguiente && !pagado && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/[0.07] p-2.5 text-xs">
+          <span className="flex-1">
+            En <b>{mesLabel(sumarMeses(mes, 1))}</b> hay cargado {[
+              (delSiguiente.pagos_parciales ?? []).length ? `${formatARS(totalParciales(delSiguiente))} de pagos` : "",
+              (delSiguiente.ajustes ?? []).length ? `${delSiguiente.ajustes.length} bono/descuento` : "",
+            ]
+              .filter(Boolean)
+              .join(" y ")}
+            . Si era por el trabajo de {mesLabel(mes).split(" ")[0].toLowerCase()}, pasalo acá.
+          </span>
+          <Button
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() =>
+              void pasarAlMesAnterior(delSiguiente, liq as Liquidacion | undefined)
+                .then(() => toast.success(`Listo: quedó en ${mesLabel(mes)}`))
+                .catch(err)
+            }
+          >
+            Pasarlo a {mesLabel(mes).split(" ")[0].toLowerCase()}
+          </Button>
+        </div>
+      )}
       {liq?.importado ? (
         <p className="text-xs text-muted-foreground">
           <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">De la planilla</span> {liq.detalle}
