@@ -31,10 +31,17 @@ export function precioPieza(settings: Record<string, unknown>, formato: string):
   return imp ? Number(settings.precio_pieza_impresion ?? redes) : redes;
 }
 
-/** Cuántas piezas del plan ocupa ese tipo (no es lo mismo un posteo que un banner). Por defecto 1. */
+/** Lo que entra en el plan, si no se cambió en Ajustes: los posteos e historias de Instagram y Facebook. */
+export const EN_PLAN_DEFAULT = ["cuadrado", "posteo_vertical", "vertical"];
+
+/**
+ * Cuántas piezas del plan ocupa ese tipo (no es lo mismo un posteo que un banner). 0 = no entra en el plan,
+ * se paga aparte (cartelería y otros diseños).
+ */
 export function cupoPieza(settings: Record<string, unknown>, formato: string): number {
-  const n = Number(ajusteDe(settings, formato).cupo);
-  return n >= 1 ? Math.round(n) : 1;
+  const v = ajusteDe(settings, formato).cupo;
+  if (v == null || isNaN(Number(v))) return EN_PLAN_DEFAULT.includes(formato) ? 1 : 0;
+  return Math.max(0, Math.round(Number(v)));
 }
 
 export interface PedidoPieza {

@@ -86,7 +86,7 @@ export function NuevaPiezaEquipo({
   }, [clientes, busca]);
   const cupo = cliente ? cupoPiezas(cliente, planes, piezas, mesActual()) : null;
   const ocupa = cupoDe(settings, formato);
-  const entra = !!cupo && cupo.quedan >= ocupa;
+  const entra = !!cupo && ocupa > 0 && cupo.quedan >= ocupa;
   const precio = precioDe(settings, formato);
   const listo = !!cliente && (pedido.trim().length >= 10 || (enfoque === "comercial" && producto.trim().length > 1));
 
@@ -312,7 +312,7 @@ export function NuevaPiezaEquipo({
             ) : (
               <div className="space-y-2">
                 <p className="text-sm">
-                  A {cliente.nombre} {cupo.incluidas ? (cupo.quedan > 0 ? `le quedan ${cupo.quedan} del plan y esta ocupa ${ocupa}` : "ya no le quedan piezas del plan este mes") : "su plan no incluye piezas"}. ¿Cómo la cargamos?
+                  A {cliente.nombre} {ocupa === 0 ? "este tipo de pieza no entra en el plan" : cupo.incluidas ? (cupo.quedan > 0 ? `le quedan ${cupo.quedan} del plan y esta ocupa ${ocupa}` : "ya no le quedan piezas del plan este mes") : "su plan no incluye piezas"}. ¿Cómo la cargamos?
                 </p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {(

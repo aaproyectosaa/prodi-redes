@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 import {
   ArrowRight,
+  CalendarCheck,
+  CalendarDays,
   Check,
+  MessageCircle,
+  MessageSquareText,
+  ShoppingCart,
+  Store,
+  Tag,
+  Type,
   CreditCard,
   Download,
   FolderOpen,
@@ -325,6 +333,35 @@ export function PiezaAprobarDialog({ pieza, onClose }: { pieza: PiezaIA | null; 
 // ---------------------------------------------------------------------------
 
 const CTAS = ["Escribinos por WhatsApp", "Vení al local", "Reservá tu lugar", "Comprá online"];
+const CTA_ICONOS: Record<string, React.ElementType> = {
+  "Escribinos por WhatsApp": MessageCircle,
+  "Vení al local": Store,
+  "Reservá tu lugar": CalendarCheck,
+  "Comprá online": ShoppingCart,
+};
+
+/** Campo con ícono y título, sin borde de formulario viejo. */
+function Campo({ icono: Icono, titulo, opcional, error, children }: { icono: React.ElementType; titulo: string; opcional?: boolean; error?: boolean; children: React.ReactNode }) {
+  return (
+    <label
+      className={cn(
+        "flex items-center gap-3 rounded-xl border bg-background px-3 py-2.5 shadow-sm transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20",
+        error && "border-destructive/60"
+      )}
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <Icono className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {titulo}
+          {opcional && <span className="font-normal normal-case tracking-normal"> · opcional</span>}
+        </span>
+        {children}
+      </span>
+    </label>
+  );
+}
 const MOTIVOS: { label: string; texto: string }[] = [
   { label: "Saludo por una fecha", texto: "Saludo por (qué fecha): " },
   { label: "Horario especial", texto: "Avisar que (qué día) abrimos en el horario: " },
@@ -382,7 +419,7 @@ export function PedirPiezaDialog({
   const info = formatoInfo(formato);
   const cupo = cupoPiezas(cliente, planes, piezas, mesActual());
   const ocupa = cupoDe(settings, formato);
-  const entra = cupo.quedan >= ocupa;
+  const entra = ocupa > 0 && cupo.quedan >= ocupa;
   const precio = precioDe(settings, formato);
   const tieneLogo = !!cliente?.marca_archivos?.logo;
 
@@ -502,7 +539,7 @@ export function PedirPiezaDialog({
                           {(() => {
                             // Lo que cuesta este tipo: del plan (cuántas ocupa) o el precio aparte.
                             const n = cupoDe(settings, f.value);
-                            const delPlan = cupo.incluidas > 0 && cupo.quedan >= n;
+                            const delPlan = n > 0 && cupo.incluidas > 0 && cupo.quedan >= n;
                             return (
                               <span className={cn("mt-1 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold", delPlan ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" : "bg-primary/10 text-primary")}>
                                 {delPlan ? (n === 1 ? "1 pieza del plan" : `${n} piezas del plan`) : formatARS(precioDe(settings, f.value))}
@@ -549,69 +586,173 @@ export function PedirPiezaDialog({
           )}
 
           {paso === 2 && (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {enfoque === "comercial" ? (
                 <>
-                  <div className="space-y-1.5">
-                    <Label>¿Qué querés vender?</Label>
-                    <Input value={producto} onChange={(e) => setProducto(e.target.value)} placeholder="Ej.: combo familiar de 2 pizzas + gaseosa" maxLength={160} autoFocus />
+                  {/* Lo principal: qué se vende y a cuánto */}
+                  <div className="space-y-2.5 rounded-2xl border bg-gradient-to-br from-primary/[0.06] to-fuchsia-500/[0.04] p-3.5">
+                    <Campo icono={ShoppingBag} titulo="¿Qué querés vender?" error={intentado && !!errorPaso2}>
+                      <input
+                        value={producto}
+                        onChange={(e) => setProducto(e.target.value)}
+                        placeholder="Combo familiar: 2 pizzas + gaseosa"
+                        maxLength={160}
+                        autoFocus
+                        className="w-full bg-transparent text-base font-medium outline-none placeholder:font-normal placeholder:text-muted-foreground/60"
+                      />
+                    </Campo>
+                    <Campo icono={Tag} titulo="Precio o promo" opcional>
+                      <input
+                        value={oferta}
+                        onChange={(e) => setOferta(e.target.value)}
+                        placeholder="$18.900 · 2x1 los jueves · 20% off"
+                        maxLength={160}
+                        className="w-full bg-transparent text-base outline-none placeholder:text-muted-foreground/60"
+                      />
+                    </Campo>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label>Precio o promo (opcional)</Label>
-                    <Input value={oferta} onChange={(e) => setOferta(e.target.value)} placeholder="Ej.: $18.900 · 2x1 los jueves · 20% off hasta el domingo" maxLength={160} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>¿Qué querés que haga la gente?</Label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {CTAS.map((c) => (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => setCta(c)}
-                          className={cn(
-                            "rounded-full border px-3 py-1 text-xs transition-colors",
-                            cta === c ? "border-primary bg-primary text-primary-foreground" : "hover:border-primary hover:text-primary"
-                          )}
-                        >
-                          {c}
-                        </button>
-                      ))}
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold">¿Qué querés que haga la gente?</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {CTAS.map((c) => {
+                        const Icono = CTA_ICONOS[c] ?? ArrowRight;
+                        const activo = cta === c;
+                        return (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => setCta(c)}
+                            className={cn(
+                              "flex items-center gap-2 rounded-xl border p-2.5 text-left text-sm font-medium transition-all",
+                              activo ? "border-transparent bg-gradient-to-r from-[#6F40FC] to-[#E040A0] text-white shadow-md" : "bg-card hover:-translate-y-0.5 hover:border-primary/50"
+                            )}
+                          >
+                            <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", activo ? "bg-white/20" : "bg-primary/10 text-primary")}>
+                              <Icono className="h-4 w-4" />
+                            </span>
+                            <span className="leading-tight">{c}</span>
+                          </button>
+                        );
+                      })}
                     </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Algo más que tengamos que saber (opcional)</Label>
-                    <Textarea rows={2} value={pedido} onChange={(e) => setPedido(e.target.value)} placeholder="Ej.: que se vea la pizza bien de cerca, es para el fin de semana largo" maxLength={2000} />
                   </div>
                 </>
               ) : (
-                <>
-                  <div className="space-y-1.5">
-                    <Label>¿Qué querés comunicar?</Label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {MOTIVOS.map((m) => (
-                        <button
-                          key={m.label}
-                          type="button"
-                          onClick={() => setPedido(m.texto)}
-                          className="rounded-full border px-2.5 py-1 text-xs transition-colors hover:border-primary hover:text-primary"
-                        >
-                          {m.label}
-                        </button>
-                      ))}
-                    </div>
-                    <Textarea rows={3} value={pedido} onChange={(e) => setPedido(e.target.value)} placeholder="Contanos con tus palabras qué tiene que decir" maxLength={2000} autoFocus />
+                <div className="space-y-2.5 rounded-2xl border bg-gradient-to-br from-sky-500/[0.06] to-primary/[0.04] p-3.5">
+                  <p className="text-sm font-semibold">¿Qué querés comunicar?</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {MOTIVOS.map((m) => (
+                      <button
+                        key={m.label}
+                        type="button"
+                        onClick={() => setPedido(m.texto)}
+                        className="rounded-full border bg-background px-3 py-1.5 text-xs font-medium transition-all hover:-translate-y-0.5 hover:border-primary hover:text-primary"
+                      >
+                        {m.label}
+                      </button>
+                    ))}
                   </div>
-                </>
+                  <Textarea
+                    rows={3}
+                    value={pedido}
+                    onChange={(e) => setPedido(e.target.value)}
+                    placeholder="Contanos con tus palabras qué tiene que decir"
+                    maxLength={2000}
+                    autoFocus
+                    className="resize-none rounded-xl border-0 bg-background text-base shadow-sm"
+                  />
+                </div>
               )}
-              <div className="space-y-1.5">
-                <Label>Texto que tiene que aparecer, tal cual (opcional)</Label>
-                <Input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Ej.: SÁBADO ABIERTO HASTA LAS 2 AM" maxLength={200} />
+
+              {/* Texto tal cual, con vista previa */}
+              <div className="space-y-2">
+                <p className="flex items-center gap-1.5 text-sm font-semibold">
+                  <Type className="h-4 w-4 text-primary" /> Texto que va tal cual <span className="text-xs font-normal text-muted-foreground">· opcional</span>
+                </p>
+                <input
+                  value={texto}
+                  onChange={(e) => setTexto(e.target.value)}
+                  placeholder="SÁBADO ABIERTO HASTA LAS 2 AM"
+                  maxLength={200}
+                  className="w-full rounded-xl border bg-card px-3 py-2.5 text-base outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary"
+                />
+                {texto.trim() && (
+                  <div className="rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-700 px-4 py-3 text-center text-lg font-extrabold uppercase leading-tight tracking-tight text-white animate-in fade-in zoom-in-95">
+                    {texto}
+                  </div>
+                )}
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="pieza-fecha">¿Para cuándo la necesitás? (opcional)</Label>
-                <Input id="pieza-fecha" type="date" min={hoyISO()} value={fecha} onChange={(e) => setFecha(e.target.value)} className="w-full sm:w-48" />
+
+              {enfoque === "comercial" && (
+                <div className="space-y-2">
+                  <p className="flex items-center gap-1.5 text-sm font-semibold">
+                    <MessageSquareText className="h-4 w-4 text-primary" /> Algo más <span className="text-xs font-normal text-muted-foreground">· opcional</span>
+                  </p>
+                  <Textarea
+                    rows={2}
+                    value={pedido}
+                    onChange={(e) => setPedido(e.target.value)}
+                    placeholder="Que se vea la pizza bien de cerca, es para el finde largo…"
+                    maxLength={2000}
+                    className="resize-none rounded-xl bg-card text-base"
+                  />
+                </div>
+              )}
+
+              {/* Para cuándo: opciones rápidas o una fecha */}
+              <div className="space-y-2">
+                <p className="flex items-center gap-1.5 text-sm font-semibold">
+                  <CalendarDays className="h-4 w-4 text-primary" /> ¿Para cuándo?
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {(
+                    [
+                      { t: "Sin apuro", v: "" },
+                      { t: "En 2 días", v: hoyISO(new Date(Date.now() + 2 * 86_400_000)) },
+                      { t: "Elegir fecha", v: "otra" },
+                    ] as const
+                  ).map((o) => {
+                    const rapida = hoyISO(new Date(Date.now() + 2 * 86_400_000));
+                    const activo = o.v === "otra" ? !!fecha && fecha !== rapida : fecha === o.v;
+                    return (
+                      <button
+                        key={o.t}
+                        type="button"
+                        onClick={() => {
+                          if (o.v === "otra") {
+                            if (!fecha || fecha === rapida) setFecha(hoyISO(new Date(Date.now() + 7 * 86_400_000)));
+                            // Abre el calendario apenas aparece el campo.
+                            setTimeout(() => {
+                              try {
+                                (document.getElementById("pieza-fecha") as HTMLInputElement | null)?.showPicker?.();
+                              } catch {
+                                /* algunos navegadores no lo dejan */
+                              }
+                            }, 60);
+                          } else setFecha(o.v);
+                        }}
+                        className={cn(
+                          "rounded-xl border px-2 py-2 text-xs font-medium transition-all",
+                          activo ? "border-primary bg-primary text-primary-foreground shadow-sm" : "bg-card hover:border-primary/50"
+                        )}
+                      >
+                        {o.t}
+                      </button>
+                    );
+                  })}
+                </div>
+                {fecha && fecha !== hoyISO(new Date(Date.now() + 2 * 86_400_000)) && (
+                  <input
+                    id="pieza-fecha"
+                    type="date"
+                    min={hoyISO()}
+                    value={fecha}
+                    onChange={(e) => setFecha(e.target.value)}
+                    className="w-full rounded-xl border bg-card px-3 py-2 text-sm outline-none focus:border-primary"
+                  />
+                )}
               </div>
-              {intentado && errorPaso2 && <p className="text-xs text-destructive">{errorPaso2}</p>}
+              {intentado && errorPaso2 && <p className="text-xs font-medium text-destructive">{errorPaso2}</p>}
             </div>
           )}
 

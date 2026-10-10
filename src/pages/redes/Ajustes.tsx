@@ -113,7 +113,7 @@ export default function Ajustes() {
               <div className="space-y-1.5">
                 <Label>Piezas gráficas</Label>
                 <p className="text-xs text-muted-foreground">
-                  No todas llevan el mismo laburo. «Ocupa» es cuántas piezas del plan descuenta (ej.: un banner = 2). El precio es si se paga aparte, con Mercado Pago.
+                  No todas llevan el mismo laburo. «Ocupa» es cuántas piezas del plan descuenta; con 0 no entra en el plan y se cobra aparte (cartelería, otros diseños). El precio es lo que se cobra aparte, con Mercado Pago.
                 </p>
                 <div className="divide-y overflow-hidden rounded-lg border">
                   {FORMATOS.map((f) => (
@@ -130,8 +130,8 @@ export default function Ajustes() {
                             onChange={(e) => setFormatos((x) => ({ ...x, [f.value]: { ...x[f.value], precio: e.target.value.replace(/\D/g, "") } }))}
                           />
                         </label>
-                        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                          Ocupa
+                        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground" title="0 = aparte del plan">
+                          {formatos[f.value]?.cupo === "0" ? "Aparte" : "Ocupa"}
                           <Input
                             className="h-8 text-center"
                             inputMode="numeric"
@@ -161,7 +161,7 @@ export default function Ajustes() {
                     precio_pieza_ia: Number(precioPieza) || 0,
                     precio_pieza_impresion: Number(precioImpresion) || 0,
                     formatos_pieza: Object.fromEntries(
-                      FORMATOS.map((f) => [f.value, { precio: Number(formatos[f.value]?.precio) || null, cupo: Math.max(1, Number(formatos[f.value]?.cupo) || 1) }])
+                      FORMATOS.map((f) => [f.value, { precio: Number(formatos[f.value]?.precio) || null, cupo: formatos[f.value]?.cupo === "" ? null : Math.max(0, Number(formatos[f.value]?.cupo) || 0) }])
                     ),
                     dias_alerta: Math.max(1, Number(dias) || 3),
                     informe_automatico: auto,

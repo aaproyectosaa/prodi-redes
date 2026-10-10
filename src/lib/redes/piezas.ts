@@ -112,10 +112,14 @@ export function cupoPiezas(cliente: Project | undefined, planes: PlanRedes[], pi
   return { incluidas, usadas, quedan: Math.max(0, incluidas - usadas) };
 }
 
-/** Cuántas piezas del plan ocupa ese tipo (Ajustes). Por defecto 1. */
+/** Lo que entra en el plan si no se cambió en Ajustes: posteos e historias de Instagram y Facebook. */
+export const EN_PLAN_DEFAULT: FormatoPieza[] = ["cuadrado", "posteo_vertical", "vertical"];
+
+/** Cuántas piezas del plan ocupa ese tipo (Ajustes). 0 = no entra en el plan, se paga aparte. */
 export function cupoDe(settings: RedesSettings, formato: FormatoPieza): number {
-  const n = Number(settings.formatos_pieza?.[formato]?.cupo);
-  return n >= 1 ? Math.round(n) : 1;
+  const v = settings.formatos_pieza?.[formato]?.cupo;
+  if (v == null || isNaN(Number(v))) return EN_PLAN_DEFAULT.includes(formato) ? 1 : 0;
+  return Math.max(0, Math.round(Number(v)));
 }
 
 /** Precio fuera del plan: el de ese tipo o, si no tiene, el general de redes / impresión. */

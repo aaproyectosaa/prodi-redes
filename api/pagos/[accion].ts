@@ -419,8 +419,9 @@ async function pedirPieza(req: VercelRequest) {
   // No todas valen lo mismo: un banner puede ocupar 2 piezas del plan.
   const ocupa = cupoPieza(settings, pedido.formato);
 
-  // Se cuenta y se crea con lock: dos pedidos a la vez no se pasan del plan.
-  const incluida = await crearSiHayCupo({
+  // Se cuenta y se crea con lock: dos pedidos a la vez no se pasan del plan. Lo que no entra en el plan
+  // (ocupa 0: cartelería, otros diseños) va directo a "aparte".
+  const incluida = ocupa > 0 && await crearSiHayCupo({
     tipo: "pieza",
     pid,
     mes,
