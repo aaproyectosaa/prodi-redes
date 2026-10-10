@@ -435,7 +435,7 @@ async function pedirPieza(req: VercelRequest) {
   });
 
   // Cargada por el equipo (productora o admin) y ya no le quedan piezas del plan: se elige en el momento.
-  const delEquipo = caller.role === "admin" || caller.role === "productor";
+  const delEquipo = caller.role === "admin" || caller.roles.includes("productor");
   if (!incluida && delEquipo) {
     const fuera = String(b.fuera_plan ?? "");
     if (fuera !== "sin_cargo" && fuera !== "cobrar") return { estado: "sin_cupo", incluidas, ocupa };

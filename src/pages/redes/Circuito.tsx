@@ -31,19 +31,20 @@ import { useBorrarVideos } from "@/components/redes/BorrarVideos";
 
 /** Kanban: el equipo ve su tablero; el admin, todo el recorrido. */
 export default function Circuito() {
-  const { role } = useUserProfileContext();
-  const tablero = tableroDe(role);
+  const { role, tieneRol, roles } = useUserProfileContext();
+  // El tablero del rol principal; si no tiene (ej. diseño + pauta), el del primer rol adicional que tenga uno.
+  const tablero = tableroDe(role) ?? roles.map((r) => tableroDe(r)).find(Boolean) ?? null;
   return tablero ? <TableroEquipo tablero={tablero} /> : <CircuitoCompleto />;
 }
 
 function TableroEquipo({ tablero }: { tablero: TableroRol }) {
   const { videos, clientes } = useRedes();
-  const { role, user } = useUserProfileContext();
+  const { role, user, tieneRol, roles } = useUserProfileContext();
   const uid = user?.uid ?? "";
   const [cliente, setCliente] = useState("todos");
   const [planificar, setPlanificar] = useState<false | ModoPlanificar>(false);
   const [rodaje, setRodaje] = useState(false);
-  const esProd = role === "productor";
+  const esProd = tieneRol("productor");
   const [vista, setVista] = useVista(`equipo-${role}`);
 
   const mios = useMemo(
@@ -164,7 +165,7 @@ function TableroEquipo({ tablero }: { tablero: TableroRol }) {
 /** Vista del super admin: todas las etapas, con filtros. */
 function CircuitoCompleto() {
   const { videos, clientes, settings } = useRedes();
-  const { role, user } = useUserProfileContext();
+  const { role, user, tieneRol, roles } = useUserProfileContext();
   // Super admin: arrastra una tarjeta a otra columna para cambiar el video de etapa (como "Mover a…" en el video).
   const arrastra = role === "admin" && !!user;
   const [arrastrando, setArrastrando] = useState<string | null>(null);

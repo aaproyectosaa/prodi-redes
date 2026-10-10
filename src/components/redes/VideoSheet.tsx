@@ -147,7 +147,7 @@ export function VideoSheet() {
 }
 
 function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) {
-  const { role, user } = useUserProfileContext();
+  const { role, user, tieneRol } = useUserProfileContext();
   const { profiles } = useAppData();
   const { clienteById, rodajes, settings } = useRedes();
   const uid = user?.uid ?? "";
@@ -155,9 +155,9 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
   const rodaje = video.rodaje_id ? rodajes.find((r) => r.id === video.rodaje_id) : undefined;
 
   const isAdmin = role === "admin";
-  const isProd = isAdmin || role === "productor";
-  const isEditor = isAdmin || role === "editor";
-  const isPauta = isAdmin || role === "pauta";
+  const isProd = isAdmin || tieneRol("productor");
+  const isEditor = isAdmin || tieneRol("editor");
+  const isPauta = isAdmin || tieneRol("pauta");
   const isCliente = role === "cliente";
   const info = etapaInfo(video.etapa);
 

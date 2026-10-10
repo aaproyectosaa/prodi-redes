@@ -59,7 +59,7 @@ import { useRedes } from "@/contexts/redes-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { callApi } from "@/lib/redes/api";
 import { hace } from "@/lib/redes/format";
-import { LEGACY_ROLES, ROLES, getRoleInfo } from "@/lib/roles";
+import { LEGACY_ROLES, ROLES, ROLES_ADICIONALES, getRoleInfo, rolesDe } from "@/lib/roles";
 import type { Profile } from "@/integrations/firebase/types";
 import { cn } from "@/lib/utils";
 
@@ -168,6 +168,14 @@ export default function Equipo() {
                     >
                       {pendiente ? (LEGACY_ROLES.includes(p.role ?? "pending") ? getRoleInfo(p.role).label : "Sin rol") : getRoleInfo(p.role).label}
                     </span>
+                    {!pendiente &&
+                      rolesDe(p.role, p.roles_extra)
+                        .slice(1)
+                        .map((r) => (
+                          <span key={r} className="rounded-full border border-primary/30 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                            + {getRoleInfo(r).label}
+                          </span>
+                        ))}
                     {inactivo && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold">Desactivado</span>}
                     {yo && <span className="text-[10px] text-muted-foreground">(vos)</span>}
                   </div>
@@ -320,6 +328,8 @@ function UsuarioDialog({
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [rol, setRol] = useState("productor");
+  /** Roles además del principal (ej. Producción que también hace Pauta). */
+  const [extras, setExtras] = useState<Set<string>>(new Set());
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
 
@@ -329,6 +339,7 @@ function UsuarioDialog({
       setNombre(p.nombre ?? "");
       setEmail(p.email ?? "");
       setRol(!p.role || LEGACY_ROLES.includes(p.role) ? "pending" : p.role);
+      setExtras(new Set(p.roles_extra ?? []));
       setSel(
         new Set(
           clientes
@@ -340,6 +351,7 @@ function UsuarioDialog({
       setNombre("");
       setEmail("");
       setRol("productor");
+      setExtras(new Set());
       setSel(new Set());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -353,12 +365,13 @@ function UsuarioDialog({
           nombre,
           email,
           rol,
+          roles_extra: extrasValidos,
           clientes: Array.from(sel),
         });
         onClose();
         onCreado(`Entrá a ${window.location.origin}\nMail: ${email}\nContraseña: ${r.password}`);
       } else if (p) {
-        await callApi("/api/usuarios/editar", { uid: p.id, nombre, email, rol, clientes: Array.from(sel) });
+        await callApi("/api/usuarios/editar", { uid: p.id, nombre, email, rol, roles_extra: extrasValidos, clientes: Array.from(sel) });
         toast.success("Usuario actualizado");
         onClose();
       }
@@ -369,7 +382,10 @@ function UsuarioDialog({
     }
   };
 
-  const usaClientes = ["productor", "editor", "pauta", "diseno", "cliente"].includes(rol);
+  // Solo el equipo interno suma roles (un cliente o un contacto, no).
+  const sumaRoles = ["admin", ...ROLES_ADICIONALES].includes(rol as never);
+  const extrasValidos = sumaRoles ? ROLES_ADICIONALES.filter((r) => r !== rol && extras.has(r)) : [];
+  const usaClientes = ["productor", "editor", "pauta", "diseno", "cliente"].includes(rol) || extrasValidos.some((r) => r !== "administracion");
 
   return (
     <Dialog open={!!persona} onOpenChange={(o) => !o && onClose()}>
@@ -415,6 +431,38 @@ function UsuarioDialog({
               Usa solo Prodi Chat: no ve clientes, videos ni nada del sistema. Entra únicamente a los grupos donde lo sumes
               (en el chat: abrí el grupo → Sumar) y puede escribirle por privado a la gente de esos grupos.
             </p>
+          )}
+          {sumaRoles && rol !== "admin" && (
+            <div className="space-y-1.5">
+              <Label>También hace</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {ROLES_ADICIONALES.filter((r) => r !== rol).map((r) => (
+                  <label
+                    key={r}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                      extras.has(r) ? "border-primary bg-primary/10" : "hover:border-primary/50"
+                    )}
+                  >
+                    <Checkbox
+                      checked={extras.has(r)}
+                      onCheckedChange={() =>
+                        setExtras((prev) => {
+                          const n = new Set(prev);
+                          if (n.has(r)) n.delete(r);
+                          else n.add(r);
+                          return n;
+                        })
+                      }
+                    />
+                    {getRoleInfo(r).label}
+                  </label>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Suma lo de esos roles (menú, permisos y avisos) en los mismos clientes que elijas abajo. Su pantalla de inicio es la del rol principal.
+              </p>
+            </div>
           )}
           {usaClientes && (
             <div className="space-y-1.5">

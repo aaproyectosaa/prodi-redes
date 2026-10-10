@@ -390,7 +390,18 @@ export interface Liquidacion {
   importado?: boolean;
   /** Nombre, para quien no tiene usuario en el sistema. */
   nombre?: string | null;
+  /** Lo que ya se le pagó por partes o por adelantado en el mes (no cambia lo que le corresponde, baja lo que falta). */
+  pagos_parciales?: PagoParcial[];
 }
+
+export interface PagoParcial {
+  at: string;
+  monto: number;
+  nota?: string | null;
+}
+
+/** Cuánto ya se le pagó por partes en el mes. */
+export const totalParciales = (liq?: Pick<Liquidacion, "pagos_parciales"> | null) => (liq?.pagos_parciales ?? []).reduce((a, x) => a + (Number(x.monto) || 0), 0);
 
 export const UNIDAD_POR_ROL: Record<string, { label: string; plural: string }> = {
   productor: { label: "video filmado", plural: "videos filmados" },
@@ -530,6 +541,12 @@ export async function guardarConfigPago(uid: string, cfg: ConfigPago) {
 export async function guardarAjustes(uid: string, mes: string, ajustes: AjustePago[]) {
   assertEditable();
   await setDoc(doc(db, "equipo_liquidaciones", `${uid}_${mes}`), { uid, mes, ajustes, estado: "pendiente" }, { merge: true });
+}
+
+/** Guarda los pagos parciales o adelantos del mes (la liquidación sigue pendiente hasta que se pague todo). */
+export async function guardarPagosParciales(uid: string, mes: string, pagos: PagoParcial[]) {
+  assertEditable();
+  await setDoc(doc(db, "equipo_liquidaciones", `${uid}_${mes}`), { uid, mes, pagos_parciales: pagos }, { merge: true });
 }
 
 export async function marcarPagado(uid: string, mes: string, total: number, detalle: string, pagado: boolean) {

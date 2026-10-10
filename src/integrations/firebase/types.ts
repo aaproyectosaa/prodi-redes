@@ -26,6 +26,8 @@ export type UserRole =
   | "disenador";
 
 export interface Profile {
+  /** Roles además del principal (ej. Producción que también hace Pauta). Los define el super admin en Equipo. */
+  roles_extra?: UserRole[];
   id: string;
   nombre: string;
   email: string;

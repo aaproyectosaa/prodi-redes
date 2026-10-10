@@ -37,6 +37,24 @@ export interface NavSection {
   items: NavItem[];
 }
 
+/** Menú del rol principal + lo que suman los roles adicionales (en una sección aparte, sin repetir). */
+export function navForRoles(role: UserRole | undefined, roles: UserRole[] = []): NavSection[] {
+  const base = navForRole(role);
+  const ya = new Set(base.flatMap((s) => s.items.map((i) => i.path)));
+  const extra: NavItem[] = [];
+  for (const r of roles) {
+    if (r === role) continue;
+    for (const s of navForRole(r))
+      for (const i of s.items)
+        if (!ya.has(i.path)) {
+          ya.add(i.path);
+          // En el celular la barra de abajo queda la del rol principal.
+          extra.push({ ...i, mobile: false });
+        }
+  }
+  return extra.length ? [...base, { title: "También", items: extra }] : base;
+}
+
 export function navForRole(role: UserRole | undefined): NavSection[] {
   switch (role) {
     case "admin":

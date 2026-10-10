@@ -11,7 +11,7 @@ import { onAuthStateChanged, type User as FirebaseUser } from "@/lib/auth";
 import { doc, onSnapshot, updateDoc } from "@/lib/db";
 import { auth, db } from "@/integrations/firebase/client";
 import type { Profile, UserRole } from "@/integrations/firebase/types";
-import { normalizeRole } from "@/lib/roles";
+import { normalizeRole, rolesDe } from "@/lib/roles";
 import { guardarVistaComo, leerVistaComo, setModoVista } from "@/lib/redes/vistaComo";
 
 interface UserProfileContextValue {
@@ -22,7 +22,12 @@ interface UserProfileContextValue {
   user: FirebaseUser | null;
   authChecked: boolean;
   profile: Profile | undefined;
+  /** Rol principal (pantalla de inicio y menú). */
   role: UserRole | undefined;
+  /** Principal + roles adicionales. */
+  roles: UserRole[];
+  /** ¿Tiene este rol (principal o adicional)? */
+  tieneRol: (r: UserRole) => boolean;
   dashboardAccess: boolean;
   loading: boolean;
   isAdmin: boolean;
@@ -120,11 +125,14 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
             providerData: [],
           } as unknown as FirebaseUser)
         : user;
+    const roles = rolesDe(role, profile?.roles_extra);
     return {
       user: effectiveUser,
       authChecked,
       profile,
       role,
+      roles,
+      tieneRol: (r: UserRole) => roles.includes(r),
       dashboardAccess: Boolean(profile?.dashboard_access),
       loading: real.loading || (puedeVer && vista.loading),
       isAdmin: role === "admin",

@@ -61,6 +61,9 @@ import {
   guardarDatosFacturacion,
   reactivarFactura,
   guardarConfigPago,
+  guardarPagosParciales,
+  totalParciales,
+  type PagoParcial,
   clientesDe,
   htmlBoleta,
   marcarCobrada,
@@ -122,7 +125,7 @@ function PagosEquipo({ mes }: { mes: string }) {
     return { p, unidades, liq, calc };
   });
   const total = filas.reduce((a, f) => a + (f.liq?.estado === "pagado" ? (f.liq.total_pagado ?? f.calc.total) : f.calc.total), 0);
-  const pagado = filas.filter((f) => f.liq?.estado === "pagado").reduce((a, f) => a + (f.liq?.total_pagado ?? 0), 0);
+  const pagado = filas.reduce((a, f) => a + (f.liq?.estado === "pagado" ? (f.liq?.total_pagado ?? 0) : totalParciales(f.liq)), 0);
   const sinConfig = filas.filter((f) => !cfg[f.p.id]).length;
 
   return (
@@ -157,7 +160,7 @@ function PersonaPago({
 }: {
   p: ReturnType<typeof useAppData>["profiles"][number];
   unidades: number;
-  liq?: { ajustes: AjustePago[]; estado: string; total_pagado?: number | null; importado?: boolean; detalle?: string | null };
+  liq?: { ajustes: AjustePago[]; estado: string; total_pagado?: number | null; importado?: boolean; detalle?: string | null; pagos_parciales?: PagoParcial[] };
   calc: ReturnType<typeof calcularPago>;
   cfg?: ConfigPago;
   mes: string;
@@ -176,6 +179,8 @@ function PersonaPago({
   const [acuerdos, setAcuerdos] = useState<Record<string, { fijo: string; unidad: string }>>(() => acuerdosIniciales(cfg, asignados, mes));
   const [desde, setDesde] = useState(mes);
   const [ajuste, setAjuste] = useState({ concepto: "", monto: "" });
+  // Qué se está cargando: un pago parcial/adelanto, un bono o un descuento.
+  const [cargando, setCargando] = useState<null | "parcial" | "bono" | "descuento">(null);
   useEffect(() => {
     if (!cfg) return;
     setModo(cfg.modo);
@@ -224,19 +229,30 @@ function PersonaPago({
       err(e);
     }
   };
+  const parciales = liq?.pagos_parciales ?? [];
+  const yaPagadoParcial = totalParciales(liq);
   const sumarAjuste = async () => {
-    const monto = Number(ajuste.monto.replace(/[^\d-]/g, ""));
-    if (!ajuste.concepto.trim() || !monto) {
-      toast.error("Poné el concepto y el monto (negativo para descontar)");
+    const monto = Math.abs(Number(ajuste.monto.replace(/[^\d]/g, "")));
+    if (!monto) {
+      toast.error("Poné el monto");
       return;
     }
     try {
-      await guardarAjustes(p.id, mes, [...ajustes, { concepto: ajuste.concepto.trim(), monto }]);
+      if (cargando === "parcial") {
+        await guardarPagosParciales(p.id, mes, [...parciales, { at: new Date().toISOString(), monto, nota: ajuste.concepto.trim() || null }]);
+        toast.success(`Anotado: ya le pagaste ${formatARS(yaPagadoParcial + monto)}`);
+      } else {
+        const concepto = ajuste.concepto.trim() || (cargando === "bono" ? "Bono" : "Descuento");
+        await guardarAjustes(p.id, mes, [...ajustes, { concepto, monto: cargando === "descuento" ? -monto : monto }]);
+      }
       setAjuste({ concepto: "", monto: "" });
+      setCargando(null);
     } catch (e) {
       err(e);
     }
   };
+  const quitarParcial = (i: number) => void guardarPagosParciales(p.id, mes, parciales.filter((_, k) => k !== i)).catch(err);
+  const quitarAjuste = (i: number) => void guardarAjustes(p.id, mes, ajustes.filter((_, k) => k !== i)).catch(err);
   const detalle = [
     calc.fijo ? `Fijo ${formatARS(calc.fijo)}` : "",
     cfg?.modo === "acuerdos"
@@ -274,8 +290,10 @@ function PersonaPago({
           </p>
         </div>
         <div className="text-right">
-          <p className="text-lg font-bold tabular-nums">{formatARS(pagado ? (liq?.total_pagado ?? calc.total) : calc.total)}</p>
-          <p className={cn("text-[11px] font-medium", pagado ? "text-emerald-600" : "text-muted-foreground")}>{pagado ? "Pagado" : "A pagar"}</p>
+          <p className="text-lg font-bold tabular-nums">{formatARS(pagado ? (liq?.total_pagado ?? calc.total) : calc.total - yaPagadoParcial)}</p>
+          <p className={cn("text-[11px] font-medium", pagado ? "text-emerald-600" : "text-muted-foreground")}>
+            {pagado ? "Pagado" : yaPagadoParcial ? `Falta pagar · de ${formatARS(calc.total)}` : "A pagar"}
+          </p>
         </div>
       </div>
       {liq?.importado ? (
@@ -483,30 +501,91 @@ function PersonaPago({
             <Pencil className="mr-1.5 h-3.5 w-3.5" /> Cómo le pago
           </Button>
           {!pagado && (
-            <details className="text-xs">
-              <summary className="cursor-pointer rounded-md px-2 py-1.5 text-muted-foreground hover:bg-muted">+ Bono o descuento</summary>
-              <div className="mt-2 flex gap-2">
-                <Input className="h-8" value={ajuste.concepto} onChange={(e) => setAjuste((a) => ({ ...a, concepto: e.target.value }))} placeholder="Concepto" />
-                <InputNumero negativos className="h-8 w-28" value={ajuste.monto} onChange={(e) => setAjuste((a) => ({ ...a, monto: e.target.value }))} placeholder="Monto" />
-                <Button size="sm" className="h-8" onClick={() => void sumarAjuste()}>
-                  Sumar
+            <div className="flex flex-wrap gap-1.5">
+              <Button size="sm" variant={cargando === "parcial" ? "default" : "outline"} className="h-8 text-xs" onClick={() => setCargando((c) => (c === "parcial" ? null : "parcial"))}>
+                <Banknote className="mr-1.5 h-3.5 w-3.5" /> Registrar pago parcial o adelanto
+              </Button>
+              <Button size="sm" variant={cargando === "bono" ? "default" : "ghost"} className="h-8 text-xs" onClick={() => setCargando((c) => (c === "bono" ? null : "bono"))}>
+                <Plus className="mr-1 h-3.5 w-3.5" /> Bono
+              </Button>
+              <Button size="sm" variant={cargando === "descuento" ? "default" : "ghost"} className="h-8 text-xs" onClick={() => setCargando((c) => (c === "descuento" ? null : "descuento"))}>
+                − Descuento
+              </Button>
+            </div>
+          )}
+          {cargando && !pagado && (
+            <div className="w-full space-y-2 rounded-xl border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">
+                {cargando === "parcial"
+                  ? "Lo que ya le pagaste (por partes o por adelantado). No cambia lo que le corresponde: baja lo que falta pagar."
+                  : cargando === "bono"
+                    ? "Un extra que se suma a lo que le corresponde este mes."
+                    : "Algo que se resta de lo que le corresponde (no es un pago: para eso está «pago parcial»)."}
+              </p>
+              <div className="flex gap-2">
+                <InputNumero className="h-9 w-36" autoFocus value={ajuste.monto} onChange={(e) => setAjuste((a) => ({ ...a, monto: e.target.value }))} placeholder="$ Monto" />
+                <Input
+                  className="h-9"
+                  value={ajuste.concepto}
+                  onChange={(e) => setAjuste((a) => ({ ...a, concepto: e.target.value }))}
+                  placeholder={cargando === "parcial" ? "Nota (opcional): transferencia, efectivo…" : cargando === "bono" ? "Por qué (opcional)" : "Por qué (opcional)"}
+                />
+                <Button size="sm" className="h-9 shrink-0" onClick={() => void sumarAjuste()}>
+                  Guardar
                 </Button>
               </div>
-            </details>
+            </div>
+          )}
+          {(parciales.length > 0 || ajustes.length > 0) && (
+            <div className="w-full space-y-1 rounded-xl border p-2.5 text-xs">
+              {ajustes.map((a, i) => (
+                <div key={`a${i}`} className="flex items-center gap-2">
+                  <span className={cn("flex-1", a.monto < 0 ? "text-destructive" : "text-emerald-700 dark:text-emerald-300")}>
+                    {a.monto < 0 ? "Descuento" : "Bono"}: {a.concepto}
+                  </span>
+                  <span className="tabular-nums">{formatARS(a.monto)}</span>
+                  {!pagado && (
+                    <button type="button" onClick={() => quitarAjuste(i)} className="rounded p-0.5 text-muted-foreground hover:text-destructive" aria-label="Quitar">
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {parciales.map((x, i) => (
+                <div key={`p${i}`} className="flex items-center gap-2">
+                  <span className="flex-1 text-muted-foreground">
+                    Ya pagado el {new Date(x.at).toLocaleDateString("es-AR", { day: "numeric", month: "short" })}
+                    {x.nota ? ` · ${x.nota}` : ""}
+                  </span>
+                  <span className="tabular-nums">{formatARS(x.monto)}</span>
+                  {!pagado && (
+                    <button type="button" onClick={() => quitarParcial(i)} className="rounded p-0.5 text-muted-foreground hover:text-destructive" aria-label="Quitar">
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {parciales.length > 0 && !pagado && (
+                <div className="flex items-center justify-between border-t pt-1 font-semibold">
+                  <span>Le corresponde {formatARS(calc.total)} · ya le pagaste {formatARS(yaPagadoParcial)}</span>
+                  <span className="tabular-nums">Falta {formatARS(calc.total - yaPagadoParcial)}</span>
+                </div>
+              )}
+            </div>
           )}
           <Button
             size="sm"
             variant={pagado ? "ghost" : "secondary"}
             className="ml-auto h-8"
             onClick={() =>
-              void marcarPagado(p.id, mes, calc.total, detalle, !pagado)
+              void marcarPagado(p.id, mes, calc.total, [detalle, yaPagadoParcial ? `pagado en ${parciales.length + 1} partes` : ""].filter(Boolean).join(" · "), !pagado)
                 .then(() => toast.success(pagado ? "Volvió a pendiente" : "Marcado como pagado"))
                 .catch(err)
             }
           >
             {pagado ? "Deshacer" : (
               <>
-                <Check className="mr-1.5 h-3.5 w-3.5" /> Marcar pagado
+                <Check className="mr-1.5 h-3.5 w-3.5" /> {yaPagadoParcial ? `Pagar lo que falta (${formatARS(calc.total - yaPagadoParcial)})` : "Marcar pagado"}
               </>
             )}
           </Button>

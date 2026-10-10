@@ -57,7 +57,7 @@ export default function ClienteDetalle() {
   const [params, setParams] = useSearchParams();
   const tab = params.get("tab") ?? "resumen";
   const { clienteById, videos, planes, cobros, settings, chats } = useRedes();
-  const { role } = useUserProfileContext();
+  const { role, tieneRol } = useUserProfileContext();
   const cliente = clienteById(id);
   const [mes, setMes] = useState(mesActual());
   const [planificar, setPlanificar] = useState<false | ModoPlanificar>(false);
@@ -113,7 +113,7 @@ export default function ClienteDetalle() {
             </SelectContent>
           </Select>
           <BotonArmarMes clienteId={cliente.id} />
-          {(isAdmin || role === "productor") && <BotonNuevaPieza clienteId={cliente.id} />}
+          {(isAdmin || tieneRol("productor")) && <BotonNuevaPieza clienteId={cliente.id} />}
           {chats.some((c) => c.id === chatClienteId(cliente.id)) && (
             <Button
               variant="outline"
@@ -259,8 +259,8 @@ const SERVICIO_OPCIONES: { v: ServicioCliente; titulo: string; texto: string }[]
 function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolean }) {
   const { planes, settings, clientes } = useRedes();
   const { profiles } = useAppData();
-  const { role, user } = useUserProfileContext();
-  const puedeFilma = isAdmin || (role === "productor" && !!user && (cliente.team_roles?.productor ?? []).includes(user.uid));
+  const { role, user, tieneRol } = useUserProfileContext();
+  const puedeFilma = isAdmin || (tieneRol("productor") && !!user && (cliente.team_roles?.productor ?? []).includes(user.uid));
   const [form, setForm] = useState(() => toForm(cliente));
   const [saving, setSaving] = useState(false);
 
@@ -378,7 +378,8 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
       .filter((p) => {
         // Lo que ya está tildado se sigue viendo (para poder sacarlo), aunque esté desactivado.
         if (asignados.includes(p.id)) return true;
-        if (p.activo === false || p.role !== rol) return false;
+        // Su rol principal o uno adicional (ej. Producción que también hace Pauta).
+        if (p.activo === false || (p.role !== rol && !(p.roles_extra ?? []).includes(rol as never))) return false;
         // Los super admin ya ven todo: no hace falta ofrecerlos en cada rol.
         return rol !== "cliente" || !deOtroCliente.has(p.id);
       })

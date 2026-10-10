@@ -93,13 +93,13 @@ const COLUMNAS: Columna[] = [
 /** Kanban de diseño (Karen): qué hacer, qué está esperando al cliente y qué se entregó. */
 export default function Piezas() {
   const { piezas, clienteById } = useRedes();
-  const { role } = useUserProfileContext();
+  const { role, tieneRol } = useUserProfileContext();
   const [params, setParams] = useSearchParams();
   const [abierta, setAbierta] = useState<string | null>(null);
   // "Nueva pieza" la cargan vos y la productora (con las fotos para usar).
   const [nueva, setNueva] = useState(false);
   const [historial, setHistorial] = useState(false);
-  const cargaPiezas = role === "admin" || role === "productor";
+  const cargaPiezas = role === "admin" || tieneRol("productor");
   const pieza = piezas.find((p) => p.id === abierta) ?? null;
 
   // Link de un aviso: /piezas?pieza=abc

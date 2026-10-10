@@ -33,9 +33,9 @@ export function RodajeRow({
   const vids = videos.filter((v) => rodaje.video_ids.includes(v.id));
   const esHoy = rodaje.fecha === hoyISO();
   const [hoja, setHoja] = useState(false);
-  const { user, role } = useUserProfileContext();
+  const { user, role, tieneRol } = useUserProfileContext();
   const { jobs } = useDriveUploadContext();
-  const puedeSubir = role === "admin" || role === "productor";
+  const puedeSubir = role === "admin" || tieneRol("productor");
 
   // Cuando se sube el material del último video de la jornada, todo pasa solo a edición
   // (y edición recibe el aviso). Solo si el material se subió desde esta hoja, en esta sesión.

@@ -65,7 +65,7 @@ export async function responderVideoApp(caller: Caller, b: PedidoVideo, base: st
     const p = (await tx.get(db.collection("projects").doc(String(v.proyecto_id)))).data() ?? {};
     const team = (p.team_roles ?? {}) as Record<string, string[]>;
     const esCliente = caller.role === "cliente" && (team.cliente ?? []).includes(caller.uid);
-    const esProd = caller.role === "admin" || (caller.role === "productor" && miembro(team, caller.uid));
+    const esProd = caller.role === "admin" || (caller.roles.includes("productor") && miembro(team, caller.uid));
     if (!esCliente && !esProd) throw new HttpError(403, "No tenés acceso a este video");
     if (v.etapa !== "revision_cliente") throw new HttpError(409, "Este video ya fue respondido");
     const evento = (accion: string, n: string | null) => ({ at: now, by: caller.uid, accion, nota: n });

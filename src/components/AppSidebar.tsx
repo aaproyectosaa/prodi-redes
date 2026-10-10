@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import UserAvatar from "@/components/UserAvatar";
 import { RoleBadge } from "@/components/RoleBadge";
 import { getRoleInfo } from "@/lib/roles";
-import { navForRole, type NavItem } from "@/lib/redes/nav";
+import { navForRoles, type NavItem } from "@/lib/redes/nav";
+import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { useInAppNotifications } from "@/hooks/use-in-app-notifications";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
@@ -71,7 +72,8 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
     navigate("/auth");
   };
 
-  const sections = navForRole(role);
+  const { roles } = useUserProfileContext();
+  const sections = navForRoles(role, roles);
   const pendientes = usePendientes();
   const plegables = useSeccionesPlegables();
   const roleLabel = getRoleInfo(role).label;
@@ -194,7 +196,7 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
           <HelpCircle className="h-4 w-4" />
           {!collapsed && <span>¿Cómo se usa?</span>}
         </button>
-        {(role === "admin" || role === "administracion") && (
+        {(role === "admin" || roles.includes("administracion")) && (
           <BotonOcultarMontos conTexto={!collapsed} className={cn("h-9 w-full text-muted-foreground", collapsed ? "justify-center" : "px-3")} />
         )}
         <button

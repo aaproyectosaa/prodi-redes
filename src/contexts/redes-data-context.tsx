@@ -125,12 +125,12 @@ function useScopedCollection<T extends { id: string }>(
 }
 
 export function RedesDataProvider({ children }: { children: ReactNode }) {
-  const { user, role } = useUserProfileContext();
+  const { user, role, roles } = useUserProfileContext();
   const { projects, loading: appLoading } = useAppData();
   const uid = user?.uid;
   const isAdmin = role === "admin";
   // Diseño ve sus clientes y los que todavía no tienen diseñadora asignada (trabajaEnCliente).
-  const finanzas = isAdmin || role === "administracion";
+  const finanzas = isAdmin || roles.includes("administracion");
   const global = finanzas;
   const activo = !!uid && !!role && role !== "pending";
   // Contacto (solo chat): no ve nada del sistema, solo sus chats.
@@ -140,11 +140,12 @@ export function RedesDataProvider({ children }: { children: ReactNode }) {
     const enabled = projects.filter(isProjectEnabled);
     if (global) return enabled.sort((a, b) => a.nombre.localeCompare(b.nombre));
     if (!uid) return [];
-    return enabled.filter((p) => trabajaEnCliente(role, uid, p)).sort((a, b) => a.nombre.localeCompare(b.nombre));
-  }, [projects, global, uid, role]);
+    return enabled.filter((p) => trabajaEnCliente(roles, uid, p)).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [projects, global, uid, roles]);
 
   const scope: string[] | "all" = global ? "all" : clientes.map((c) => c.id);
-  const conVideos = activo && role !== "diseno" && !soloChat;
+  // Videos y rodajes: si alguno de sus roles trabaja con videos (diseño solo, no).
+  const conVideos = activo && roles.some((r) => r !== "diseno") && !soloChat;
   const desdeMes = sumarMeses(mesActual(), -(MESES_EN_VIVO - 1));
   const porProyecto = role === "cliente";
 
@@ -166,7 +167,7 @@ export function RedesDataProvider({ children }: { children: ReactNode }) {
   );
   const piezasQ = useScopedCollection<PiezaIA>(
     "piezas_ia",
-    activo && role !== "editor" && role !== "pauta" && !soloChat,
+    activo && roles.some((r) => r !== "editor" && r !== "pauta") && !soloChat,
     scope,
     [where("created_at", ">=", `${desdeMes}-01`)],
     desdeMes,

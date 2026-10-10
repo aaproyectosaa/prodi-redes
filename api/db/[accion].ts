@@ -54,7 +54,7 @@ async function consultar(req: VercelRequest) {
   const { consultas } = body<{ consultas?: PedidoConsulta[] }>(req);
   if (!Array.isArray(consultas) || consultas.length > MAX_CONSULTAS) throw new HttpError(400, "Consultas inválidas");
   const pool = getPool();
-  const ctx = await contexto(pool, caller.uid, caller.role);
+  const ctx = await contexto(pool, caller.uid, caller.role, caller.roles);
   // Marca de este momento, tomada antes de consultar: lo que cambie mientras tanto se vuelve a mandar la próxima vez.
   // Con 3 s de margen (lo que se estaba guardando): lo más nuevo se manda dos veces antes que perderlo.
   const marca = Number((await pool.query("select coalesce(max(rev), 0)::bigint as rev from documentos where actualizado < now() - interval '3 seconds'")).rows[0].rev);
@@ -114,7 +114,7 @@ async function escribir(req: VercelRequest) {
   if (!Array.isArray(ops) || !ops.length || ops.length > MAX_OPS) throw new HttpError(400, "Escrituras inválidas");
   const calendario = new Map<string, { coleccion: "reuniones" | "tareas"; id: string; antes: Data | null }>();
   await enTransaccion(async (cli) => {
-    const ctx = await contexto(cli, caller.uid, caller.role);
+    const ctx = await contexto(cli, caller.uid, caller.role, caller.roles);
     for (const o of ops) {
       if (!["set", "update", "create", "delete"].includes(o.tipo)) throw new HttpError(400, "Escritura inválida");
       const { coleccion, id } = partirRuta(String(o.ruta));

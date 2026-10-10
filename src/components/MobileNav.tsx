@@ -9,7 +9,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import UserAvatar from "@/components/UserAvatar";
 import { RoleBadge } from "@/components/RoleBadge";
 import { getRoleInfo } from "@/lib/roles";
-import { navForRole } from "@/lib/redes/nav";
+import { navForRoles } from "@/lib/redes/nav";
+import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { useInAppNotifications } from "@/hooks/use-in-app-notifications";
 import { useTheme } from "@/hooks/use-theme";
 import { isNavItemActive } from "@/components/AppSidebar";
@@ -39,7 +40,8 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
   const [open, setOpen] = useState(false);
   const [verComo, setVerComo] = useState(false);
   const { unreadCount } = useInAppNotifications(profile?.id);
-  const sections = navForRole(role);
+  const { roles } = useUserProfileContext();
+  const sections = navForRoles(role, roles);
   const plegables = useSeccionesPlegables();
   const pendientes = usePendientes();
 
@@ -59,7 +61,7 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
           <img src={asset("/brand/logo-horizontal-negro.png")} alt="Prodi" className="h-5 w-auto dark:hidden" />
         </button>
         <div className="flex items-center gap-1">
-          {(role === "admin" || role === "administracion") && (
+          {(role === "admin" || roles.includes("administracion")) && (
             <BotonOcultarMontos conTexto={false} className="h-10 w-10 justify-center rounded-full" />
           )}
           <button
@@ -157,7 +159,7 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
             >
               <HelpCircle className="h-4 w-4" /> ¿Cómo se usa?
             </button>
-            {(role === "admin" || role === "administracion") && <BotonOcultarMontos className="h-10 w-full gap-3 px-3" />}
+            {(role === "admin" || roles.includes("administracion")) && <BotonOcultarMontos className="h-10 w-full gap-3 px-3" />}
             <button
               type="button"
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -245,7 +247,7 @@ export const MobileTabBar = ({ role }: { role?: UserRole }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const pendientes = usePendientes();
-  const items = navForRole(role)
+  const items = navForRoles(role)
     .flatMap((s) => s.items)
     .filter((i) => i.mobile)
     .slice(0, 4);

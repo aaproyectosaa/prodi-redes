@@ -67,10 +67,10 @@ async function enChatDe(uid: string, fileId: string): Promise<boolean> {
  * al que tenga acceso. Una sola consulta (usa el índice GIN de `data`).
  */
 export async function puedeVerArchivo(caller: Caller, fileId: string): Promise<boolean> {
-  if (GLOBALES.includes(caller.role)) return true;
+  if (caller.roles.some((r) => GLOBALES.includes(r))) return true;
   // Contacto (solo chat): únicamente los archivos mandados en sus chats.
   if (caller.role === "contacto") return enChatDe(caller.uid, fileId);
-  if (!ASIGNABLES.includes(caller.role)) return false;
+  if (!caller.roles.some((r) => ASIGNABLES.includes(r))) return false;
   if (await enChatDe(caller.uid, fileId)) return true;
   const ref = [{ drive_file_id: fileId }];
   const r = await getPool().query(
@@ -106,7 +106,7 @@ export async function puedeVerArchivo(caller: Caller, fileId: string): Promise<b
   );
   return (p.rows as { team: unknown }[]).some(({ team }) => {
     // El equipo, en cualquier rol del proyecto (y diseño, también sin diseñadora asignada): como assertProjectAccess.
-    if (caller.role !== "cliente") return trabajaEn(caller.role, caller.uid, team);
+    if (caller.role !== "cliente") return trabajaEn(caller.roles, caller.uid, team);
     if (!team || typeof team !== "object" || Array.isArray(team)) return false;
     // El cliente, solo como cliente.
     const ids = (team as Record<string, unknown>).cliente;

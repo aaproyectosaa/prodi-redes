@@ -7,9 +7,27 @@ import { adminDb } from "./db";
 export type Rol = "pending" | "admin" | "productor" | "editor" | "pauta" | "diseno" | "administracion" | "cliente" | string;
 
 export interface Caller extends AuthedUser {
+  /** Rol principal (el que define su pantalla de inicio y su menú). */
   role: Rol;
+  /** Rol principal + roles adicionales (ej. Producción que también hace Pauta). Para los permisos. */
+  roles: Rol[];
   nombre: string;
 }
+
+/** Roles que se pueden sumar a una persona del equipo además del principal. */
+export const ROLES_ADICIONALES: Rol[] = ["productor", "editor", "pauta", "diseno", "administracion"];
+const EQUIPO_INTERNO: Rol[] = ["admin", ...ROLES_ADICIONALES];
+
+/** Rol principal + adicionales válidos (solo el equipo interno puede sumar roles; nunca "admin"). */
+export function rolesDe(role: Rol, extra: unknown): Rol[] {
+  if (!EQUIPO_INTERNO.includes(role) || !Array.isArray(extra)) return [role];
+  return [role, ...extra.filter((r): r is Rol => typeof r === "string" && ROLES_ADICIONALES.includes(r) && r !== role)].filter(
+    (r, i, a) => a.indexOf(r) === i
+  );
+}
+
+/** ¿Tiene este rol (como principal o adicional)? */
+export const tieneRol = (caller: Pick<Caller, "role" | "roles">, rol: Rol) => (caller.roles ?? [caller.role]).includes(rol);
 
 /** Valida el token y trae el rol del perfil. */
 // El perfil (rol, activo) se recuerda 30 s en esta instancia: la app pregunta cada pocos segundos y así
@@ -35,10 +53,11 @@ export async function requireCaller(req: VercelRequest, roles?: Rol[]): Promise<
   const propio = (k: string) => (Object.hasOwn(data, k) ? data[k] : undefined);
   if (propio("activo") === false) throw new HttpError(403, "Tu usuario está desactivado");
   const role = (propio("role") as Rol) ?? "pending";
-  if (roles && !roles.includes(role)) {
+  const todos = rolesDe(role, propio("roles_extra"));
+  if (roles && !todos.some((r) => roles.includes(r))) {
     throw new HttpError(403, "No tenés permiso para esta acción");
   }
-  return { ...user, role, nombre: (propio("nombre") as string) ?? "" };
+  return { ...user, role, roles: todos, nombre: (propio("nombre") as string) ?? "" };
 }
 
 /** El cliente todavía no tiene diseñadora asignada (team_roles.diseno vacío): lo ven todas las de diseño. */
@@ -51,19 +70,20 @@ export const sinDisenadora = (team: unknown): boolean => {
  * ¿Trabaja en este cliente? Equipo: en cualquier rol de team_roles. Diseño: además, los clientes
  * sin diseñadora asignada (transición: así no se pierde ningún pedido hasta que el admin las asigne).
  */
-export function trabajaEn(role: Rol, uid: string, team: unknown): boolean {
+export function trabajaEn(role: Rol | Rol[], uid: string, team: unknown): boolean {
+  const lista = Array.isArray(role) ? role : [role];
   const t = team && typeof team === "object" && !Array.isArray(team) ? (team as Record<string, unknown>) : {};
   if (Object.values(t).some((ids) => Array.isArray(ids) && ids.includes(uid))) return true;
-  return role === "diseno" && sinDisenadora(t);
+  return lista.includes("diseno") && sinDisenadora(t);
 }
 
 /** ¿El usuario está asignado a ese cliente (o es admin)? */
 export async function assertProjectAccess(caller: Caller, proyectoId: string) {
   // Admin y administración no necesitan estar asignados.
-  if (caller.role === "admin" || caller.role === "administracion") return;
+  if (tieneRol(caller, "admin") || tieneRol(caller, "administracion")) return;
   const snap = await adminDb().collection("projects").doc(proyectoId).get();
   if (!snap.exists) throw new HttpError(404, "Cliente no encontrado");
-  if (!trabajaEn(caller.role, caller.uid, snap.data()?.team_roles)) throw new HttpError(403, "No tenés acceso a este cliente");
+  if (!trabajaEn(caller.roles ?? caller.role, caller.uid, snap.data()?.team_roles)) throw new HttpError(403, "No tenés acceso a este cliente");
 }
 
 export function sendError(res: VercelResponse, err: unknown) {

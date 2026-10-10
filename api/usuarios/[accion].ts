@@ -18,7 +18,7 @@ import crypto from "crypto";
 import { FieldValue } from "../_lib/db";
 import { adminDb } from "../_lib/db";
 import { adminAuth, crearUsuario, linkDeClave, usuarioFresco } from "../_lib/cuentas";
-import { appUrl, body, HttpError, requireCaller, sendError, type Caller } from "../_lib/http";
+import { appUrl, body, HttpError, olvidarPerfil, requireCaller, rolesDe, sendError, type Caller } from "../_lib/http";
 import { enviarMailsLote } from "../_lib/informe";
 import { mailAvisoHtml } from "../_lib/mail-aviso";
 import { borrarEjemplo, cargarEjemplo } from "../_lib/ejemplo";
@@ -28,33 +28,41 @@ export const config = { maxDuration: 60 };
 const ROLES = ["admin", "productor", "editor", "pauta", "diseno", "administracion", "cliente", "pending"];
 const ROL_EN_CLIENTE: Record<string, string> = { productor: "productor", editor: "editor", pauta: "pauta", diseno: "diseno", cliente: "cliente" };
 
-/** Deja a la persona exactamente en esos clientes (para su rol). */
-async function asignarClientes(uid: string, rol: string, clientes: string[]) {
+/**
+ * Deja a la persona exactamente en esos clientes, en todos sus roles (el principal y los adicionales):
+ * ej. Producción + Pauta queda como productora y como pauta en cada uno de esos clientes.
+ */
+async function asignarClientes(uid: string, rol: string | string[], clientes: string[]) {
   const db = adminDb();
   const projects = await db.collection("projects").get();
   const batch = db.batch();
-  const campo = ROL_EN_CLIENTE[rol];
+  const campos = new Set((Array.isArray(rol) ? rol : [rol]).map((r) => ROL_EN_CLIENTE[r]).filter(Boolean));
   for (const p of projects.docs) {
     // Los clientes dados de baja no se tocan (no aparecen en la pantalla de edición).
     if (p.data().enabled === false && clientes.length > 0) continue;
     const team = (p.data().team_roles ?? {}) as Record<string, string[]>;
     const updates: Record<string, unknown> = {};
-    // Se saca de cualquier otro rol del proyecto (cambió de rol o de clientes).
+    // Se saca de los roles que ya no tiene y de los clientes que no están elegidos.
     for (const [k, ids] of Object.entries(team)) {
-      if ((ids ?? []).includes(uid) && (k !== campo || !clientes.includes(p.id))) {
+      if ((ids ?? []).includes(uid) && (!campos.has(k) || !clientes.includes(p.id))) {
         updates[`team_roles.${k}`] = FieldValue.arrayRemove(uid);
       }
     }
-    if (campo && clientes.includes(p.id) && !(team[campo] ?? []).includes(uid)) {
-      updates[`team_roles.${campo}`] = FieldValue.arrayUnion(uid);
+    for (const campo of campos) {
+      if (clientes.includes(p.id) && !(team[campo] ?? []).includes(uid)) {
+        updates[`team_roles.${campo}`] = FieldValue.arrayUnion(uid);
+      }
     }
     if (Object.keys(updates).length) batch.update(p.ref, updates);
   }
   await batch.commit();
 }
 
+/** Roles adicionales válidos para ese rol principal (solo el equipo interno; nunca admin ni el mismo principal). */
+const extrasValidos = (rol: string, extra: unknown): string[] => rolesDe(rol, extra).filter((r) => r !== rol);
+
 async function crear(req: VercelRequest) {
-  const b = body<{ nombre?: string; email?: string; rol?: string; clientes?: string[]; password?: string }>(req);
+  const b = body<{ nombre?: string; email?: string; rol?: string; roles_extra?: string[]; clientes?: string[]; password?: string }>(req);
   const nombre = String(b.nombre ?? "").trim();
   const email = String(b.email ?? "").trim().toLowerCase();
   const rol = String(b.rol ?? "");
@@ -71,15 +79,16 @@ async function crear(req: VercelRequest) {
     nombre,
     email,
     role: rol,
+    roles_extra: extrasValidos(rol, b.roles_extra),
     activo: true,
     created_at: new Date().toISOString(),
   });
-  if (b.clientes?.length) await asignarClientes(user.uid, rol, b.clientes);
+  if (b.clientes?.length) await asignarClientes(user.uid, [rol, ...extrasValidos(rol, b.roles_extra)], b.clientes);
   return { ok: true, uid: user.uid, password };
 }
 
 async function editar(req: VercelRequest, adminUid: string) {
-  const b = body<{ uid?: string; nombre?: string; email?: string; rol?: string; clientes?: string[] }>(req);
+  const b = body<{ uid?: string; nombre?: string; email?: string; rol?: string; roles_extra?: string[]; clientes?: string[] }>(req);
   if (!b.uid) throw new HttpError(400, "Falta uid");
   if (b.uid === adminUid && b.rol && b.rol !== "admin") throw new HttpError(409, "No te podés sacar el rol de super admin a vos mismo");
   const ref = adminDb().collection("profiles").doc(b.uid);
@@ -97,9 +106,14 @@ async function editar(req: VercelRequest, adminUid: string) {
     await adminAuth().updateUser(b.uid, { email });
     patch.email = email;
   }
+  const rolFinal = (patch.role as string) ?? String(prev.role ?? "");
+  // Roles adicionales: los que vienen (o los que tenía), siempre válidos para el rol principal.
+  const extras = extrasValidos(rolFinal, b.roles_extra !== undefined ? b.roles_extra : prev.roles_extra);
+  if (b.roles_extra !== undefined || patch.role) patch.roles_extra = extras;
   if (patch.nombre) await adminAuth().updateUser(b.uid, { displayName: patch.nombre as string }).catch(() => undefined);
   if (Object.keys(patch).length) await ref.set(patch, { merge: true });
-  if (b.clientes) await asignarClientes(b.uid, (patch.role as string) ?? prev.role, b.clientes);
+  if (Object.keys(patch).length) olvidarPerfil(b.uid);
+  if (b.clientes) await asignarClientes(b.uid, [rolFinal, ...extras], b.clientes);
   return { ok: true };
 }
 
@@ -167,7 +181,7 @@ async function clienteParaContactos(caller: Caller, proyectoId: unknown) {
   const p = snap.data() ?? {};
   if (caller.role !== "admin") {
     const team = (p.team_roles ?? {}) as Record<string, string[]>;
-    if (caller.role !== "productor" || !Object.values(team).some((ids) => (ids ?? []).includes(caller.uid)))
+    if (!caller.roles.includes("productor") || !Object.values(team).some((ids) => (ids ?? []).includes(caller.uid)))
       throw new HttpError(403, "Solo el super admin o la producción de este cliente");
   }
   return { id: proyectoId, nombre: String(p.nombre ?? "") };

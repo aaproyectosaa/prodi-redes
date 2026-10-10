@@ -9,6 +9,7 @@ import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { fechaCorta, formatARS, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import {
   calcularPago,
+  totalParciales,
   trabajosDelMes,
   UNIDAD_POR_ROL,
   useConfigPagos,
@@ -154,6 +155,17 @@ export default function MisGanancias() {
                 <span>Total</span>
                 <span className="tabular-nums">{formatARS(actual.total)}</span>
               </div>
+              {!actual.pagado && totalParciales(actual.liq) > 0 && (
+                <>
+                  {(actual.liq?.pagos_parciales ?? []).map((x, i) => (
+                    <Linea key={`pp${i}`} texto={`Ya te pagaron el ${new Date(x.at).toLocaleDateString("es-AR", { day: "numeric", month: "short" })}`} monto={-x.monto} />
+                  ))}
+                  <div className="flex items-center justify-between font-semibold text-primary">
+                    <span>Falta que te paguen</span>
+                    <span className="tabular-nums">{formatARS(actual.total - totalParciales(actual.liq))}</span>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* En camino */}

@@ -10,7 +10,10 @@ import { leerDoc } from "./db";
 
 export interface Contexto {
   uid: string;
+  /** Rol principal. */
   role: string;
+  /** Principal + adicionales (ej. Producción que también hace Pauta). */
+  roles: string[];
   /** Clientes donde el usuario es "cliente" (se calcula una vez por pedido). */
   misClientes: Set<string>;
   /** Clientes asignados a productor / editor / pauta / diseño (en cualquier rol de team_roles; diseño, también los sin diseñadora). */
@@ -32,17 +35,18 @@ const ACTIVOS = [...TEAM, "administracion", "cliente"];
  */
 const esContacto = (c: Contexto) => c.role === "contacto";
 const esAdmin = (c: Contexto) => c.role === "admin";
-const esTeam = (c: Contexto) => TEAM.includes(c.role);
-const esDiseno = (c: Contexto) => c.role === "diseno";
-const esFinanzas = (c: Contexto) => c.role === "admin" || c.role === "administracion";
+const tiene = (c: Contexto, r: string) => c.roles.includes(r);
+const esTeam = (c: Contexto) => c.roles.some((r) => TEAM.includes(r));
+const esDiseno = (c: Contexto) => tiene(c, "diseno");
+const esFinanzas = (c: Contexto) => tiene(c, "admin") || tiene(c, "administracion");
 
 /** Roles del equipo que solo ven los clientes donde están asignados (como assertProjectAccess). Diseño ve además los clientes sin diseñadora asignada. */
 const ASIGNADOS = ["productor", "editor", "pauta", "diseno"];
 /** ¿Trabaja en este cliente? Admin ve todos; el resto, solo si está en team_roles (diseño: también los sin diseñadora). */
 const equipoDe = (c: Contexto, pid: unknown) =>
-  esAdmin(c) || (ASIGNADOS.includes(c.role) && typeof pid === "string" && c.misProyectos.has(pid));
+  esAdmin(c) || (c.roles.some((r) => ASIGNADOS.includes(r)) && typeof pid === "string" && c.misProyectos.has(pid));
 /** Admin, o productor asignado a ese cliente. */
-const produceEn = (c: Contexto, pid: unknown) => esAdmin(c) || (c.role === "productor" && equipoDe(c, pid));
+const produceEn = (c: Contexto, pid: unknown) => esAdmin(c) || (tiene(c, "productor") && equipoDe(c, pid));
 /** Campos del WhatsApp (ya no se usa): nadie los escribe desde la app. */
 const WHATSAPP = ["whatsapp_phone", "whatsapp_phone_verified", "whatsapp_enabled", "whatsapp_notifications"];
 /** Evento de Google Calendar: lo escribe solo el servidor (api/_lib/calendario.ts). */
@@ -50,7 +54,7 @@ const CALENDARIO = ["google_event_id", "google_event_hash"];
 /** ¿Pone o cambia alguno de estos campos? (borrarlos sí se puede: un set completo sin ellos no se rechaza). */
 const escribeAlguna = (antes: Data | null, despues: Data | null, campos: string[]) =>
   !!despues && campos.some((k) => despues[k] !== undefined && JSON.stringify(despues[k]) !== JSON.stringify(antes?.[k]));
-const activo = (c: Contexto) => ACTIVOS.includes(c.role);
+const activo = (c: Contexto) => c.roles.some((r) => ACTIVOS.includes(r));
 const clienteDe = (c: Contexto, pid: unknown) => c.role === "cliente" && typeof pid === "string" && c.misClientes.has(pid);
 const soloCambia = (antes: Data | null, despues: Data | null, permitidas: string[]) =>
   clavesCambiadas(antes, despues).every((k) => permitidas.includes(k));
@@ -344,10 +348,10 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       if (escribeAlguna(antes, despues, WHATSAPP)) return false;
       // La foto va chica (la app la recorta y comprime): así no pesa en cada lista de perfiles.
       if (escribeAlguna(antes, despues, ["profileImage"]) && !fotoOk(despues!.profileImage, 200_000)) return false;
-      if (crea) return c.uid === id && despues!.role === "pending";
+      if (crea) return c.uid === id && despues!.role === "pending" && despues!.roles_extra == null;
       return (
         esAdmin(c) ||
-        (c.uid === id && !tocaAlguna(antes, despues, ["role", "dashboard_access", "project_permissions", "activo", "email", "proyecto_id"]))
+        (c.uid === id && !tocaAlguna(antes, despues, ["role", "roles_extra", "dashboard_access", "project_permissions", "activo", "email", "proyecto_id"]))
       );
     case "projects":
       if (crea || borra) return esAdmin(c);
@@ -514,7 +518,8 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
 }
 
 /** Arma el contexto del pedido: rol y clientes del usuario. */
-export async function contexto(ex: Pick<PoolClient, "query">, uid: string, role: string): Promise<Contexto> {
+export async function contexto(ex: Pick<PoolClient, "query">, uid: string, role: string, rolesTodos: string[] = [role]): Promise<Contexto> {
+  const roles = rolesTodos.length ? rolesTodos : [role];
   const misClientes = new Set<string>();
   const misProyectos = new Set<string>();
   if (role === "cliente") {
@@ -523,7 +528,8 @@ export async function contexto(ex: Pick<PoolClient, "query">, uid: string, role:
       [uid]
     );
     r.rows.forEach((x: { id: string }) => misClientes.add(x.id));
-  } else if (ASIGNADOS.includes(role)) {
+  }
+  if (roles.some((r) => ASIGNADOS.includes(r))) {
     // En cualquier rol del cliente (igual que assertProjectAccess / trabajaEn). Diseño: también los clientes
     // sin diseñadora asignada (team_roles.diseno vacío), así no se pierde nada hasta que el admin las asigne.
     const r = await ex.query(
@@ -537,11 +543,11 @@ export async function contexto(ex: Pick<PoolClient, "query">, uid: string, role:
             )
             or ($2::boolean and coalesce(jsonb_array_length(case when jsonb_typeof(d.data->'team_roles'->'diseno') = 'array' then d.data->'team_roles'->'diseno' end), 0) = 0)
           )`,
-      [uid, role === "diseno"]
+      [uid, roles.includes("diseno")]
     );
     r.rows.forEach((x: { id: string }) => misProyectos.add(x.id));
   }
-  return { uid, role, misClientes, misProyectos, chats: new Map(), ex };
+  return { uid, role, roles, misClientes, misProyectos, chats: new Map(), ex };
 }
 
 /** Saca los campos que solo usa el servidor (tokens cifrados de Drive, etc.). */

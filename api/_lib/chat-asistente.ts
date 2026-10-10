@@ -260,7 +260,7 @@ async function interpretarYHacer(
           ? (x) => x.id === chat.proyecto_id
           : esDireccion
             ? undefined
-            : (x) => trabajaEn(caller.role as Rol, caller.uid, x.team_roles),
+            : (x) => trabajaEn(caller.roles, caller.uid, x.team_roles),
       })
     : null;
 
@@ -570,7 +570,7 @@ Español rioplatense con voseo.`;
       // Solo videos de clientes donde trabaja quien pide (el admin, todos).
       if (caller.role !== "admin") {
         const pv = (await db.collection("projects").doc(String(v.proyecto_id ?? "")).get()).data();
-        if (!pv || !trabajaEn(caller.role as Rol, caller.uid, pv.team_roles)) {
+        if (!pv || !trabajaEn(caller.roles, caller.uid, pv.team_roles)) {
           out.push({ texto: `«${v.titulo}» es de un cliente donde no estás asignado: no lo toco.` });
           continue;
         }
@@ -656,7 +656,7 @@ Español rioplatense con voseo.`;
         if (!out.some((x) => x.texto.startsWith("¿Para qué cliente"))) out.push({ texto: "¿Para qué cliente son los videos? Decime el nombre y los cargo." });
         continue;
       }
-      if (caller.role !== "admin" && !trabajaEn(caller.role as Rol, caller.uid, cli.team_roles)) {
+      if (caller.role !== "admin" && !trabajaEn(caller.roles, caller.uid, cli.team_roles)) {
         out.push({ texto: `No estás asignado a ${cli.nombre}: esos videos los carga su productora o el admin.` });
         continue;
       }

@@ -145,8 +145,23 @@ export const sinDisenadora = (p: Pick<Project, "team_roles"> | undefined | null)
  * ¿Trabaja en este cliente? En cualquier rol de su equipo; diseño, también en los clientes sin diseñadora
  * (igual que trabajaEn en api/_lib/http.ts y las reglas del servidor).
  */
-export function trabajaEnCliente(role: UserRole | string | undefined | null, uid: string | undefined | null, p: Pick<Project, "team_roles">): boolean {
+export function trabajaEnCliente(
+  role: UserRole | string | undefined | null | (UserRole | string)[],
+  uid: string | undefined | null,
+  p: Pick<Project, "team_roles">
+): boolean {
   if (!uid) return false;
   if (Object.values(p.team_roles ?? {}).some((ids) => Array.isArray(ids) && ids.includes(uid))) return true;
-  return role === "diseno" && sinDisenadora(p);
+  const roles = Array.isArray(role) ? role : [role];
+  return roles.includes("diseno") && sinDisenadora(p);
+}
+
+/** Roles que se le pueden sumar a una persona del equipo además del principal (igual que en el servidor). */
+export const ROLES_ADICIONALES: UserRole[] = ["productor", "editor", "pauta", "diseno", "administracion"];
+
+/** Rol principal + adicionales válidos (solo el equipo interno suma roles). */
+export function rolesDe(role: UserRole | undefined, extra: unknown): UserRole[] {
+  if (!role) return [];
+  if (!["admin", ...ROLES_ADICIONALES].includes(role) || !Array.isArray(extra)) return [role];
+  return [role, ...extra.filter((r): r is UserRole => ROLES_ADICIONALES.includes(r as UserRole) && r !== role)].filter((r, i, a) => a.indexOf(r) === i);
 }
