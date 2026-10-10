@@ -37,6 +37,7 @@ const Chat = lazy(() => import("./pages/redes/Chat"));
 const Reuniones = lazy(() => import("./pages/redes/Reuniones"));
 const Aprobar = lazy(() => import("./pages/Aprobar"));
 const Reportes = lazy(() => import("./pages/redes/Reportes"));
+const Escalabilidad = lazy(() => import("./pages/redes/Escalabilidad"));
 const MiAsistente = lazy(() => import("./pages/redes/MiAsistente"));
 const ReporteDetalle = lazy(() => import("./pages/redes/Reportes").then((m) => ({ default: m.ReporteDetalle })));
 
@@ -95,6 +96,7 @@ const App = () => (
                 <Route path="/equipo" element={<RequireRole roles={["admin"]}><Equipo /></RequireRole>} />
                 <Route path="/ajustes" element={<RequireRole roles={["admin"]}><Ajustes /></RequireRole>} />
                 <Route path="/reportes" element={<RequireRole roles={["admin"]}><Reportes /></RequireRole>} />
+                <Route path="/escalabilidad" element={<RequireRole roles={["admin"]}><Escalabilidad /></RequireRole>} />
                 <Route path="/mi-asistente" element={<RequireRole roles={["admin"]}><MiAsistente /></RequireRole>} />
                 <Route path="/reportes/:uid" element={<RequireRole roles={["admin"]}><ReporteDetalle /></RequireRole>} />
 

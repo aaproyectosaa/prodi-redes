@@ -74,6 +74,7 @@ export function navForRole(role: UserRole | undefined): NavSection[] {
           items: [
             { label: "Equipo", icon: Users, path: "/equipo" },
             { label: "Reportes", icon: BarChart3, path: "/reportes" },
+            { label: "Escalabilidad", icon: TrendingUp, path: "/escalabilidad" },
             { label: "Ajustes", icon: Settings, path: "/ajustes" },
           ],
         },
