@@ -371,11 +371,13 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       if (crea || borra) return esAdmin(c);
       if (!esAdmin(c)) {
         if (tocaAlguna(antes, despues, ["incluida", "cupo_usado", "precio", "cobro_id", "proyecto_id", "solicitado_por", "mes"])) return false;
-        // Sin pagar, cancelada o rechazada (con reembolso): solo el servidor o el admin.
-        const BLOQUEADOS = ["pendiente_pago", "cancelada", "rechazada"];
+        // Sin pagar o rechazada (con reembolso): solo el servidor o el admin. Cancelar, solo las que no se pagaron
+        // aparte (incluidas en el plan o sin cargo): una pagada se rechaza con reembolso desde el servidor.
+        const BLOQUEADOS = ["pendiente_pago", "rechazada"];
         if (BLOQUEADOS.includes(String(antes!.estado)) || (despues!.estado !== antes!.estado && BLOQUEADOS.includes(String(despues!.estado)))) return false;
-        // "Entregada" la pone el cliente al aprobar (servidor) o el admin.
-        if (despues!.estado === "entregada" && antes!.estado !== "entregada") return false;
+        if (antes!.estado === "cancelada" && despues!.estado !== "cancelada") return false;
+        if (despues!.estado === "cancelada" && antes!.estado !== "cancelada" && Number(antes!.precio) > 0 && antes!.incluida !== true) return false;
+        // "Entregada" la pone el cliente al aprobar (servidor) o el equipo (si la aprobó por otro medio, ej. WhatsApp).
       }
       return (
         (esDiseno(c) && equipoDe(c, antes!.proyecto_id) && equipoDe(c, despues!.proyecto_id)) ||

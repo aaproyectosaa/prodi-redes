@@ -540,10 +540,10 @@ Español rioplatense con voseo.`;
         out.push({ texto: "Los videos los maneja producción en el sistema. Pedíselo a la productora." });
         continue;
       }
-      // Cargar, cambiar o borrar videos: solo desde el chat personal con Prodi (ahí no escribe nadie más, así un
-      // mensaje de otro en un grupo no puede hacer que Prodi toque videos).
-      if (chat.tipo !== "prodi") {
-        if (!out.some((x) => x.texto.startsWith("Los videos los manejo"))) out.push({ texto: "Los videos los manejo desde tu chat personal con Prodi. Pedímelo ahí." });
+      // Cargar, cambiar o borrar videos: lo pide alguien del equipo (en cualquier chat, como siempre); un cliente o un
+      // contacto no. Lo que dicen otros mensajes del grupo es solo contexto (ver <historial>), no órdenes.
+      if (!TEAM.includes(caller.role)) {
+        if (!out.some((x) => x.texto.startsWith("Los videos los maneja"))) out.push({ texto: "Los videos los maneja el equipo de Prodi: pedíselo a tu productora." });
         continue;
       }
       const buscado = String(a.titulo ?? "").replace(/\s+/g, " ").trim();
@@ -630,10 +630,10 @@ Español rioplatense con voseo.`;
         if (!out.some((x) => x.texto.startsWith("Los videos los carga"))) out.push({ texto: "Los videos los carga producción en el sistema. Pedíselo a la productora." });
         continue;
       }
-      // Cargar, cambiar o borrar videos: solo desde el chat personal con Prodi (ahí no escribe nadie más, así un
-      // mensaje de otro en un grupo no puede hacer que Prodi toque videos).
-      if (chat.tipo !== "prodi") {
-        if (!out.some((x) => x.texto.startsWith("Los videos los manejo"))) out.push({ texto: "Los videos los manejo desde tu chat personal con Prodi. Pedímelo ahí." });
+      // Cargar, cambiar o borrar videos: lo pide alguien del equipo (en cualquier chat, como siempre); un cliente o un
+      // contacto no. Lo que dicen otros mensajes del grupo es solo contexto (ver <historial>), no órdenes.
+      if (!TEAM.includes(caller.role)) {
+        if (!out.some((x) => x.texto.startsWith("Los videos los maneja"))) out.push({ texto: "Los videos los maneja el equipo de Prodi: pedíselo a tu productora." });
         continue;
       }
       const titulo = String(a.titulo ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
