@@ -51,6 +51,9 @@ interface AccionIA {
   filmado?: boolean;
   /** editar_video: el título nuevo (si lo cambia). */
   nuevo_titulo?: string;
+  /** Lo transcripto de las fotos: guion (lo que se dice y se lee) y tomas (lo que se filma). */
+  guion?: string;
+  tomas?: string[];
 }
 
 const ESQUEMA = {
@@ -298,7 +301,7 @@ No podés ver videos: si te piden algo de un video, decí que solo ves fotos y t
 Devolvé las acciones (máximo ${MAX_ACCIONES}; una por cada cosa: si pide 5 videos, 5 crear_video):
 - crear_reunion: titulo corto (ej. "Reunión con Ariel y Pato"); fecha YYYY-MM-DD (si no dice el día, hoy; calculá "mañana", "el viernes", etc. a partir de ahora); hora HH:MM en 24 h ("5 pm" = 17:00; si no dice la hora, no la pongas); duracion_min (60 si no dice); personas: los nombres de la lista tal cual (si usan un apodo como "Pato", poné el nombre de la lista que le corresponde; si no está, ponelo como lo escribieron). No incluyas a ${yo.nombre}: ya va.
 - crear_tarea: cuando pide recordarle algo a alguien o dejar una tarea ("recordale a Lucía que mande el guion el viernes"). titulo: la tarea corta en infinitivo ("Mandar el guion"); personas: a quién se le asigna (vacío si es para quien escribe); vence YYYY-MM-DD si dice cuándo (si no, vacío).
-- crear_video: cuando pide cargar videos en Producción ("cargá los videos", "armame los videos de…", "ya grabé estos videos, cargalos"). Uno por video, SOLO los que aparecen en las fotos o el texto que mandó (no inventes ni agregues de otros lados; si no estás seguro de cuáles son, preguntá antes). titulo: el nombre del video tal cual (ej. "¿Qué bolsa necesitás?"); cliente: el nombre del cliente tal cual la lista; texto (OBLIGATORIO): la idea y el guion de ESE video copiados de las fotos o del chat (video/tomas, diálogo, texto en pantalla, cierre o CTA), ordenado en líneas; si no tenés el guion de ese video, no lo cargues: preguntá; filmado: true si dice que ya lo grabó/filmó, false si es para planificar.${CARGAN_VIDEOS.includes(caller.role) ? "" : " (Quien escribe no puede cargar videos: contestá que eso lo hace producción.)"}
+- crear_video: cuando pide cargar videos en Producción ("cargá los videos", "armame los videos de…", "ya grabé estos videos, cargalos"). Uno por video, SOLO los que aparecen en las fotos o el texto que mandó (no inventes ni agregues de otros lados; si no estás seguro de cuáles son, preguntá antes). titulo: el nombre del video tal cual (ej. "¿Qué bolsa necesitás?"); cliente: el nombre del cliente tal cual la lista; texto (OBLIGATORIO): la idea de ESE video en 1 o 2 oraciones (de qué se trata y qué busca); el guion y las tomas los transcribe el sistema de las fotos; si no tenés el guion de ese video, no lo cargues: preguntá; filmado: true si dice que ya lo grabó/filmó, false si es para planificar.${CARGAN_VIDEOS.includes(caller.role) ? "" : " (Quien escribe no puede cargar videos: contestá que eso lo hace producción.)"}
 - editar_video: cuando pide corregir o completar un video que ya está cargado (ponerle la idea/guion, cambiarle el nombre). titulo: el nombre ACTUAL del video tal cual está en el sistema; cliente; texto: la idea/guion completo nuevo (si lo cambia); nuevo_titulo: si le cambia el nombre.
 - borrar_video: cuando pide borrar o sacar un video cargado (ej. "borrá los que no estaban", "sacá ese"). titulo: el nombre actual tal cual; cliente. Solo se pueden borrar los que todavía no tienen material subido.
 - mandar_logo: cuando pide el logo (o los logos) de un cliente para mandarlo al chat. cliente: el nombre del cliente tal cual la lista.
@@ -549,15 +552,19 @@ Español rioplatense con voseo.`;
       const cambios: Data = { updated_at: ts };
       const idea = String(a.texto ?? "").trim().slice(0, 4000);
       const nuevo = String(a.nuevo_titulo ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
+      const guion = String(a.guion ?? "").trim().slice(0, 6000);
+      const tomas = (a.tomas ?? []).map((t) => String(t).trim()).filter(Boolean);
       if (idea) cambios.idea = idea;
+      if (guion) cambios.guion = guion;
+      if (tomas.length) cambios.tomas = tomas;
       if (nuevo.length >= 3) cambios.titulo = nuevo;
-      if (!idea && nuevo.length < 3) {
+      if (!idea && !guion && nuevo.length < 3) {
         out.push({ texto: `¿Qué le cambio a «${v.titulo}»?` });
         continue;
       }
       cambios.historial = FieldValue.arrayUnion({ at: ts, by: caller.uid, accion: "Corregido por Prodi", nota: null });
       await vd.ref.update(cambios);
-      out.push({ texto: `Listo, corregí «${nuevo.length >= 3 ? nuevo : v.titulo}»${idea ? ": le puse la idea y el guion" : ""}.`, link: `/videos?video=${vd.id}`, link_texto: "Ver video" });
+      out.push({ texto: `Listo, corregí «${nuevo.length >= 3 ? nuevo : v.titulo}»${guion ? ": le puse la idea, el guion y las tomas" : idea ? ": le puse la idea" : ""}.`, link: `/videos?video=${vd.id}`, link_texto: "Ver video" });
       continue;
     }
 
@@ -604,6 +611,8 @@ Español rioplatense con voseo.`;
         proyecto_id: cli.id,
         titulo,
         idea: String(a.texto ?? "").trim().slice(0, 4000) || null,
+        guion: String(a.guion ?? "").trim().slice(0, 6000) || null,
+        tomas: (a.tomas ?? []).map((t) => String(t).trim()).filter(Boolean),
         objetivo: null,
         referencias: null,
         mes,
@@ -638,7 +647,7 @@ Español rioplatense con voseo.`;
         created_by: caller.uid,
         updated_at: ts,
       });
-      out.push({ texto: "", video: { id: ref.id, titulo, cliente: cli.nombre, filmado, sinIdea: !String(a.texto ?? "").trim() } });
+      out.push({ texto: "", video: { id: ref.id, titulo, cliente: cli.nombre, filmado, sinIdea: !String(a.texto ?? "").trim() && !String(a.guion ?? "").trim() } });
       continue;
     }
 
@@ -683,8 +692,13 @@ const ESQUEMA_GUIONES = {
       type: "ARRAY",
       items: {
         type: "OBJECT",
-        properties: { titulo: { type: "STRING" }, guion: { type: "STRING" } },
-        required: ["titulo", "guion"],
+        properties: {
+          titulo: { type: "STRING" },
+          idea: { type: "STRING" },
+          guion: { type: "STRING" },
+          tomas: { type: "ARRAY", items: { type: "STRING" } },
+        },
+        required: ["titulo", "idea", "guion", "tomas"],
       },
     },
   },
@@ -695,7 +709,8 @@ const ESQUEMA_GUIONES = {
  * Lee las capturas (páginas de un documento con ideas de videos) y devuelve cada video con su título y su guion
  * transcripto tal cual. Las capturas suelen estar en orden y superponerse: se juntan sin repetir.
  */
-async function extraerGuiones(imagenes: Imagen[], charla: string): Promise<{ titulo: string; guion: string }[]> {
+type GuionVideo = { titulo: string; idea: string; guion: string; tomas: string[] };
+async function extraerGuiones(imagenes: Imagen[], charla: string): Promise<GuionVideo[]> {
   const prompt = `Te paso ${imagenes.length} capturas de pantalla, en orden, de un documento con ideas de videos (reels) para un cliente. Pueden superponerse (la misma parte aparece en dos capturas): juntá el texto sin repetir.
 
 Para la conversación de contexto (qué pidió la persona):
@@ -703,12 +718,20 @@ ${charla.slice(-3000)}
 
 Devolvé en "videos" cada idea de video que aparece en las capturas, en el orden del documento:
 - titulo: el título de esa idea tal cual figura (lo que está después de "Título:" o el encabezado entre comillas, ej. “¿Qué bolsa necesitás?”). Sin comillas. Si una idea no tiene título propio, usá su primera línea de diálogo corta.
-- guion: TODO el texto de esa idea copiado tal cual, sin resumir ni inventar: Video/tomas, Diálogo, Texto en pantalla, Cierre/CTA y notas. Una línea por renglón del documento, con las etiquetas ("Video:", "Diálogo:", "Texto:", "CTA:") como están.
+Repartí lo de cada video en tres lugares, pensando qué es cada cosa (no copies todo en un solo campo):
+- idea: el concepto del video en 1 o 2 oraciones con tus palabras: de qué se trata y qué busca (ej. "Mostrar en tomas rápidas la variedad de productos de packaging para que los negocios conozcan todo lo que tiene Polinea").
+- guion: lo que se DICE y se LEE, copiado tal cual del documento (sin resumir ni inventar): el Diálogo / locución, el Texto en pantalla y el Cierre o CTA, con sus etiquetas ("Diálogo:", "Texto en pantalla:", "CTA:") y una línea por renglón. Las notas de cómo se dice van entre paréntesis donde están.
+- tomas: lo que se FILMA, como lista para el día de rodaje: una toma por elemento, sacada de "Video:" y de las indicaciones de qué mostrar (ej. "Mesa con 5/6 productos, cámara cenital", "Bolsa riñón", "Bolsa ecommerce"…). Si el documento no dice qué filmar, deducí las tomas mínimas del diálogo (ej. "Mostrar productos" → "Planos de los productos").
 No incluyas encabezados de categoría ("Ideas de Reels categoría bolsas") como videos. No dupliques un video si aparece en dos capturas.`;
-  const r = await generarJSON<{ videos?: { titulo?: string; guion?: string }[] }>(prompt, ESQUEMA_GUIONES, 0.5, imagenes, "high");
+  const r = await generarJSON<{ videos?: { titulo?: string; idea?: string; guion?: string; tomas?: string[] }[] }>(prompt, ESQUEMA_GUIONES, 0.5, imagenes, "high");
   return (r.videos ?? [])
-    .map((v) => ({ titulo: String(v.titulo ?? "").replace(/["“”«»]/g, "").replace(/\s+/g, " ").trim().slice(0, 160), guion: String(v.guion ?? "").trim().slice(0, 4000) }))
-    .filter((v) => v.titulo.length >= 3 && v.guion.length >= 10);
+    .map((v) => ({
+      titulo: String(v.titulo ?? "").replace(/["“”«»]/g, "").replace(/\s+/g, " ").trim().slice(0, 160),
+      idea: String(v.idea ?? "").trim().slice(0, 1000),
+      guion: String(v.guion ?? "").trim().slice(0, 4000),
+      tomas: (Array.isArray(v.tomas) ? v.tomas : []).map((t) => String(t).trim().slice(0, 200)).filter(Boolean).slice(0, 30),
+    }))
+    .filter((v) => v.titulo.length >= 3 && (v.guion.length >= 10 || v.idea.length >= 10));
 }
 
 /** Qué tan parecidos son dos títulos (palabras en común sobre el más corto), de 0 a 1. */
@@ -725,7 +748,7 @@ function parecido(a: string, b: string): number {
  * Pone en cada crear_video / editar_video el título y el guion transcriptos de las fotos. Los crear_video que no
  * aparecen en las fotos no se cargan (se avisa).
  */
-function combinarConGuiones(acciones: AccionIA[], guiones: { titulo: string; guion: string }[], ext: { avisos: string[] }): AccionIA[] {
+function combinarConGuiones(acciones: AccionIA[], guiones: GuionVideo[], ext: { avisos: string[] }): AccionIA[] {
   const usados = new Set<number>();
   const mejor = (titulo: string) => {
     let k = -1;
@@ -749,7 +772,7 @@ function combinarConGuiones(acciones: AccionIA[], guiones: { titulo: string; gui
         continue;
       }
       usados.add(k);
-      out.push({ ...a, titulo: guiones[k].titulo, texto: guiones[k].guion });
+      out.push({ ...a, titulo: guiones[k].titulo, texto: guiones[k].idea, guion: guiones[k].guion, tomas: guiones[k].tomas });
       continue;
     }
     if (a.tipo === "editar_video") {
@@ -757,7 +780,7 @@ function combinarConGuiones(acciones: AccionIA[], guiones: { titulo: string; gui
       const k = mejor(String(a.nuevo_titulo || a.titulo || ""));
       if (k >= 0) {
         usados.add(k);
-        out.push({ ...a, texto: guiones[k].guion, nuevo_titulo: a.nuevo_titulo ? guiones[k].titulo : a.nuevo_titulo });
+        out.push({ ...a, texto: guiones[k].idea, guion: guiones[k].guion, tomas: guiones[k].tomas, nuevo_titulo: a.nuevo_titulo ? guiones[k].titulo : a.nuevo_titulo });
         continue;
       }
     }
