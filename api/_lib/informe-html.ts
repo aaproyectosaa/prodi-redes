@@ -8,6 +8,11 @@ const num = (n: number) => new Intl.NumberFormat("es-AR", { maximumFractionDigit
 const esc = (s: unknown) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
+/** Id de archivo de Drive válido (si no, no se muestra la miniatura). */
+const idDriveOk = (id: unknown): id is string => typeof id === "string" && /^[A-Za-z0-9_-]+$/.test(id);
+/** Solo links https (nada de javascript: ni data:); si no, no se muestra. */
+const linkOk = (u: unknown): string => (typeof u === "string" && /^https:\/\/[^\s"<>]+$/i.test(u.trim()) ? u.trim() : "");
+
 export interface DatosInforme {
   nombre: string;
   label: string;
@@ -19,25 +24,26 @@ export interface DatosInforme {
 export function renderInformeHtml({ nombre, label, baseUrl, resumen, publicados }: DatosInforme): string {
   const p = { nombre };
   const costoMensaje = resumen.mensajes > 0 && resumen.gasto > 0 ? resumen.gasto / resumen.mensajes : null;
-  const logo = `${baseUrl}/brand/logo-horizontal-blanco.png`;
+  const base = esc(baseUrl);
+  const logo = `${base}/brand/logo-horizontal-blanco.png`;
 
   const kpi = (titulo: string, valor: string, destacado = false) => `
     <td width="33%" style="padding:6px;">
       <div style="background:${destacado ? "#6F40FC" : "#F4F2FF"};border-radius:14px;padding:16px 14px;">
-        <div style="font-size:12px;color:${destacado ? "#E9E3FF" : "#6B6880"};">${titulo}</div>
-        <div style="font-size:24px;font-weight:700;color:${destacado ? "#FFFFFF" : "#111018"};margin-top:4px;">${valor}</div>
+        <div style="font-size:12px;color:${destacado ? "#E9E3FF" : "#6B6880"};">${esc(titulo)}</div>
+        <div style="font-size:24px;font-weight:700;color:${destacado ? "#FFFFFF" : "#111018"};margin-top:4px;">${esc(valor)}</div>
       </div>
     </td>`;
 
   const filas = publicados
     .map((v) => {
       const fin = v.attachments_finalizado?.[0];
-      const thumb = fin?.drive_file_id ? `https://drive.google.com/thumbnail?id=${fin.drive_file_id}&sz=w200` : "";
-      const link = v.publicacion?.link_instagram || v.publicacion?.link_facebook || "";
+      const thumb = idDriveOk(fin?.drive_file_id) ? `https://drive.google.com/thumbnail?id=${fin.drive_file_id}&sz=w200` : "";
+      const link = linkOk(v.publicacion?.link_instagram) || linkOk(v.publicacion?.link_facebook);
       return `
       <tr>
         <td style="padding:10px 0;border-bottom:1px solid #EEECF5;" width="64">
-          ${thumb ? `<img src="${thumb}" width="56" height="56" style="border-radius:10px;object-fit:cover;display:block;background:#EEE;" alt="">` : ""}
+          ${thumb ? `<img src="${esc(thumb)}" width="56" height="56" style="border-radius:10px;object-fit:cover;display:block;background:#EEE;" alt="">` : ""}
         </td>
         <td style="padding:10px 12px;border-bottom:1px solid #EEECF5;font-size:14px;color:#111018;">
           <div style="font-weight:600;">${esc(v.titulo)}</div>
@@ -64,7 +70,7 @@ export function renderInformeHtml({ nombre, label, baseUrl, resumen, publicados 
   </td></tr>
   <tr><td style="padding:24px 22px 8px;">
     <p style="margin:0 6px 14px;font-size:15px;color:#3A3850;line-height:1.5;">
-      Este mes publicamos <b>${resumen.publicados}</b> video${resumen.publicados === 1 ? "" : "s"}${resumen.cupo ? ` de los <b>${resumen.cupo}</b> de tu plan` : ""}. Estos son los resultados de la pauta:
+      Este mes publicamos <b>${num(resumen.publicados)}</b> video${resumen.publicados === 1 ? "" : "s"}${resumen.cupo ? ` de los <b>${num(resumen.cupo)}</b> de tu plan` : ""}. Estos son los resultados de la pauta:
     </p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
       <tr>${kpi("Personas alcanzadas", num(resumen.alcance), true)}${kpi("Reproducciones", num(resumen.reproducciones))}${kpi("Mensajes", num(resumen.mensajes))}</tr>
@@ -76,7 +82,7 @@ export function renderInformeHtml({ nombre, label, baseUrl, resumen, publicados 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${filas}</table>
   </td></tr>` : ""}
   <tr><td align="center" style="padding:24px 28px 30px;">
-    <a href="${baseUrl}/cliente?tab=resultados" style="display:inline-block;background:#6F40FC;color:#FFFFFF;text-decoration:none;font-weight:600;font-size:14px;padding:13px 26px;border-radius:999px;">Ver el detalle en tu panel</a>
+    <a href="${base}/cliente?tab=resultados" style="display:inline-block;background:#6F40FC;color:#FFFFFF;text-decoration:none;font-weight:600;font-size:14px;padding:13px 26px;border-radius:999px;">Ver el detalle en tu panel</a>
     <p style="font-size:12px;color:#8A879C;margin:18px 0 0;line-height:1.5;">Las cifras salen del Administrador de anuncios de Meta y las carga el equipo de Prodi.<br>¿Querés sumar videos para una promo? Lo podés hacer desde tu panel.</p>
   </td></tr>
 </table>

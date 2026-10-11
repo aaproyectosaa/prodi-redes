@@ -25,6 +25,7 @@ export function BoletaDialog({ f, cobro, onClose, arca = false }: { f: (Factura 
             {f.tipo === "factura" && <EstadoArca f={f} puedeAutorizar={arca} />}
             <iframe
               title="Boleta"
+              sandbox=""
               srcDoc={htmlBoletas([f], cobro, logoBoleta(), false)}
               className="min-h-[55dvh] w-full flex-1 rounded-xl border bg-white"
             />

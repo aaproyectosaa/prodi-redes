@@ -35,7 +35,7 @@ interface MaterialSlotProps {
  * en su video original; acá se ven (miniaturas, se abren con el permiso corto de media-token) y se descargan.
  */
 export function MaterialElegido({ video, audience = "team" }: { video: Video; audience?: "team" | "client" }) {
-  const { connection, ensureToken } = useDriveConnection();
+  const { connection } = useDriveConnection();
   const driveAvailable = connection?.status === "connected";
   const [downloading, setDownloading] = useState(false);
   const archivos = video.material_base?.tipo === "existente" ? (video.material_base.archivos ?? []) : [];
@@ -55,7 +55,7 @@ export function MaterialElegido({ video, audience = "team" }: { video: Video; au
   const bajar = async () => {
     setDownloading(true);
     try {
-      await downloadAttachmentsSequential(refs, { getAccessToken: driveAvailable ? ensureToken : undefined });
+      await downloadAttachmentsSequential(refs);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo descargar");
     } finally {
@@ -97,7 +97,7 @@ export function MaterialSlot({
   onSubir,
 }: MaterialSlotProps) {
   const { user } = useUserProfileContext();
-  const { connection, ensureToken } = useDriveConnection();
+  const { connection } = useDriveConnection();
   const driveAvailable = connection?.status === "connected";
   const attachments: DriveAttachmentRef[] =
     (slot === "crudo" ? video.attachments_crudo : video.attachments_finalizado) ?? [];
@@ -135,9 +135,7 @@ export function MaterialSlot({
     if (!attachments.length) return;
     setDownloading(true);
     try {
-      await downloadAttachmentsSequential(attachments, {
-        getAccessToken: driveAvailable ? ensureToken : undefined,
-      });
+      await downloadAttachmentsSequential(attachments);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo descargar");
     } finally {

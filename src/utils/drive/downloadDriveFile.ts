@@ -1,12 +1,17 @@
 import { asset } from "@/lib/asset";
 import type { DriveAttachmentRef } from "@/integrations/firebase/types";
 import { downloadDriveFileBlob } from "@/utils/drive/driveApi";
+import { getDriveMediaPlayUrl } from "@/utils/drive/driveMediaUrl";
+
+/** Hasta este tamaño se baja por la app (con el permiso corto de media-token); más grande, directo de Drive. */
+const MAX_POR_APP = 150 * 1024 * 1024;
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 
 function getPublicDownloadUrl(fileId: string): string {
   if (fileId.startsWith("demo/")) return asset(fileId); // datos de ejemplo
-  return `https://drive.google.com/uc?export=download&id=${fileId}`;
+  // confirm=t: Drive no frena los archivos grandes con la página de "no se pudo analizar" (son públicos por link).
+  return `https://drive.usercontent.google.com/download?id=${encodeURIComponent(fileId)}&export=download&confirm=t`;
 }
 
 /** Guarda un blob en disco con el nombre indicado (misma origen vía blob:). */
@@ -48,8 +53,21 @@ async function downloadOneAttachment(
     }
   }
 
-  const publicUrl =
-    att.web_content_link ?? getPublicDownloadUrl(att.drive_file_id);
+  // Sin el acceso de Drive en el navegador: los chicos se bajan por la app (mismo origen, se guardan con su nombre)…
+  if (!att.drive_file_id.startsWith("demo/") && Number(att.size) > 0 && Number(att.size) <= MAX_POR_APP) {
+    try {
+      const res = await fetch(await getDriveMediaPlayUrl(att.drive_file_id));
+      if (res.ok) {
+        saveBlobAsDownload(await res.blob(), att.name);
+        return;
+      }
+    } catch (err) {
+      console.warn("Descarga por la app falló, probando enlace de Drive:", err);
+    }
+  }
+
+  // …y los grandes, directo de Drive (enlace público del archivo).
+  const publicUrl = getPublicDownloadUrl(att.drive_file_id);
 
   try {
     const res = await fetch(publicUrl, { mode: "cors", credentials: "omit" });

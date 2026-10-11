@@ -44,6 +44,7 @@ import { asistenteDueno } from "../_lib/dueno";
 import { linksDeMensaje } from "../_lib/chat-links";
 import { crearTarea } from "../_lib/tareas";
 import { logosParaPieza, marcaTexto } from "../_lib/marca";
+import { controlarTopeIA } from "../_lib/tope-ia";
 import {
   comercialTexto,
   limpiarComercial,
@@ -89,6 +90,7 @@ const proximos30 = (desde: Date | string = new Date()): [string, string] => {
 
 async function copy(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "productor", "editor", "pauta", "diseno"]);
+  await controlarTopeIA(caller, "copy");
   const { video_id } = body<{ video_id?: string }>(req);
   if (!video_id) throw new HttpError(400, "Falta video_id");
   const db = adminDb();
@@ -189,6 +191,7 @@ async function liberarTurnoPieza(req: VercelRequest, err: unknown): Promise<neve
 
 async function pieza(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "productor", "diseno"]);
+  await controlarTopeIA(caller, "pieza");
   const { pieza_id, ajustes, foto_intacta } = body<{ pieza_id?: string; ajustes?: string | null; foto_intacta?: boolean }>(req);
   if (!pieza_id) throw new HttpError(400, "Falta pieza_id");
   const db = adminDb();
@@ -328,6 +331,7 @@ ${prompt}${guia}`,
  */
 async function piezaEditar(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "productor", "diseno"]);
+  await controlarTopeIA(caller, "pieza-editar");
   const { pieza_id, version_id, instruccion, formato, zona, marcada } = body<{
     pieza_id?: string;
     version_id?: string;
@@ -429,6 +433,7 @@ Escribí UNA instrucción de edición precisa (máximo 90 palabras): qué cambia
 
 async function minuta(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "productor", "editor", "pauta", "diseno"]);
+  await controlarTopeIA(caller, "minuta");
   const { reunion_id, usar } = body<{ reunion_id?: string; usar?: "audio" | "notas" }>(req);
   if (!reunion_id) throw new HttpError(400, "Falta reunion_id");
   const db = adminDb();
@@ -485,6 +490,7 @@ ${r.notas ? `Notas tomadas durante la reunión:\n${r.notas}` : ""}`;
 
 async function guion(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "productor"]);
+  await controlarTopeIA(caller, "guion");
   const { video_id } = body<{ video_id?: string }>(req);
   if (!video_id) throw new HttpError(400, "Falta video_id");
   const db = adminDb();
@@ -524,6 +530,7 @@ ${video.referencias ? `Referencias: ${video.referencias}` : ""}`;
 
 async function preparar(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "productor"]);
+  await controlarTopeIA(caller, "preparar");
   const { proyecto_id, video_ids } = body<{ proyecto_id?: string; video_ids?: string[] }>(req);
   if (!proyecto_id) throw new HttpError(400, "Falta el cliente");
   await assertProjectAccess(caller, proyecto_id);
@@ -777,6 +784,7 @@ async function aprender(pid: string, proj: Record<string, any>, ejemplo: Ejemplo
 
 async function planMes(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "productor"]);
+  await controlarTopeIA(caller, "plan-mes");
   const b = body<{ proyecto_id?: string; mes?: string; idea_id?: string; pista?: string }>(req);
   if (!b.proyecto_id || !MES_RE.test(String(b.mes))) throw new HttpError(400, "Elegí el cliente y el mes");
   await assertProjectAccess(caller, b.proyecto_id);
@@ -968,6 +976,7 @@ async function planResponder(req: VercelRequest) {
 
 async function planAjustar(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "productor"]);
+  await controlarTopeIA(caller, "plan-ajustar");
   const b = body<{ proyecto_id?: string; mes?: string; idea_id?: string; accion?: string; titulo?: string; idea?: string; objetivo?: string }>(req);
   if (!b.proyecto_id || !MES_RE.test(String(b.mes)) || !b.idea_id) throw new HttpError(400, "Datos incompletos");
   await assertProjectAccess(caller, b.proyecto_id);
@@ -1054,13 +1063,15 @@ async function memoriaNotas(req: VercelRequest) {
 // Links de un mensaje: contexto para la IA y, si son de un cliente, a su ficha. Ver api/_lib/chat-links.ts.
 async function linksChat(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "productor", "editor", "pauta", "diseno", "administracion", "cliente"]);
+  await controlarTopeIA(caller, "links-chat");
   const b = body<{ chat_id?: string; mensaje_id?: string }>(req);
   return linksDeMensaje(caller, b.chat_id, b.mensaje_id);
 }
 
 // Solo el super admin (el dueño): ve todo, también la plata. Ver api/_lib/dueno.ts.
 async function dueno(req: VercelRequest) {
-  await requireCaller(req, ["admin"]);
+  const caller = await requireCaller(req, ["admin"]);
+  await controlarTopeIA(caller, "dueno");
   return asistenteDueno(body<{ mensajes?: unknown }>(req).mensajes);
 }
 

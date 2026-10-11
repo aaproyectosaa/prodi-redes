@@ -408,7 +408,7 @@ export function mailFacturaHtml(f: Factura, link: string, baseUrl: string, aviso
   return `<!doctype html><html lang="es"><body style="margin:0;background:#F4F2FA;font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F2FA;padding:24px 12px;"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FFFFFF;border-radius:18px;overflow:hidden;">
-<tr><td style="background:#0B0A10;padding:22px 28px;"><img src="${baseUrl}/brand/logo-horizontal-blanco.png" height="28" alt="PRODI" style="display:block;height:28px;"></td></tr>
+<tr><td style="background:#0B0A10;padding:22px 28px;"><img src="${escF(baseUrl)}/brand/logo-horizontal-blanco.png" height="28" alt="PRODI" style="display:block;height:28px;"></td></tr>
 <tr><td style="padding:28px;">
   ${aviso ? `<div style="background:#FFF4E5;border-radius:12px;padding:12px 14px;margin-bottom:18px;font-size:14px;color:#7A4B00;">${escF(aviso)}</div>` : ""}
   <div style="font-size:13px;color:#6B6880;">${escF(f.razon_social || f.cliente)}</div>
@@ -431,7 +431,7 @@ export function mailFacturaHtml(f: Factura, link: string, baseUrl: string, aviso
     }</table>
   </div>
   <div style="text-align:center;margin:26px 0 8px;">
-    <a href="${link}" style="display:inline-block;background:#111018;color:#FFFFFF;text-decoration:none;font-weight:600;font-size:15px;padding:14px 26px;border-radius:12px;">Ver y descargar la ${doc}</a>
+    <a href="${escF(/^https:\/\//i.test(link) ? link : baseUrl)}" style="display:inline-block;background:#111018;color:#FFFFFF;text-decoration:none;font-weight:600;font-size:15px;padding:14px 26px;border-radius:12px;">Ver y descargar la ${doc}</a>
   </div>
   <div style="text-align:center;font-size:12px;color:#8A879A;">También la tenés en tu panel de Prodi, en “Mi plan”.</div>
 </td></tr>

@@ -615,7 +615,7 @@ async function emitir(req: VercelRequest) {
 async function arcaAutorizar(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "administracion"]);
   const { factura_id, reintentar } = body<{ factura_id?: string; reintentar?: boolean }>(req);
-  if (!factura_id || !/^[^/s]{1,200}$/.test(factura_id)) throw new HttpError(400, "Falta la boleta");
+  if (!factura_id || !/^[^/\s]{1,200}$/.test(factura_id)) throw new HttpError(400, "Falta la boleta");
   return { ok: true, arca: await autorizarFactura(factura_id, caller.uid, { reintentar: !!reintentar }) };
 }
 

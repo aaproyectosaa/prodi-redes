@@ -1,15 +1,8 @@
 import { doc, updateDoc, arrayUnion, getDoc } from "@/lib/db";
 import { db } from "@/integrations/firebase/client";
 import { fechaAR, hoyAR } from "@/lib/fecha";
-import { ensureAccessToken } from "@/utils/drive/tokenStore";
-import { DriveAuthError } from "@/utils/drive/auth";
-import {
-  ensureFolderPath,
-  uploadAndShare,
-  sanitizeDriveAttachment,
-  DriveApiError,
-} from "@/utils/drive/driveApi";
-import { loadFolderCache, saveFolderCache } from "@/utils/drive/folderCache";
+import { callApi } from "@/lib/redes/api";
+import { subirASesion, sanitizeDriveAttachment, DriveApiError } from "@/utils/drive/driveApi";
 import { validateFile } from "@/utils/drive/fileValidation";
 import type {
   DriveAttachment,
@@ -18,7 +11,6 @@ import type {
   UploadProgress,
 } from "@/utils/drive/types";
 
-const ROOT_FOLDER_NAME = "Progreso";
 const MAX_CONCURRENT = 2;
 
 function formatDate(iso: string | null): string {
@@ -100,29 +92,11 @@ export async function runDriveUploadBatch(
     return { attachments: [], errors: [], cancelledCount: 0, validCount: 0 };
   }
 
-  let accessToken: string;
-  try {
-    accessToken = await ensureAccessToken(connection.email);
-  } catch (err) {
-    const msg =
-      err instanceof DriveAuthError && err.code === "refresh_revoked"
-        ? "La conexión a Drive expiró. Pedile al dueño que reconecte."
-        : err instanceof Error
-          ? err.message
-          : String(err);
-    throw new Error(msg);
-  }
-
-  const folderCache = loadFolderCache();
-  const pathParts = [
-    ROOT_FOLDER_NAME,
-    projectName,
-    taskTipo ?? "Sin Tipo",
-    formatDate(taskFecha),
-  ];
-  const folderPath = pathParts.join("/");
-  const folderId = await ensureFolderPath(pathParts, accessToken, folderCache);
-  saveFolderCache(folderCache);
+  // El servidor abre cada subida en Drive (Progreso/<cliente>/<tipo>/<fecha>) y da solo la URL de ese archivo:
+  // el acceso a Drive de la agencia no llega al navegador. La carpeta la arma el servidor con el cliente del documento.
+  void connection;
+  void projectName;
+  const fecha = formatDate(taskFecha);
 
   const field = slot === "crudo" ? "attachments_crudo" : "attachments_finalizado";
   const attachments: DriveAttachment[] = [];
@@ -193,17 +167,27 @@ export async function runDriveUploadBatch(
     onJobUpdate?.(localId, { status: "uploading", progress: 0 });
 
     try {
-      const attachment = await uploadAndShare({
+      void uploaderUid;
+      const { subida, url, mime } = await callApi<{ subida: string; url: string; mime: string }>("/api/drive/equipo-subida", {
+        coleccion: collectionName,
+        doc_id: taskId,
+        tipo: taskTipo ?? "Sin Tipo",
+        fecha,
+        nombre: file.name,
+        mime: file.type || "application/octet-stream",
+        size: file.size,
+      });
+      await subirASesion({
+        sessionUri: url,
         file,
-        folderId,
-        folderPath,
-        uploaderUid: uploaderUid ?? "unknown",
-        accessToken,
+        mime,
         signal: getAbortSignal?.(localId),
         onProgress: (pct) => {
           onJobUpdate?.(localId, { progress: pct, status: "uploading" });
         },
       });
+      const { adjunto } = await callApi<{ adjunto: DriveAttachment }>("/api/drive/equipo-archivo", { subida });
+      const attachment = sanitizeDriveAttachment(adjunto);
 
       onJobUpdate?.(localId, {
         status: "done",

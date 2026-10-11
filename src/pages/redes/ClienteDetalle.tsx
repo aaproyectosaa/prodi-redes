@@ -858,7 +858,7 @@ function InformeCliente({ cliente, mes }: { cliente: Project; mes: string }) {
       }
     >
       {html !== null && (
-        <iframe title="Vista previa del informe" srcDoc={srcDoc} className="h-[640px] w-full rounded-xl border bg-white" />
+        <iframe title="Vista previa del informe" srcDoc={srcDoc} sandbox="" className="h-[640px] w-full rounded-xl border bg-white" />
       )}
     </Section>
   );

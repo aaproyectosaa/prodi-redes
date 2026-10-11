@@ -27,8 +27,9 @@ export default async function handler(
     return;
   }
   try {
-    // Solo el equipo sube archivos (el token da acceso a todo lo que la app creó en Drive).
-    await requireCaller(req, ["admin", "productor", "editor", "pauta", "diseno"]);
+    // Solo el admin: el token da acceso a todo lo que la app creó en Drive y a la agenda. El equipo sube con
+    // sesiones que abre el servidor por archivo (equipo-subida, chat-subida, video-subida) y nunca recibe el token.
+    await requireCaller(req, ["admin"]);
     const { accessToken, email, expiresIn } = await getAppDriveAccessToken();
 
     res.status(200).json({
