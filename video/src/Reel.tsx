@@ -11,7 +11,7 @@ import {
   useVideoConfig,
 } from "remotion";
 import { createTikTokStyleCaptions, type Caption, type TikTokPage } from "@remotion/captions";
-import { Efectos, Progreso, fontFamily, useZoom, type Colores, type Efecto } from "./Efectos";
+import { ORIGEN_ZOOM, Efectos, Persona, Progreso, fontFamily, useZoom, type Colores, type Efecto } from "./Efectos";
 
 export type ReelProps = {
   /** Ruta dentro de public/ (staticFile) del clip ya recortado. */
@@ -39,6 +39,7 @@ export const Reel: React.FC<ReelProps> = (p) => {
       <Sequence durationInFrames={framesClip}>
         {p.video ? <Video src={p.video} efectos={p.efectos ?? []} /> : null}
         <Efectos efectos={p.efectos ?? []} colores={p.colores ?? COLORES} />
+        <Persona efectos={p.efectos ?? []} />
         <Subtitulos captions={p.captions} color={p.colorResaltado} />
         {p.efectos?.length ? <Progreso color={(p.colores ?? COLORES).fuerte} frames={framesClip} /> : null}
       </Sequence>
@@ -53,7 +54,7 @@ const Video: React.FC<{ src: string; efectos: Efecto[] }> = ({ src, efectos }) =
   const escala = useZoom(efectos);
   return (
     <AbsoluteFill style={{ overflow: "hidden" }}>
-      <OffthreadVideo src={staticFile(src)} style={{ width: "100%", height: "100%", transform: `scale(${escala})`, transformOrigin: "50% 35%" }} />
+      <OffthreadVideo src={staticFile(src)} style={{ width: "100%", height: "100%", transform: `scale(${escala})`, transformOrigin: ORIGEN_ZOOM }} />
     </AbsoluteFill>
   );
 };

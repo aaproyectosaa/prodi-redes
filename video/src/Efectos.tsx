@@ -8,14 +8,35 @@ export type Efecto =
   | { tipo: "zoom"; desde: number; hasta: number; escala?: number }
   | { tipo: "flash"; en: number }
   | { tipo: "titulo"; desde: number; hasta: number; texto: string; sub?: string }
-  | { tipo: "etiqueta"; desde: number; hasta: number; texto: string; x?: number; y?: number; giro?: number }
+  | { tipo: "etiqueta"; desde: number; hasta: number; texto: string; x?: number; y?: number; giro?: number; tam?: number }
   | { tipo: "promo"; desde: number; hasta: number; grande: string; chico: string; y?: number }
-  | { tipo: "broll"; desde: number; hasta: number; src: string; texto?: string }
-  | { tipo: "cta"; desde: number; hasta: number; texto: string };
+  | { tipo: "broll"; desde: number; hasta: number; src: string; texto?: string; y?: number }
+  | { tipo: "cta"; desde: number; hasta: number; texto: string }
+  /** La persona recortada (pnpm editar persona) encima de los gráficos: lo que esté en esos tramos queda detrás de ella. */
+  | { tipo: "persona"; desde: number; hasta: number; src: string };
 
 export type Colores = { marca: string; fuerte: string; texto: string };
 
 const seg = (s: number, fps: number) => Math.round(s * fps);
+
+export const ORIGEN_ZOOM = "50% 35%";
+
+/** La persona recortada, con el mismo zoom que el video para que calce justo encima. */
+export const Persona: React.FC<{ efectos: Efecto[] }> = ({ efectos }) => {
+  const { fps } = useVideoConfig();
+  const escala = useZoom(efectos);
+  return (
+    <AbsoluteFill style={{ overflow: "hidden" }}>
+      {efectos.map((e, i) =>
+        e.tipo === "persona" ? (
+          <Sequence key={i} from={seg(e.desde, fps)} durationInFrames={Math.max(1, seg(e.hasta, fps) - seg(e.desde, fps))} layout="none">
+            <OffthreadVideo src={staticFile(e.src)} transparent muted style={{ position: "absolute", width: "100%", height: "100%", transform: `scale(${escala})`, transformOrigin: ORIGEN_ZOOM }} />
+          </Sequence>
+        ) : null,
+      )}
+    </AbsoluteFill>
+  );
+};
 
 /** Escala del video según los zoom activos (entra y sale suave). */
 export const useZoom = (efectos: Efecto[]) => {
@@ -39,7 +60,7 @@ export const Efectos: React.FC<{ efectos: Efecto[]; colores: Colores }> = ({ efe
   return (
     <AbsoluteFill>
       {efectos.map((e, i) => {
-        if (e.tipo === "zoom") return null;
+        if (e.tipo === "zoom" || e.tipo === "persona") return null;
         if (e.tipo === "flash") {
           return (
             <Sequence key={i} from={seg(e.en, fps) - 2} durationInFrames={9} layout="none">
@@ -104,7 +125,7 @@ const Titulo: React.FC<{ texto: string; sub?: string; c: Colores; dur: number }>
   );
 };
 
-const Etiqueta: React.FC<{ texto: string; x?: number; y?: number; giro?: number; c: Colores; dur: number }> = ({ texto, x = 540, y = 720, giro = -4, c, dur }) => {
+const Etiqueta: React.FC<{ texto: string; x?: number; y?: number; giro?: number; tam?: number; c: Colores; dur: number }> = ({ texto, x = 540, y = 720, giro = -4, tam = 58, c, dur }) => {
   const { entra, sale, frame } = usePop(dur);
   const late = 1 + Math.sin(frame / 6) * 0.015;
   return (
@@ -116,8 +137,8 @@ const Etiqueta: React.FC<{ texto: string; x?: number; y?: number; giro?: number;
         transform: `translate(-50%, -50%) scale(${entra * late}) rotate(${giro}deg)`,
         opacity: sale,
         ...caja("white", c.texto),
-        fontSize: 58,
-        border: `6px solid ${c.fuerte}`,
+        fontSize: tam,
+        border: `${Math.round(tam / 10)}px solid ${c.fuerte}`,
         whiteSpace: "nowrap",
       }}
     >
@@ -148,7 +169,7 @@ const Promo: React.FC<{ grande: string; chico: string; y?: number; c: Colores; d
   );
 };
 
-const Broll: React.FC<{ src: string; texto?: string; c: Colores; dur: number }> = ({ src, texto, c, dur }) => {
+const Broll: React.FC<{ src: string; texto?: string; y?: number; c: Colores; dur: number }> = ({ src, texto, y = 330, c, dur }) => {
   const frame = useCurrentFrame();
   const entra = interpolate(frame, [0, 7], [100, 0], { extrapolateRight: "clamp" });
   const sale = interpolate(frame, [dur - 7, dur], [0, -100], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
@@ -156,7 +177,7 @@ const Broll: React.FC<{ src: string; texto?: string; c: Colores; dur: number }> 
   return (
     <AbsoluteFill style={{ transform: `translateX(${entra + sale}%)`, overflow: "hidden" }}>
       <OffthreadVideo src={staticFile(src)} muted style={{ width: "100%", height: "100%", transform: `scale(${zoom})` }} />
-      {texto ? <Etiqueta texto={texto} y={330} giro={-3} c={c} dur={dur} /> : null}
+      {texto ? <Etiqueta texto={texto} y={y} giro={-3} c={c} dur={dur} /> : null}
     </AbsoluteFill>
   );
 };

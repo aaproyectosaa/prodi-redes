@@ -15,6 +15,8 @@
 //   --encuadre recorte    llena la pantalla cortando costados (por defecto: desenfoque si el video es horizontal)
 //   --sin-subtitulos      --cierre 2.5 (segundos del logo)       --salida nombre.mp4
 //   --efectos efectos.json  títulos, etiquetas, promos, zooms, flashes y planos de apoyo (ver src/Efectos.tsx)
+//
+//   pnpm editar persona <nombre> 6.6-12.5 25.7-35.1   recorta a la persona en esos tramos (para texto detrás de ella)
 // Opciones de preparar/todo:
 //   --umbral -35          dB por debajo de los cuales es silencio  --min-silencio 0.5  (segundos)
 //   --margen 0.15         aire que se deja a cada lado del corte   --sin-cortar  (no corta silencios)
@@ -249,6 +251,26 @@ function cierre(): { logo: string; fondo: string } {
   return { logo, fondo };
 }
 
+// ---------- persona recortada (para poner texto detrás) ----------
+// Recorta a la persona (con lo que tenga en la mano) en los tramos pedidos con el modelo local de HyperFrames.
+// ~0,65 s por cuadro en esta PC: pedir solo los tramos donde hay texto detrás.
+function persona(nombre: string, tramos: string[]) {
+  const dir = path.join(TRABAJO, nombre);
+  const limpio = path.join(dir, "limpio.mp4");
+  if (!fs.existsSync(limpio)) throw new Error(`Primero: pnpm editar preparar (no existe trabajo/${nombre})`);
+  for (const t of tramos) {
+    const m = t.match(/^([\d.]+)-([\d.]+)$/);
+    if (!m) throw new Error(`Tramo inválido "${t}" (formato: 6.6-12.5)`);
+    const base = path.join(dir, `persona-${m[1]}-${m[2]}`);
+    correr(FFMPEG, ["-y", "-ss", m[1], "-i", limpio, "-t", (Number(m[2]) - Number(m[1])).toFixed(3), "-an", "-vf", `fps=${FPS}`, "-c:v", "libx264", "-crf", "14", "-pix_fmt", "yuv420p", `${base}.mp4`]);
+    console.log(`  recortando ${m[1]}–${m[2]} s…`);
+    const r = spawnSync(`pnpm exec hyperframes remove-background "${base}.mp4" -o "${base}.webm" --quality best`, { cwd: RAIZ, shell: true, encoding: "utf8", env: { ...process.env, PATH: `${path.dirname(FFMPEG)}${path.delimiter}${process.env.PATH}` } });
+    if (r.status !== 0 || !fs.existsSync(`${base}.webm`)) throw new Error(`Falló el recorte de ${t}: ${r.stderr?.slice(-500)}`);
+    fs.rmSync(`${base}.mp4`);
+    console.log(`  { "tipo": "persona", "desde": ${m[1]}, "hasta": ${m[2]}, "src": "${path.basename(base)}.webm" }`);
+  }
+}
+
 // ---------- efectos gráficos ----------
 // El JSON tiene { colores?: {marca, fuerte, texto}, efectos: [...] } con tiempos del video ya preparado
 // (los de captions.json); acá se corren al tramo y los planos de apoyo se copian a public/.
@@ -403,6 +425,7 @@ try {
   if (comando === "preparar" && objetivo) await preparar(objetivo);
   else if (comando === "reel" && objetivo) reel(objetivo);
   else if (comando === "todo" && objetivo) reel(await preparar(objetivo));
+  else if (comando === "persona" && objetivo) persona(objetivo, resto.filter((a) => !a.startsWith("--")));
   else if (comando === "unir" && objetivo) unir(objetivo, resto.filter((a, i) => !a.startsWith("--") && !(resto[i - 1]?.startsWith("--") && opts[resto[i - 1].slice(2)] === a)));
   else {
     console.log(fs.readFileSync(import.meta.filename, "utf8").split("\n").filter((l) => l.startsWith("//")).map((l) => l.slice(3)).join("\n"));
