@@ -10,6 +10,8 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { HttpError, requireCaller, sendError, tieneRol, type Caller } from "../_lib/http";
 import { NextRequest, type NextResponse } from "../_lib/software/next-shim";
 import { misGanancias } from "../_lib/software/mis-ganancias";
+import { crearEsquemaSoftware } from "../_lib/software/esquema";
+import { getSql } from "../_lib/software/sql";
 
 import * as activity from "../_lib/software/rutas/activity";
 import * as apps from "../_lib/software/rutas/apps";
@@ -89,8 +91,19 @@ async function cuerpoCrudo(req: VercelRequest): Promise<string> {
   return Buffer.concat(partes).toString("utf8");
 }
 
+/** Las tablas de Software se crean solas la primera vez (solo "si no existen": nunca borra ni cambia datos). */
+let esquema: Promise<void> | null = null;
+function asegurarEsquema(): Promise<void> {
+  esquema ??= crearEsquemaSoftware(getSql()).catch((e) => {
+    esquema = null;
+    throw e;
+  });
+  return esquema;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
+    await asegurarEsquema();
     const accion = String(req.query.accion ?? "");
     if (accion === "mis-ganancias") {
       const caller = await requireCaller(req, ["admin", "administracion", "programador"]);
