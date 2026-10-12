@@ -333,7 +333,8 @@ export async function salirDelChatDeVoz() {
   void a.ctx?.close().catch(() => undefined);
   avisar();
   const r = await avisarVoz(a.chatId, "salir").catch(() => null);
-  if (r?.cerrada?.inicio) void armarMinuta(a.chatId, r.cerrada.inicio);
+  // Era el último: el servidor ya está armando la minuta (llega al chat como PDF aunque cierres la app).
+  if (r?.cerrada?.inicio) toast.message("La minuta llega al chat en PDF en un ratito.");
 }
 
 // ---- Minuta: cada uno transcribe su propia voz en partes cortas (solo si habló); al cortar, Prodi la arma ----
@@ -400,18 +401,6 @@ async function cerrarTramo(a: NonNullable<typeof actual>) {
     /* nada */
   }
   await Promise.race([t.listo, new Promise((ok) => window.setTimeout(ok, 20_000))]);
-}
-
-async function armarMinuta(chatId: string, inicio: string) {
-  const id = toast.loading("Armando la minuta de la llamada…");
-  try {
-    const minutos = Math.max(1, Math.round((Date.now() - new Date(inicio).getTime()) / 60_000));
-    const r = await callApi<{ vacia?: boolean }>("/api/ia/minuta-llamada-texto", { chat_id: chatId, inicio, minutos });
-    if (r.vacia) toast.message("No hubo nada para la minuta (no se escuchó a nadie hablar).", { id });
-    else toast.success("La minuta quedó en el chat", { id });
-  } catch (err) {
-    toast.error(err instanceof Error ? `No se pudo armar la minuta: ${err.message}` : "No se pudo armar la minuta", { id });
-  }
 }
 
 // ---- Al volver a la app (iPhone pausa el micrófono en segundo plano): se recupera micrófono y audio ----

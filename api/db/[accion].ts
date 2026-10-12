@@ -19,10 +19,15 @@ import { contexto, paraLaApp, partirColeccion, puedeEscribir, puedeLeer } from "
 import { appUrl, body, HttpError, olvidarPerfil, requireCaller, sendError } from "../_lib/http";
 import { sincronizarCalendario } from "../_lib/calendario";
 import { publicarEnChat } from "../_lib/chat-server";
+import { waitUntil } from "@vercel/functions";
+import { armarMinutaDeLlamada } from "../_lib/minuta-llamada";
 import type { Data } from "../_lib/db";
 
 /** Colecciones con fecha que van a Google Calendar (se ponen al día después de guardar). */
 const CON_CALENDARIO = new Set(["reuniones", "tareas"]);
+
+// La minuta de una llamada se arma después de responder (IA + PDF + Drive): hasta 60 s.
+export const config = { maxDuration: 60 };
 
 const MAX_CONSULTAS = 40;
 const MAX_OPS = 450;
@@ -162,6 +167,7 @@ async function cambios(req: VercelRequest) {
   const { desde, escribiendo: conEscribiendo } = body<{ desde?: number | null; escribiendo?: boolean }>(req);
   const clave = desde == null || !Number.isFinite(Number(desde)) ? "inicio" : String(Number(desde));
   // Con el chat abierto, también quién está escribiendo (es de cada persona: no va en la respuesta compartida).
+  waitUntil(cerrarLlamadasTerminadas().catch(() => undefined));
   const escriben = conEscribiendo ? quienesEscriben(quien.uid).catch(() => []) : null;
   const enVoz = conEscribiendo ? quienesEnVoz(quien.uid).catch(() => []) : null;
   const c = respuestas.get(clave);
@@ -318,6 +324,9 @@ async function cerrarLlamadasTerminadas(forzar = false): Promise<{ chat_id: stri
       { texto: `hizo una llamada de voz ${duracion}${con} 📞`, by: x.por, by_nombre: x.por_nombre, at: new Date().toISOString(), tipo: "sistema" },
       `llamada_${new Date(x.inicio).getTime()}`
     ).catch((e) => console.warn("[voz] registro", e));
+    // La minuta (PDF) se arma en el servidor, aunque todos hayan cerrado la app.
+    const inicio = new Date(x.inicio).toISOString();
+    waitUntil(armarMinutaDeLlamada(x.chat_id, inicio, appUrl(), Math.max(1, min)).catch((e) => console.warn("[voz] minuta", e)));
   }
   return (r.rows as { chat_id: string; inicio: string }[]).map((x) => ({ chat_id: x.chat_id, inicio: new Date(x.inicio).toISOString() }));
 }
