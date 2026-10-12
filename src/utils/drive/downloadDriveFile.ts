@@ -124,7 +124,8 @@ export async function downloadAttachmentsSequential(
     for (let i = 0; i < files.length; i++) {
       options?.onProgress?.({ current: i + 1, total: files.length, fileName: files[i].name });
       downloadViaLink(getPublicDownloadUrl(files[i].drive_file_id));
-      if (i < files.length - 1) await new Promise((resolve) => setTimeout(resolve, delayMs));
+      // Más espacio que en el camino viejo: si la siguiente arranca antes de que Drive responda, puede cortar la anterior.
+      if (i < files.length - 1) await new Promise((resolve) => setTimeout(resolve, Math.max(delayMs, 3000)));
     }
     return;
   }
