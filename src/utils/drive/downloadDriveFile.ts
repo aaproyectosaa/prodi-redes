@@ -1,7 +1,7 @@
 import { asset } from "@/lib/asset";
 import type { DriveAttachmentRef } from "@/integrations/firebase/types";
 import { downloadDriveFileBlob } from "@/utils/drive/driveApi";
-import { getDriveMediaPlayUrl } from "@/utils/drive/driveMediaUrl";
+import { getDriveDownloadUrl, getDriveMediaPlayUrl } from "@/utils/drive/driveMediaUrl";
 
 /** Hasta este tamaño se baja por la app (con el permiso corto de media-token); más grande, directo de Drive. */
 const MAX_POR_APP = 150 * 1024 * 1024;
@@ -27,6 +27,17 @@ export function saveBlobAsDownload(blob: Blob, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
 }
 
+/** Baja con el navegador (el archivo llega como adjunto: la página no se mueve). Sirve para videos de cualquier tamaño. */
+function downloadViaLink(url: string): void {
+  const link = document.createElement("a");
+  link.href = url;
+  link.rel = "noopener";
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 /** Fallback: iframe oculto (evita bloqueo de popups en descargas públicas). */
 function downloadViaHiddenFrame(url: string): void {
   const iframe = document.createElement("iframe");
@@ -50,6 +61,16 @@ async function downloadOneAttachment(
       return;
     } catch (err) {
       console.warn("Descarga vía API falló, probando enlace público:", err);
+    }
+  }
+
+  // El equipo: el servidor revisa que tenga acceso y el navegador lo baja directo de Drive (fotos y videos de cualquier tamaño).
+  if (!att.drive_file_id.startsWith("demo/")) {
+    try {
+      downloadViaLink(await getDriveDownloadUrl(att.drive_file_id));
+      return;
+    } catch (err) {
+      console.warn("Descarga directa falló, probando por la app:", err);
     }
   }
 
@@ -101,7 +122,8 @@ export async function downloadAttachmentsSequential(
     delayMs?: number;
   }
 ): Promise<void> {
-  const delayMs = options?.delayMs ?? 350;
+  // Un respiro entre archivos: si no, el navegador puede saltearse alguno.
+  const delayMs = options?.delayMs ?? 1200;
 
   for (let i = 0; i < files.length; i++) {
     const att = files[i];

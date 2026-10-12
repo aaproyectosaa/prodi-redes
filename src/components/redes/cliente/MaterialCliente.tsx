@@ -8,7 +8,7 @@ import { EtapaBadge } from "@/components/redes/EtapaBadge";
 import { useOpenVideo } from "@/components/redes/VideoCard";
 import { aceptaMaterialCliente } from "@/lib/redes/etapas";
 import { useDriveConnection } from "@/hooks/use-drive-connection";
-import { getDriveMediaPlayUrl } from "@/utils/drive/driveMediaUrl";
+import { getDriveDownloadUrl, getDriveMediaPlayUrl } from "@/utils/drive/driveMediaUrl";
 import { asset } from "@/lib/asset";
 import { mesLabel } from "@/lib/redes/format";
 import { versionFinal } from "@/lib/redes/piezas";
@@ -300,7 +300,10 @@ function SeccionArchivos({
  * ni la sesión ni el acceso a Drive viajan en la URL.
  */
 async function descargar(a: DriveAttachmentRef) {
-  const url = a.drive_file_id.startsWith("demo/") ? asset(a.drive_file_id) : await getDriveMediaPlayUrl(a.drive_file_id);
+  // Directo de Drive (videos de cualquier tamaño); si no se puede, por la app.
+  const url = a.drive_file_id.startsWith("demo/")
+    ? asset(a.drive_file_id)
+    : await getDriveDownloadUrl(a.drive_file_id).catch(() => getDriveMediaPlayUrl(a.drive_file_id));
   const link = document.createElement("a");
   link.href = url;
   link.download = a.name;

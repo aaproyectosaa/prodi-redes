@@ -30,3 +30,17 @@ export async function getDriveMediaPlayUrl(fileId: string): Promise<string> {
   logVideo("auth:token-ok", { fileId, uid: user.uid });
   return data.url;
 }
+
+/** Link para bajar el archivo directo de Drive (el servidor revisa el acceso y deja el archivo abierto con el link). */
+export async function getDriveDownloadUrl(fileId: string): Promise<string> {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Necesitás estar logueado");
+  const res = await fetch("/api/drive/media-token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${await user.getIdToken()}` },
+    body: JSON.stringify({ fileId, descarga: true }),
+  });
+  const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+  if (!res.ok || !data.url) throw new Error(data.error ?? `No se pudo bajar el archivo (${res.status})`);
+  return data.url;
+}
