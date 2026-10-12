@@ -18,6 +18,17 @@ Todo vive en `video/` (paquete aparte de la app, con su propio `pnpm-workspace.y
 
 Nada de eso último va a git (`video/.gitignore`).
 
+## Si llegan varios videos
+
+Primero mirarlos (tira de cuadros) y transcribirlos cada uno con `preparar`. Si son **tomas repetidas** del mismo texto, elegir la mejor (sin trabas ni repeticiones, buen audio, encuadre y foco) y seguir solo con esa. Si son **partes distintas** (gancho, producto, promo, cierre), armar el orden y empalmar recortando lo que sobre para que entre en 57,5 s:
+```
+pnpm editar unir <nombre> "C:\...\IMG_1.MOV:0-8.3" "C:\...\IMG_2.MOV:4.9-16.3" "C:\...\IMG_3.MOV"
+pnpm editar preparar trabajo\<nombre>.mp4 --vocabulario "..."
+```
+`unir` lleva todo a 1080×1920 y empareja el volumen. Tomas con solo cuenta regresiva o "3, 2, 1" no van. En un local con ruido de fondo los silencios casi no se detectan con -35 dB: probar `--umbral -26 --min-silencio 0.35`.
+
+Si la marca no está en `marcas/marcas.json`, recortar el logo que pase Lucas a su contenido (ffmpeg `crop`) y usar `--logo` + `--fondo` del color de fondo del logo.
+
 ## Flujo con un video nuevo
 
 1. **Preparar** (corta silencios + transcribe):

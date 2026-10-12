@@ -3,6 +3,8 @@
 //   pnpm editar preparar <video>                     corta silencios y transcribe (trabajo/<nombre>/)
 //   pnpm editar reel <nombre> --desde 12.4 --hasta 55  arma el Reel vertical de ese tramo (tiempos del video ya sin silencios)
 //   pnpm editar todo <video>                         preparar + reel con el tramo que elige solo
+//   pnpm editar unir <nombre> a.mov:0-8.3 b.mov:4.9-16.3 c.mov   empalma partes de varios videos en trabajo/<nombre>.mp4
+//                                                    (vertical 1080×1920, volumen parejo); después: preparar trabajo/<nombre>.mp4
 //
 // Opciones de reel/todo:
 //   --marca "TOKIO"       logo y fondo del cierre salen de marcas/marcas.json (sin marca: logo PRODI)
@@ -245,6 +247,33 @@ function cierre(): { logo: string; fondo: string } {
 }
 
 // ---------- comandos ----------
+function unir(nombre: string, partes: string[]) {
+  if (!partes.length) throw new Error("Faltan las partes: ruta.mov:desde-hasta (o la ruta sola para usarlo entero)");
+  const entradas: string[] = [];
+  const filtros: string[] = [];
+  partes.forEach((p, i) => {
+    const m = p.match(/^(.*):([\d.]+)-([\d.]+)$/);
+    const archivo = m ? m[1] : p;
+    if (!fs.existsSync(archivo)) throw new Error(`No existe ${archivo}`);
+    const sinAudio = !info(archivo).tieneAudio;
+    entradas.push(...(m ? ["-ss", m[2], "-to", m[3]] : []), "-i", archivo);
+    filtros.push(`[${i}:v]fps=${FPS},scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1[v${i}]`);
+    filtros.push(sinAudio
+      ? `anullsrc=r=48000:cl=stereo,atrim=duration=${m ? Number(m[3]) - Number(m[2]) : info(archivo).duracion}[a${i}]`
+      : `[${i}:a]aresample=48000,aformat=channel_layouts=stereo[a${i}]`);
+    console.log(`  ${i + 1}. ${path.basename(archivo)} ${m ? `${m[2]}–${m[3]} s` : "(entero)"}`);
+  });
+  const n = partes.length;
+  filtros.push(partes.map((_, i) => `[v${i}][a${i}]`).join("") + `concat=n=${n}:v=1:a=1[v][ac]`);
+  filtros.push("[ac]loudnorm=I=-14:TP=-1.5:LRA=11[a]");
+  fs.mkdirSync(TRABAJO, { recursive: true });
+  const salida = path.join(TRABAJO, `${slug(nombre)}.mp4`);
+  correr(FFMPEG, ["-y", ...entradas, "-filter_complex", filtros.join(";"), "-map", "[v]", "-map", "[a]", ...CODIFICAR, salida]);
+  console.log(`
+✔ Unido: ${path.relative(RAIZ, salida)} (${mmss(info(salida).duracion)})
+  Siguiente: pnpm editar preparar ${path.relative(RAIZ, salida)}`);
+}
+
 const slug = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "video";
 
 async function preparar(entrada: string) {
@@ -342,6 +371,7 @@ try {
   if (comando === "preparar" && objetivo) await preparar(objetivo);
   else if (comando === "reel" && objetivo) reel(objetivo);
   else if (comando === "todo" && objetivo) reel(await preparar(objetivo));
+  else if (comando === "unir" && objetivo) unir(objetivo, resto.filter((a, i) => !a.startsWith("--") && !(resto[i - 1]?.startsWith("--") && opts[resto[i - 1].slice(2)] === a)));
   else {
     console.log(fs.readFileSync(import.meta.filename, "utf8").split("\n").filter((l) => l.startsWith("//")).map((l) => l.slice(3)).join("\n"));
     process.exit(comando ? 1 : 0);
