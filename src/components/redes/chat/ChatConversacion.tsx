@@ -19,6 +19,10 @@ import {
   noLeido,
   pedirAProdi,
   guardarLinks,
+  descartarSugerencia,
+  esChatSoftware,
+  sugerirTareaSoftware,
+  tareaDesdeMensaje,
   tieneLink,
   reaccionar,
   puedeEditarMensaje,
@@ -30,7 +34,7 @@ import { TextoIA } from "@/components/redes/TextoIA";
 import { TarjetaReferencia } from "./TarjetaReferencia";
 import { AudioMensaje, BarraGrabando, BotonMic, useGrabadorVoz } from "@/components/redes/chat/Voz";
 import { textoEscribiendo, useAvisarEscribiendo, useEscriben } from "@/lib/redes/escribiendo";
-import { entrarAlChatDeVoz, salirDelChatDeVoz, useChatVoz } from "@/lib/redes/chatVoz";
+import { entrarAlChatDeVoz, useChatVoz, useLlamada } from "@/lib/redes/chatVoz";
 import { ArchivoMensaje, SubidaBurbuja } from "@/components/redes/chat/Archivo";
 import { ChatIcon } from "@/components/redes/chat/ChatIcon";
 import { EtiquetaContacto, InfoChat } from "@/components/redes/chat/Grupos";
@@ -268,6 +272,9 @@ export function ChatConversacion({
   const [respondiendo, setRespondiendo] = useState<Mensaje | null>(null);
   const [referencia, setReferencia] = useState<ReferenciaChat | null>(null);
   const [tareaMsg, setTareaMsg] = useState<Mensaje | null>(null);
+  // Software: "Editar" en la tarjeta "¿Crear tarea?" abre el diálogo con lo que sugirió la IA.
+  const [tareaSug, setTareaSug] = useState<Mensaje["sugerencia_tarea"]>(null);
+  const [creandoSug, setCreandoSug] = useState<string | null>(null);
   const fin = useRef<HTMLDivElement>(null);
   const caja = useRef<HTMLTextAreaElement>(null);
   // Abierto desde otra pantalla con un mensaje empezado (ej. "Hablarlo con el cliente" en una corrección).
@@ -449,6 +456,8 @@ export function ChatConversacion({
       setRespondiendo(null);
       setReferencia(null);
       if (tieneLink(t) && chat.tipo !== "prodi") guardarLinks(chat.id, id);
+      // Prodi Software: la IA mira si el mensaje es una tarea y, si lo es, aparece "¿Crear tarea?" (solo chats de Software).
+      if (esChatSoftware(chat, profiles)) sugerirTareaSoftware(chat.id, id);
       // @prodi: el servidor lo procesa y contesta en el chat.
       if (mencionaProdi(t) || chat.tipo === "prodi") {
         setPensando(true);
@@ -497,12 +506,16 @@ export function ChatConversacion({
 
   // Chat de voz (grupos, como WhatsApp): sala de audio fija del chat; acá se ve quién está y se entra/sale.
   const conVoz = chat.tipo !== "prodi" && chat.tipo !== "directo";
-  const { enVoz, miChat: miChatVoz } = useChatVoz();
-  const enEsteVoz = enVoz.filter((v) => v.chat_id === chat.id);
-  const estoyEnVoz = miChatVoz === chat.id;
-  const otrosEnVoz = enEsteVoz.filter((v) => v.uid !== uid);
+  const { enVoz } = useChatVoz();
+  const llamada = useLlamada();
+  const estoyEnVoz = llamada?.chatId === chat.id;
+  const otrosEnVoz = enVoz.filter((v) => v.chat_id === chat.id && v.uid !== uid);
+  const [entrandoVoz, setEntrandoVoz] = useState(false);
   const entrarVoz = () => {
-    entrarAlChatDeVoz(chat.id, nombre, jitsiBase).catch((err) => toast.error(err instanceof Error ? err.message : "No se pudo abrir el chat de voz"));
+    setEntrandoVoz(true);
+    entrarAlChatDeVoz(chat.id, tituloChat(chat, uid, profiles, role))
+      .catch((err) => toast.error(err instanceof Error ? err.message : "No se pudo entrar al chat de voz"))
+      .finally(() => setEntrandoVoz(false));
   };
 
   const videollamada = async () => {
@@ -628,11 +641,12 @@ export function ChatConversacion({
             size="icon"
             variant="ghost"
             onClick={entrarVoz}
+            disabled={entrandoVoz}
             className={cn("h-10 w-10 shrink-0 text-primary md:h-8 md:w-8", otrosEnVoz.length && "animate-pulse")}
             aria-label="Chat de voz"
             title="Chat de voz: una sala de audio del grupo, entrás y salís cuando quieras"
           >
-            <Headphones className="h-4 w-4" />
+            {entrandoVoz ? <Loader2 className="h-4 w-4 animate-spin" /> : <Headphones className="h-4 w-4" />}
           </Button>
         )}
         {/* Los contactos (solo chat) no arman reuniones: las crea el equipo o el cliente. */}
@@ -657,36 +671,23 @@ export function ChatConversacion({
           ))}
         {acciones}
       </header>
-      {conVoz && (estoyEnVoz || otrosEnVoz.length > 0) && (
+      {conVoz && !estoyEnVoz && otrosEnVoz.length > 0 && (
         <div className="flex shrink-0 items-center gap-2 border-b bg-primary/[0.07] px-3 py-2 text-sm">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+          <span className="flex h-7 w-7 shrink-0 animate-pulse items-center justify-center rounded-full bg-primary text-primary-foreground">
             <Headphones className="h-3.5 w-3.5" />
           </span>
           <span className="min-w-0 flex-1 truncate">
-            <span className="font-medium">{estoyEnVoz ? "Estás en el chat de voz" : "Chat de voz"}</span>
-            {otrosEnVoz.length > 0 && (
-              <span className="text-muted-foreground">
-                {" · "}
-                {estoyEnVoz ? "con " : ""}
-                {otrosEnVoz.map((v) => (v.nombre || "Alguien").split(" ")[0]).join(", ")}
-                {estoyEnVoz ? "" : otrosEnVoz.length === 1 ? " está adentro" : " están adentro"}
-              </span>
-            )}
+            <span className="font-medium">Chat de voz</span>
+            <span className="text-muted-foreground">
+              {" · "}
+              {otrosEnVoz.map((v) => (v.nombre || "Alguien").split(" ")[0]).join(", ")}
+              {otrosEnVoz.length === 1 ? " está adentro" : " están adentro"}
+            </span>
           </span>
-          {estoyEnVoz ? (
-            <>
-              <Button size="sm" variant="ghost" className="h-8 shrink-0" onClick={entrarVoz}>
-                Volver
-              </Button>
-              <Button size="sm" variant="destructive" className="h-8 shrink-0" onClick={() => void salirDelChatDeVoz()}>
-                Salir
-              </Button>
-            </>
-          ) : (
-            <Button size="sm" className="h-8 shrink-0" onClick={entrarVoz}>
-              Unirse
-            </Button>
-          )}
+          <Button size="sm" className="h-8 shrink-0" onClick={entrarVoz} disabled={entrandoVoz}>
+            {entrandoVoz && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+            Unirse
+          </Button>
         </div>
       )}
 
@@ -930,6 +931,39 @@ export function ChatConversacion({
                         );
                       })}
                     </div>
+                  )}
+                  {m.sugerencia_tarea?.estado === "pendiente" && (
+                    <TarjetaSugerencia
+                      s={m.sugerencia_tarea}
+                      mio={mio}
+                      nombreDe={(u) => (u === uid ? "vos" : nombreDe(u, chat.nombres?.[u]).split(" ")[0])}
+                      ocupado={creandoSug === m.id}
+                      onCrear={() => {
+                        const s = m.sugerencia_tarea!;
+                        if (!s.asignados.length) {
+                          setTareaSug(s);
+                          setTareaMsg(m);
+                          return;
+                        }
+                        setCreandoSug(m.id);
+                        void tareaDesdeMensaje(chat, m, {
+                          titulo: s.titulo,
+                          asignados: s.asignados,
+                          vence: s.vence,
+                          cliente_software_id: s.cliente_id,
+                          cliente_software_tipo: s.cliente_tipo,
+                          desde_sugerencia: true,
+                        })
+                          .then(() => toast.success("Tarea creada. Le llega el aviso."))
+                          .catch((err) => toast.error(err instanceof Error ? err.message : "No se pudo crear la tarea"))
+                          .finally(() => setCreandoSug(null));
+                      }}
+                      onEditar={() => {
+                        setTareaSug(m.sugerencia_tarea ?? null);
+                        setTareaMsg(m);
+                      }}
+                      onDescartar={() => void descartarSugerencia(chat, m).catch((err) => toast.error(err instanceof Error ? err.message : "No se pudo"))}
+                    />
                   )}
                   {mio && m.id === ultimoMio && <VistoLinea chat={chat} m={m} uid={uid} />}
                   {vistos.has(m.id) && (
@@ -1230,7 +1264,62 @@ export function ChatConversacion({
         }}
       />
       <EditarMensajeDialog chat={chat} m={editMsg} onOpenChange={(v) => !v && setEditMsg(null)} />
-      <TareaMensajeDialog chat={chat} m={tareaMsg} uid={uid} perfilDe={perfilDe} onOpenChange={(v) => !v && setTareaMsg(null)} />
+      <TareaMensajeDialog
+        chat={chat}
+        m={tareaMsg}
+        uid={uid}
+        perfilDe={perfilDe}
+        sugerencia={tareaSug}
+        onOpenChange={(v) => {
+          if (v) return;
+          setTareaMsg(null);
+          setTareaSug(null);
+        }}
+      />
+    </div>
+  );
+}
+
+/** Software: "📌 ¿Crear tarea?" debajo del mensaje donde la IA vio una tarea. Cualquiera del chat la crea, edita o descarta. */
+function TarjetaSugerencia({
+  s,
+  mio,
+  nombreDe,
+  ocupado,
+  onCrear,
+  onEditar,
+  onDescartar,
+}: {
+  s: NonNullable<Mensaje["sugerencia_tarea"]>;
+  mio: boolean;
+  nombreDe: (uid: string) => string;
+  ocupado: boolean;
+  onCrear: () => void;
+  onEditar: () => void;
+  onDescartar: () => void;
+}) {
+  const fecha = s.vence ? new Date(`${s.vence}T12:00:00`).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "numeric" }) : null;
+  const partes = [s.asignados.length ? `para ${s.asignados.map(nombreDe).join(", ")}` : "sin asignar", fecha, s.cliente_nombre].filter(Boolean);
+  return (
+    <div className={cn("flex", mio ? "justify-end pr-1" : "pl-9")}>
+      <div className="mt-0.5 max-w-[85%] rounded-xl border border-primary/30 bg-primary/[0.06] px-3 py-2 text-xs shadow-sm animate-in fade-in slide-in-from-bottom-1 motion-reduce:animate-none">
+        <p>
+          📌 <span className="font-semibold">¿Crear tarea?</span> {s.titulo}
+        </p>
+        <p className="mt-0.5 text-muted-foreground">{partes.join(" · ")}</p>
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          <Button size="sm" className="h-7 px-2.5 text-xs" disabled={ocupado} onClick={onCrear}>
+            {ocupado ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}
+            Crear
+          </Button>
+          <Button size="sm" variant="outline" className="h-7 bg-background px-2.5 text-xs" disabled={ocupado} onClick={onEditar}>
+            Editar
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7 px-2.5 text-xs text-muted-foreground" disabled={ocupado} onClick={onDescartar}>
+            Descartar
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

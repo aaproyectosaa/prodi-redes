@@ -6,6 +6,8 @@
 //                                                  y, con el chat abierto, quién está escribiendo
 // POST /api/db/escribiendo { chatId, estado: "escribiendo" | "grabando" | null }
 // POST /api/db/voz         { chatId, accion: "entrar" | "latido" | "salir" }  (chat de voz de los grupos)
+// POST /api/db/senal       { chatId, para, tipo: "oferta" | "respuesta" | "chau", data }  (para conectar la llamada)
+// POST /api/db/senales     {}  → las señales que me mandaron (se entregan una vez)
 //
 // Cada documento pasa por las reglas de acceso de api/_lib/reglas.ts.
 
@@ -293,7 +295,61 @@ async function voz(req: VercelRequest) {
        desde = case when chat_voz.hasta < now() then now() else chat_voz.desde end`,
     [chatId, caller.uid, caller.nombre ?? "", VIGENCIA_VOZ_S]
   );
-  return accion === "entrar" ? { ok: true, sala: salaDeVoz(chatId) } : { ok: true };
+  if (accion !== "entrar") return { ok: true };
+  // Quiénes ya estaban adentro: el que entra los llama a cada uno.
+  const adentro = await pool.query("select uid, nombre from chat_voz where chat_id = $1 and uid <> $2 and hasta > now() order by desde", [chatId, caller.uid]);
+  return { ok: true, sala: salaDeVoz(chatId), adentro: adentro.rows as { uid: string; nombre: string }[] };
+}
+
+// Señales de la llamada (WebRTC): para que dos celulares se conecten directo, Prodi les pasa "la presentación"
+// (oferta / respuesta). El audio no pasa por Prodi. Las señales se leen una vez y se borran; vencen al minuto.
+let tablaSenales: Promise<unknown> | null = null;
+function asegurarTablaSenales() {
+  tablaSenales ??= getPool()
+    .query(
+      "create table if not exists chat_senales (id bigserial primary key, chat_id text not null, de text not null, de_nombre text not null default '', para text not null, tipo text not null, data jsonb not null default '{}', creado timestamptz not null default now())"
+    )
+    .then(() => getPool().query("create index if not exists chat_senales_para on chat_senales (para)"))
+    .catch((e) => {
+      tablaSenales = null;
+      throw e;
+    });
+  return tablaSenales;
+}
+
+async function senal(req: VercelRequest) {
+  const caller = await requireCaller(req);
+  const { chatId, para, tipo, data } = body<{ chatId?: string; para?: string; tipo?: string; data?: unknown }>(req);
+  if (typeof chatId !== "string" || !ID_OK.test(chatId) || typeof para !== "string" || !ID_OK.test(para)) throw new HttpError(400, "Señal inválida");
+  if (!["oferta", "respuesta", "chau"].includes(String(tipo))) throw new HttpError(400, "Señal inválida");
+  const texto = JSON.stringify(data ?? {});
+  if (texto.length > 60_000) throw new HttpError(400, "Señal demasiado grande");
+  // Los dos tienen que ser del chat.
+  const r = await getPool().query(
+    "select 1 from documentos where coleccion = 'chats' and id = $1 and data->'miembros' @> jsonb_build_array($2::text) and data->'miembros' @> jsonb_build_array($3::text)",
+    [chatId, caller.uid, para]
+  );
+  if (!r.rowCount) throw new HttpError(403, "No son parte de este chat");
+  await asegurarTablaSenales();
+  await getPool().query("insert into chat_senales (chat_id, de, de_nombre, para, tipo, data) values ($1, $2, $3, $4, $5, $6::jsonb)", [
+    chatId,
+    caller.uid,
+    caller.nombre ?? "",
+    para,
+    tipo,
+    texto,
+  ]);
+  return { ok: true };
+}
+
+/** Las señales que me mandaron (se entregan una vez). */
+async function senales(req: VercelRequest) {
+  const caller = await requireCaller(req);
+  await asegurarTablaSenales();
+  const pool = getPool();
+  await pool.query("delete from chat_senales where creado < now() - interval '60 seconds'");
+  const r = await pool.query("delete from chat_senales where para = $1 returning chat_id, de, de_nombre, tipo, data, id", [caller.uid]);
+  return { senales: (r.rows as { id: string }[]).sort((a, b) => Number(a.id) - Number(b.id)) };
 }
 
 /** Quién está en el chat de voz de los chats de esta persona (incluida ella). */
@@ -335,6 +391,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "cambios") res.status(200).json(await cambios(req));
     else if (accion === "escribiendo") res.status(200).json(await escribiendo(req));
     else if (accion === "voz") res.status(200).json(await voz(req));
+    else if (accion === "senal") res.status(200).json(await senal(req));
+    else if (accion === "senales") res.status(200).json(await senales(req));
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {
     const status = (err as { code?: number }).code;

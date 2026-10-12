@@ -491,8 +491,11 @@ export function suscribirVoz(cb: (l: EnVoz[]) => void): () => void {
   };
 }
 /** Entrar / seguir / salir del chat de voz de un chat. Al entrar devuelve el nombre de la sala. */
-export async function avisarVoz(chatId: string, accion: "entrar" | "latido" | "salir"): Promise<{ sala?: string }> {
-  const r = await api<{ sala?: string }>("voz", { chatId, accion });
+export async function avisarVoz(
+  chatId: string,
+  accion: "entrar" | "latido" | "salir"
+): Promise<{ sala?: string; adentro?: { uid: string; nombre: string }[] }> {
+  const r = await api<{ sala?: string; adentro?: { uid: string; nombre: string }[] }>("voz", { chatId, accion });
   // Que se vea enseguida (sin esperar a la próxima pregunta).
   if (subs.size && !pausada) {
     if (timer) clearTimeout(timer);
@@ -500,6 +503,15 @@ export async function avisarVoz(chatId: string, accion: "entrar" | "latido" | "s
     programar(200);
   }
   return r;
+}
+
+/** Señales para conectar la llamada (WebRTC) con otra persona del chat. */
+export type Senal = { chat_id: string; de: string; de_nombre: string; tipo: "oferta" | "respuesta" | "chau"; data: { sdp?: string; type?: string } };
+export async function enviarSenal(chatId: string, para: string, tipo: Senal["tipo"], data: unknown = {}): Promise<void> {
+  await api("senal", { chatId, para, tipo, data });
+}
+export async function leerSenales(): Promise<Senal[]> {
+  return (await api<{ senales: Senal[] }>("senales", {})).senales ?? [];
 }
 
 /** Avisa que estoy escribiendo o grabando en un chat (null: dejé de hacerlo). */

@@ -7,6 +7,7 @@ import { MobileAppHeader, MobileTabBar, useTecladoAbierto } from "@/components/M
 import { AvisoActivarAvisos, AvisoInstalar } from "@/components/InstalarApp";
 import { RecorridoAuto } from "@/components/recorrido/Recorrido";
 import { AvisoDescargarChat, InstalarChatHost } from "@/components/InstalarChat";
+import { BarraLlamada } from "@/components/redes/chat/BarraLlamada";
 import { VideoSheet } from "@/components/redes/VideoSheet";
 import { ChatDock } from "@/components/redes/chat/ChatDock";
 import { VerComoBanner } from "@/components/redes/VerComo";
@@ -55,6 +56,7 @@ const LayoutInner = () => {
           <MobileAppHeader profile={profile} role={role} />
           <VerComoBanner />
           <AvisoDescargarChat oculto={sinAvisoChat} />
+          <BarraLlamada />
           <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
             {/* Al tocar el ojito se vuelve a dibujar la pantalla con los montos tapados o a la vista. */}
             <Outlet key={montosOcultos ? "ocultos" : "visibles"} />
