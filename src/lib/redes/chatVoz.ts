@@ -5,11 +5,17 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { avisarVoz, enviarSenal, leerSenales, suscribirVoz, type EnVoz, type Senal } from "@/lib/db";
 import { assertEditable } from "@/lib/redes/vistaComo";
+import { auth } from "@/integrations/firebase/client";
 import { callApi } from "@/lib/redes/api";
 import { subirASesion } from "@/utils/drive/driveApi";
 import { toast } from "sonner";
 
 const LATIDO_MS = 30_000;
+
+/** Mi id (para resolver quién gana si dos se llaman a la vez). */
+function uidActual(): string {
+  return auth.currentUser?.uid ?? "";
+}
 
 /** Servidores para encontrarse a través de internet. Si hay un TURN configurado (redes difíciles), también. */
 function servidoresIce(): RTCIceServer[] {
@@ -35,6 +41,8 @@ interface Par {
   hablando: boolean;
   desde: number;
   medir?: () => void;
+  /** Sesión de la otra persona (cambia cada vez que entra): las señales viejas no tocan la conexión nueva. */
+  sesionRemota?: string;
 }
 
 export interface Llamada {
@@ -58,8 +66,12 @@ let actual: {
   latido: number;
   sondeo: number;
   ctx: AudioContext | null;
+  uid: string;
+  /** Esta entrada a la llamada (al salir y volver a entrar es otra). */
+  sesion: string;
   medirMio?: () => void;
   finPresencia?: () => void;
+  medirOtros?: number;
   /** Grabación para la minuta (solo quien abrió la llamada): mezcla de su micrófono y los de los demás. */
   grabacion?: { rec: MediaRecorder; partes: Blob[]; mezcla: MediaStreamAudioDestinationNode; desde: number; nombres: Set<string>; mime: string };
 } | null = null;
@@ -104,7 +116,7 @@ function medidor(ctx: AudioContext | null, stream: MediaStream, alCambiar: (habl
   }
 }
 
-/** Espera a juntar los caminos posibles (máx. 3 s) para mandar la presentación completa de una vez. */
+/** Espera a juntar los caminos posibles (máx. 1,2 s: alcanza para la red local y la pública) y manda todo junto. */
 function esperarIce(pc: RTCPeerConnection): Promise<void> {
   if (pc.iceGatheringState === "complete") return Promise.resolve();
   return new Promise((ok) => {
@@ -114,36 +126,38 @@ function esperarIce(pc: RTCPeerConnection): Promise<void> {
     };
     const alCambiar = () => pc.iceGatheringState === "complete" && fin();
     pc.addEventListener("icegatheringstatechange", alCambiar);
-    window.setTimeout(fin, 3_000);
+    window.setTimeout(fin, 1_200);
   });
 }
 
-function crearPar(uid: string, nombre: string): Par {
+function crearPar(uid: string, nombre: string, sesionRemota?: string): Par {
   const a = actual!;
-  a.pares.get(uid)?.pc.close();
+  // Si ya había una conexión con esa persona, se cierra del todo (que no queden dos sonando).
+  const vieja = a.pares.get(uid);
+  if (vieja) {
+    vieja.pc.close();
+    vieja.audio.pause();
+    vieja.audio.srcObject = null;
+  }
   const pc = new RTCPeerConnection({ iceServers: servidoresIce() });
   a.mic.getAudioTracks().forEach((t) => pc.addTrack(t, a.mic));
   const audio = new Audio();
   audio.autoplay = true;
   audio.setAttribute("playsinline", "");
-  const par: Par = { uid, nombre, pc, audio, estado: "conectando", hablando: false, desde: Date.now() };
+  const par: Par = { uid, nombre, pc, audio, estado: "conectando", hablando: false, desde: Date.now(), sesionRemota };
   pc.ontrack = (e) => {
     const stream = e.streams[0] ?? new MediaStream([e.track]);
     audio.srcObject = stream;
     void audio.play().catch(() => undefined);
+    // A la grabación de la minuta va una copia aparte (nunca a los parlantes).
     if (a.grabacion && a.ctx) {
       try {
-        a.ctx.createMediaStreamSource(stream).connect(a.grabacion.mezcla);
+        a.ctx.createMediaStreamSource(new MediaStream([e.track.clone()])).connect(a.grabacion.mezcla);
       } catch {
         /* sin mezcla para esta persona */
       }
     }
     a.grabacion?.nombres.add(nombre);
-    par.medir?.();
-    par.medir = medidor(a.ctx, stream, (h) => {
-      par.hablando = h;
-      avisar();
-    });
   };
   pc.onconnectionstatechange = () => {
     const s = pc.connectionState;
@@ -160,6 +174,7 @@ function cerrarPar(uid: string) {
   if (!p) return;
   p.medir?.();
   p.pc.close();
+  p.audio.pause();
   p.audio.srcObject = null;
   actual!.pares.delete(uid);
   avisar();
@@ -173,30 +188,44 @@ async function llamarA(uid: string, nombre: string) {
   await par.pc.setLocalDescription(oferta);
   await esperarIce(par.pc);
   if (actual !== a) return;
-  await enviarSenal(a.chatId, uid, "oferta", { type: "offer", sdp: par.pc.localDescription?.sdp }).catch(() => undefined);
+  await enviarSenal(a.chatId, uid, "oferta", { type: "offer", sdp: par.pc.localDescription?.sdp, sesion: a.sesion }).catch(() => undefined);
 }
 
 async function atender(s: Senal) {
   const a = actual;
   if (!a || s.chat_id !== a.chatId) return;
-  if (s.tipo === "chau") return cerrarPar(s.de);
-  if (s.tipo === "oferta" && s.data.sdp) {
-    const par = crearPar(s.de, s.de_nombre || "Alguien");
+  const d = s.data as { sdp?: string; sesion?: string; para_sesion?: string };
+  if (s.tipo === "chau") {
+    // Solo si es de la conexión actual con esa persona (un "chau" viejo no corta la nueva).
+    const p = a.pares.get(s.de);
+    if (p && (!d.sesion || !p.sesionRemota || p.sesionRemota === d.sesion)) cerrarPar(s.de);
+    return;
+  }
+  if (s.tipo === "oferta" && d.sdp) {
+    // Los dos se llamaron a la vez: gana la oferta de quien tiene el id más chico; el otro la descarta.
+    const mia = a.pares.get(s.de);
+    if (mia && mia.pc.signalingState === "have-local-offer" && a.uid < s.de) return;
+    const par = crearPar(s.de, s.de_nombre || "Alguien", d.sesion);
     await par.pc.setRemoteDescription({ type: "offer", sdp: s.data.sdp });
     const resp = await par.pc.createAnswer();
     await par.pc.setLocalDescription(resp);
     await esperarIce(par.pc);
     if (actual !== a) return;
-    await enviarSenal(a.chatId, s.de, "respuesta", { type: "answer", sdp: par.pc.localDescription?.sdp }).catch(() => undefined);
+    await enviarSenal(a.chatId, s.de, "respuesta", { type: "answer", sdp: par.pc.localDescription?.sdp, sesion: a.sesion, para_sesion: d.sesion }).catch(() => undefined);
     return;
   }
-  if (s.tipo === "respuesta" && s.data.sdp) {
+  if (s.tipo === "respuesta" && d.sdp) {
+    // Solo respuestas a ESTA entrada (las de una entrada anterior se ignoran).
+    if (d.para_sesion && d.para_sesion !== a.sesion) return;
     const par = a.pares.get(s.de);
-    if (par && par.pc.signalingState === "have-local-offer") await par.pc.setRemoteDescription({ type: "answer", sdp: s.data.sdp }).catch(() => undefined);
+    if (par && par.pc.signalingState === "have-local-offer") {
+      par.sesionRemota = d.sesion;
+      await par.pc.setRemoteDescription({ type: "answer", sdp: d.sdp }).catch(() => undefined);
+    }
   }
 }
 
-/** Pregunta seguido por señales nuevas (cada 1 s al principio, después cada 2 s). */
+/** Pregunta seguido por señales nuevas (cada medio segundo al principio, después cada 1,5 s). */
 function sondearSenales(inicio: number) {
   const a = actual;
   if (!a) return;
@@ -207,7 +236,7 @@ function sondearSenales(inicio: number) {
       /* se reintenta */
     }
     if (actual === a) sondearSenales(inicio);
-  }, Date.now() - inicio < 30_000 ? 1_000 : 2_000);
+  }, Date.now() - inicio < 20_000 ? 500 : 1_500);
 }
 
 /** Entra al chat de voz del chat (se llama desde el toque: el navegador pide el micrófono). */
@@ -232,7 +261,19 @@ export async function entrarAlChatDeVoz(chatId: string, chatNombre: string) {
   } catch {
     ctx = null;
   }
-  actual = { chatId, chatNombre, mic, muteado: false, yoHablando: false, pares: new Map(), latido: 0, sondeo: 0, ctx };
+  actual = {
+    chatId,
+    chatNombre,
+    mic,
+    muteado: false,
+    yoHablando: false,
+    pares: new Map(),
+    latido: 0,
+    sondeo: 0,
+    ctx,
+    uid: uidActual(),
+    sesion: Math.random().toString(36).slice(2, 12),
+  };
   const a = actual;
   a.medirMio = medidor(ctx, mic, (h) => {
     a.yoHablando = h && !a.muteado;
@@ -245,6 +286,19 @@ export async function entrarAlChatDeVoz(chatId: string, chatNombre: string) {
     if (!(r.adentro ?? []).length) empezarGrabacion(a);
     a.latido = window.setInterval(() => void avisarVoz(chatId, "latido").catch(() => undefined), LATIDO_MS);
     sondearSenales(Date.now());
+    a.medirOtros = window.setInterval(() => {
+      let cambio = false;
+      for (const p of a.pares.values()) {
+        let nivel = 0;
+        for (const r of p.pc.getReceivers()) for (const f of r.getSynchronizationSources?.() ?? []) nivel = Math.max(nivel, f.audioLevel ?? 0);
+        const habla = nivel > 0.03;
+        if (habla !== p.hablando) {
+          p.hablando = habla;
+          cambio = true;
+        }
+      }
+      if (cambio) avisar();
+    }, 300);
     // Si alguien dejó de figurar (cerró Prodi sin colgar), se corta con esa persona.
     a.finPresencia = suscribirVoz((lista) => {
       if (actual !== a) return;
@@ -266,11 +320,13 @@ export async function salirDelChatDeVoz() {
   window.clearInterval(a.latido);
   window.clearTimeout(a.sondeo);
   a.finPresencia?.();
+  window.clearInterval(a.medirOtros);
   a.medirMio?.();
   for (const p of a.pares.values()) {
-    void enviarSenal(a.chatId, p.uid, "chau").catch(() => undefined);
+    void enviarSenal(a.chatId, p.uid, "chau", { sesion: a.sesion }).catch(() => undefined);
     p.medir?.();
     p.pc.close();
+    p.audio.pause();
     p.audio.srcObject = null;
   }
   const grabado = a.grabacion ? await terminarGrabacion(a.grabacion) : null;

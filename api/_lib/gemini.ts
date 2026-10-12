@@ -171,7 +171,10 @@ export interface MinutaIA {
 export async function generarMinutaIA(prompt: string, audio?: { data: Buffer; mime: string }): Promise<MinutaIA> {
   const parts: any[] = [{ text: prompt }];
   if (audio) {
-    const mime = audio.mime.split(";")[0] || "audio/webm";
+    // Gemini lee audio WAV/MP3/AAC/OGG/FLAC; lo que graban los navegadores (WebM en Chrome, MP4/M4A en iPhone)
+    // lo acepta como video (y escucha su audio).
+    const crudo = (audio.mime.split(";")[0] || "audio/webm").toLowerCase();
+    const mime = /webm/.test(crudo) ? "video/webm" : /mp4|m4a|quicktime/.test(crudo) ? "video/mp4" : crudo;
     if (audio.data.length <= 14 * 1024 * 1024) {
       parts.push({ inline_data: { mime_type: mime, data: audio.data.toString("base64") } });
     } else {
