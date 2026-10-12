@@ -16,6 +16,7 @@
   "dependencies": {
     "@remotion/captions": "4.0.533",
     "@remotion/cli": "4.0.533",
+    "@remotion/google-fonts": "4.0.533",
     "@remotion/install-whisper-cpp": "4.0.533",
     "@remotion/media-utils": "4.0.533",
     "@remotion/zod-types": "4.0.533",

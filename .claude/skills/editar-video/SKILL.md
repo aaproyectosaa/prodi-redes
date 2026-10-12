@@ -64,6 +64,20 @@ Si la marca no está en `marcas/marcas.json`, recortar el logo que pase Lucas a 
    ```
    Revisar: que el sujeto quede en cuadro, subtítulos legibles y bien escritos (si whisper erró una palabra, corregirla en `trabajo/<nombre>/captions.json` y volver a correr `reel`), y el logo del cierre. Chequear duración con `ffprobe`. Recién después mandarle el MP4 a Lucas (SendUserFile) con duración y tramo usado.
 
+## Efectos gráficos (siempre, salvo que pida algo sobrio)
+
+Con los tiempos de palabra de `captions.json` escribir `trabajo/<nombre>/efectos.json` y pasarlo con `--efectos`:
+`{ "colores": {"marca","fuerte","texto"}, "efectos": [...] }`. Tipos (en `src/Efectos.tsx`):
+- `titulo` (arriba, con `sub`) para el gancho y cada bloque; `etiqueta` (sticker con `x`,`y`,`giro`) cuando nombra un producto o atributo;
+- `zoom` (punch-in 1.12–1.16) en las palabras fuertes; `flash` en cada empalme entre partes;
+- `promo` (`grande` + `chico`) para descuentos, cuotas y precios; `cta` con la web o el @ al final;
+- `broll` (`src` relativo al JSON) para planos de apoyo **encima de la voz** — nunca un plano mudo suelto: si queda un hueco sin voz necesita música, y no tenemos música propia (sugerir agregarla en Instagram o pedir un MP3).
+Barra de progreso arriba automática. Colores de la marca; subtítulos con `--color` en un tono de la marca que se lea sobre borde negro.
+
+**Voz del camarógrafo** ("3, 2, 1, va"): whisper suele no transcribirla y además corre los tiempos de las primeras palabras. Para cada toma, medir el nivel cada 0,1 s del principio (`asetnsamples=4800,astats=metadata=1:reset=1`) y cortar donde arranca la voz fuerte de quien habla a cámara; después verificar transcribiendo el arranque de cada empalme del video final.
+
+`unir` ya limpia la voz (filtro de ruido, compresión, presencia) y realza el color; `--sin-mejorar` lo saltea.
+
 ## Ajustes finos
 
 - **Estilo de subtítulos** (tamaño, fuente, posición, mayúsculas, borde): `Pagina` en `src/Reel.tsx`. `paddingBottom: 430` los deja sobre la zona de botones de Instagram.

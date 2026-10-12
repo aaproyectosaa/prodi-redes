@@ -14,6 +14,9 @@ importers:
       '@remotion/cli':
         specifier: 4.0.533
         version: 4.0.533(@swc/helpers@0.5.23)(postcss@8.5.29)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(supports-color@8.1.1)(typescript@5.9.3)
+      '@remotion/google-fonts':
+        specifier: 4.0.533
+        version: 4.0.533(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       '@remotion/install-whisper-cpp':
         specifier: 4.0.533
         version: 4.0.533
@@ -903,6 +906,9 @@ packages:
 
   '@remotion/elevenlabs@4.0.533':
     resolution: {integrity: sha512-9BN2ZMmX8hxZFUjcOHiWPFR2W34IpUTnPZWyEZXO0gGNyYUD3QS0muvOodp82r9KtDqNlfUh0EoyI8HPWow2vQ==}
+
+  '@remotion/google-fonts@4.0.533':
+    resolution: {integrity: sha512-5+nKopVXZhX7o3uFM80CGSCDMTAst2N1I7NtfVd3ycG84yd6g86/+BKJ72Qcz/SD4TJFouQ/4w210PcNNI2ryw==}
 
   '@remotion/install-whisper-cpp@4.0.533':
     resolution: {integrity: sha512-d+wOyUS8hhYS+Al9l6YaFzHcTT4nj1D2utrQKe1yWmxlDWtN6Bg6S853fimwdO5rqInkug5E77JyxEty5+gN8A==}
@@ -2756,6 +2762,13 @@ snapshots:
     dependencies:
       '@remotion/captions': 4.0.533
       zod: 4.5.4
+
+  '@remotion/google-fonts@4.0.533(react-dom@19.2.0(react@19.2.0))(react@19.2.0)':
+    dependencies:
+      remotion: 4.0.533(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+    transitivePeerDependencies:
+      - react
+      - react-dom
 
   '@remotion/install-whisper-cpp@4.0.533':
     dependencies:

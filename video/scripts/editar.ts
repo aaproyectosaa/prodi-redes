@@ -4,7 +4,9 @@
 //   pnpm editar reel <nombre> --desde 12.4 --hasta 55  arma el Reel vertical de ese tramo (tiempos del video ya sin silencios)
 //   pnpm editar todo <video>                         preparar + reel con el tramo que elige solo
 //   pnpm editar unir <nombre> a.mov:0-8.3 b.mov:4.9-16.3 c.mov   empalma partes de varios videos en trabajo/<nombre>.mp4
-//                                                    (vertical 1080×1920, volumen parejo); después: preparar trabajo/<nombre>.mp4
+//                                                    (vertical 1080×1920, voz limpia, colores realzados); después: preparar trabajo/<nombre>.mp4
+//                                                    --sin-mejorar  deja sonido y color como vienen
+//                                                    a.mov:2-5:mudo  usa solo la imagen de esa parte (audio en silencio)
 //
 // Opciones de reel/todo:
 //   --marca "TOKIO"       logo y fondo del cierre salen de marcas/marcas.json (sin marca: logo PRODI)
@@ -12,6 +14,7 @@
 //   --color "#ffd400"     color de la palabra que se está diciendo
 //   --encuadre recorte    llena la pantalla cortando costados (por defecto: desenfoque si el video es horizontal)
 //   --sin-subtitulos      --cierre 2.5 (segundos del logo)       --salida nombre.mp4
+//   --efectos efectos.json  títulos, etiquetas, promos, zooms, flashes y planos de apoyo (ver src/Efectos.tsx)
 // Opciones de preparar/todo:
 //   --umbral -35          dB por debajo de los cuales es silencio  --min-silencio 0.5  (segundos)
 //   --margen 0.15         aire que se deja a cada lado del corte   --sin-cortar  (no corta silencios)
@@ -246,18 +249,48 @@ function cierre(): { logo: string; fondo: string } {
   return { logo, fondo };
 }
 
+// ---------- efectos gráficos ----------
+// El JSON tiene { colores?: {marca, fuerte, texto}, efectos: [...] } con tiempos del video ya preparado
+// (los de captions.json); acá se corren al tramo y los planos de apoyo se copian a public/.
+type EfectoJson = { tipo: string; desde?: number; hasta?: number; en?: number; src?: string };
+function efectos(archivo: string | undefined, tramo: Tramo, pub: string, id: string) {
+  if (!archivo) return {};
+  const j: { colores?: unknown; efectos: EfectoJson[] } = JSON.parse(fs.readFileSync(path.resolve(archivo), "utf8"));
+  const dentro = j.efectos.filter((e) => (e.en ?? e.hasta ?? 0) > tramo.desde && (e.en ?? e.desde ?? 0) < tramo.hasta);
+  const lista = dentro.map((e, i) => {
+    const r: EfectoJson = { ...e };
+    for (const k of ["desde", "hasta", "en"] as const) if (r[k] !== undefined) r[k] = Math.max(0, r[k]! - tramo.desde);
+    if (r.src) {
+      const origen = path.resolve(path.dirname(path.resolve(archivo)), r.src);
+      if (!fs.existsSync(origen)) throw new Error(`No existe el plano de apoyo ${origen}`);
+      fs.copyFileSync(origen, path.join(pub, `apoyo-${i}${path.extname(origen)}`));
+      r.src = `trabajo/${id}/apoyo-${i}${path.extname(origen)}`;
+    }
+    return r;
+  });
+  console.log(`  ${lista.length} efectos gráficos`);
+  return { efectos: lista, ...(j.colores ? { colores: j.colores } : {}) };
+}
+
 // ---------- comandos ----------
+// Realce suave: un poco más de contraste y saturación, y algo de nitidez (los celulares graban algo lavado).
+const COLOR = "eq=contrast=1.07:saturation=1.22:brightness=0.012:gamma=0.98,unsharp=5:5:0.45";
+// Voz: corta graves de ambiente, saca el ruido de fondo constante (aire, heladeras, música baja),
+// empareja el volumen de la voz y le da presencia.
+const VOZ = "highpass=f=85,lowpass=f=14000,afftdn=nf=-28:tn=1,acompressor=threshold=-21dB:ratio=3:attack=8:release=120:makeup=2,equalizer=f=3000:t=q:w=1.2:g=2.5,equalizer=f=250:t=q:w=1:g=-2";
+
 function unir(nombre: string, partes: string[]) {
   if (!partes.length) throw new Error("Faltan las partes: ruta.mov:desde-hasta (o la ruta sola para usarlo entero)");
+  const mejorar = !opts["sin-mejorar"];
   const entradas: string[] = [];
   const filtros: string[] = [];
   partes.forEach((p, i) => {
-    const m = p.match(/^(.*):([\d.]+)-([\d.]+)$/);
+    const m = p.match(/^(.*):([\d.]+)-([\d.]+)(:mudo)?$/);
     const archivo = m ? m[1] : p;
     if (!fs.existsSync(archivo)) throw new Error(`No existe ${archivo}`);
-    const sinAudio = !info(archivo).tieneAudio;
+    const sinAudio = !info(archivo).tieneAudio || !!m?.[4];
     entradas.push(...(m ? ["-ss", m[2], "-to", m[3]] : []), "-i", archivo);
-    filtros.push(`[${i}:v]fps=${FPS},scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1[v${i}]`);
+    filtros.push(`[${i}:v]fps=${FPS},scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1${mejorar ? `,${COLOR}` : ""}[v${i}]`);
     filtros.push(sinAudio
       ? `anullsrc=r=48000:cl=stereo,atrim=duration=${m ? Number(m[3]) - Number(m[2]) : info(archivo).duracion}[a${i}]`
       : `[${i}:a]aresample=48000,aformat=channel_layouts=stereo[a${i}]`);
@@ -265,13 +298,11 @@ function unir(nombre: string, partes: string[]) {
   });
   const n = partes.length;
   filtros.push(partes.map((_, i) => `[v${i}][a${i}]`).join("") + `concat=n=${n}:v=1:a=1[v][ac]`);
-  filtros.push("[ac]loudnorm=I=-14:TP=-1.5:LRA=11[a]");
+  filtros.push(`[ac]${mejorar ? `${VOZ},` : ""}loudnorm=I=-14:TP=-1.5:LRA=11[a]`);
   fs.mkdirSync(TRABAJO, { recursive: true });
   const salida = path.join(TRABAJO, `${slug(nombre)}.mp4`);
   correr(FFMPEG, ["-y", ...entradas, "-filter_complex", filtros.join(";"), "-map", "[v]", "-map", "[a]", ...CODIFICAR, salida]);
-  console.log(`
-✔ Unido: ${path.relative(RAIZ, salida)} (${mmss(info(salida).duracion)})
-  Siguiente: pnpm editar preparar ${path.relative(RAIZ, salida)}`);
+  console.log(`\n✔ Unido: ${path.relative(RAIZ, salida)} (${mmss(info(salida).duracion)})\n  Siguiente: pnpm editar preparar ${path.relative(RAIZ, salida)}`);
 }
 
 const slug = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "video";
@@ -354,6 +385,7 @@ function reel(nombre: string, tramoForzado?: Tramo) {
     fondoCierre: fondo,
     colorResaltado: str("color") ?? "#ffd400",
     segundosCierre: segCierre,
+    ...efectos(str("efectos"), tramo, pub, id),
   };
   const propsArchivo = path.join(pub, "props.json");
   fs.writeFileSync(propsArchivo, JSON.stringify(props));

@@ -11,6 +11,7 @@ import {
   useVideoConfig,
 } from "remotion";
 import { createTikTokStyleCaptions, type Caption, type TikTokPage } from "@remotion/captions";
+import { Efectos, Progreso, fontFamily, useZoom, type Colores, type Efecto } from "./Efectos";
 
 export type ReelProps = {
   /** Ruta dentro de public/ (staticFile) del clip ya recortado. */
@@ -22,7 +23,12 @@ export type ReelProps = {
   fondoCierre: string;
   colorResaltado: string;
   segundosCierre: number;
+  /** Gráficos, zooms, flashes y planos de apoyo (ver Efectos.tsx). */
+  efectos?: Efecto[];
+  colores?: Colores;
 };
+
+const COLORES: Colores = { marca: "#ffd400", fuerte: "#ff5fa2", texto: "#1d1d1d" };
 
 export const Reel: React.FC<ReelProps> = (p) => {
   const { fps } = useVideoConfig();
@@ -31,12 +37,23 @@ export const Reel: React.FC<ReelProps> = (p) => {
   return (
     <AbsoluteFill style={{ backgroundColor: "black" }}>
       <Sequence durationInFrames={framesClip}>
-        {p.video ? <OffthreadVideo src={staticFile(p.video)} style={{ width: "100%", height: "100%" }} /> : null}
+        {p.video ? <Video src={p.video} efectos={p.efectos ?? []} /> : null}
+        <Efectos efectos={p.efectos ?? []} colores={p.colores ?? COLORES} />
         <Subtitulos captions={p.captions} color={p.colorResaltado} />
+        {p.efectos?.length ? <Progreso color={(p.colores ?? COLORES).fuerte} frames={framesClip} /> : null}
       </Sequence>
       <Sequence from={framesClip}>
         <Cierre logo={p.logo} fondo={p.fondoCierre} />
       </Sequence>
+    </AbsoluteFill>
+  );
+};
+
+const Video: React.FC<{ src: string; efectos: Efecto[] }> = ({ src, efectos }) => {
+  const escala = useZoom(efectos);
+  return (
+    <AbsoluteFill style={{ overflow: "hidden" }}>
+      <OffthreadVideo src={staticFile(src)} style={{ width: "100%", height: "100%", transform: `scale(${escala})`, transformOrigin: "50% 35%" }} />
     </AbsoluteFill>
   );
 };
@@ -77,7 +94,7 @@ const Pagina: React.FC<{ page: TikTokPage; color: string }> = ({ page, color }) 
         style={{
           maxWidth: 900,
           textAlign: "center",
-          fontFamily: "'Montserrat', 'Arial Black', Arial, sans-serif",
+          fontFamily,
           fontWeight: 900,
           fontSize: 76,
           lineHeight: 1.15,
