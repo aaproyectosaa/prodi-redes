@@ -373,7 +373,7 @@ export function InfoChat({
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent side="right" className="flex w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-md">
           <SheetHeader className="space-y-3 border-b p-5 text-left">
-            <SheetTitle>{esGrupo ? "Grupo" : chat.tipo === "equipo" ? "Equipo Prodi" : "Grupo del cliente"}</SheetTitle>
+            <SheetTitle>{esGrupo ? "Grupo" : chat.tipo === "equipo" ? "Equipo Prodi" : chat.tipo === "software" ? "Equipo Software" : "Grupo del cliente"}</SheetTitle>
             <SheetDescription className="sr-only">Miembros y datos de la conversación</SheetDescription>
             {editaFoto && uid ? (
               <CaraGrupo

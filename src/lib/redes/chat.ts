@@ -27,6 +27,7 @@ export const chatDirectoId = (a: string, b: string) => `dm_${[a, b].sort().join(
  * Mantiene los grupos al día (lo corre el super admin al abrir la app):
  * - "equipo": todo el equipo interno.
  * - "cliente_<id>": equipo asignado al cliente + usuarios del cliente + admins.
+ * - "software": Prodi Software (admins, programación y administración).
  */
 export async function sincronizarChats(projects: Project[], profiles: Profile[], chats: Chat[]) {
   if (enModoVista()) return;
@@ -61,6 +62,11 @@ export async function sincronizarChats(projects: Project[], profiles: Profile[],
   };
 
   asegurar("equipo", { tipo: "equipo", proyecto_id: null, nombre: "Equipo Prodi", miembros: equipo });
+  // Prodi Software: admins, programación (rol principal o adicional) y administración.
+  const deSoftware = profiles
+    .filter((p) => p.activo !== false && [p.role, ...(p.roles_extra ?? [])].some((r) => r === "admin" || r === "programador" || r === "administracion"))
+    .map((p) => p.id);
+  asegurar("software", { tipo: "software", proyecto_id: null, nombre: "Equipo Software", miembros: Array.from(new Set(deSoftware)) });
   for (const p of projects) {
     if (p.enabled === false) continue;
     const t = p.team_roles ?? {};
@@ -299,6 +305,7 @@ export function noLeido(chat: Chat, uid: string | undefined): boolean {
 export function tituloChat(chat: Chat, uid: string | undefined, profiles: Profile[], role?: string): string {
   if (chat.tipo === "prodi") return "Prodi";
   if (chat.tipo === "equipo") return "Equipo Prodi";
+  if (chat.tipo === "software") return chat.nombre_propio && chat.nombre ? chat.nombre : "Equipo Software";
   if (chat.tipo === "cliente") return role === "cliente" || role === "contacto" ? `Prodi · ${chat.nombre ?? ""}` : chat.nombre ?? "Cliente";
   if (chat.tipo === "grupo") return chat.nombre ?? "Grupo";
   const otro = chat.miembros.find((m) => m !== uid) ?? "";
@@ -502,8 +509,48 @@ export async function reaccionar(chat: Chat, m: Mensaje, uid: string, emoji: str
   await updateDoc(doc(db, CHATS, chat.id, "mensajes", m.id), { reacciones: nuevas });
 }
 
+// ---------------------------------------------------------------------------
+// Prodi Software: tareas sugeridas por la IA en sus chats (Redes no usa esto)
+// ---------------------------------------------------------------------------
+
+const ROLES_SOFTWARE = ["admin", "administracion", "programador"];
+
+/** ¿Es una conversación de Software? El grupo "Equipo Software" o un privado entre dos personas de Software. */
+export function esChatSoftware(chat: Chat, profiles: Profile[]): boolean {
+  if (chat.tipo === "software") return true;
+  if (chat.tipo !== "directo" || chat.miembros.length !== 2) return false;
+  return chat.miembros.every((u) => {
+    const p = profiles.find((x) => x.id === u);
+    return !!p && [p.role, ...(p.roles_extra ?? [])].some((r) => ROLES_SOFTWARE.includes(r ?? ""));
+  });
+}
+
+/** Después de mandar un mensaje en un chat de Software: la IA mira si es una tarea (en segundo plano, sin avisar errores). */
+export function sugerirTareaSoftware(chatId: string, mensajeId: string) {
+  void callApi("/api/ia/software-tarea-sugerir", { chat_id: chatId, mensaje_id: mensajeId }).catch(() => undefined);
+}
+
+/** "Descartar" en la tarjeta "¿Crear tarea?". */
+export async function descartarSugerencia(chat: Chat, m: Mensaje) {
+  assertEditable();
+  await updateDoc(doc(db, CHATS, chat.id, "mensajes", m.id), { "sugerencia_tarea.estado": "descartada" });
+}
+
 /** "Hacer tarea" con un mensaje: la crea el servidor (aviso, Calendar y una línea en el chat). */
-export async function tareaDesdeMensaje(chat: Chat, m: Mensaje, datos: { titulo: string; asignados: string[]; vence: string | null }) {
+export async function tareaDesdeMensaje(
+  chat: Chat,
+  m: Mensaje,
+  datos: {
+    titulo: string;
+    asignados: string[];
+    vence: string | null;
+    /** Software: cliente de la tarea. */
+    cliente_software_id?: string | null;
+    cliente_software_tipo?: "app" | "mantenimiento" | null;
+    /** Viene de la tarjeta "¿Crear tarea?" (la marca como creada). */
+    desde_sugerencia?: boolean;
+  }
+) {
   assertEditable();
   return callApi<{ ok: boolean; tarea_id: string }>("/api/ia/tarea-chat", { chat_id: chat.id, mensaje_id: m.id, ...datos });
 }

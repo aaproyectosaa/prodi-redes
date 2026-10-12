@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, ListTodo, Loader2 } from "lucide-react";
+import { Check, ListTodo, Loader2, Store, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import UserAvatar from "@/components/UserAvatar";
 import { hoyAR, sumarDias } from "@/lib/fecha";
 import { PRODI_ID, tareaDesdeMensaje } from "@/lib/redes/chat";
-import type { Chat, Mensaje } from "@/lib/redes/types";
+import type { Chat, Mensaje, SugerenciaTarea } from "@/lib/redes/types";
 import type { Profile } from "@/integrations/firebase/types";
 import { cn } from "@/lib/utils";
 
@@ -22,25 +22,38 @@ export function TareaMensajeDialog({
   uid,
   perfilDe,
   onOpenChange,
+  sugerencia,
 }: {
   chat: Chat;
   m: Mensaje | null;
   uid: string;
   perfilDe: (id: string) => Profile | undefined;
   onOpenChange: (v: boolean) => void;
+  /** Software: viene de "Editar" en la tarjeta "¿Crear tarea?" (precarga lo que sugirió la IA). */
+  sugerencia?: SugerenciaTarea | null;
 }) {
   const hoy = hoyAR();
   const [titulo, setTitulo] = useState("");
   const [asignados, setAsignados] = useState<string[]>([]);
   const [vence, setVence] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Software: cliente sugerido por la IA (se puede sacar).
+  const [cliente, setCliente] = useState<{ id: string; tipo: "app" | "mantenimiento"; nombre: string } | null>(null);
   useEffect(() => {
     if (!m) return;
+    if (sugerencia) {
+      setTitulo(sugerencia.titulo);
+      setAsignados(sugerencia.asignados.length ? sugerencia.asignados.filter((u) => chat.miembros.includes(u)) : [uid]);
+      setVence(sugerencia.vence);
+      setCliente(sugerencia.cliente_id && sugerencia.cliente_tipo ? { id: sugerencia.cliente_id, tipo: sugerencia.cliente_tipo, nombre: sugerencia.cliente_nombre ?? "Cliente" } : null);
+      return;
+    }
     setTitulo((m.texto || m.leyenda || "").slice(0, 200));
     // Por defecto, para quien mandó el mensaje (si no fui yo ni @prodi); si no, para mí.
     setAsignados([m.by !== uid && m.by !== PRODI_ID && chat.miembros.includes(m.by) ? m.by : uid]);
     setVence(null);
-  }, [m, uid, chat.miembros]);
+    setCliente(null);
+  }, [m, uid, chat.miembros, sugerencia]);
   if (!m) return null;
   const gente = chat.miembros.filter((u) => u !== PRODI_ID);
   const nombre = (u: string) => (u === uid ? "Yo" : perfilDe(u)?.nombre || chat.nombres?.[u] || "Usuario");
@@ -54,7 +67,14 @@ export function TareaMensajeDialog({
   const crear = async () => {
     setBusy(true);
     try {
-      await tareaDesdeMensaje(chat, m, { titulo: titulo.trim(), asignados, vence });
+      await tareaDesdeMensaje(chat, m, {
+        titulo: titulo.trim(),
+        asignados,
+        vence,
+        cliente_software_id: cliente?.id ?? null,
+        cliente_software_tipo: cliente?.tipo ?? null,
+        desde_sugerencia: sugerencia?.estado === "pendiente",
+      });
       toast.success("Tarea creada. Le llega el aviso y la ve en Tareas.");
       onOpenChange(false);
     } catch (err) {
@@ -99,6 +119,18 @@ export function TareaMensajeDialog({
             })}
           </div>
         </div>
+        {cliente && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">Cliente</p>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 py-1 pl-2.5 pr-1 text-sm">
+              <Store className="h-3.5 w-3.5 text-primary" /> {cliente.nombre}
+              <span className="text-[11px] text-muted-foreground">· {cliente.tipo === "app" ? "app" : "mantenimiento"}</span>
+              <button type="button" onClick={() => setCliente(null)} className="rounded-full p-0.5 text-muted-foreground hover:text-destructive" aria-label="Sacar el cliente">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </span>
+          </div>
+        )}
         <div className="space-y-1.5">
           <p className="text-xs font-medium text-muted-foreground">Para cuándo</p>
           <div className="flex flex-wrap items-center gap-1.5">

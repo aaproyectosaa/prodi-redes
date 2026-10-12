@@ -441,7 +441,18 @@ export const DEFAULT_REDES_SETTINGS: RedesSettings = {
 // Chat interno
 // ---------------------------------------------------------------------------
 
-export type TipoChat = "equipo" | "cliente" | "directo" | "grupo" | "prodi";
+export type TipoChat = "equipo" | "cliente" | "directo" | "grupo" | "prodi" | "software";
+
+/** Software: tarea que la IA detectó en un mensaje. Una persona la crea, la edita o la descarta (nunca se crea sola). */
+export interface SugerenciaTarea {
+  titulo: string;
+  asignados: string[];
+  vence: string | null;
+  cliente_id: string | null;
+  cliente_tipo: "app" | "mantenimiento" | null;
+  cliente_nombre: string | null;
+  estado: "pendiente" | "creada" | "descartada";
+}
 
 export interface Chat {
   /** Equipo / grupo de cliente que el super admin borró: queda sin miembros y la app no lo vuelve a crear. */
@@ -500,6 +511,10 @@ export interface Mensaje {
   /** Respuestas de @prodi: texto del botón del link. */
   link_texto?: string | null;
   tarea_id?: string | null;
+  /** Software: la tarea que sugiere la IA para este mensaje (la escribe el servidor). */
+  sugerencia_tarea?: SugerenciaTarea | null;
+  /** Software: ya se miró si era una tarea (no se vuelve a llamar a la IA). */
+  sugerencia_revisada?: boolean;
   /** Respuesta a otro mensaje: lo que se muestra citado arriba. */
   responde_a?: { id: string; by: string; by_nombre?: string; texto: string } | null;
   /** Personas mencionadas con @nombre (les llega un aviso aparte). */
@@ -540,6 +555,13 @@ export interface Tarea {
   chat_id: string | null;
   proyecto_id: string | null;
   created_at: string;
+  /** Mensaje del chat de donde salió. */
+  mensaje_id?: string | null;
+  /** De qué empresa es (sin dato: Redes). */
+  empresa?: "redes" | "software";
+  cliente_software_id?: string | null;
+  cliente_software_tipo?: "app" | "mantenimiento" | null;
+  cliente_software_nombre?: string | null;
 }
 
 // ---------------------------------------------------------------------------

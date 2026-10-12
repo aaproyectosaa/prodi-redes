@@ -21,6 +21,7 @@ import {
   Store,
   FolderOpen,
   Sparkles,
+  ListTodo,
 } from "lucide-react";
 import type { UserRole } from "@/integrations/firebase/types";
 
@@ -49,6 +50,7 @@ export function navSoftware(roles: UserRole[]): NavSection[] {
           { label: "Clientes", icon: Store, path: "/software/clientes", mobile: true },
           { label: "Planes mensuales", icon: Receipt, path: "/software/suscripciones" },
           { label: "Mantenimiento", icon: ClipboardList, path: "/software/mantenimientos" },
+          { label: "Tareas", icon: ListTodo, path: "/software/tareas" },
           { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
         ],
       },
@@ -67,6 +69,7 @@ export function navSoftware(roles: UserRole[]): NavSection[] {
     {
       items: [
         { label: "Mis ganancias", icon: HandCoins, path: "/software/mis-ganancias", mobile: true },
+        { label: "Tareas", icon: ListTodo, path: "/software/tareas", mobile: true },
         { label: "Clientes", icon: Store, path: "/software/clientes", mobile: true },
         { label: "Cobros", icon: CreditCard, path: "/software/pagos", mobile: true },
         { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },

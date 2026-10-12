@@ -110,6 +110,34 @@ export async function generarJSON<T>(prompt: string, schema: unknown, temperatur
   sinTexto();
 }
 
+/**
+ * Respuesta estructurada con un modelo barato, para tareas chicas y frecuentes (ej. detectar tareas en el chat de
+ * Software). Con GEMINI_API_KEY usa Gemini (gemini-2.5-flash); si no, Claude con ANTHROPIC_MODEL_BARATO
+ * (por defecto claude-haiku-4-5). No cambia generarJSON.
+ */
+export async function generarJSONBarato<T>(prompt: string, schema: unknown): Promise<T> {
+  if (hayGemini()) return gemini.generarJSON<T>(prompt, schema, 0.2);
+  if (!hayClaude()) sinTexto();
+  let r: Anthropic.Messages.Message;
+  try {
+    r = await claude().messages.create({
+      model: process.env.ANTHROPIC_MODEL_BARATO || "claude-haiku-4-5",
+      max_tokens: 1024,
+      output_config: { format: { type: "json_schema", schema: aJsonSchema(schema) } },
+      messages: [{ role: "user", content: prompt }],
+    } as Anthropic.Messages.MessageCreateParamsNonStreaming);
+  } catch (err) {
+    throw errorClaude(err);
+  }
+  if (r.stop_reason === "refusal") throw new Error("IA: no pudo responder ese pedido.");
+  const texto = r.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+  try {
+    return JSON.parse(texto) as T;
+  } catch {
+    throw new Error("IA: la respuesta vino incompleta. Probá de nuevo.");
+  }
+}
+
 /** Conversación en texto libre (el asistente del dueño). Solo Claude. */
 export async function conversarClaude(system: string, mensajes: { role: "user" | "assistant"; content: string }[]): Promise<string> {
   if (!hayClaude()) sinTexto();

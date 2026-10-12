@@ -318,6 +318,16 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       if (!soloSuReaccion(antes!.reacciones, despues!.reacciones, c.uid)) return false;
       return esAdmin(c) || miembroDelChat(c, padreId!);
     }
+    // Software, "¿Crear tarea?": la sugerencia la escribe solo el servidor. Un miembro solo la pasa de "pendiente" a
+    // "descartada" (o "creada"); nada más de la sugerencia ni del mensaje.
+    if (sub === "mensajes" && !crea && !borra && soloCambia(antes, despues, ["sugerencia_tarea"])) {
+      const a = antes!.sugerencia_tarea as Data | null | undefined;
+      const d = despues!.sugerencia_tarea as Data | null | undefined;
+      if (!a || !d || a.estado !== "pendiente" || !["descartada", "creada"].includes(String(d.estado))) return false;
+      if (JSON.stringify({ ...a, estado: null }) !== JSON.stringify({ ...d, estado: null })) return false;
+      return esAdmin(c) || miembroDelChat(c, padreId!);
+    }
+    if (sub === "mensajes" && despues && (escribeAlguna(antes, despues, ["sugerencia_tarea", "sugerencia_revisada"]))) return false;
     if (sub === "mensajes" && (delServidor(despues) || (delServidor(antes) && !(borra && esAdmin(c))))) return false;
     // Nadie (ni el admin desde la app) guarda un link que no sea https: un "javascript:" se ejecutaría al tocarlo.
     if (sub === "mensajes" && despues && (!linkOk(despues.link) || (crea && !TIPOS_MENSAJE.includes(String(despues.tipo ?? "texto"))))) return false;

@@ -15,14 +15,28 @@ export interface NuevaTarea {
   creada_por_nombre: string;
   chat_id: string | null;
   proyecto_id: string | null;
+  /** Mensaje del chat de donde salió (para el link a la conversación). */
+  mensaje_id?: string | null;
+  /** De qué empresa es (por defecto Redes). Las de Software se ven en /software/tareas. */
+  empresa?: "redes" | "software";
+  /** Software: cliente de una app (hub_clients) o de mantenimiento (hub_maintenance_clients). */
+  cliente_software_id?: string | null;
+  cliente_software_tipo?: "app" | "mantenimiento" | null;
+  cliente_software_nombre?: string | null;
 }
 
 const fechaCorta = (f: string) => `${Number(f.slice(8, 10))}/${Number(f.slice(5, 7))}`;
 
 export async function crearTarea(t: NuevaTarea, baseUrl: string): Promise<string> {
   const ref = adminDb().collection("tareas").doc();
+  const empresa = t.empresa === "software" ? "software" : "redes";
   await ref.create({
     ...t,
+    empresa,
+    mensaje_id: t.mensaje_id ?? null,
+    cliente_software_id: t.cliente_software_id ?? null,
+    cliente_software_tipo: t.cliente_software_tipo ?? null,
+    cliente_software_nombre: t.cliente_software_nombre ?? null,
     titulo: t.titulo.slice(0, 200),
     asignados: Array.from(new Set(t.asignados)),
     // Día completo en hora de AR (ISO), para calendario: de 00:00 del día que vence a 00:00 del siguiente.
@@ -44,7 +58,7 @@ export async function crearTarea(t: NuevaTarea, baseUrl: string): Promise<string
         destinatarios: otros,
         titulo: "Tarea nueva",
         cuerpo: `${t.creada_por_nombre || "Te pidieron"}: ${t.titulo.slice(0, 120)}${t.vence ? ` · para el ${fechaCorta(t.vence)}` : ""}`,
-        link: "/chat?tareas=1",
+        link: empresa === "software" ? "/software/tareas" : "/chat?tareas=1",
         clave: `tarea:${ref.id}`,
         proyectoId: t.proyecto_id,
       },
@@ -69,7 +83,7 @@ export async function recordatoriosTareas(baseUrl: string): Promise<string> {
         destinatarios: (t.asignados ?? []) as string[],
         titulo: "Tarea para hoy",
         cuerpo: String(t.titulo ?? "").slice(0, 140),
-        link: "/chat?tareas=1",
+        link: t.empresa === "software" ? "/software/tareas" : "/chat?tareas=1",
         clave: `tarea:${d.id}`,
         proyectoId: (t.proyecto_id as string | null) ?? null,
       },

@@ -98,7 +98,7 @@ export function CompartirPorChat({
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{nombre}</span>
                 <span className="block truncate text-[11px] text-muted-foreground">
-                  {c.proyecto_id === proyectoId ? "Grupo de este cliente" : c.tipo === "directo" ? "Privado" : c.tipo === "equipo" ? "Equipo" : "Grupo"}
+                  {c.proyecto_id === proyectoId ? "Grupo de este cliente" : c.tipo === "directo" ? "Privado" : c.tipo === "equipo" || c.tipo === "software" ? "Equipo" : "Grupo"}
                 </span>
               </span>
             </button>

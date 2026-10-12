@@ -14,6 +14,10 @@ const TOPE_MINUTA = 10;
 const TOPE_PIEZAS = 20; // pieza + pieza-editar juntas
 /** Links del chat: corre solo en segundo plano al mandar un mensaje, así que va aparte (no gasta el tope de la persona). */
 const TOPE_LINKS_CHAT = 100;
+/** Sugerir tareas en el chat de Software: también en segundo plano y aparte; tope entre todos en 24 h. */
+const TOPE_SOFTWARE_TAREA = 300;
+/** Acciones de segundo plano: no gastan el tope de la persona. */
+const APARTE = ["links-chat", "software-tarea"];
 /** Entre todo el sistema en 24 h (el admin no lo tiene). */
 const TOPE_GLOBAL = 1500;
 
@@ -29,15 +33,18 @@ export async function controlarTopeIA(caller: Caller, accion: string): Promise<v
   const mios = (await db.collection("ia_usos").where("uid", "==", caller.uid).where("at", ">", desde).get()).docs.map((d) => String(d.data().accion));
   if (accion === "links-chat") {
     if (mios.filter((a) => a === "links-chat").length >= TOPE_LINKS_CHAT) throw new HttpError(429, MENSAJE);
+  } else if (accion === "software-tarea") {
+    const deTodos = await db.collection("ia_usos").where("accion", "==", "software-tarea").where("at", ">", desde).get();
+    if (deTodos.size >= TOPE_SOFTWARE_TAREA) throw new HttpError(429, MENSAJE);
   } else {
-    const propios = mios.filter((a) => a !== "links-chat").length;
+    const propios = mios.filter((a) => !APARTE.includes(a)).length;
     const tope = esAdmin ? TOPE_ADMIN : caller.roles.some((r) => EQUIPO.includes(r)) ? TOPE_EQUIPO : TOPE_CLIENTE;
     if (propios >= tope) throw new HttpError(429, MENSAJE);
   }
   if (accion === "minuta" && mios.filter((a) => a === "minuta").length >= TOPE_MINUTA) throw new HttpError(429, MENSAJE);
   if ((accion === "pieza" || accion === "pieza-editar") && mios.filter((a) => a === "pieza" || a === "pieza-editar").length >= TOPE_PIEZAS)
     throw new HttpError(429, MENSAJE);
-  if (!esAdmin) {
+  if (!esAdmin && accion !== "software-tarea") {
     const todos = await db.collection("ia_usos").where("at", ">", desde).get();
     if (todos.size >= TOPE_GLOBAL) throw new HttpError(429, MENSAJE);
   }

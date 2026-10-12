@@ -168,7 +168,8 @@ export async function atenderMencion(caller: Caller, chatId: unknown, mensajeId:
   // Tope por día (que nadie use la IA sin freno): clientes y contactos menos, el equipo más.
   const hoyInicio = new Date(Date.now() - 24 * 3600_000).toISOString();
   const delDia = await db.collection("prodi_pedidos").where("uid", "==", caller.uid).where("at", ">", hoyInicio).get();
-  const topeDia = TEAM.includes(caller.role) ? 300 : 60;
+  // Programación (Software) cuenta como equipo solo para este tope: TEAM decide también qué datos de Redes ve Prodi.
+  const topeDia = TEAM.includes(caller.role) || caller.roles.includes("programador") ? 300 : 60;
   if (delDia.size >= topeDia) throw new HttpError(429, "Llegaste al límite de pedidos a Prodi por hoy. Mañana sigue.");
   try {
     await db.collection("prodi_pedidos").doc(`${cid}_${mensajeId}`).create({ uid: caller.uid, chat_id: cid, mensaje_id: mensajeId, at: new Date().toISOString() });

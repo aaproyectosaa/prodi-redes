@@ -54,6 +54,7 @@ const SwAppEditar = lazy(() => import("./software/paginas/AppEditar"));
 const SwActividad = lazy(() => import("./software/paginas/Actividad"));
 const SwReparto = lazy(() => import("./software/paginas/Reparto"));
 const SwMisGanancias = lazy(() => import("./software/paginas/MisGanancias"));
+const SwTareas = lazy(() => import("./software/paginas/Tareas"));
 const SwInicioSegunRol = lazy(() => import("./software/SoftwareLayout").then((m) => ({ default: () => <m.InicioSoftware panel={<SwInicio />} /> })));
 const ReporteDetalle = lazy(() => import("./pages/redes/Reportes").then((m) => ({ default: m.ReporteDetalle })));
 
@@ -131,6 +132,7 @@ const App = () => (
                 <Route path="/software" element={<RequireRole roles={["admin", "administracion", "programador"]}><SoftwareLayout /></RequireRole>}>
                   <Route index element={<SwInicioSegunRol />} />
                   <Route path="mis-ganancias" element={<SwMisGanancias />} />
+                  <Route path="tareas" element={<SwTareas />} />
                   <Route path="pagos" element={<SwPagos />} />
                   <Route path="clientes" element={<SwClientes />} />
                   <Route path="suscripciones" element={<RequireRole roles={["admin", "administracion"]}><SwSuscripciones /></RequireRole>} />

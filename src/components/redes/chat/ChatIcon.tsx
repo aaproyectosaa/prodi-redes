@@ -1,4 +1,4 @@
-import { Sparkles, Users } from "lucide-react";
+import { Sparkles, Users, Code2 } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useRedes } from "@/contexts/redes-data-context";
@@ -48,7 +48,7 @@ export function ChatIcon({
   // Foto de perfil armada con el logo (centrado y sin márgenes); si todavía no está, el logo tal cual.
   const avatar = cliente && logo && avatarAlDia(cliente) ? cliente.marca_archivos?.avatar?.img : undefined;
   const src = chat.foto || avatar || (logo ? logoUrl(logo) : undefined);
-  const fondo = chat.tipo === "grupo" ? chat.color || "#6F40FC" : chat.tipo === "equipo" ? "#6F40FC" : color || "#6F40FC";
+  const fondo = chat.tipo === "grupo" ? chat.color || "#6F40FC" : chat.tipo === "equipo" ? "#6F40FC" : chat.tipo === "software" ? "#0EA5E9" : color || "#6F40FC";
   return (
     <Avatar className={cn("shrink-0", tam)}>
       {src && (
@@ -62,6 +62,8 @@ export function ChatIcon({
       <AvatarFallback className="text-sm font-bold text-white" style={{ backgroundColor: fondo }}>
         {chat.tipo === "equipo" ? (
           <Users className="h-1/2 w-1/2" />
+        ) : chat.tipo === "software" ? (
+          <Code2 className="h-1/2 w-1/2" />
         ) : chat.tipo === "grupo" && chat.emoji ? (
           <span className="text-lg leading-none">{chat.emoji}</span>
         ) : (
