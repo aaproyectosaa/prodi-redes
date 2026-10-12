@@ -251,6 +251,23 @@ export function AvisoInstalar() {
 }
 
 /** ¿Este equipo ya está anotado para recibir avisos? (hay una suscripción push en el navegador). */
+/** Se pregunta UNA vez por equipo (queda guardado en el navegador, no por sesión). */
+const CLAVE_AVISOS_RESPONDIO = "prodi-avisos-respondio";
+function respondioAvisos(): boolean {
+  try {
+    return !!localStorage.getItem(CLAVE_AVISOS_RESPONDIO);
+  } catch {
+    return false;
+  }
+}
+function marcarRespondioAvisos() {
+  try {
+    localStorage.setItem(CLAVE_AVISOS_RESPONDIO, "1");
+  } catch {
+    /* nada */
+  }
+}
+
 async function equipoSuscripto(): Promise<boolean> {
   try {
     const reg = await navigator.serviceWorker.getRegistration("/");
@@ -280,14 +297,22 @@ export function AvisoActivarAvisos({ uid }: { uid?: string }) {
     if (yaMostrado(CLAVE_AVISOS)) return;
     let cancel = () => undefined as void;
     let vivo = true;
-    void import("@/lib/webPush").then(async ({ isWebPushSupported }) => {
+    void import("@/lib/webPush").then(async ({ isWebPushSupported, subscribeWebPush }) => {
       if (!(await isWebPushSupported())) return;
       const permiso = Notification.permission;
-      if (permiso === "granted" && (await equipoSuscripto())) return;
+      if (permiso === "granted") {
+        // Ya dio permiso: si el celular perdió la anotación, se vuelve a anotar solo, sin preguntar nada.
+        if (!(await equipoSuscripto())) await subscribeWebPush(uid).catch(() => undefined);
+        return;
+      }
+      // Ya respondió en este equipo (activar, "más tarde" o bloqueado): no se vuelve a preguntar.
+      // Si quiere activarlos después, está en su perfil.
+      if (respondioAvisos()) return;
       if (!vivo) return;
       setBloqueados(permiso === "denied");
       cancel = cuandoNoHayDialogo(() => {
         marcarMostrado(CLAVE_AVISOS);
+        marcarRespondioAvisos();
         setOpen(true);
       });
     });
@@ -353,7 +378,7 @@ export function AvisoActivarAvisos({ uid }: { uid?: string }) {
             </Button>
           )}
           <button type="button" onClick={() => setOpen(false)} className="text-sm text-muted-foreground hover:text-foreground">
-            Más tarde
+            Más tarde (se activan desde tu perfil)
           </button>
         </div>
       </DialogContent>

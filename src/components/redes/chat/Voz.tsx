@@ -117,6 +117,57 @@ export function AudioMensaje({
 
 const TIPOS = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4", "audio/webm"];
 
+// Micrófono: si el navegador recuerda el permiso, se pide y se suelta en cada audio (no pregunta nada).
+// Si es de los que preguntan cada vez (iPhone, o eligieron "Solo esta vez"), después de grabar queda guardado
+// y apagado 2 minutos: el próximo audio lo reusa sin volver a preguntar.
+let micGuardado: MediaStream | null = null;
+let soltarMic = 0;
+const MIC_GUARDADO_MS = 2 * 60_000;
+const CLAVE_AYUDA_MIC = "prodi-ayuda-mic";
+
+async function permisoMic(): Promise<PermissionState | null> {
+  try {
+    return (await navigator.permissions.query({ name: "microphone" as PermissionName })).state;
+  } catch {
+    return null;
+  }
+}
+
+async function pedirMic(): Promise<MediaStream> {
+  window.clearTimeout(soltarMic);
+  if (micGuardado?.getAudioTracks().some((t) => t.readyState === "live")) {
+    micGuardado.getAudioTracks().forEach((t) => (t.enabled = true));
+    return micGuardado;
+  }
+  micGuardado = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  return micGuardado;
+}
+
+async function guardarMic(stream: MediaStream) {
+  stream.getAudioTracks().forEach((t) => (t.enabled = false));
+  const soltar = () => {
+    stream.getTracks().forEach((t) => t.stop());
+    if (micGuardado === stream) micGuardado = null;
+  };
+  const permiso = await permisoMic();
+  if (permiso === "granted") return soltar();
+  soltarMic = window.setTimeout(soltar, MIC_GUARDADO_MS);
+  // Una sola vez: cómo dejarlo permitido para siempre.
+  try {
+    if (localStorage.getItem(CLAVE_AYUDA_MIC)) return;
+    localStorage.setItem(CLAVE_AYUDA_MIC, "1");
+  } catch {
+    return;
+  }
+  const iphone = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  toast.message("Para que no te pida el micrófono cada vez", {
+    description: iphone
+      ? "En el iPhone: Ajustes → Apps → Safari → Micrófono → «Permitir»."
+      : "Cuando el navegador pregunte, elegí «Permitir» (no «Solo esta vez»).",
+    duration: 10_000,
+  });
+}
+
 export function useGrabadorVoz() {
   const [grabando, setGrabando] = useState(false);
   const [seg, setSeg] = useState(0);
@@ -141,7 +192,7 @@ export function useGrabadorVoz() {
     }
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      stream = await pedirMic();
     } catch {
       toast.error("Permití el micrófono en el navegador para mandar audios");
       return;
@@ -194,7 +245,7 @@ export function useGrabadorVoz() {
       window.clearInterval(timer);
       cancelAnimationFrame(raf);
       void ctx?.close().catch(() => undefined);
-      stream.getTracks().forEach((t) => t.stop());
+      void guardarMic(stream);
     };
     r.start(250);
     rec.current = r;
