@@ -358,6 +358,8 @@ let ocultaDesde: number | null = null;
 let ultimoUso = Date.now();
 let pausada = false;
 const ACTIVA = 6_000;
+/** Con un chat abierto pregunta más seguido, para que "escribiendo…" llegue enseguida (como WhatsApp). */
+const ACTIVA_CHAT = 2_500;
 const QUIETA = 30_000;
 const QUIETA_DESDE = 5 * 60_000;
 const PAUSA_QUIETA = 20 * 60_000;
@@ -376,9 +378,13 @@ async function sondear() {
     return;
   }
   try {
-    const r = await api<{ rev: number; colecciones: string[] }>("cambios", { desde: rev });
+    const r = await api<{ rev: number; colecciones: string[]; escribiendo?: Escribe[] }>("cambios", {
+      desde: rev,
+      ...(interesEscribiendo > 0 ? { escribiendo: true } : {}),
+    });
     const primera = rev === null;
     rev = r.rev;
+    if (r.escribiendo) ponerEscriben(r.escribiendo);
     if (!primera && r.colecciones.length) refrescarColecciones(r.colecciones);
   } catch {
     /* sin conexión: se reintenta */
@@ -389,7 +395,7 @@ function programar(ms?: number) {
   if (timer || !subs.size) return;
   const oculto = typeof document !== "undefined" && document.visibilityState === "hidden";
   const quieta = Date.now() - ultimoUso > QUIETA_DESDE;
-  timer = setTimeout(sondear, ms ?? (oculto ? 60_000 : quieta ? QUIETA : ACTIVA));
+  timer = setTimeout(sondear, ms ?? (oculto ? 60_000 : quieta ? QUIETA : interesEscribiendo > 0 ? ACTIVA_CHAT : ACTIVA));
 }
 /** Se volvió a usar la app: si estaba en pausa, se pone al día y vuelve a preguntar seguido. */
 function despertar() {
@@ -430,6 +436,43 @@ if (typeof document !== "undefined") {
     timer = null;
     programar(50);
   });
+}
+
+// ---------------------------------------------------------------------------
+// "Escribiendo…" / "grabando audio…" (como WhatsApp): llega en la misma pregunta de "¿qué cambió?".
+// ---------------------------------------------------------------------------
+
+export type Escribe = { chat_id: string; uid: string; nombre: string; estado: string };
+let interesEscribiendo = 0;
+let escriben: Escribe[] = [];
+const oyentesEscriben = new Set<(l: Escribe[]) => void>();
+
+function ponerEscriben(l: Escribe[]) {
+  if (JSON.stringify(l) === JSON.stringify(escriben)) return;
+  escriben = l;
+  oyentesEscriben.forEach((cb) => cb(l));
+}
+
+/** Para las pantallas de chat: recibe quién está escribiendo en mis chats (y hace que se pregunte más seguido). */
+export function suscribirEscribiendo(cb: (l: Escribe[]) => void): () => void {
+  interesEscribiendo++;
+  oyentesEscriben.add(cb);
+  cb(escriben);
+  if (subs.size && !pausada) {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    programar(300);
+  }
+  return () => {
+    oyentesEscriben.delete(cb);
+    interesEscribiendo--;
+    if (!interesEscribiendo) escriben = [];
+  };
+}
+
+/** Avisa que estoy escribiendo o grabando en un chat (null: dejé de hacerlo). */
+export async function avisarEscribiendo(chatId: string, estado: "escribiendo" | "grabando" | null): Promise<void> {
+  await api("escribiendo", { chatId, estado }).catch(() => undefined);
 }
 
 export function onSnapshot(target: any, cb: (s: any) => void, err?: (e: unknown) => void): () => void {

@@ -40,6 +40,7 @@ import {
   type ChatPrefs,
 } from "@/lib/redes/chatPrefs";
 import { cn } from "@/lib/utils";
+import { textoEscribiendo, useEscriben } from "@/lib/redes/escribiendo";
 import { fechaAR, formatearFecha, hoyAR } from "@/lib/fecha";
 import type { Chat as ChatT } from "@/lib/redes/types";
 
@@ -163,6 +164,8 @@ export function ChatLista({
   const { profiles } = useAppData();
   const { user, role, profile, viewingAs } = useUserProfileContext();
   const uid = user?.uid;
+  // "escribiendo…" en la fila del chat, como WhatsApp.
+  const escriben = useEscriben();
   const prefs = useChatPrefs(uid);
   const [q, setQ] = useState("");
   const [filtro, setFiltro] = useState<Filtro>("todos");
@@ -366,6 +369,9 @@ export function ChatLista({
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
+                    {textoEscribiendo(escriben, c.id, c.tipo === "directo") ? (
+                      <p className="min-w-0 truncate text-xs font-medium text-primary">{textoEscribiendo(escriben, c.id, c.tipo === "directo")}</p>
+                    ) : (
                     <p className={cn("min-w-0 truncate text-xs", unread ? "text-foreground" : "text-muted-foreground")}>
                       {c.ultimo
                         ? `${c.ultimo.by === uid ? "Vos: " : c.ultimo.by === PRODI_ID ? "Prodi: " : c.tipo !== "directo" ? `${(profiles.find((p) => p.id === c.ultimo!.by)?.nombre ?? c.nombres?.[c.ultimo.by] ?? "").split(" ")[0]}: ` : ""}${c.ultimo.texto}`
@@ -375,6 +381,7 @@ export function ChatLista({
                             ? "Grupo"
                             : "Sin mensajes"}
                     </p>
+                    )}
                     {unread && <span className="ml-auto h-2.5 w-2.5 shrink-0 rounded-full bg-primary" aria-label="Sin leer" />}
                   </div>
                   {(etiquetas.length > 0 || (buscando && archivado)) && (

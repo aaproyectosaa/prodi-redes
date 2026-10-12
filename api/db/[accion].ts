@@ -2,7 +2,9 @@
 //
 // POST /api/db/consultar { consultas: [ { ruta } | { coleccion, filtros, orden, limite } ] }
 // POST /api/db/escribir  { ops: [ { tipo: "set"|"update"|"create"|"delete", ruta, data?, merge? } ] }  (todo o nada)
-// POST /api/db/cambios   { desde }  → qué colecciones cambiaron desde la última vez (para refrescar en vivo)
+// POST /api/db/cambios   { desde, escribiendo? }  → qué colecciones cambiaron desde la última vez (para refrescar en vivo)
+//                                                  y, con el chat abierto, quién está escribiendo
+// POST /api/db/escribiendo { chatId, estado: "escribiendo" | "grabando" | null }
 //
 // Cada documento pasa por las reglas de acceso de api/_lib/reglas.ts.
 
@@ -152,15 +154,20 @@ async function cambios(req: VercelRequest) {
   const quien = await requireCaller(req);
   // Sin rol todavía: no hay nada en vivo que mirar.
   if (quien.role === "pending" || !quien.role) return { rev: 0, colecciones: [] as string[] };
-  const { desde } = body<{ desde?: number | null }>(req);
+  const { desde, escribiendo: conEscribiendo } = body<{ desde?: number | null; escribiendo?: boolean }>(req);
   const clave = desde == null || !Number.isFinite(Number(desde)) ? "inicio" : String(Number(desde));
+  // Con el chat abierto, también quién está escribiendo (es de cada persona: no va en la respuesta compartida).
+  const escriben = conEscribiendo ? quienesEscriben(quien.uid).catch(() => []) : null;
   const c = respuestas.get(clave);
-  if (c && c.hasta > Date.now()) return c.r;
-  if (respuestas.size > 200) respuestas.clear();
-  const r = calcularCambios(clave === "inicio" ? null : Number(desde));
-  respuestas.set(clave, { r, hasta: Date.now() + CAMBIOS_TTL });
-  r.catch(() => respuestas.delete(clave));
-  return r;
+  let r: Promise<{ rev: number; colecciones: string[] }>;
+  if (c && c.hasta > Date.now()) r = c.r;
+  else {
+    if (respuestas.size > 200) respuestas.clear();
+    r = calcularCambios(clave === "inicio" ? null : Number(desde));
+    respuestas.set(clave, { r, hasta: Date.now() + CAMBIOS_TTL });
+    r.catch(() => respuestas.delete(clave));
+  }
+  return escriben ? { ...(await r), escribiendo: await escriben } : r;
 }
 
 async function calcularCambios(desde: number | null) {
@@ -192,6 +199,62 @@ async function calcularCambios(desde: number | null) {
   return { rev, colecciones: [...cols] };
 }
 
+// ---------------------------------------------------------------------------
+// "Escribiendo…" / "grabando audio…" en el chat (como WhatsApp). Es efímero: una fila por persona y chat que
+// vence sola a los pocos segundos. Viaja en la misma consulta de cambios (no suma pedidos).
+// ---------------------------------------------------------------------------
+
+const VIGENCIA_ESCRIBIENDO_S = 7;
+let tablaEscribiendo: Promise<unknown> | null = null;
+function asegurarTablaEscribiendo() {
+  tablaEscribiendo ??= getPool()
+    .query(
+      "create table if not exists chat_escribiendo (chat_id text not null, uid text not null, nombre text not null default '', estado text not null default 'escribiendo', hasta timestamptz not null, primary key (chat_id, uid))"
+    )
+    .catch((e) => {
+      tablaEscribiendo = null;
+      throw e;
+    });
+  return tablaEscribiendo;
+}
+
+/** Avisa que está escribiendo o grabando en un chat donde es miembro (o deja de hacerlo, con estado null). */
+async function escribiendo(req: VercelRequest) {
+  const caller = await requireCaller(req);
+  const { chatId, estado } = body<{ chatId?: string; estado?: "escribiendo" | "grabando" | null }>(req);
+  if (typeof chatId !== "string" || !ID_OK.test(chatId)) throw new HttpError(400, "Chat inválido");
+  await asegurarTablaEscribiendo();
+  const pool = getPool();
+  if (estado !== "escribiendo" && estado !== "grabando") {
+    await pool.query("delete from chat_escribiendo where chat_id = $1 and uid = $2", [chatId, caller.uid]);
+    return { ok: true };
+  }
+  const r = await pool.query("select 1 from documentos where coleccion = 'chats' and id = $1 and data->'miembros' @> jsonb_build_array($2::text)", [
+    chatId,
+    caller.uid,
+  ]);
+  if (!r.rowCount) throw new HttpError(403, "No sos parte de este chat");
+  await pool.query(
+    `insert into chat_escribiendo (chat_id, uid, nombre, estado, hasta) values ($1, $2, $3, $4, now() + make_interval(secs => $5))
+     on conflict (chat_id, uid) do update set nombre = excluded.nombre, estado = excluded.estado, hasta = excluded.hasta`,
+    [chatId, caller.uid, caller.nombre ?? "", estado, VIGENCIA_ESCRIBIENDO_S]
+  );
+  return { ok: true };
+}
+
+/** Quién está escribiendo ahora en los chats de esta persona (sin contarla a ella). */
+async function quienesEscriben(uid: string) {
+  await asegurarTablaEscribiendo();
+  const r = await getPool().query(
+    `select e.chat_id, e.uid, e.nombre, e.estado from chat_escribiendo e
+       join documentos d on d.coleccion = 'chats' and d.id = e.chat_id
+      where e.hasta > now() and e.uid <> $1 and d.data->'miembros' @> jsonb_build_array($1::text)
+      limit 100`,
+    [uid]
+  );
+  return r.rows as { chat_id: string; uid: string; nombre: string; estado: string }[];
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
@@ -202,6 +265,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (accion === "consultar") res.status(200).json(await consultar(req));
     else if (accion === "escribir") res.status(200).json(await escribir(req));
     else if (accion === "cambios") res.status(200).json(await cambios(req));
+    else if (accion === "escribiendo") res.status(200).json(await escribiendo(req));
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {
     const status = (err as { code?: number }).code;

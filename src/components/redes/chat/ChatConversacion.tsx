@@ -29,6 +29,7 @@ import { limpiarSubidasListas, subirArchivosChat, useSubidasChat, CHAT_MAX_MB } 
 import { TextoIA } from "@/components/redes/TextoIA";
 import { TarjetaReferencia } from "./TarjetaReferencia";
 import { AudioMensaje, BarraGrabando, BotonMic, useGrabadorVoz } from "@/components/redes/chat/Voz";
+import { textoEscribiendo, useAvisarEscribiendo, useEscriben } from "@/lib/redes/escribiendo";
 import { ArchivoMensaje, SubidaBurbuja } from "@/components/redes/chat/Archivo";
 import { ChatIcon } from "@/components/redes/chat/ChatIcon";
 import { EtiquetaContacto, InfoChat } from "@/components/redes/chat/Grupos";
@@ -425,9 +426,15 @@ export function ChatConversacion({
     setTimeout(() => el.classList.remove("bg-primary/15"), 1400);
   };
 
+  // "Escribiendo…" / "grabando audio…" (como WhatsApp): lo que hago yo y lo que hacen los demás.
+  const avisarEscribiendo = useAvisarEscribiendo(chat.id);
+  const escriben = useEscriben();
+  const escribeAhora = chat.tipo === "prodi" ? null : textoEscribiendo(escriben, chat.id, chat.tipo === "directo");
+
   const enviar = async () => {
     const t = texto.trim() || (referencia ? `Sobre ${referencia.titulo}` : "");
     if (!t) return;
+    avisarEscribiendo(null);
     setEnviando(true);
     setSugerir(null);
     try {
@@ -456,6 +463,9 @@ export function ChatConversacion({
   };
 
   const voz = useGrabadorVoz();
+  useEffect(() => {
+    avisarEscribiendo(voz.grabando ? "grabando" : null);
+  }, [voz.grabando, avisarEscribiendo]);
   // La caja se vuelve a montar al terminar de grabar un audio: ahí se vuelve a medir.
   useEffect(() => {
     const el = caja.current;
@@ -589,6 +599,9 @@ export function ChatConversacion({
           <ChatIcon chat={chat} profiles={profiles} uid={uid} color={color} />
           <span className="min-w-0 flex-1">
             <span className="block truncate font-semibold">{tituloChat(chat, uid, profiles, role)}</span>
+            {escribeAhora ? (
+              <span className="block truncate text-xs font-medium text-primary">{escribeAhora}</span>
+            ) : (
             <span className="block truncate text-xs text-muted-foreground">
               {chat.tipo === "prodi"
                 ? "Tu asistente: agenda, tareas, clientes y logos"
@@ -596,6 +609,7 @@ export function ChatConversacion({
                 ? etiquetaPersona(chat.miembros.find((m) => m !== uid) ?? "")
                 : miembros.map((m) => m.nombre?.split(" ")[0]).join(", ")}
             </span>
+            )}
           </span>
         </button>
         {/* Los contactos (solo chat) no arman reuniones: las crea el equipo o el cliente. */}
@@ -1079,6 +1093,7 @@ export function ChatConversacion({
               value={texto}
               onChange={(e) => {
                 setTexto(e.target.value);
+                if (chat.tipo !== "prodi") avisarEscribiendo(e.target.value.trim() ? "escribiendo" : null);
                 setSugerir(mencionEnCurso(e.target.value, e.target.selectionStart ?? e.target.value.length));
               }}
               onKeyDown={(e) => {
