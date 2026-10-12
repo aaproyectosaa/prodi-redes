@@ -179,6 +179,27 @@ export function ChatLista({
   const personas = useContactos();
   const tMantener = useRef<ReturnType<typeof setTimeout>>();
   const mantenido = useRef(false);
+  // Al bajar por la lista, el encabezado se achica (título chico, sin buscador ni filtros); al subir, vuelve.
+  const [plegado, setPlegado] = useState(false);
+  const ultimoScroll = useRef(0);
+  const inputBuscar = useRef<HTMLInputElement | null>(null);
+  const refBuscar = (el: HTMLInputElement | null) => {
+    inputBuscar.current = el;
+    if (typeof buscarRef === "function") buscarRef(el);
+    else if (buscarRef) (buscarRef as { current: HTMLInputElement | null }).current = el;
+  };
+  const alScrollear = (e: React.UIEvent<HTMLDivElement>) => {
+    const y = e.currentTarget.scrollTop;
+    const antes = ultimoScroll.current;
+    ultimoScroll.current = y;
+    if (y < 12) setPlegado(false);
+    else if (y > antes + 4 && y > 48) setPlegado(true);
+    else if (y < antes - 14) setPlegado(false);
+  };
+  const abrirBuscador = () => {
+    setPlegado(false);
+    window.setTimeout(() => inputBuscar.current?.focus(), 200);
+  };
 
   const titulo = (c: ChatT) => tituloChat(c, uid, profiles, role);
   const etiquetaPorId = useMemo(() => new Map(prefs.etiquetas.map((e) => [e.id, e])), [prefs.etiquetas]);
@@ -195,6 +216,8 @@ export function ChatLista({
           : (prefs.asignaciones[c.id] ?? []).includes(filtroOk.slice(2));
 
   const buscando = q.trim().length > 0;
+  // Buscando, el encabezado no se pliega.
+  const plegarHeader = plegado && !buscando;
   let lista: ChatT[];
   if (buscando) {
     // La búsqueda mira todos (también los archivados).
@@ -228,21 +251,38 @@ export function ChatLista({
 
   return (
     <>
-      <div className={cn("shrink-0 space-y-3", compacto ? "px-3 pb-2 pt-3" : "px-4 pb-3 pt-4")}>
+      <div
+        className={cn(
+          "shrink-0 transition-[padding,box-shadow] duration-300",
+          compacto ? "px-3" : "px-4",
+          plegarHeader ? "border-b pb-2 pt-2 shadow-sm" : compacto ? "pb-2 pt-3" : "pb-3 pt-4"
+        )}
+      >
         <div className="flex items-center justify-between gap-2">
           {verArchivados && !buscando ? (
             <button type="button" onClick={() => setVerArchivados(false)} className="-ml-1 flex items-center gap-2 rounded-full px-1 py-1 hover:bg-accent">
               <ArrowLeft className="h-5 w-5" />
-              <Titulo id={tituloId} className={cn("font-bold tracking-tight", compacto ? "text-lg" : "text-2xl")}>
+              <Titulo id={tituloId} className={cn("font-bold tracking-tight transition-all duration-300", compacto || plegarHeader ? "text-lg" : "text-2xl")}>
                 Archivados
               </Titulo>
             </button>
           ) : (
-            <Titulo id={tituloId} className={cn("font-bold tracking-tight", compacto ? "text-lg" : "text-2xl")}>
+            <Titulo id={tituloId} className={cn("font-bold tracking-tight transition-all duration-300", compacto || plegarHeader ? "text-lg" : "text-2xl")}>
               Chats
             </Titulo>
           )}
           <div className="flex items-center gap-1">
+            {plegarHeader && (
+              <button
+                type="button"
+                onClick={abrirBuscador}
+                className="flex h-10 w-10 items-center justify-center rounded-full text-foreground/80 transition-colors hover:bg-muted active:scale-95 animate-in fade-in zoom-in-75"
+                aria-label="Buscar conversación"
+                title="Buscar"
+              >
+                <Search className="h-5 w-5" />
+              </button>
+            )}
             <button
               type="button"
               onClick={onTareas}
@@ -269,10 +309,19 @@ export function ChatLista({
             {acciones}
           </div>
         </div>
+        <div
+          className={cn(
+            "grid transition-[grid-template-rows,opacity,margin] duration-300 ease-out",
+            plegarHeader ? "mt-0 grid-rows-[0fr] opacity-0" : "mt-3 grid-rows-[1fr] opacity-100"
+          )}
+          aria-hidden={plegarHeader}
+        >
+        <div className="min-h-0 space-y-3 overflow-hidden">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            ref={buscarRef}
+            ref={refBuscar}
+            tabIndex={plegarHeader ? -1 : undefined}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Buscar"
@@ -318,8 +367,10 @@ export function ChatLista({
             ))}
           </div>
         )}
+        </div>
+        </div>
       </div>
-      <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-y-contain", compacto ? "safe-area-pb" : "pb-mobile-nav md:pb-0")}>
+      <div onScroll={alScrollear} className={cn("min-h-0 flex-1 overflow-y-auto overscroll-y-contain", compacto ? "safe-area-pb" : "pb-mobile-nav md:pb-0")}>
         {lista.length === 0 && (
           <p className="p-6 text-center text-sm text-muted-foreground">
             {buscando
