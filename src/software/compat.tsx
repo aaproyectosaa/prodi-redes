@@ -1,7 +1,7 @@
 // Las pantallas de Prodi Software vinieron de MP Socios (Next.js). Esto les da lo que usaban de Next (Link,
 // router, parámetros) sobre react-router, y un fetch que va a /api/software con la sesión de Prodi.
 
-import { forwardRef, type AnchorHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, useMemo, useRef, type AnchorHTMLAttributes, type ReactNode } from "react";
 import { Link as RRLink, useLocation, useNavigate, useParams as useRRParams, useSearchParams as useRRSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { auth } from "@/integrations/firebase/client";
@@ -44,12 +44,18 @@ export default Link;
 
 export function useRouter() {
   const navigate = useNavigate();
-  return {
-    push: (href: string) => navigate(rutaSoftware(href)),
-    replace: (href: string) => navigate(rutaSoftware(href), { replace: true }),
-    refresh: () => navigate(0),
-    back: () => navigate(-1),
-  };
+  const ir = useRef(navigate);
+  ir.current = navigate;
+  // Siempre el mismo objeto: varias pantallas lo tienen en las dependencias de sus efectos.
+  return useMemo(
+    () => ({
+      push: (href: string) => ir.current(rutaSoftware(href)),
+      replace: (href: string) => ir.current(rutaSoftware(href), { replace: true }),
+      refresh: () => ir.current(0),
+      back: () => ir.current(-1),
+    }),
+    []
+  );
 }
 
 export function useSearchParams(): URLSearchParams {
@@ -96,7 +102,10 @@ export async function swFetch(url: string, init: RequestInit = {}): Promise<Resp
   return fetch(url.startsWith("/api/") ? apiSoftware(url) : url, { ...init, headers });
 }
 
-/** Avisos de MP Socios → los de Prodi. */
+/** Avisos de MP Socios → los de Prodi. Siempre la misma función (las pantallas la usan en efectos: si cambiara, se repetirían sin parar). */
+const avisar = (msg: string) => {
+  toast(msg, { id: msg });
+};
 export function useToast() {
-  return (msg: string) => toast(msg);
+  return avisar;
 }
