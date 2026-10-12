@@ -27,7 +27,7 @@ export const chatDirectoId = (a: string, b: string) => `dm_${[a, b].sort().join(
  * Mantiene los grupos al día (lo corre el super admin al abrir la app):
  * - "equipo": todo el equipo interno.
  * - "cliente_<id>": equipo asignado al cliente + usuarios del cliente + admins.
- * - "software": Prodi Software (admins, programación y administración).
+ * - "software": Prodi Software (admins y programación).
  */
 export async function sincronizarChats(projects: Project[], profiles: Profile[], chats: Chat[]) {
   if (enModoVista()) return;
@@ -38,6 +38,9 @@ export async function sincronizarChats(projects: Project[], profiles: Profile[],
   const nombreDe = (id: string) => profiles.find((p) => p.id === id)?.nombre ?? "";
   const asegurar = (id: string, data: Omit<Chat, "id" | "ultimo" | "leido" | "created_at" | "nombres">) => {
     const actual = chats.find((c) => c.id === id);
+    // Los que el super admin sacó de este grupo no vuelven a entrar solos.
+    const fuera = new Set(actual?.excluidos ?? []);
+    if (fuera.size) data = { ...data, miembros: data.miembros.filter((m) => !fuera.has(m)) };
     const nombres = Object.fromEntries(data.miembros.map((m) => [m, nombreDe(m)]));
     // Grupo dado de baja por el super admin: no se vuelve a armar.
     if (actual?.borrado) return;
@@ -62,9 +65,9 @@ export async function sincronizarChats(projects: Project[], profiles: Profile[],
   };
 
   asegurar("equipo", { tipo: "equipo", proyecto_id: null, nombre: "Equipo Prodi", miembros: equipo });
-  // Prodi Software: admins, programación (rol principal o adicional) y administración.
+  // Prodi Software: admins y programación (rol principal o adicional).
   const deSoftware = profiles
-    .filter((p) => p.activo !== false && [p.role, ...(p.roles_extra ?? [])].some((r) => r === "admin" || r === "programador" || r === "administracion"))
+    .filter((p) => p.activo !== false && [p.role, ...(p.roles_extra ?? [])].some((r) => r === "admin" || r === "programador"))
     .map((p) => p.id);
   asegurar("software", { tipo: "software", proyecto_id: null, nombre: "Equipo Software", miembros: Array.from(new Set(deSoftware)) });
   for (const p of projects) {
@@ -446,6 +449,28 @@ export async function sacarDelGrupo(chat: Chat, uid: string, remitente: string, 
     ...extra,
   });
   await lote.commit();
+}
+
+/** Super admin: saca a alguien de un grupo automático (equipo, Software o cliente); no vuelve a entrar solo. */
+export async function sacarDeGrupoAuto(chat: Chat, uid: string, remitente: string, quien: string, nombreQuien: string) {
+  assertEditable();
+  const lote = writeBatch(db);
+  const extra = sistema(lote, chat.id, uid, remitente, `sacó a ${primerNombre(nombreQuien)}`);
+  lote.update(doc(db, CHATS, chat.id), {
+    miembros: chat.miembros.filter((m) => m !== quien),
+    excluidos: Array.from(new Set([...(chat.excluidos ?? []), quien])),
+    ...extra,
+  });
+  await lote.commit();
+}
+
+/** Super admin: vuelve a sumar a alguien que había sacado de un grupo automático. */
+export async function volverASumarAuto(chat: Chat, quien: string) {
+  assertEditable();
+  await updateDoc(doc(db, CHATS, chat.id), {
+    excluidos: (chat.excluidos ?? []).filter((m) => m !== quien),
+    miembros: Array.from(new Set([...chat.miembros, quien])),
+  });
 }
 
 /** Hace (o deja de hacer) admin del grupo a alguien. */

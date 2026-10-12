@@ -33,6 +33,8 @@ import {
   PRODI_ID,
   puedeEditarChat,
   sacarDelGrupo,
+  sacarDeGrupoAuto,
+  volverASumarAuto,
   salirDelGrupo,
   sumarAlGrupo,
   tituloChat,
@@ -336,6 +338,8 @@ export function InfoChat({
   const personas = useContactos();
   const contactos = useMemo(() => contactosDe(chats), [chats]);
   const esGrupo = chat.tipo === "grupo";
+  // Grupos que arma el sistema (equipo, Software, clientes): el super admin puede sacar gente.
+  const sacaAuto = role === "admin" && (chat.tipo === "equipo" || chat.tipo === "software" || chat.tipo === "cliente");
   const admin = esAdminDelGrupo(chat, uid, role);
   const editaFoto = puedeEditarChat(chat, uid, role);
   const [nombre, setNombre] = useState(chat.nombre ?? "");
@@ -481,10 +485,42 @@ export function InfoChat({
                         </Button>
                       </>
                     )}
+                    {sacaAuto && id !== uid && uid && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        disabled={ocupado}
+                        title="Sacar del grupo"
+                        aria-label={`Sacar a ${p.nombre} del grupo`}
+                        onClick={() => void hacer(() => sacarDeGrupoAuto(chat, uid, yo, id, p.nombre))}
+                      >
+                        <UserMinus className="h-4 w-4" />
+                      </Button>
+                    )}
                   </li>
                 );
               })}
             </ul>
+            {sacaAuto && (chat.excluidos ?? []).length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground">Sacados de este grupo</p>
+                <ul className="divide-y rounded-lg border">
+                  {(chat.excluidos ?? []).map((id) => {
+                    const p = persona(id);
+                    return (
+                      <li key={id} className="flex items-center gap-3 px-3 py-2">
+                        <UserAvatar profile={p} size="sm" className="h-8 w-8 opacity-60" />
+                        <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">{p.nombre}</span>
+                        <Button size="sm" variant="outline" className="h-8" disabled={ocupado} onClick={() => void hacer(() => volverASumarAuto(chat, id))}>
+                          Volver a sumar
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
             {esGrupo && chat.miembros.includes(uid ?? "") && (
               <Button variant="ghost" className="w-full text-destructive hover:text-destructive" onClick={() => setConfirmarSalir(true)}>
                 <LogOut className="mr-1.5 h-4 w-4" /> Salir del grupo

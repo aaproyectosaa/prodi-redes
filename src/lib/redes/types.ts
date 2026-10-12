@@ -460,6 +460,8 @@ export interface SugerenciaTarea {
 export interface Chat {
   /** Equipo / grupo de cliente que el super admin borró: queda sin miembros y la app no lo vuelve a crear. */
   borrado?: boolean;
+  /** Grupos automáticos: gente que el super admin sacó (no vuelve a entrar sola). */
+  excluidos?: string[];
   /** Equipo / grupo de cliente con nombre puesto a mano por el super admin (la sincronización no lo pisa). */
   nombre_propio?: boolean;
   id: string;
