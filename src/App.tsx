@@ -1,5 +1,6 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
+import { BarraLlamada } from "@/components/redes/chat/BarraLlamada";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { lazy, Suspense } from "react";
@@ -88,6 +89,8 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        {/* Llamada de voz en curso: arriba en todas las pantallas (sistema, Prodi Chat y chat flotante). */}
+        <BarraLlamada />
         <Router>
           <AppProviders>
             <PendingRoleGate />

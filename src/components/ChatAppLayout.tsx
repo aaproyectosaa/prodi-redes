@@ -20,7 +20,6 @@ import { useTheme } from "@/hooks/use-theme";
 import { esContacto, getRoleInfo } from "@/lib/roles";
 import { toast } from "sonner";
 import { useAltoVisible } from "@/hooks/use-alto-visible";
-import { BarraLlamada } from "@/components/redes/chat/BarraLlamada";
 import {
   abrirEnSistema,
   CHAT_APP,
@@ -128,7 +127,6 @@ function ChatAppHeader() {
 
   return (
     <>
-      <BarraLlamada />
       <header className="safe-area-pt sticky top-0 z-30 border-b bg-background/90 backdrop-blur">
         <div className="flex h-14 items-center justify-between gap-2 px-3">
           {enSubpagina ? (
