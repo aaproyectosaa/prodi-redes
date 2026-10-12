@@ -1,0 +1,10 @@
+{
+  "name": "hyperframes",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --dir .. exec hyperframes preview hyperframes",
+    "check": "pnpm --dir .. exec hyperframes check hyperframes",
+    "render": "pnpm --dir .. exec hyperframes render hyperframes"
+  }
+}
