@@ -4,6 +4,7 @@
 //   · Software: el admin, administración y programación.
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import type { UserRole } from "@/integrations/firebase/types";
 
@@ -23,6 +24,15 @@ export function empresasDe(roles: UserRole[]): Empresa[] {
   if (roles.some((r) => DE_REDES.includes(r))) out.push("redes");
   if (roles.some((r) => DE_SOFTWARE.includes(r))) out.push("software");
   return out;
+}
+
+/** Pantallas que sirven para las dos empresas (no cambian en cuál estás). */
+const COMPARTIDAS = ["/", "/chat", "/chat-app", "/reuniones", "/profile", "/notificaciones", "/auth", "/aprobar"];
+/** La empresa de la pantalla abierta (null si es compartida). */
+function empresaDeRuta(path: string): Empresa | null {
+  if (path === "/software" || path.startsWith("/software/")) return "software";
+  if (COMPARTIDAS.some((c) => (c === "/" ? path === "/" : path === c || path.startsWith(`${c}/`)))) return null;
+  return "redes";
 }
 
 const CLAVE = "prodi-empresa";
@@ -47,8 +57,12 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
   const { roles } = useUserProfileContext();
   const disponibles = useMemo(() => empresasDe(roles), [roles]);
   const [elegida, setElegida] = useState<Empresa | null>(leer);
-  // La elegida, si la tiene; si no, la primera donde trabaja (o Redes, mientras carga).
-  const empresa: Empresa = elegida && disponibles.includes(elegida) ? elegida : disponibles[0] ?? "redes";
+  const { pathname } = useLocation();
+  // La de la pantalla abierta manda (así el menú nunca queda de una empresa con una pantalla de la otra);
+  // en las compartidas (chat, perfil…), la elegida; si no hay, la primera donde trabaja (o Redes, mientras carga).
+  const deRuta = empresaDeRuta(pathname);
+  const empresa: Empresa =
+    deRuta && disponibles.includes(deRuta) ? deRuta : elegida && disponibles.includes(elegida) ? elegida : disponibles[0] ?? "redes";
   const cambiar = useCallback((e: Empresa) => {
     setElegida(e);
     try {
