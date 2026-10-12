@@ -3,6 +3,7 @@ import { UserProfileProvider } from "@/contexts/user-profile-context";
 import { AppDataProvider } from "@/contexts/app-data-context";
 import { DriveUploadProvider } from "@/contexts/drive-upload-context";
 import { ProfileThemeSync } from "@/components/ProfileThemeSync";
+import { EmpresaProvider } from "@/lib/empresa";
 import { ForegroundPushListener } from "@/components/ForegroundPushListener";
 
 export function AppProviders({ children }: { children: ReactNode }) {
@@ -11,7 +12,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
       <ProfileThemeSync />
       <ForegroundPushListener />
       <DriveUploadProvider>
-        <AppDataProvider>{children}</AppDataProvider>
+        <AppDataProvider>
+          <EmpresaProvider>{children}</EmpresaProvider>
+        </AppDataProvider>
       </DriveUploadProvider>
     </UserProfileProvider>
   );

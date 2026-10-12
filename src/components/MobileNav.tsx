@@ -10,6 +10,8 @@ import UserAvatar from "@/components/UserAvatar";
 import { RoleBadge } from "@/components/RoleBadge";
 import { getRoleInfo } from "@/lib/roles";
 import { navForRoles } from "@/lib/redes/nav";
+import { useEmpresa } from "@/lib/empresa";
+import { SelectorEmpresa } from "@/components/SelectorEmpresa";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { useInAppNotifications } from "@/hooks/use-in-app-notifications";
 import { useTheme } from "@/hooks/use-theme";
@@ -41,7 +43,8 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
   const [verComo, setVerComo] = useState(false);
   const { unreadCount } = useInAppNotifications(profile?.id);
   const { roles } = useUserProfileContext();
-  const sections = navForRoles(role, roles);
+  const { empresa } = useEmpresa();
+  const sections = navForRoles(role, roles, empresa);
   const plegables = useSeccionesPlegables();
   const pendientes = usePendientes();
 
@@ -56,10 +59,13 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
           botones quedarían apretados y se saldrían por abajo, encima del aviso que sigue. */}
       <header className="safe-area-pt sticky top-0 z-30 shrink-0 border-b bg-background/90 backdrop-blur md:hidden">
         <div className="flex h-14 items-center justify-between px-4">
-        <button type="button" onClick={() => navigate("/")} className="flex h-10 items-center gap-2">
-          <img src={asset("/brand/logo-horizontal-blanco.png")} alt="Prodi" className="hidden h-5 w-auto dark:block" />
-          <img src={asset("/brand/logo-horizontal-negro.png")} alt="Prodi" className="h-5 w-auto dark:hidden" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => navigate("/")} className="flex h-10 items-center gap-2">
+            <img src={asset("/brand/logo-horizontal-blanco.png")} alt="Prodi" className="hidden h-5 w-auto dark:block" />
+            <img src={asset("/brand/logo-horizontal-negro.png")} alt="Prodi" className="h-5 w-auto dark:hidden" />
+          </button>
+          <SelectorEmpresa className="py-1" />
+        </div>
         <div className="flex items-center gap-1">
           {(role === "admin" || roles.includes("administracion")) && (
             <BotonOcultarMontos conTexto={false} className="h-10 w-10 justify-center rounded-full" />
@@ -247,7 +253,9 @@ export const MobileTabBar = ({ role }: { role?: UserRole }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const pendientes = usePendientes();
-  const items = navForRoles(role)
+  const { empresa: empresaBarra } = useEmpresa();
+  const { roles: rolesBarra } = useUserProfileContext();
+  const items = navForRoles(role, empresaBarra === "software" ? rolesBarra : [], empresaBarra)
     .flatMap((s) => s.items)
     .filter((i) => i.mobile)
     .slice(0, 4);

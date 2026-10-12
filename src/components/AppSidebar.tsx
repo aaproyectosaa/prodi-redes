@@ -6,6 +6,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { auth } from "@/integrations/firebase/client";
 import { getRoleInfo } from "@/lib/roles";
 import { navForRoles, type NavItem } from "@/lib/redes/nav";
+import { useEmpresa } from "@/lib/empresa";
+import { SelectorEmpresa } from "@/components/SelectorEmpresa";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { useInAppNotifications } from "@/hooks/use-in-app-notifications";
 import { cn } from "@/lib/utils";
@@ -64,7 +66,8 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
   };
 
   const { roles } = useUserProfileContext();
-  const sections = navForRoles(role, roles);
+  const { empresa } = useEmpresa();
+  const sections = navForRoles(role, roles, empresa);
   const pendientes = usePendientes();
   const plegables = useSeccionesPlegables();
   const roleLabel = getRoleInfo(role).label;
@@ -126,9 +129,7 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
           <div className="flex items-center gap-2">
             <img src={asset("/brand/logo-horizontal-blanco.png")} alt="Prodi" className="hidden h-6 w-auto dark:block" />
             <img src={asset("/brand/logo-horizontal-negro.png")} alt="Prodi" className="h-6 w-auto dark:hidden" />
-            <span className="rounded-md bg-primary/12 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
-              Redes
-            </span>
+            <SelectorEmpresa />
           </div>
         )}
       </div>

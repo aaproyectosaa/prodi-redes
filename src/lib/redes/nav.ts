@@ -37,8 +37,47 @@ export interface NavSection {
   items: NavItem[];
 }
 
-/** Menú del rol principal + lo que suman los roles adicionales (en una sección aparte, sin repetir). */
-export function navForRoles(role: UserRole | undefined, roles: UserRole[] = []): NavSection[] {
+/** Menú de Prodi Software: dirección (admin y administración) todo; programación, lo suyo. */
+export function navSoftware(roles: UserRole[]): NavSection[] {
+  const direccion = roles.includes("admin") || roles.includes("administracion");
+  if (direccion)
+    return [
+      {
+        items: [
+          { label: "Inicio", icon: Gauge, path: "/software", mobile: true },
+          { label: "Pagos", icon: CreditCard, path: "/software/pagos", mobile: true },
+          { label: "Clientes", icon: Store, path: "/software/clientes", mobile: true },
+          { label: "Suscripciones", icon: Receipt, path: "/software/suscripciones" },
+          { label: "Mantenimientos", icon: ClipboardList, path: "/software/mantenimientos" },
+          { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
+        ],
+      },
+      {
+        title: "Administración",
+        items: [
+          { label: "Liquidación", icon: HandCoins, path: "/software/liquidacion" },
+          { label: "Gastos", icon: Wallet, path: "/software/gastos" },
+          { label: "Reparto (porcentajes)", icon: Users, path: "/software/reparto" },
+          { label: "Apps de Mercado Pago", icon: Landmark, path: "/software/apps" },
+          { label: "Actividad", icon: BarChart3, path: "/software/actividad" },
+        ],
+      },
+    ];
+  return [
+    {
+      items: [
+        { label: "Mis ganancias", icon: HandCoins, path: "/software/mis-ganancias", mobile: true },
+        { label: "Clientes", icon: Store, path: "/software/clientes", mobile: true },
+        { label: "Pagos", icon: CreditCard, path: "/software/pagos", mobile: true },
+        { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
+      ],
+    },
+  ];
+}
+
+/** Menú del rol principal + lo que suman los roles adicionales (en una sección aparte, sin repetir). En Software, el suyo. */
+export function navForRoles(role: UserRole | undefined, roles: UserRole[] = [], empresa: "redes" | "software" = "redes"): NavSection[] {
+  if (empresa === "software") return navSoftware(roles.length ? roles : role ? [role] : []);
   const base = navForRole(role);
   const ya = new Set(base.flatMap((s) => s.items.map((i) => i.path)));
   const extra: NavItem[] = [];

@@ -16,6 +16,7 @@ export type UserRole =
   | "pauta" // Sube los videos y maneja la pauta en Meta
   | "diseno" // Diseño gráfico: arma las piezas de sus clientes (y de los que no tienen diseñadora), con IA de apoyo
   | "administracion" // Administración: facturación, cobros, pagos al equipo y gastos
+  | "programador" // Programación de Prodi Software: ve sus ganancias y los clientes/pagos de Software
   | "cliente"
   | "contacto" // Contacto de un cliente que usa solo Prodi Chat (proyecto_id = su cliente)
   // Roles del modelo anterior. Se leen para no romper datos viejos, pero ya

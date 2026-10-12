@@ -3,10 +3,13 @@ import { asset } from "@/lib/asset";
 import { useNavigate } from "react-router-dom";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { defaultRouteForRole } from "@/lib/roles";
+import { useEmpresa } from "@/lib/empresa";
 
 const RoleRedirect = () => {
   const navigate = useNavigate();
   const { user, role, loading } = useUserProfileContext();
+  // En Prodi Software, su inicio; en Redes, el de su rol.
+  const { empresa } = useEmpresa();
 
   useEffect(() => {
     if (!user) {
@@ -14,8 +17,8 @@ const RoleRedirect = () => {
       return;
     }
     if (loading || !role || role === "pending") return;
-    navigate(defaultRouteForRole(role), { replace: true });
-  }, [user, role, loading, navigate]);
+    navigate(empresa === "software" ? "/software" : defaultRouteForRole(role), { replace: true });
+  }, [user, role, loading, navigate, empresa]);
 
   return (
     <div className="flex min-h-[60dvh] items-center justify-center">

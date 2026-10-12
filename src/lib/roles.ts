@@ -51,6 +51,11 @@ export const ROLES: RoleInfo[] = [
     description: "Facturación del mes, cobros, pagos al equipo, gastos y números del negocio. No ve la producción.",
   },
   {
+    value: "programador",
+    label: "Programación",
+    description: "Prodi Software: ve lo que le toca por su porcentaje, los clientes y los pagos de las apps.",
+  },
+  {
     value: "cliente",
     label: "Cliente",
     description: "Aprueba los videos, ve resultados y pide piezas gráficas.",
@@ -133,6 +138,8 @@ export const defaultRouteForRole = (role: UserRole | undefined): string => {
       return "/cliente";
     case "contacto":
       return "/chat-app";
+    case "programador":
+      return "/software";
     default:
       return "/auth";
   }
@@ -157,7 +164,7 @@ export function trabajaEnCliente(
 }
 
 /** Roles que se le pueden sumar a una persona del equipo además del principal (igual que en el servidor). */
-export const ROLES_ADICIONALES: UserRole[] = ["productor", "editor", "pauta", "diseno", "administracion"];
+export const ROLES_ADICIONALES: UserRole[] = ["productor", "editor", "pauta", "diseno", "administracion", "programador"];
 
 /** Rol principal + adicionales válidos (solo el equipo interno suma roles). */
 export function rolesDe(role: UserRole | undefined, extra: unknown): UserRole[] {

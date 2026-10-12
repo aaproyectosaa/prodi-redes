@@ -15,7 +15,7 @@ export interface Caller extends AuthedUser {
 }
 
 /** Roles que se pueden sumar a una persona del equipo además del principal. */
-export const ROLES_ADICIONALES: Rol[] = ["productor", "editor", "pauta", "diseno", "administracion"];
+export const ROLES_ADICIONALES: Rol[] = ["productor", "editor", "pauta", "diseno", "administracion", "programador"];
 const EQUIPO_INTERNO: Rol[] = ["admin", ...ROLES_ADICIONALES];
 
 /** Rol principal + adicionales válidos (solo el equipo interno puede sumar roles; nunca "admin"). */

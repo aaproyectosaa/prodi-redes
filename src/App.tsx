@@ -39,6 +39,22 @@ const Aprobar = lazy(() => import("./pages/Aprobar"));
 const Reportes = lazy(() => import("./pages/redes/Reportes"));
 const Escalabilidad = lazy(() => import("./pages/redes/Escalabilidad"));
 const MiAsistente = lazy(() => import("./pages/redes/MiAsistente"));
+// Prodi Software (lo que era MP Socios)
+const SoftwareLayout = lazy(() => import("./software/SoftwareLayout"));
+const SwInicio = lazy(() => import("./software/paginas/Inicio"));
+const SwPagos = lazy(() => import("./software/paginas/Pagos"));
+const SwClientes = lazy(() => import("./software/paginas/Clientes"));
+const SwSuscripciones = lazy(() => import("./software/paginas/Suscripciones"));
+const SwMantenimientos = lazy(() => import("./software/paginas/Mantenimientos"));
+const SwLiquidacion = lazy(() => import("./software/liquidacion/LiquidacionClient").then((m) => ({ default: m.LiquidacionClient })));
+const SwGastos = lazy(() => import("./software/gastos/GastosClient").then((m) => ({ default: m.GastosClient })));
+const SwApps = lazy(() => import("./software/paginas/Apps"));
+const SwAppNueva = lazy(() => import("./software/paginas/AppNueva"));
+const SwAppEditar = lazy(() => import("./software/paginas/AppEditar"));
+const SwActividad = lazy(() => import("./software/paginas/Actividad"));
+const SwReparto = lazy(() => import("./software/paginas/Reparto"));
+const SwMisGanancias = lazy(() => import("./software/paginas/MisGanancias"));
+const SwInicioSegunRol = lazy(() => import("./software/SoftwareLayout").then((m) => ({ default: () => <m.InicioSoftware panel={<SwInicio />} /> })));
 const ReporteDetalle = lazy(() => import("./pages/redes/Reportes").then((m) => ({ default: m.ReporteDetalle })));
 
 const queryClient = new QueryClient();
@@ -101,8 +117,8 @@ const App = () => (
                 <Route path="/reportes/:uid" element={<RequireRole roles={["admin"]}><ReporteDetalle /></RequireRole>} />
 
                 {/* Todos */}
-                <Route path="/chat" element={<RequireRole roles={["admin", "productor", "editor", "pauta", "diseno", "administracion", "cliente"]}><Chat /></RequireRole>} />
-                <Route path="/reuniones" element={<RequireRole roles={["admin", "productor", "editor", "pauta", "diseno", "administracion", "cliente"]}><Reuniones /></RequireRole>} />
+                <Route path="/chat" element={<RequireRole roles={["admin", "productor", "editor", "pauta", "diseno", "administracion", "programador", "cliente"]}><Chat /></RequireRole>} />
+                <Route path="/reuniones" element={<RequireRole roles={["admin", "productor", "editor", "pauta", "diseno", "administracion", "programador", "cliente"]}><Reuniones /></RequireRole>} />
 
                 {/* Equipo */}
                 <Route path="/videos" element={<RequireRole roles={["admin", "productor", "editor", "pauta"]}><Circuito /></RequireRole>} />
@@ -110,6 +126,23 @@ const App = () => (
                 <Route path="/piezas" element={<RequireRole roles={["admin", "productor", "diseno"]}><Piezas /></RequireRole>} />
                 <Route path="/clientes" element={<RequireRole roles={["admin", "productor"]}><Clientes /></RequireRole>} />
                 <Route path="/clientes/:id" element={<RequireRole roles={["admin", "productor"]}><ClienteDetalle /></RequireRole>} />
+
+                {/* Prodi Software */}
+                <Route path="/software" element={<RequireRole roles={["admin", "administracion", "programador"]}><SoftwareLayout /></RequireRole>}>
+                  <Route index element={<SwInicioSegunRol />} />
+                  <Route path="mis-ganancias" element={<SwMisGanancias />} />
+                  <Route path="pagos" element={<SwPagos />} />
+                  <Route path="clientes" element={<SwClientes />} />
+                  <Route path="suscripciones" element={<RequireRole roles={["admin", "administracion"]}><SwSuscripciones /></RequireRole>} />
+                  <Route path="mantenimientos" element={<RequireRole roles={["admin", "administracion"]}><SwMantenimientos /></RequireRole>} />
+                  <Route path="liquidacion" element={<RequireRole roles={["admin", "administracion"]}><SwLiquidacion /></RequireRole>} />
+                  <Route path="gastos" element={<RequireRole roles={["admin", "administracion"]}><SwGastos /></RequireRole>} />
+                  <Route path="apps" element={<RequireRole roles={["admin", "administracion"]}><SwApps /></RequireRole>} />
+                  <Route path="apps/nueva" element={<RequireRole roles={["admin", "administracion"]}><SwAppNueva /></RequireRole>} />
+                  <Route path="apps/:id" element={<RequireRole roles={["admin", "administracion"]}><SwAppEditar /></RequireRole>} />
+                  <Route path="actividad" element={<RequireRole roles={["admin", "administracion"]}><SwActividad /></RequireRole>} />
+                  <Route path="reparto" element={<RequireRole roles={["admin", "administracion"]}><SwReparto /></RequireRole>} />
+                </Route>
 
                 {/* Cliente */}
                 <Route path="/cliente" element={<RequireRole roles={["cliente"]}><ClientePortal /></RequireRole>} />

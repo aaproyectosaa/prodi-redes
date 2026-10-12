@@ -26,7 +26,7 @@ export interface Contexto {
 }
 
 const TEAM = ["admin", "productor", "editor", "pauta", "diseno"];
-const ACTIVOS = [...TEAM, "administracion", "cliente"];
+const ACTIVOS = [...TEAM, "administracion", "programador", "cliente"];
 
 /**
  * Contacto (solo chat): persona de un cliente que usa solo Prodi Chat. No lee nada del sistema (clientes, videos,
