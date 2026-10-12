@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type ReactNode, type Ref } from "react";
-import { Archive, ArchiveRestore, ArrowLeft, Headphones, ListTodo, MoreHorizontal, Pin, PinOff, Plus, Search, Tag, Trash2, UsersRound } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowLeft, Headphones, ListTodo, MoreHorizontal, Pin, PinOff, Search, SquarePen, Tag, Trash2, UsersRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -215,9 +215,10 @@ export function ChatLista({
       (err) => toast.error(err instanceof Error ? err.message : "No se pudo guardar")
     );
 
-  const chips: { id: Filtro; label: string; color?: string }[] = [
+  const sinLeer = chats.filter((c) => !archivados.has(c.id) && noLeido(c, uid)).length;
+  const chips: { id: Filtro; label: string; color?: string; n?: number }[] = [
     { id: "todos", label: "Todos" },
-    { id: "no-leidos", label: "No leídos" },
+    { id: "no-leidos", label: "No leídos", n: sinLeer },
     { id: "grupos", label: "Grupos" },
     ...prefs.etiquetas.map((e) => ({ id: `e:${e.id}` as Filtro, label: e.nombre, color: e.color })),
   ];
@@ -227,64 +228,73 @@ export function ChatLista({
 
   return (
     <>
-      <div className={cn("shrink-0 space-y-3 border-b", compacto ? "p-3" : "p-4")}>
+      <div className={cn("shrink-0 space-y-3", compacto ? "px-3 pb-2 pt-3" : "px-4 pb-3 pt-4")}>
         <div className="flex items-center justify-between gap-2">
           {verArchivados && !buscando ? (
-            <button type="button" onClick={() => setVerArchivados(false)} className="-ml-1 flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-accent">
+            <button type="button" onClick={() => setVerArchivados(false)} className="-ml-1 flex items-center gap-2 rounded-full px-1 py-1 hover:bg-accent">
               <ArrowLeft className="h-5 w-5" />
-              <Titulo id={tituloId} className={cn("font-bold", compacto ? "text-base" : "text-xl")}>
+              <Titulo id={tituloId} className={cn("font-bold tracking-tight", compacto ? "text-lg" : "text-2xl")}>
                 Archivados
               </Titulo>
             </button>
           ) : (
-            <Titulo id={tituloId} className={cn("font-bold", compacto ? "text-base" : "text-xl")}>
-              Chat
+            <Titulo id={tituloId} className={cn("font-bold tracking-tight", compacto ? "text-lg" : "text-2xl")}>
+              Chats
             </Titulo>
           )}
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
               onClick={onTareas}
-              className={cn("relative", compacto && "h-10 w-10 px-0 md:h-8 md:w-auto md:px-2")}
+              className="relative flex h-10 w-10 items-center justify-center rounded-full text-foreground/80 transition-colors hover:bg-muted active:scale-95"
               aria-label="Tareas"
               title="Tareas"
             >
-              <ListTodo className={cn("h-4 w-4", !compacto && "sm:mr-1")} />
-              {!compacto && <span className="hidden sm:inline">Tareas</span>}
+              <ListTodo className="h-5 w-5" />
               {tareasPendientes > 0 && (
-                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                <span className="absolute right-0.5 top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground ring-2 ring-background">
                   {tareasPendientes}
                 </span>
               )}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
+            </button>
+            <button
+              type="button"
               onClick={() => setNuevo(true)}
-              className={cn(compacto && "h-10 w-10 px-0 md:h-8 md:w-auto md:px-2")}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md shadow-primary/30 transition-transform hover:bg-primary/90 active:scale-95"
               aria-label="Nueva conversación"
               title="Nueva conversación"
             >
-              <Plus className={cn("h-4 w-4", !compacto && "mr-1")} />
-              {!compacto && "Nuevo"}
-            </Button>
+              <SquarePen className="h-[18px] w-[18px]" />
+            </button>
             {acciones}
           </div>
         </div>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             ref={buscarRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar conversación"
+            placeholder="Buscar"
             aria-label="Buscar conversación"
-            className={cn("pl-9", compacto && "h-9")}
+            className={cn(
+              "rounded-full border-0 bg-muted/70 pl-10 pr-9 shadow-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-0",
+              compacto ? "h-9" : "h-10"
+            )}
           />
+          {buscando && (
+            <button
+              type="button"
+              onClick={() => setQ("")}
+              className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-muted-foreground/20 text-muted-foreground hover:bg-muted-foreground/30"
+              aria-label="Borrar búsqueda"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
         {!buscando && (
-          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]" role="tablist" aria-label="Filtrar conversaciones">
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]" role="tablist" aria-label="Filtrar conversaciones">
             {chips.map((f) => (
               <button
                 key={f.id}
@@ -293,12 +303,17 @@ export function ChatLista({
                 aria-selected={filtroOk === f.id}
                 onClick={() => setFiltro(f.id)}
                 className={cn(
-                  "flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors",
-                  filtroOk === f.id ? "border-primary bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"
+                  "flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition-colors active:scale-95",
+                  filtroOk === f.id ? "bg-primary/15 text-primary" : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
                 {f.color && <span className="h-2 w-2 rounded-full" style={{ backgroundColor: f.color }} />}
                 {f.label}
+                {!!f.n && (
+                  <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                    {f.n}
+                  </span>
+                )}
               </button>
             ))}
           </div>
