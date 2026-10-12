@@ -794,7 +794,7 @@ export async function POST(req: NextRequest) {
         WHERE id = ${String(p.id)}
       `;
     }
-    await logActivity("partner_update", "Nombres / % default de socios actualizados");
+    await logActivity("partner_update", "Reparto actualizado: nombres y % general");
     return NextResponse.json({ ok: true });
   }
 

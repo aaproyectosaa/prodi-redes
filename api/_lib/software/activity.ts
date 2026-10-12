@@ -1,4 +1,5 @@
 import { getSql } from "./sql";
+import { quienEs } from "./quien";
 
 export type ActivityType =
   | "sync"
@@ -24,7 +25,8 @@ export async function logActivity(
 ) {
   try {
     const sql = getSql();
-    const metaJson = JSON.stringify(meta || {});
+    const q = quienEs();
+    const metaJson = JSON.stringify({ ...(meta || {}), por: q?.nombre ?? "Automático", ...(q?.uid ? { por_uid: q.uid } : {}) });
     await sql`
       INSERT INTO hub_activity (type, message, meta)
       VALUES (${type}, ${message}, ${metaJson}::jsonb)

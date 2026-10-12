@@ -241,6 +241,7 @@ export default function ActivityPage() {
                             <span className="text-xs tabular-nums text-muted-foreground/80">
                               {new Date(r.created_at).toLocaleTimeString("es-AR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" })}
                             </span>
+                            {typeof r.meta?.por === "string" ? <span className="text-xs font-medium text-foreground/80">· {r.meta.por}</span> : null}
                           </span>
                           <span className="mt-0.5 block text-sm [overflow-wrap:anywhere]">{r.message}</span>
                         </span>
@@ -263,6 +264,7 @@ export default function ActivityPage() {
           <>
             <div className="rounded-2xl border bg-muted/30 p-4">
               <p className="text-sm [overflow-wrap:anywhere]">{open.message}</p>
+              {typeof open.meta?.por === "string" ? <p className="mt-1 text-sm font-medium">Hecho por {open.meta.por}</p> : null}
               <p className="mt-2 text-xs text-muted-foreground">
                 {new Date(open.created_at).toLocaleString("es-AR", { timeZone: TZ, dateStyle: "full", timeStyle: "short" })}
               </p>
@@ -271,9 +273,11 @@ export default function ActivityPage() {
               <div className="space-y-2">
                 <h3 className="text-base font-semibold">Detalle</h3>
                 <dl className="divide-y rounded-2xl border">
-                  {Object.entries(open.meta).map(([k, v]) => (
+                  {Object.entries(open.meta)
+                    .filter(([k]) => k !== "por_uid")
+                    .map(([k, v]) => (
                     <div key={k} className="flex flex-col gap-0.5 px-4 py-2.5 sm:flex-row sm:gap-3">
-                      <dt className="shrink-0 text-xs text-muted-foreground sm:w-32">{k}</dt>
+                      <dt className="shrink-0 text-xs text-muted-foreground sm:w-32">{k === "por" ? "Hecho por" : k}</dt>
                       <dd className="min-w-0 font-mono text-xs [overflow-wrap:anywhere]">
                         {v !== null && typeof v === "object" ? (
                           <pre className="whitespace-pre-wrap">{JSON.stringify(v, null, 2)}</pre>

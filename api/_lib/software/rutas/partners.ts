@@ -87,7 +87,7 @@ export async function PATCH(req: NextRequest) {
     `;
   }
 
-  await logActivity("partner_update", "Socios / % default actualizados");
+  await logActivity("partner_update", "Reparto actualizado: nombres y % general");
   const rows = await sql`
     SELECT id, name, pct::float8 AS pct, sort_order, is_cash
     FROM hub_partners
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
     VALUES (${name}, ${pct}, ${sort})
     RETURNING id, name, pct::float8 AS pct, sort_order
   `;
-  await logActivity("partner_update", `Socio agregado: ${name}`);
+  await logActivity("partner_update", `Persona agregada al reparto: ${name}`);
   return NextResponse.json({ partner: rows[0] }, { status: 201 });
 }
 
@@ -148,6 +148,6 @@ export async function DELETE(req: NextRequest) {
   }
   await sql`DELETE FROM hub_client_partner_pct WHERE partner_id = ${id}`;
   await sql`DELETE FROM hub_partners WHERE id = ${id}`;
-  await logActivity("partner_update", `Socio eliminado: ${prev[0]?.name || id}`);
+  await logActivity("partner_update", `Persona sacada del reparto: ${prev[0]?.name || id}`);
   return NextResponse.json({ ok: true });
 }

@@ -12,6 +12,7 @@ import { NextRequest, type NextResponse } from "../_lib/software/next-shim";
 import { misGanancias } from "../_lib/software/mis-ganancias";
 import { crearEsquemaSoftware } from "../_lib/software/esquema";
 import { getSql } from "../_lib/software/sql";
+import { conQuien, type Quien } from "../_lib/software/quien";
 
 import * as activity from "../_lib/software/rutas/activity";
 import * as apps from "../_lib/software/rutas/apps";
@@ -112,16 +113,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.status(200).json(await misGanancias(de, String(req.query.mes ?? "")));
       return;
     }
+    // Todos los días (cron de Vercel): trae de Mercado Pago lo nuevo aunque nadie abra Software.
+    if (accion === "cron-sync") {
+      const secret = process.env.CRON_SECRET;
+      if (!secret || req.headers.authorization !== `Bearer ${secret}`) throw new HttpError(401, "No autorizado");
+      const r = await conQuien({ nombre: "Actualización diaria automática" }, () => Promise.resolve(sync.POST()));
+      res.status(r.status).setHeader("Content-Type", "application/json").send(r.body);
+      return;
+    }
     if (!Object.hasOwn(ACCIONES, accion)) throw new HttpError(404, "Acción desconocida");
     const { m, acceso } = ACCIONES[accion];
     const metodo = String(req.method ?? "GET").toUpperCase() as Metodo;
     const fn = m[metodo];
     if (!fn) throw new HttpError(405, "Método no permitido");
 
+    // Quién lo hace (queda en Actividad): la persona, o Mercado Pago cuando avisa solo.
+    let quien: Quien = { nombre: "Mercado Pago (automático)" };
     if (acceso !== "publica") {
       const caller = await requireCaller(req, ["admin", "administracion", "programador"]);
       const permitido = esDireccion(caller) || (acceso === "lectura" && metodo === "GET");
       if (!permitido) throw new HttpError(403, "No tenés permiso para esta acción");
+      quien = { nombre: caller.nombre || "Alguien del equipo", uid: caller.uid };
     }
 
     const host = String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "localhost");
@@ -134,7 +146,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (typeof req.query.client === "string") params.clientId = req.query.client;
     if (typeof req.query.app === "string") params.appId = req.query.app;
 
-    const r = await fn(nreq, { params: Promise.resolve(params) });
+    const r = await conQuien(quien, () => Promise.resolve(fn(nreq, { params: Promise.resolve(params) })));
     res.status(r.status);
     r.headers.forEach((v, k) => res.setHeader(k, v));
     res.send(r.body);

@@ -108,7 +108,7 @@ export async function POST() {
   const backfill = await backfillClientsFromPayments();
   await logActivity(
     "sync",
-    `Sync: ${imported} pagos con fee · ${importedSubs} suscripciones · ${feeRecovered} fees recuperados · ${backfill.clientsTotal} clientes`,
+    `Actualizado desde Mercado Pago: ${imported} pagos nuevos con comisión · ${importedSubs} planes mensuales · ${feeRecovered} comisiones recuperadas · ${backfill.clientsTotal} clientes`,
     {
       imported,
       importedSubs,
