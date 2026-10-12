@@ -68,11 +68,11 @@ export function navSoftware(roles: UserRole[]): NavSection[] {
   return [
     {
       items: [
-        { label: "Mis ganancias", icon: HandCoins, path: "/software/mis-ganancias", mobile: true },
         { label: "Tareas", icon: ListTodo, path: "/software/tareas", mobile: true },
         { label: "Clientes", icon: Store, path: "/software/clientes", mobile: true },
         { label: "Cobros", icon: CreditCard, path: "/software/pagos", mobile: true },
         { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
+        { label: "Mis ganancias", icon: HandCoins, path: "/software/mis-ganancias", mobile: true },
       ],
     },
   ];

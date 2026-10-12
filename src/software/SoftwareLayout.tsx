@@ -32,9 +32,9 @@ export default function SoftwareLayout() {
   );
 }
 
-/** Inicio de Software: dirección ve el panel; programación, sus ganancias. */
+/** Inicio de Software: dirección ve el panel; programación, sus tareas. */
 export function InicioSoftware({ panel }: { panel: React.ReactNode }) {
   const { roles } = useUserProfileContext();
-  if (!roles.some((r) => r === "admin" || r === "administracion")) return <Navigate to="/software/mis-ganancias" replace />;
+  if (!roles.some((r) => r === "admin" || r === "administracion")) return <Navigate to="/software/tareas" replace />;
   return <>{panel}</>;
 }
