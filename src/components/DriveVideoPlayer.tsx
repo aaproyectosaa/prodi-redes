@@ -23,6 +23,29 @@ interface DriveVideoPlayerProps {
   onVideoEl?: (el: HTMLVideoElement | null) => void;
 }
 
+/** ¿El navegador no sabe reproducir este formato? (ej. los .MOV de iPhone en Chrome). Entonces lo muestra Drive. */
+function formatoNoSoportado(mimeType?: string): boolean {
+  if (!mimeType || !/quicktime|x-matroska|x-msvideo|3gpp/.test(mimeType)) return false;
+  try {
+    return document.createElement("video").canPlayType(mimeType) === "";
+  } catch {
+    return false;
+  }
+}
+
+/** Reproductor de Google Drive: convierte formatos que el navegador no lee (.MOV de iPhone, HEVC). */
+function VistaDrive({ fileId, className }: { fileId: string; className?: string }) {
+  return (
+    <iframe
+      src={`https://drive.google.com/file/d/${encodeURIComponent(fileId)}/preview`}
+      title="Video"
+      allow="autoplay; fullscreen"
+      allowFullScreen
+      className={cn("block aspect-video min-h-[200px] w-full rounded-md border-0 bg-black", className)}
+    />
+  );
+}
+
 export function DriveVideoPlayer({
   fileId,
   mimeType,
@@ -39,8 +62,16 @@ export function DriveVideoPlayer({
   const [playbackError, setPlaybackError] = useState(false);
   const [debugDetail, setDebugDetail] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  // Si el navegador no sabe reproducir el formato (.MOV de iPhone en Chrome) o falló la carga, se ve con el
+  // reproductor de Drive (convierte el video).
+  const saltear = !fileId.startsWith("demo/") && formatoNoSoportado(mimeType);
+  const conDrive = saltear || (!fileId.startsWith("demo/") && playbackError);
 
   useEffect(() => {
+    if (saltear) {
+      onVideoEl?.(null);
+      return;
+    }
     let active = true;
     setLoading(true);
     setPlaybackError(false);
@@ -98,7 +129,8 @@ export function DriveVideoPlayer({
     return () => {
       active = false;
     };
-  }, [fileId, mimeType, attempt]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileId, mimeType, attempt, saltear]);
 
   useEffect(() => {
     if (!autoPlay || !src) return;
@@ -123,6 +155,8 @@ export function DriveVideoPlayer({
     setDebugDetail(detail);
     setPlaybackError(true);
   };
+
+  if (conDrive) return <VistaDrive fileId={fileId} className={className} />;
 
   if (loading) {
     return (

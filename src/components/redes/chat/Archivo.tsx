@@ -3,7 +3,7 @@ import { AlertCircle, Download, File as FileIcon, FileText, Loader2, Play, Rotat
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { DriveVideoPlayer } from "@/components/DriveVideoPlayer";
-import { getDriveDownloadUrl, getDriveMediaPlayUrl } from "@/utils/drive/driveMediaUrl";
+import { getDriveDownloadUrl, getDriveMediaPlayUrl, urlDescargaDrive } from "@/utils/drive/driveMediaUrl";
 import { cancelarSubida, reintentarSubida, type SubidaChat } from "@/lib/redes/chatArchivos";
 import { cn } from "@/lib/utils";
 import type { ArchivoChat } from "@/lib/redes/types";
@@ -26,8 +26,9 @@ async function urlArchivo(fileId: string): Promise<string> {
 
 async function descargar(a: ArchivoChat) {
   const link = document.createElement("a");
-  // Directo de Drive (videos de cualquier tamaño); si no se puede, por la app.
-  link.href = await getDriveDownloadUrl(a.drive_file_id).catch(() => urlArchivo(a.drive_file_id));
+  // Directo de Drive y en el mismo toque (si se espera al servidor, el celular bloquea la descarga sin avisar).
+  void getDriveDownloadUrl(a.drive_file_id).catch(() => undefined);
+  link.href = urlDescargaDrive(a.drive_file_id);
   link.download = a.name;
   link.rel = "noopener";
   link.style.display = "none";

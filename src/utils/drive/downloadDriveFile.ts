@@ -64,15 +64,6 @@ async function downloadOneAttachment(
     }
   }
 
-  // El equipo: el servidor revisa que tenga acceso y el navegador lo baja directo de Drive (fotos y videos de cualquier tamaño).
-  if (!att.drive_file_id.startsWith("demo/")) {
-    try {
-      downloadViaLink(await getDriveDownloadUrl(att.drive_file_id));
-      return;
-    } catch (err) {
-      console.warn("Descarga directa falló, probando por la app:", err);
-    }
-  }
 
   // Sin el acceso de Drive en el navegador: los chicos se bajan por la app (mismo origen, se guardan con su nombre)…
   if (!att.drive_file_id.startsWith("demo/") && Number(att.size) > 0 && Number(att.size) <= MAX_POR_APP) {
@@ -124,6 +115,19 @@ export async function downloadAttachmentsSequential(
 ): Promise<void> {
   // Un respiro entre archivos: si no, el navegador puede saltearse alguno.
   const delayMs = options?.delayMs ?? 1200;
+
+  // El equipo (sin la llave de Drive): la descarga arranca EN el toque, directo de Drive (videos y fotos de cualquier
+  // tamaño). En el celular, si se espera al servidor antes, el navegador la bloquea sin avisar. Los archivos que sube
+  // Prodi ya se abren con el link; igual se le pide al servidor que lo asegure (revisa que la persona tenga acceso).
+  if (!options?.getAccessToken && files.length && files.every((f) => !f.drive_file_id.startsWith("demo/"))) {
+    for (const f of files) void getDriveDownloadUrl(f.drive_file_id).catch(() => undefined);
+    for (let i = 0; i < files.length; i++) {
+      options?.onProgress?.({ current: i + 1, total: files.length, fileName: files[i].name });
+      downloadViaLink(getPublicDownloadUrl(files[i].drive_file_id));
+      if (i < files.length - 1) await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+    return;
+  }
 
   for (let i = 0; i < files.length; i++) {
     const att = files[i];

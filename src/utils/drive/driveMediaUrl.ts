@@ -44,3 +44,8 @@ export async function getDriveDownloadUrl(fileId: string): Promise<string> {
   if (!res.ok || !data.url) throw new Error(data.error ?? `No se pudo bajar el archivo (${res.status})`);
   return data.url;
 }
+
+/** Link público de descarga de Drive (los archivos que sube Prodi se abren con el link). */
+export function urlDescargaDrive(fileId: string): string {
+  return `https://drive.usercontent.google.com/download?id=${encodeURIComponent(fileId)}&export=download&confirm=t`;
+}
