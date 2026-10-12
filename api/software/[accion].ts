@@ -10,6 +10,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { HttpError, requireCaller, sendError, tieneRol, type Caller } from "../_lib/http";
 import { NextRequest, type NextResponse } from "../_lib/software/next-shim";
 import { misGanancias } from "../_lib/software/mis-ganancias";
+import { proyectosQueSonDeSoftware } from "../_lib/software/chat-software";
 import { crearEsquemaSoftware } from "../_lib/software/esquema";
 import { getSql } from "../_lib/software/sql";
 import { conQuien, type Quien } from "../_lib/software/quien";
@@ -119,6 +120,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!secret || req.headers.authorization !== `Bearer ${secret}`) throw new HttpError(401, "No autorizado");
       const r = await conQuien({ nombre: "Actualización diaria automática" }, () => Promise.resolve(sync.POST()));
       res.status(r.status).setHeader("Content-Type", "application/json").send(r.body);
+      return;
+    }
+    // Para los chats de Prodi Redes: qué clientes también son de Software (solo ids, para la etiqueta).
+    if (accion === "clientes-en-redes") {
+      await requireCaller(req, ["admin", "administracion", "productor", "editor", "pauta", "diseno", "programador"]);
+      res.setHeader("Cache-Control", "private, max-age=300");
+      res.status(200).json({ proyectos: await proyectosQueSonDeSoftware() });
       return;
     }
     if (!Object.hasOwn(ACCIONES, accion)) throw new HttpError(404, "Acción desconocida");

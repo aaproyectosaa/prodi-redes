@@ -452,6 +452,9 @@ export interface SugerenciaTarea {
   cliente_tipo: "app" | "mantenimiento" | null;
   cliente_nombre: string | null;
   estado: "pendiente" | "creada" | "descartada";
+  /** La creó la IA sola (se puede deshacer). */
+  auto?: boolean;
+  tarea_id?: string | null;
 }
 
 export interface Chat {

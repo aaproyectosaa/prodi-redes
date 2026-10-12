@@ -20,6 +20,7 @@ import {
   pedirAProdi,
   guardarLinks,
   descartarSugerencia,
+  deshacerTareaAuto,
   esChatSoftware,
   sugerirTareaSoftware,
   tareaDesdeMensaje,
@@ -965,6 +966,21 @@ export function ChatConversacion({
                       onDescartar={() => void descartarSugerencia(chat, m).catch((err) => toast.error(err instanceof Error ? err.message : "No se pudo"))}
                     />
                   )}
+                  {m.sugerencia_tarea?.estado === "creada" && m.sugerencia_tarea.auto && (
+                    <TarjetaTareaCreada
+                      s={m.sugerencia_tarea}
+                      mio={mio}
+                      nombreDe={(u) => (u === uid ? "vos" : nombreDe(u, chat.nombres?.[u]).split(" ")[0])}
+                      ocupado={creandoSug === m.id}
+                      onDeshacer={() => {
+                        setCreandoSug(m.id);
+                        void deshacerTareaAuto(chat, m)
+                          .then(() => toast.success("Listo, la tarea se borró."))
+                          .catch((err) => toast.error(err instanceof Error ? err.message : "No se pudo deshacer"))
+                          .finally(() => setCreandoSug(null));
+                      }}
+                    />
+                  )}
                   {mio && m.id === ultimoMio && <VistoLinea chat={chat} m={m} uid={uid} />}
                   {vistos.has(m.id) && (
                     <Cabecitas ids={vistos.get(m.id)!} perfilDe={perfilDe} mio={mio} onClick={() => setInfoMsg(m)} />
@@ -1281,6 +1297,45 @@ export function ChatConversacion({
 }
 
 /** Software: "📌 ¿Crear tarea?" debajo del mensaje donde la IA vio una tarea. Cualquiera del chat la crea, edita o descarta. */
+/** La IA creó la tarea sola: se avisa abajo del mensaje y se puede deshacer. */
+function TarjetaTareaCreada({
+  s,
+  mio,
+  nombreDe,
+  ocupado,
+  onDeshacer,
+}: {
+  s: NonNullable<Mensaje["sugerencia_tarea"]>;
+  mio: boolean;
+  nombreDe: (uid: string) => string;
+  ocupado: boolean;
+  onDeshacer: () => void;
+}) {
+  const fecha = s.vence ? new Date(`${s.vence}T12:00:00`).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "numeric" }) : null;
+  const partes = [s.asignados.length ? `para ${s.asignados.map(nombreDe).join(", ")}` : null, fecha, s.cliente_nombre].filter(Boolean);
+  return (
+    <div className={cn("flex", mio ? "justify-end pr-1" : "pl-9")}>
+      <div className="mt-0.5 flex max-w-[85%] items-start gap-2 rounded-xl border border-success/30 bg-success/[0.07] px-3 py-2 text-xs shadow-sm animate-in fade-in slide-in-from-bottom-1 motion-reduce:animate-none">
+        <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-success text-[10px] text-white">✓</span>
+        <div className="min-w-0">
+          <p>
+            <span className="font-semibold">Tarea creada:</span> {s.titulo}
+          </p>
+          {partes.length > 0 && <p className="mt-0.5 text-muted-foreground">{partes.join(" · ")}</p>}
+        </div>
+        <button
+          type="button"
+          onClick={onDeshacer}
+          disabled={ocupado}
+          className="ml-1 shrink-0 rounded-md px-1.5 py-0.5 font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
+        >
+          {ocupado ? <Loader2 className="h-3 w-3 animate-spin" /> : "Deshacer"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TarjetaSugerencia({
   s,
   mio,

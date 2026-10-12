@@ -536,6 +536,12 @@ export async function descartarSugerencia(chat: Chat, m: Mensaje) {
   await updateDoc(doc(db, CHATS, chat.id, "mensajes", m.id), { "sugerencia_tarea.estado": "descartada" });
 }
 
+/** Deshace una tarea que la IA creó sola (se borra y queda descartada). */
+export async function deshacerTareaAuto(chat: Chat, m: Mensaje) {
+  assertEditable();
+  await callApi("/api/ia/software-tarea-deshacer", { chat_id: chat.id, mensaje_id: m.id });
+}
+
 /** "Hacer tarea" con un mensaje: la crea el servidor (aviso, Calendar y una línea en el chat). */
 export async function tareaDesdeMensaje(
   chat: Chat,

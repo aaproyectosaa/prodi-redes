@@ -33,6 +33,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { FieldValue } from "../_lib/db";
 import { adminDb } from "../_lib/db";
 import { appUrl, assertProjectAccess, body, HttpError, requireCaller, sendError } from "../_lib/http";
+import { sincronizarCalendario } from "../_lib/calendario";
 import { generarImagen, generarJSON, generarJSONBarato, generarMinutaIA, generarTextos } from "../_lib/ia";
 import { clienteSoftware, clientesSoftware, esChatSoftware } from "../_lib/software/chat-software";
 import { descargarDrive } from "../_lib/drive-stream";
@@ -1135,6 +1136,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "estado") res.status(200).json(await estadoIA(req));
     else if (accion === "tarea-chat") res.status(200).json(await tareaChat(req));
     else if (accion === "software-tarea-sugerir") res.status(200).json(await softwareTareaSugerir(req));
+    else if (accion === "software-tarea-deshacer") res.status(200).json(await softwareTareaDeshacer(req));
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {
     sendError(res, err);
@@ -1198,36 +1200,71 @@ async function tareaChat(req: VercelRequest) {
     if (!sug || sug.estado !== "pendiente") throw new HttpError(409, "Esa tarea ya se creó o se descartó");
     await msgRef.update({ "sugerencia_tarea.estado": "creada" });
   }
+  const id = await crearTareaDeChat({
+    chat,
+    chatId: b.chat_id,
+    mensajeId: b.mensaje_id,
+    por: caller.uid,
+    porNombre: yo,
+    titulo,
+    asignados,
+    vence,
+    deSoftware,
+    cliSw,
+    base,
+  });
+  return { ok: true, tarea_id: id };
+}
+
+/** Crea la tarea que sale de un mensaje del chat y deja la línea "le dejó una tarea a …" en la conversación. */
+async function crearTareaDeChat(o: {
+  chat: Record<string, unknown>;
+  chatId: string;
+  mensajeId: string;
+  por: string;
+  porNombre: string;
+  titulo: string;
+  asignados: string[];
+  vence: string | null;
+  deSoftware: boolean;
+  cliSw: { id: string; tipo: "app" | "mantenimiento"; nombre: string } | null;
+  base: string;
+  /** La creó la IA sola (Software): la línea del chat lo dice. */
+  auto?: boolean;
+}): Promise<string> {
+  const { chat, titulo, asignados, vence, cliSw } = o;
+  const nombres = (chat.nombres ?? {}) as Record<string, string>;
   const id = await crearTarea(
     {
       titulo,
       asignados,
       vence,
-      creada_por: caller.uid,
-      creada_por_nombre: yo,
-      chat_id: b.chat_id,
-      mensaje_id: b.mensaje_id,
-      proyecto_id: deSoftware ? null : typeof chat.proyecto_id === "string" ? chat.proyecto_id : null,
-      ...(deSoftware
+      creada_por: o.por,
+      creada_por_nombre: o.porNombre,
+      chat_id: o.chatId,
+      mensaje_id: o.mensajeId,
+      proyecto_id: o.deSoftware ? null : typeof chat.proyecto_id === "string" ? chat.proyecto_id : null,
+      ...(o.deSoftware
         ? { empresa: "software" as const, cliente_software_id: cliSw?.id ?? null, cliente_software_tipo: cliSw?.tipo ?? null, cliente_software_nombre: cliSw?.nombre ?? null }
         : {}),
     },
-    base
+    o.base
   );
   // Línea en el chat (la app antepone el nombre de quien la creó): "Lucas le dejó una tarea a Nati: …".
   const primer = (u: string) => String(nombres[u] ?? "alguien").split(" ")[0];
-  const solo = asignados.length === 1 && asignados[0] === caller.uid;
+  const solo = asignados.length === 1 && asignados[0] === o.por;
   const para = asignados.map(primer).join(", ");
   const dia = vence ? ` · para el ${Number(vence.slice(8, 10))}/${Number(vence.slice(5, 7))}` : "";
-  const at = new Date().toISOString();
-  await db.collection(`chats/${b.chat_id}/mensajes`).add({
-    texto: `${solo ? "se anotó una tarea" : `le dejó una tarea a ${para}`}: “${titulo}”${dia} 📌`,
-    by: caller.uid,
-    at,
-    tipo: "sistema",
-    tarea_id: id,
-  });
-  return { ok: true, tarea_id: id };
+  await adminDb()
+    .collection(`chats/${o.chatId}/mensajes`)
+    .add({
+      texto: `${solo ? "se anotó una tarea" : `le dejó una tarea a ${para}`}: “${titulo}”${dia} 📌${o.auto ? " (la armó Prodi)" : ""}`,
+      by: o.por,
+      at: new Date().toISOString(),
+      tipo: "sistema",
+      tarea_id: id,
+    });
+  return id;
 }
 
 // ---------------------------------------------------------------------------
@@ -1236,8 +1273,8 @@ async function tareaChat(req: VercelRequest) {
 
 const DIAS_SEMANA = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
 /** Respuestas cortas que nunca son tareas (se descartan sin llamar a la IA). */
-const TRIVIAL = /^(ok+|oki|okey|dale+|gracias|grax|listo|joya|genial|buenisimo|buenísimo|perfecto|si+|sí|no|ja(ja)+|je(je)+|jajaw*|👍|🙌)[s.!¡?¿]*$/i;
-const SOLO_EMOJIS = /^[p{Extended_Pictographic}p{Emoji_Component}s]+$/u;
+const TRIVIAL = /^(ok+|oki|okey|dale+|gracias|grax|listo|joya|genial|buenisimo|buenísimo|perfecto|si+|sí|no|ja(ja)+|je(je)+|jaja\w*|👍|🙌)[\s.!¡?¿]*$/i;
+const SOLO_EMOJIS = /^[\p{Extended_Pictographic}\p{Emoji_Component}\s]+$/u;
 
 const ESQUEMA_SUGERENCIA = {
   type: "OBJECT",
@@ -1291,7 +1328,7 @@ async function softwareTareaSugerir(req: VercelRequest) {
   const hoy = fechaAR();
   const dia = DIAS_SEMANA[new Date(`${hoy}T12:00:00Z`).getUTCDay()];
 
-  const prompt = `Sos el asistente de tareas del equipo de Prodi Software (programación de apps). Tu trabajo: decir si un mensaje del chat es un pedido concreto de algo para hacer (una tarea) y armarla. No crees nada: solo sugerís y una persona confirma.
+  const prompt = `Sos el asistente de tareas del equipo de Prodi Software (programación de apps). Tu trabajo: decir si un mensaje del chat es un pedido concreto de algo para hacer (una tarea) y armarla. Si estás muy seguro, la tarea se crea sola; si dudás, se le pregunta a una persona. Ante la duda, confianza baja.
 Hoy es ${dia} ${hoy} (Argentina). "El jueves" = el próximo jueves desde hoy; "mañana" = ${sumarDias(hoy, 1)}.
 
 Personas del chat (id · nombre):
@@ -1328,7 +1365,7 @@ Respondé:
   const asignados = Array.isArray(r.asignados) ? [...new Set(r.asignados.filter((u): u is string => typeof u === "string" && miembros.includes(u) && u !== "prodi"))] : [];
   const vence = typeof r.vence === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.vence) && r.vence >= hoy ? r.vence : null;
   const cli = r.cliente_id ? await clienteSoftware(r.cliente_id, r.cliente_tipo) : null;
-  const sugerencia = {
+  const sugerencia: Record<string, unknown> = {
     titulo,
     asignados,
     vence,
@@ -1337,6 +1374,52 @@ Respondé:
     cliente_nombre: cli?.nombre ?? null,
     estado: "pendiente",
   };
+  // Si la IA está segura y sabe a quién le toca, la crea sola (a nombre de quien escribió el mensaje) y en el chat
+  // queda "✅ Tarea creada · Deshacer". Si duda, pregunta "¿Crear tarea?".
+  if (Number(r.confianza) >= CONFIANZA_AUTO && asignados.length) {
+    const autor = String(msg.by ?? caller.uid);
+    const tareaId = await crearTareaDeChat({
+      chat,
+      chatId: b.chat_id,
+      mensajeId: b.mensaje_id,
+      por: autor,
+      porNombre: String(nombres[autor] ?? msg.by_nombre ?? caller.nombre ?? "Alguien"),
+      titulo,
+      asignados,
+      vence,
+      deSoftware: true,
+      cliSw: cli,
+      base: appUrl(req),
+      auto: true,
+    });
+    Object.assign(sugerencia, { estado: "creada", auto: true, tarea_id: tareaId });
+  }
   await msgRef.update({ sugerencia_tarea: sugerencia });
   return { ok: true, sugerencia };
+}
+
+/** Desde cuánta seguridad la IA crea la tarea sola (por debajo, solo sugiere). */
+const CONFIANZA_AUTO = 0.85;
+
+/** "Deshacer" una tarea que creó la IA sola: se borra la tarea (y su línea del chat) y queda descartada. */
+async function softwareTareaDeshacer(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "administracion", "programador"]);
+  const b = body<{ chat_id?: string; mensaje_id?: string }>(req);
+  if (!b.chat_id || !b.mensaje_id || b.chat_id.includes("/") || b.mensaje_id.includes("/")) throw new HttpError(400, "Faltan datos");
+  const db = adminDb();
+  const [chatSnap, msgSnap] = await Promise.all([db.collection("chats").doc(b.chat_id).get(), db.collection(`chats/${b.chat_id}/mensajes`).doc(b.mensaje_id).get()]);
+  const miembros: string[] = Array.isArray(chatSnap.data()?.miembros) ? chatSnap.data()!.miembros : [];
+  if (!msgSnap.exists || !miembros.includes(caller.uid)) throw new HttpError(403, "No sos parte de este chat");
+  const sug = (msgSnap.data()?.sugerencia_tarea ?? null) as { estado?: string; auto?: boolean; tarea_id?: string } | null;
+  if (!sug || sug.estado !== "creada" || !sug.auto || !sug.tarea_id) throw new HttpError(409, "Esa tarea ya no se puede deshacer");
+  const ref = db.collection("tareas").doc(sug.tarea_id);
+  const antes = (await ref.get()).data() ?? null;
+  if (antes) {
+    await ref.delete();
+    await sincronizarCalendario("tareas", sug.tarea_id, appUrl(req), antes);
+  }
+  const lineas = await db.collection(`chats/${b.chat_id}/mensajes`).where("tarea_id", "==", sug.tarea_id).get();
+  await Promise.all(lineas.docs.map((d) => d.ref.delete()));
+  await msgSnap.ref.update({ "sugerencia_tarea.estado": "descartada", "sugerencia_tarea.tarea_id": null });
+  return { ok: true };
 }

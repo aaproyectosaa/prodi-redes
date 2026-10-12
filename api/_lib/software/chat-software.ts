@@ -55,3 +55,38 @@ export async function clienteSoftware(id: unknown, tipo: unknown): Promise<Clien
   const f = r.rows[0] as { id: string; name: string } | undefined;
   return f ? { id: f.id, nombre: f.name, tipo } : null;
 }
+
+const SIN_PESO = new Set(["sa", "srl", "sas", "de", "del", "la", "el", "los", "las", "y", "e", "app"]);
+/** "Dulce Capricho S.R.L." → ["dulce", "capricho"]: sin tildes, mayúsculas, signos ni palabras de relleno. */
+function palabras(nombre: string): string[] {
+  return nombre
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(" ")
+    .filter((p) => p && !SIN_PESO.has(p));
+}
+
+/**
+ * Clientes de Redes (projects) que también son clientes de Software: mismo nombre, o todas las palabras del
+ * más corto están en el otro ("Dulce Capricho" ↔ "Dulce Capricho Pastelería"). Para marcar sus chats.
+ */
+export async function proyectosQueSonDeSoftware(): Promise<string[]> {
+  const sw = (await clientesSoftware()).map((c) => palabras(c.nombre)).filter((p) => p.join("").length >= 4);
+  if (!sw.length) return [];
+  const r = await getPool().query("select id, data->>'nombre' as nombre from documentos where coleccion = 'projects'");
+  const out: string[] = [];
+  for (const row of r.rows as { id: string; nombre: string | null }[]) {
+    const p = palabras(row.nombre ?? "");
+    if (p.join("").length < 4) continue;
+    const coincide = sw.some((s) => {
+      const [corto, largo] = s.length <= p.length ? [s, p] : [p, s];
+      // Una sola palabra corta ("test") no alcanza: con una palabra, que tenga 5 letras o más.
+      if (corto.length === 1 && corto[0].length < 5) return false;
+      return corto.every((x) => largo.includes(x));
+    });
+    if (coincide) out.push(row.id);
+  }
+  return out;
+}

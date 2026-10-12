@@ -42,6 +42,7 @@ import {
 import { cn } from "@/lib/utils";
 import { textoEscribiendo, useEscriben } from "@/lib/redes/escribiendo";
 import { useChatVoz } from "@/lib/redes/chatVoz";
+import { useProyectosSoftware } from "@/lib/redes/clientesSoftware";
 import { fechaAR, formatearFecha, hoyAR } from "@/lib/fecha";
 import type { Chat as ChatT } from "@/lib/redes/types";
 
@@ -50,7 +51,7 @@ function horaCorta(iso: string) {
   return formatearFecha(iso, { day: "numeric", month: "short" });
 }
 
-type Filtro = "todos" | "no-leidos" | "grupos" | `e:${string}`;
+type Filtro = "todos" | "no-leidos" | "grupos" | "software" | `e:${string}`;
 
 /** Etiquetas de un chat: crear (nombre + color), asignar varias y borrar. */
 function EtiquetasDialog({
@@ -168,6 +169,9 @@ export function ChatLista({
   // "escribiendo…" en la fila del chat, como WhatsApp.
   const escriben = useEscriben();
   const { enVoz } = useChatVoz();
+  // Clientes de Redes que también son de Software: su grupo lleva la etiqueta "Software" (solo para el equipo).
+  const proyectosSw = useProyectosSoftware(role !== "cliente" && role !== "contacto");
+  const esDeSoftware = (c: ChatT) => c.tipo === "software" || (c.tipo === "cliente" && !!c.proyecto_id && proyectosSw.has(c.proyecto_id));
   const prefs = useChatPrefs(uid);
   const [q, setQ] = useState("");
   const [filtro, setFiltro] = useState<Filtro>("todos");
@@ -211,6 +215,8 @@ export function ChatLista({
       ? true
       : filtroOk === "no-leidos"
         ? noLeido(c, uid)
+        : filtroOk === "software"
+          ? esDeSoftware(c)
         : filtroOk === "grupos"
           ? c.tipo !== "directo" && c.tipo !== "prodi"
           : (prefs.asignaciones[c.id] ?? []).includes(filtroOk.slice(2));
@@ -243,6 +249,7 @@ export function ChatLista({
     { id: "todos", label: "Todos" },
     { id: "no-leidos", label: "No leídos", n: sinLeer },
     { id: "grupos", label: "Grupos" },
+    ...(chats.some(esDeSoftware) ? [{ id: "software" as Filtro, label: "Software" }] : []),
     ...prefs.etiquetas.map((e) => ({ id: `e:${e.id}` as Filtro, label: e.nombre, color: e.color })),
   ];
 
@@ -430,6 +437,11 @@ export function ChatLista({
                   <div className="flex items-baseline justify-between gap-2">
                     <p className={cn("flex min-w-0 items-center gap-1 truncate text-sm", unread ? "font-bold" : "font-medium")}>
                       <span className="truncate">{titulo(c)}</span>
+                      {esDeSoftware(c) && (
+                        <span className="shrink-0 rounded-md bg-sky-500/15 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">
+                          Software
+                        </span>
+                      )}
                     </p>
                     <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground md:group-hover/fila:invisible">
                       {enVoz.some((v) => v.chat_id === c.id) && (
