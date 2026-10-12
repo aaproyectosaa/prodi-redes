@@ -1,17 +1,17 @@
 // "Mis ganancias" de programación en Prodi Software: lo que le toca a cada uno por su porcentaje.
 // Usa el mismo cálculo que la liquidación (no hay dos cuentas distintas) y devuelve solo lo de esa persona.
 
-import { HttpError, type Caller } from "../http";
+import { HttpError } from "../http";
 import { getSql } from "./sql";
 import { NextRequest } from "./next-shim";
 import { GET as liquidacion } from "./rutas/liquidacion";
 
 type Item = { partner_id: string; share?: number; paid?: number; pending?: number; [k: string]: unknown };
 
-export async function misGanancias(caller: Caller, mes: string) {
+export async function misGanancias(uid: string, mes: string) {
   const sql = getSql();
   const [p] = await sql<{ id: string; name: string; pct: number }>`
-    SELECT id, name, pct::float8 AS pct FROM hub_partners WHERE prodi_uid = ${caller.uid} LIMIT 1
+    SELECT id, name, pct::float8 AS pct FROM hub_partners WHERE prodi_uid = ${uid} LIMIT 1
   `;
   if (!p) throw new HttpError(404, "Todavía no estás en el reparto de Prodi Software. Pedile al admin que te sume.");
 

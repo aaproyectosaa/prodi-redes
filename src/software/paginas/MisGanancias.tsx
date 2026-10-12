@@ -5,6 +5,7 @@ import { MesNav } from "@/components/redes/admin/FacturaPartes";
 import { Button } from "@/components/ui/button";
 import { fechaCorta, formatARS, mesActual } from "@/lib/redes/format";
 import { swFetch } from "@/software/compat";
+import { useUserProfileContext } from "@/contexts/user-profile-context";
 
 type Parte = { share?: number; paid?: number; pending?: number } | null;
 type Datos = {
@@ -32,12 +33,15 @@ export default function MisGananciasSoftware() {
   const [anio, setAnio] = useState(false);
   const [datos, setDatos] = useState<Datos | null>(null);
   const [error, setError] = useState("");
+  // Con "Ver como" el admin ve las de esa persona.
+  const { user, viewingAs } = useUserProfileContext();
+  const como = viewingAs ? user?.uid ?? "" : "";
 
   useEffect(() => {
     let vivo = true;
     setDatos(null);
     setError("");
-    swFetch(`/api/mis-ganancias?mes=${anio ? "" : mes}`)
+    swFetch(`/api/mis-ganancias?mes=${anio ? "" : mes}${como ? `&uid=${encodeURIComponent(como)}` : ""}`)
       .then(async (r) => {
         const d = await r.json().catch(() => ({}));
         if (!vivo) return;
@@ -48,7 +52,7 @@ export default function MisGananciasSoftware() {
     return () => {
       vivo = false;
     };
-  }, [mes, anio]);
+  }, [mes, anio, como]);
 
   return (
     <PageShell

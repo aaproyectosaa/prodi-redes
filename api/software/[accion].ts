@@ -107,7 +107,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const accion = String(req.query.accion ?? "");
     if (accion === "mis-ganancias") {
       const caller = await requireCaller(req, ["admin", "administracion", "programador"]);
-      res.status(200).json(await misGanancias(caller, String(req.query.mes ?? "")));
+      // Dirección puede mirar las de otro ("Ver como" del admin).
+      const de = typeof req.query.uid === "string" && req.query.uid && esDireccion(caller) ? req.query.uid : caller.uid;
+      res.status(200).json(await misGanancias(de, String(req.query.mes ?? "")));
       return;
     }
     if (!Object.hasOwn(ACCIONES, accion)) throw new HttpError(404, "Acción desconocida");
