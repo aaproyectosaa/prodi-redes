@@ -18,6 +18,7 @@ import { claveProhibida } from "../_lib/docs";
 import { contexto, paraLaApp, partirColeccion, puedeEscribir, puedeLeer } from "../_lib/reglas";
 import { appUrl, body, HttpError, olvidarPerfil, requireCaller, sendError } from "../_lib/http";
 import { sincronizarCalendario } from "../_lib/calendario";
+import { publicarEnChat } from "../_lib/chat-server";
 import type { Data } from "../_lib/db";
 
 /** Colecciones con fecha que van a Google Calendar (se ponen al día después de guardar). */
@@ -266,6 +267,61 @@ function asegurarTablaVoz() {
   return tablaVoz;
 }
 
+// Registro de la llamada: quién la abrió, desde cuándo y quiénes pasaron. Cuando no queda nadie, se deja en el
+// chat "hizo una llamada de voz de 12 min con Ariel y Agustín 📞" (una sola vez: la fila se borra al publicarla).
+let tablaLlamadas: Promise<unknown> | null = null;
+function asegurarTablaLlamadas() {
+  tablaLlamadas ??= getPool()
+    .query(
+      "create table if not exists chat_llamadas (chat_id text primary key, inicio timestamptz not null default now(), por text not null, por_nombre text not null default '', participantes jsonb not null default '[]')"
+    )
+    .catch((e) => {
+      tablaLlamadas = null;
+      throw e;
+    });
+  return tablaLlamadas;
+}
+
+async function anotarEnLlamada(chatId: string, uid: string, nombre: string) {
+  await asegurarTablaLlamadas();
+  const quien = JSON.stringify([{ uid, nombre }]);
+  await getPool().query(
+    `insert into chat_llamadas (chat_id, por, por_nombre, participantes) values ($1, $2, $3, $4::jsonb)
+     on conflict (chat_id) do update set participantes = case
+       when chat_llamadas.participantes @> jsonb_build_array(jsonb_build_object('uid', $2::text)) then chat_llamadas.participantes
+       else chat_llamadas.participantes || $4::jsonb end`,
+    [chatId, uid, nombre, quien]
+  );
+}
+
+let ultimoCierre = 0;
+/** Las llamadas donde ya no queda nadie (colgaron o cerraron la app): se registran en su chat. */
+async function cerrarLlamadasTerminadas(forzar = false): Promise<{ chat_id: string; inicio: string }[]> {
+  if (!forzar && Date.now() - ultimoCierre < 10_000) return [];
+  ultimoCierre = Date.now();
+  await Promise.all([asegurarTablaLlamadas(), asegurarTablaVoz()]);
+  const r = await getPool().query(
+    `delete from chat_llamadas l
+      where not exists (select 1 from chat_voz v where v.chat_id = l.chat_id and v.hasta > now())
+      returning l.chat_id, l.inicio, l.por, l.por_nombre, l.participantes,
+        coalesce((select max(v.hasta) - make_interval(secs => $1) from chat_voz v where v.chat_id = l.chat_id), now()) as fin`,
+    [VIGENCIA_VOZ_S - 30]
+  );
+  for (const x of r.rows as { chat_id: string; inicio: string; por: string; por_nombre: string; participantes: { uid: string; nombre: string }[]; fin: string }[]) {
+    const ms = Math.max(0, new Date(x.fin).getTime() - new Date(x.inicio).getTime());
+    const min = Math.round(ms / 60_000);
+    const duracion = min < 1 ? "de menos de un minuto" : `de ${min} min`;
+    const otros = x.participantes.filter((p) => p.uid !== x.por).map((p) => (p.nombre || "alguien").split(" ")[0]);
+    const con = otros.length ? ` con ${otros.length > 1 ? `${otros.slice(0, -1).join(", ")} y ${otros[otros.length - 1]}` : otros[0]}` : " (no entró nadie más)";
+    await publicarEnChat(
+      x.chat_id,
+      { texto: `hizo una llamada de voz ${duracion}${con} 📞`, by: x.por, by_nombre: x.por_nombre, at: new Date().toISOString(), tipo: "sistema" },
+      `llamada_${new Date(x.inicio).getTime()}`
+    ).catch((e) => console.warn("[voz] registro", e));
+  }
+  return (r.rows as { chat_id: string; inicio: string }[]).map((x) => ({ chat_id: x.chat_id, inicio: new Date(x.inicio).toISOString() }));
+}
+
 /** Nombre de la sala: fijo para cada chat pero imposible de adivinar sin la clave del servidor. */
 function salaDeVoz(chatId: string): string {
   const clave = process.env.TOKEN_ENCRYPTION_KEY || process.env.CRON_SECRET;
@@ -281,7 +337,13 @@ async function voz(req: VercelRequest) {
   const pool = getPool();
   if (accion === "salir") {
     await pool.query("delete from chat_voz where chat_id = $1 and uid = $2", [chatId, caller.uid]);
-    return { ok: true };
+    const cerradas = await cerrarLlamadasTerminadas(true).catch((e) => {
+      console.warn("[voz] cierre", e);
+      return [];
+    });
+    // Era el último: la app pide la minuta de esta llamada.
+    const esta = cerradas.find((c) => c.chat_id === chatId);
+    return { ok: true, cerrada: esta ? { inicio: esta.inicio } : null };
   }
   const r = await pool.query("select data->>'tipo' as tipo from documentos where coleccion = 'chats' and id = $1 and data->'miembros' @> jsonb_build_array($2::text)", [
     chatId,
@@ -296,9 +358,14 @@ async function voz(req: VercelRequest) {
     [chatId, caller.uid, caller.nombre ?? "", VIGENCIA_VOZ_S]
   );
   if (accion !== "entrar") return { ok: true };
+  // Si había una llamada vieja sin registrar en este chat (todos se fueron sin colgar), se registra antes.
+  await cerrarLlamadasTerminadas(true).catch(() => undefined);
+  await anotarEnLlamada(chatId, caller.uid, caller.nombre ?? "");
+  const llamada = await pool.query("select inicio from chat_llamadas where chat_id = $1", [chatId]);
+  const inicio = llamada.rows[0]?.inicio ? new Date(llamada.rows[0].inicio).toISOString() : null;
   // Quiénes ya estaban adentro: el que entra los llama a cada uno.
   const adentro = await pool.query("select uid, nombre from chat_voz where chat_id = $1 and uid <> $2 and hasta > now() order by desde", [chatId, caller.uid]);
-  return { ok: true, sala: salaDeVoz(chatId), adentro: adentro.rows as { uid: string; nombre: string }[] };
+  return { ok: true, sala: salaDeVoz(chatId), adentro: adentro.rows as { uid: string; nombre: string }[], inicio };
 }
 
 // Señales de la llamada (WebRTC): para que dos celulares se conecten directo, Prodi les pasa "la presentación"
@@ -355,6 +422,7 @@ async function senales(req: VercelRequest) {
 /** Quién está en el chat de voz de los chats de esta persona (incluida ella). */
 async function quienesEnVoz(uid: string) {
   await asegurarTablaVoz();
+  await cerrarLlamadasTerminadas().catch(() => undefined);
   const r = await getPool().query(
     `select v.chat_id, v.uid, v.nombre from chat_voz v
        join documentos d on d.coleccion = 'chats' and d.id = v.chat_id

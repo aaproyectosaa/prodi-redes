@@ -494,8 +494,11 @@ export function suscribirVoz(cb: (l: EnVoz[]) => void): () => void {
 export async function avisarVoz(
   chatId: string,
   accion: "entrar" | "latido" | "salir"
-): Promise<{ sala?: string; adentro?: { uid: string; nombre: string }[] }> {
-  const r = await api<{ sala?: string; adentro?: { uid: string; nombre: string }[] }>("voz", { chatId, accion });
+): Promise<{ sala?: string; adentro?: { uid: string; nombre: string }[]; inicio?: string | null; cerrada?: { inicio: string } | null }> {
+  const r = await api<{ sala?: string; adentro?: { uid: string; nombre: string }[]; inicio?: string | null; cerrada?: { inicio: string } | null }>("voz", {
+    chatId,
+    accion,
+  });
   // Que se vea enseguida (sin esperar a la próxima pregunta).
   if (subs.size && !pausada) {
     if (timer) clearTimeout(timer);

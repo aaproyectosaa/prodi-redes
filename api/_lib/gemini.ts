@@ -10,12 +10,16 @@ function key(): string {
   return k;
 }
 
-export const TEXT_MODEL = () => process.env.GEMINI_TEXT_MODEL || "gemini-2.5-flash";
+export const TEXT_MODEL = () => process.env.GEMINI_TEXT_MODEL || "gemini-3.8-flash";
 /** Imágenes: Nano Banana Pro (el más avanzado; escribe bien el texto dentro de la pieza). Si no está disponible, los de respaldo. */
 export const IMAGE_MODEL = () => process.env.GEMINI_IMAGE_MODEL || "gemini-3-pro-image";
 const IMAGE_RESPALDO = ["gemini-nano-banana-2.1", "gemini-2.5-flash-image"];
 
-async function call(model: string, payload: unknown): Promise<any> {
+/** Modelos que Google dio de baja → el que sugirió en su lugar (se aprende solo, ver call). */
+const REEMPLAZOS = new Map<string, string>();
+
+async function call(model: string, payload: unknown, reintento = false): Promise<any> {
+  model = REEMPLAZOS.get(model) ?? model;
   const res = await fetch(`${BASE}/${model}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": key() },
@@ -24,6 +28,13 @@ async function call(model: string, payload: unknown): Promise<any> {
   const json: any = await res.json().catch(() => ({}));
   if (!res.ok) {
     const crudo = String(json?.error?.message ?? `Gemini respondió ${res.status}`);
+    // Google dio de baja el modelo y sugiere otro ("…no longer available… use models/gemini-X…"): se usa ese y se reintenta.
+    const sugerido = /no longer available|deprecated|not found|is not supported/i.test(crudo) ? /models\/(gemini-[\w.-]+)/i.exec(crudo.replace(`models/${model}`, ""))?.[1] : undefined;
+    if (!reintento && sugerido && sugerido !== model) {
+      console.warn(`[gemini] ${model} dado de baja: uso ${sugerido}`);
+      REEMPLAZOS.set(model, sugerido);
+      return call(sugerido, payload, true);
+    }
     // Lo más común: la clave es del plan gratis (o se pasó del límite). Que se entienda qué hacer.
     const msg =
       res.status === 429 || /quota|RESOURCE_EXHAUSTED|rate limit/i.test(crudo)
@@ -171,10 +182,7 @@ export interface MinutaIA {
 export async function generarMinutaIA(prompt: string, audio?: { data: Buffer; mime: string }): Promise<MinutaIA> {
   const parts: any[] = [{ text: prompt }];
   if (audio) {
-    // Gemini lee audio WAV/MP3/AAC/OGG/FLAC; lo que graban los navegadores (WebM en Chrome, MP4/M4A en iPhone)
-    // lo acepta como video (y escucha su audio).
-    const crudo = (audio.mime.split(";")[0] || "audio/webm").toLowerCase();
-    const mime = /webm/.test(crudo) ? "video/webm" : /mp4|m4a|quicktime/.test(crudo) ? "video/mp4" : crudo;
+    const mime = comoVideo((audio.mime.split(";")[0] || "audio/webm").toLowerCase());
     if (audio.data.length <= 14 * 1024 * 1024) {
       parts.push({ inline_data: { mime_type: mime, data: audio.data.toString("base64") } });
     } else {
@@ -217,14 +225,31 @@ export async function generarMinutaIA(prompt: string, audio?: { data: Buffer; mi
 }
 
 /** Pasa a texto un mensaje de voz (español rioplatense). */
+/** Lo que graban los navegadores (WebM en Chrome, MP4/M4A en iPhone): Gemini lo lee seguro como video (escucha su audio). */
+export function comoVideo(mime: string): string {
+  return /webm/.test(mime) ? "video/webm" : /mp4|m4a|quicktime|aac/.test(mime) ? "video/mp4" : mime;
+}
+
 export async function transcribirAudio(data: Buffer, mime: string): Promise<string> {
+  const base = (mime.split(";")[0] || "audio/webm").toLowerCase();
+  try {
+    return await transcribirCon(data, base);
+  } catch (err) {
+    // Si Gemini no aceptó el formato como audio, se prueba como video (mismo archivo).
+    const alt = comoVideo(base);
+    if (alt === base) throw err;
+    return transcribirCon(data, alt);
+  }
+}
+
+async function transcribirCon(data: Buffer, mime: string): Promise<string> {
   const json = await call(TEXT_MODEL(), {
     contents: [
       {
         role: "user",
         parts: [
           { text: "Transcribí este mensaje de voz en español (Argentina) tal cual lo dice, sin agregar nada. Si no se entiende, devolvé vacío." },
-          { inline_data: { mime_type: mime.split(";")[0] || "audio/webm", data: data.toString("base64") } },
+          { inline_data: { mime_type: mime, data: data.toString("base64") } },
         ],
       },
     ],

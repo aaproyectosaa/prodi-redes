@@ -31,7 +31,7 @@ export function BarraLlamada() {
               <p className="truncate text-sm font-semibold">{ll.chatNombre}</p>
               <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
                 {ll.grabando && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-destructive" />}
-                {ll.grabando ? "Grabando para la minuta · al salir queda en el chat" : "Se graba para la minuta del chat"}
+                {ll.grabando ? "Se transcribe para la minuta · al cortar queda en el chat" : "Se transcribe para la minuta del chat"}
               </p>
             </div>
             <button

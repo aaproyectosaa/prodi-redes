@@ -112,7 +112,7 @@ export async function generarJSON<T>(prompt: string, schema: unknown, temperatur
 
 /**
  * Respuesta estructurada con un modelo barato, para tareas chicas y frecuentes (ej. detectar tareas en el chat de
- * Software). Con GEMINI_API_KEY usa Gemini (gemini-2.5-flash); si no, Claude con ANTHROPIC_MODEL_BARATO
+ * Software). Con GEMINI_API_KEY usa Gemini (gemini-3.8-flash); si no, Claude con ANTHROPIC_MODEL_BARATO
  * (por defecto claude-haiku-4-5). No cambia generarJSON.
  */
 export async function generarJSONBarato<T>(prompt: string, schema: unknown): Promise<T> {
