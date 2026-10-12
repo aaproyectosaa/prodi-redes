@@ -220,6 +220,7 @@ export async function entrarAlChatDeVoz(chatId: string, chatNombre: string) {
   }
   let mic: MediaStream;
   try {
+    sesionDeLlamada(true);
     mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
   } catch {
     throw new Error("Permití el micrófono para entrar al chat de voz");
@@ -238,6 +239,7 @@ export async function entrarAlChatDeVoz(chatId: string, chatNombre: string) {
     avisar();
   });
   avisar();
+  controlesDelSistema(a);
   try {
     const r = await avisarVoz(chatId, "entrar");
     if (!(r.adentro ?? []).length) empezarGrabacion(a);
@@ -272,6 +274,8 @@ export async function salirDelChatDeVoz() {
     p.audio.srcObject = null;
   }
   const grabado = a.grabacion ? await terminarGrabacion(a.grabacion) : null;
+  sesionDeLlamada(false);
+  controlesDelSistema(null);
   a.mic.getTracks().forEach((t) => t.stop());
   void a.ctx?.close().catch(() => undefined);
   avisar();
@@ -360,6 +364,51 @@ if (typeof document !== "undefined") {
       })
       .catch(() => toast.error("Se cortó el micrófono. Salí y volvé a entrar al chat de voz."));
   });
+}
+
+// ---- iPhone: que iOS la trate como una llamada (Safari 17+) y que aparezca en los controles de audio ----
+
+type ConAudioSession = Navigator & { audioSession?: { type: string } };
+
+/** "play-and-record": iOS la maneja como llamada (micrófono + parlante) y no la mezcla con otros audios. */
+function sesionDeLlamada(si: boolean) {
+  try {
+    const s = (navigator as ConAudioSession).audioSession;
+    if (s) s.type = si ? "play-and-record" : "auto";
+  } catch {
+    /* navegador sin audioSession */
+  }
+}
+
+/** La llamada en los controles del sistema (pantalla bloqueada / centro de control): título, silenciar y colgar. */
+function controlesDelSistema(a: NonNullable<typeof actual> | null) {
+  const ms = typeof navigator !== "undefined" ? navigator.mediaSession : undefined;
+  if (!ms) return;
+  try {
+    if (!a) {
+      ms.metadata = null;
+      ms.playbackState = "none";
+      for (const accion of ["hangup", "togglemicrophone", "pause", "stop"]) ms.setActionHandler(accion as MediaSessionAction, null);
+      return;
+    }
+    ms.metadata = new MediaMetadata({ title: `Chat de voz · ${a.chatNombre}`, artist: "Prodi" });
+    ms.playbackState = "playing";
+    const colgar = () => void salirDelChatDeVoz();
+    for (const [accion, fn] of [
+      ["hangup", colgar],
+      ["stop", colgar],
+      ["togglemicrophone", () => silenciar()],
+      ["pause", () => silenciar(true)],
+    ] as const) {
+      try {
+        ms.setActionHandler(accion as MediaSessionAction, fn);
+      } catch {
+        /* acción no soportada en este navegador */
+      }
+    }
+  } catch {
+    /* sin controles del sistema */
+  }
 }
 
 export function silenciar(si?: boolean) {
