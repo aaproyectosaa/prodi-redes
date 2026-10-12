@@ -44,7 +44,7 @@ import { enviarAviso } from "../_lib/notify";
 import { filmaElCliente, videoDesdePedido } from "../_lib/pedidos";
 import { fechaAR, sumarDias } from "../_lib/fecha";
 import { atenderMencion } from "../_lib/chat-asistente";
-import { avisarMensaje, chatDeMiembro, publicarEnChat } from "../_lib/chat-server";
+import { avisarMensaje, chatDeMiembro, PRODI_ID, publicarEnChat } from "../_lib/chat-server";
 import { asistenteDueno } from "../_lib/dueno";
 import { linksDeMensaje } from "../_lib/chat-links";
 import { crearTarea } from "../_lib/tareas";
@@ -492,6 +492,73 @@ ${r.notas ? `Notas tomadas durante la reunión:\n${r.notas}` : ""}`;
   return { ok: true };
 }
 
+
+// ---------------------------------------------------------------------------
+// Minuta del chat de voz: quien abrió la llamada la graba; al salir sube el audio a Drive (carpeta del chat) y
+// acá la IA arma la minuta, que Prodi publica en el mismo chat.
+// ---------------------------------------------------------------------------
+
+const SUBIDA_OK = /^[a-f0-9]{32}$/;
+
+async function minutaLlamada(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "productor", "editor", "pauta", "diseno", "administracion", "programador", "cliente"]);
+  const b = body<{ chat_id?: string; subida?: string; minutos?: number; participantes?: unknown }>(req);
+  const chat = await chatDeMiembro(b.chat_id, caller.uid);
+  const chatId = String(b.chat_id);
+  const subida = String(b.subida ?? "");
+  if (!SUBIDA_OK.test(subida)) throw new HttpError(400, "Grabación inválida");
+  await controlarTopeIA(caller, "minuta");
+
+  // La grabación: la que subió esta persona para este chat (marcada por el servidor al abrir la subida).
+  const { accessToken } = await getAppDriveAccessToken();
+  const q = `appProperties has { key='prodi_subida' and value='${subida}' } and trashed = false`;
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,mimeType,size,appProperties)&pageSize=1`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!r.ok) throw new HttpError(502, `Drive respondió ${r.status}`);
+  const g = ((await r.json()) as { files?: { id: string; mimeType: string; size?: string; appProperties?: Record<string, string> }[] }).files?.[0];
+  if (!g) throw new HttpError(404, "La grabación no terminó de subir");
+  if (g.appProperties?.prodi_chat !== chatId || g.appProperties?.prodi_by !== caller.uid) throw new HttpError(403, "Esa grabación no es de este chat");
+  if (Number(g.size ?? 0) > 200 * 1024 * 1024) throw new HttpError(413, "La llamada es muy larga para armar la minuta");
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(g.id)}?alt=media`, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) throw new HttpError(502, `No se pudo leer la grabación (${res.status})`);
+  const audio = { data: Buffer.from(await res.arrayBuffer()), mime: g.mimeType || "audio/webm" };
+
+  const nombres = (chat.nombres ?? {}) as Record<string, string>;
+  const gente = (Array.isArray(b.participantes) ? b.participantes : [])
+    .filter((x): x is string => typeof x === "string")
+    .slice(0, 20)
+    .map((x) => x.slice(0, 60));
+  const quienes = gente.length ? gente.join(", ") : chat.miembros.filter((u) => u !== PRODI_ID).map((u) => nombres[u] ?? "").filter(Boolean).join(", ");
+  const minutos = Math.max(1, Math.round(Number(b.minutos) || 0));
+
+  const prompt = `Sos el asistente de Prodi (agencia argentina de videos y redes, y equipo de programación).
+Armá la minuta de esta llamada de voz del chat «${String(chat.nombre ?? "chat")}» en español rioplatense, clara y concreta.
+- resumen: 2 a 4 oraciones con lo más importante.
+- temas: los temas tratados, cortos.
+- acuerdos: decisiones tomadas (si no hubo, lista vacía).
+- tareas: cosas concretas que alguien tiene que hacer; responsable con el nombre si se dice; fecha si se dice (texto libre).
+No inventes nada que no se haya dicho. Si casi no se habló, decilo en el resumen.
+Participantes: ${quienes || "sin datos"}. Duración: unos ${minutos} minutos.`;
+  const m = await generarMinutaIA(prompt, audio);
+
+  const lista = (titulo: string, items: string[]) => (items.length ? `\n\n**${titulo}**\n${items.map((x) => `• ${x}`).join("\n")}` : "");
+  const texto =
+    `📝 **Minuta de la llamada** · ${minutos} min${quienes ? ` · ${quienes}` : ""}\n\n${m.resumen}` +
+    lista("Temas", m.temas) +
+    lista("Acuerdos", m.acuerdos) +
+    lista(
+      "Tareas",
+      m.tareas.map((x) => `${x.tarea}${x.responsable ? ` (${x.responsable})` : ""}${x.fecha ? ` · ${x.fecha}` : ""}`)
+    );
+  const { id, nuevo } = await publicarEnChat(
+    chatId,
+    { texto: texto.slice(0, 4000), by: PRODI_ID, by_nombre: "Prodi", at: new Date().toISOString(), tipo: "bot", link: null, reunion_id: null },
+    `minuta_${subida}`
+  );
+  if (nuevo) await avisarMensaje(chatId, chat, PRODI_ID, "Prodi", "📝 Minuta de la llamada", appUrl(req)).catch(() => undefined);
+  return { ok: true, id };
+}
 
 async function guion(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "productor"]);
@@ -1114,6 +1181,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "pieza-editar") res.status(200).json(await piezaEditar(req).catch((e) => liberarTurnoPieza(req, e)));
     else if (accion === "pieza-compartir") res.status(200).json(await piezaCompartir(req));
     else if (accion === "minuta") res.status(200).json(await minuta(req));
+    else if (accion === "minuta-llamada") res.status(200).json(await minutaLlamada(req));
     else if (accion === "guion") res.status(200).json(await guion(req));
     else if (accion === "preparar") res.status(200).json(await preparar(req));
     else if (accion === "marca-subir") res.status(200).json(await marcaSubir(req));

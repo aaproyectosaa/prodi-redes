@@ -19,7 +19,7 @@ import { atenderMencion } from "../chat-asistente";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
-const ROLES = ["admin", "productor", "editor", "pauta", "diseno", "administracion", "cliente"];
+const ROLES = ["admin", "productor", "editor", "pauta", "diseno", "administracion", "programador", "cliente"];
 
 /** Tope por archivo (la subida va directo a Drive, no pasa por Vercel). */
 export const CHAT_MAX_MB = 200;

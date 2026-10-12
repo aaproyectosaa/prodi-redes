@@ -29,7 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   }
   res.setHeader("Cache-Control", "no-store");
   try {
-    const caller = await requireCaller(req, ["admin", "productor", "editor", "pauta", "diseno", "administracion", "cliente"]);
+    const caller = await requireCaller(req, ["admin", "productor", "editor", "pauta", "diseno", "administracion", "programador", "cliente"]);
     const { fileId, descarga } = body<{ fileId?: string; descarga?: boolean }>(req);
     if (!fileIdValido(fileId)) throw new HttpError(400, "fileId required");
     if (!(await puedeVerArchivo(caller, fileId))) throw new HttpError(403, "No tenés acceso a este archivo");

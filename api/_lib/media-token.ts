@@ -70,8 +70,9 @@ export async function puedeVerArchivo(caller: Caller, fileId: string): Promise<b
   if (caller.roles.some((r) => GLOBALES.includes(r))) return true;
   // Contacto (solo chat): únicamente los archivos mandados en sus chats.
   if (caller.role === "contacto") return enChatDe(caller.uid, fileId);
-  if (!caller.roles.some((r) => ASIGNABLES.includes(r))) return false;
+  // Lo que se mandó en sus chats lo ve cualquiera de ese chat (también Programación).
   if (await enChatDe(caller.uid, fileId)) return true;
+  if (!caller.roles.some((r) => ASIGNABLES.includes(r))) return false;
   const ref = [{ drive_file_id: fileId }];
   const r = await getPool().query(
     `select coleccion, id, data->>'proyecto_id' as pid, data->'participantes' as participantes

@@ -5,6 +5,9 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { avisarVoz, enviarSenal, leerSenales, suscribirVoz, type EnVoz, type Senal } from "@/lib/db";
 import { assertEditable } from "@/lib/redes/vistaComo";
+import { callApi } from "@/lib/redes/api";
+import { subirASesion } from "@/utils/drive/driveApi";
+import { toast } from "sonner";
 
 const LATIDO_MS = 30_000;
 
@@ -40,6 +43,8 @@ export interface Llamada {
   muteado: boolean;
   yoHablando: boolean;
   personas: { uid: string; nombre: string; estado: EstadoPar; hablando: boolean }[];
+  /** Esta persona graba la llamada para la minuta (la que la abrió). */
+  grabando: boolean;
 }
 
 // ---- Estado de la llamada (uno solo a la vez) ----
@@ -55,6 +60,8 @@ let actual: {
   ctx: AudioContext | null;
   medirMio?: () => void;
   finPresencia?: () => void;
+  /** Grabación para la minuta (solo quien abrió la llamada): mezcla de su micrófono y los de los demás. */
+  grabacion?: { rec: MediaRecorder; partes: Blob[]; mezcla: MediaStreamAudioDestinationNode; desde: number; nombres: Set<string>; mime: string };
 } | null = null;
 let foto: Llamada | null = null;
 const oyentes = new Set<() => void>();
@@ -67,6 +74,7 @@ function avisar() {
         muteado: actual.muteado,
         yoHablando: actual.yoHablando,
         personas: [...actual.pares.values()].map((p) => ({ uid: p.uid, nombre: p.nombre, estado: p.estado, hablando: p.hablando })),
+        grabando: !!actual.grabacion,
       }
     : null;
   oyentes.forEach((f) => f());
@@ -123,6 +131,14 @@ function crearPar(uid: string, nombre: string): Par {
     const stream = e.streams[0] ?? new MediaStream([e.track]);
     audio.srcObject = stream;
     void audio.play().catch(() => undefined);
+    if (a.grabacion && a.ctx) {
+      try {
+        a.ctx.createMediaStreamSource(stream).connect(a.grabacion.mezcla);
+      } catch {
+        /* sin mezcla para esta persona */
+      }
+    }
+    a.grabacion?.nombres.add(nombre);
     par.medir?.();
     par.medir = medidor(a.ctx, stream, (h) => {
       par.hablando = h;
@@ -224,6 +240,7 @@ export async function entrarAlChatDeVoz(chatId: string, chatNombre: string) {
   avisar();
   try {
     const r = await avisarVoz(chatId, "entrar");
+    if (!(r.adentro ?? []).length) empezarGrabacion(a);
     a.latido = window.setInterval(() => void avisarVoz(chatId, "latido").catch(() => undefined), LATIDO_MS);
     sondearSenales(Date.now());
     // Si alguien dejó de figurar (cerró Prodi sin colgar), se corta con esa persona.
@@ -254,10 +271,95 @@ export async function salirDelChatDeVoz() {
     p.pc.close();
     p.audio.srcObject = null;
   }
+  const grabado = a.grabacion ? await terminarGrabacion(a.grabacion) : null;
   a.mic.getTracks().forEach((t) => t.stop());
   void a.ctx?.close().catch(() => undefined);
   avisar();
   await avisarVoz(a.chatId, "salir").catch(() => undefined);
+  if (grabado) void armarMinuta(a.chatId, grabado);
+}
+
+// ---- Minuta: graba quien abrió la llamada; al salir sube el audio a Drive y Prodi deja la minuta en el chat ----
+
+const MINIMO_MINUTA_MS = 30_000;
+
+function tipoGrabacion(): string {
+  const opciones = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/webm", "audio/mp4"];
+  return opciones.find((m) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported?.(m)) ?? "";
+}
+
+function empezarGrabacion(a: NonNullable<typeof actual>) {
+  if (!a.ctx || typeof MediaRecorder === "undefined") return;
+  try {
+    const mezcla = a.ctx.createMediaStreamDestination();
+    a.ctx.createMediaStreamSource(a.mic).connect(mezcla);
+    const mime = tipoGrabacion();
+    const rec = new MediaRecorder(mezcla.stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: 32_000 });
+    const partes: Blob[] = [];
+    rec.ondataavailable = (e) => e.data.size && partes.push(e.data);
+    rec.start(10_000);
+    a.grabacion = { rec, partes, mezcla, desde: Date.now(), nombres: new Set(), mime: rec.mimeType || mime || "audio/webm" };
+    avisar();
+  } catch {
+    a.grabacion = undefined;
+  }
+}
+
+function terminarGrabacion(g: NonNullable<NonNullable<typeof actual>["grabacion"]>): Promise<{ blob: Blob; ms: number; nombres: string[]; mime: string } | null> {
+  const ms = Date.now() - g.desde;
+  return new Promise((ok) => {
+    const fin = () => ok(ms >= MINIMO_MINUTA_MS && g.partes.length ? { blob: new Blob(g.partes, { type: g.mime }), ms, nombres: [...g.nombres], mime: g.mime } : null);
+    if (g.rec.state === "inactive") return fin();
+    g.rec.onstop = fin;
+    try {
+      g.rec.stop();
+    } catch {
+      fin();
+    }
+  });
+}
+
+async function armarMinuta(chatId: string, g: { blob: Blob; ms: number; nombres: string[]; mime: string }) {
+  const id = toast.loading("Armando la minuta de la llamada…");
+  try {
+    const ext = g.mime.includes("mp4") ? "m4a" : g.mime.includes("ogg") ? "ogg" : "webm";
+    const tipo = g.mime.split(";")[0];
+    const nombre = `Llamada ${new Date().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" }).replace(/[/:]/g, "-")}.${ext}`;
+    const { subida, url } = await callApi<{ subida: string; url: string }>("/api/drive/chat-subida", { chat_id: chatId, nombre, mime: tipo, size: g.blob.size });
+    try {
+      await subirASesion({ sessionUri: url, file: new File([g.blob], nombre, { type: tipo }), mime: tipo });
+    } catch {
+      /* a veces el navegador no deja leer la última respuesta aunque subió: el servidor lo confirma */
+    }
+    await callApi("/api/ia/minuta-llamada", { chat_id: chatId, subida, minutos: Math.round(g.ms / 60_000), participantes: g.nombres });
+    toast.success("La minuta quedó en el chat", { id });
+  } catch (err) {
+    toast.error(err instanceof Error ? `No se pudo armar la minuta: ${err.message}` : "No se pudo armar la minuta", { id });
+  }
+}
+
+// ---- Al volver a la app (iPhone pausa el micrófono en segundo plano): se recupera micrófono y audio ----
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    const a = actual;
+    if (!a || document.visibilityState !== "visible") return;
+    void a.ctx?.resume().catch(() => undefined);
+    for (const p of a.pares.values()) void p.audio.play().catch(() => undefined);
+    const vivo = a.mic.getAudioTracks().some((t) => t.readyState === "live");
+    if (vivo) return;
+    void navigator.mediaDevices
+      .getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
+      .then((nuevo) => {
+        if (actual !== a) return nuevo.getTracks().forEach((t) => t.stop());
+        const pista = nuevo.getAudioTracks()[0];
+        if (!pista) return;
+        pista.enabled = !a.muteado;
+        for (const p of a.pares.values()) for (const s of p.pc.getSenders()) if (s.track?.kind === "audio" || !s.track) void s.replaceTrack(pista);
+        a.mic = nuevo;
+        if (a.grabacion && a.ctx) a.ctx.createMediaStreamSource(nuevo).connect(a.grabacion.mezcla);
+      })
+      .catch(() => toast.error("Se cortó el micrófono. Salí y volvé a entrar al chat de voz."));
+  });
 }
 
 export function silenciar(si?: boolean) {
