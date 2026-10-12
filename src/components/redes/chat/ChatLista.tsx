@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type ReactNode, type Ref } from "react";
-import { Archive, ArchiveRestore, ArrowLeft, ListTodo, MoreHorizontal, Pin, PinOff, Plus, Search, Tag, Trash2, UsersRound } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowLeft, Headphones, ListTodo, MoreHorizontal, Pin, PinOff, Plus, Search, Tag, Trash2, UsersRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,7 @@ import {
 } from "@/lib/redes/chatPrefs";
 import { cn } from "@/lib/utils";
 import { textoEscribiendo, useEscriben } from "@/lib/redes/escribiendo";
+import { useChatVoz } from "@/lib/redes/chatVoz";
 import { fechaAR, formatearFecha, hoyAR } from "@/lib/fecha";
 import type { Chat as ChatT } from "@/lib/redes/types";
 
@@ -166,6 +167,7 @@ export function ChatLista({
   const uid = user?.uid;
   // "escribiendo…" en la fila del chat, como WhatsApp.
   const escriben = useEscriben();
+  const { enVoz } = useChatVoz();
   const prefs = useChatPrefs(uid);
   const [q, setQ] = useState("");
   const [filtro, setFiltro] = useState<Filtro>("todos");
@@ -364,6 +366,9 @@ export function ChatLista({
                       <span className="truncate">{titulo(c)}</span>
                     </p>
                     <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground md:group-hover/fila:invisible">
+                      {enVoz.some((v) => v.chat_id === c.id) && (
+                        <Headphones className="h-3.5 w-3.5 animate-pulse text-primary" aria-label="Chat de voz en curso" />
+                      )}
                       {fijado && <Pin className="h-3 w-3 rotate-45 text-primary" aria-label="Fijado" />}
                       {c.ultimo && horaCorta(c.ultimo.at)}
                     </span>

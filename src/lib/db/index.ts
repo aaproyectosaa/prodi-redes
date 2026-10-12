@@ -378,13 +378,14 @@ async function sondear() {
     return;
   }
   try {
-    const r = await api<{ rev: number; colecciones: string[]; escribiendo?: Escribe[] }>("cambios", {
+    const r = await api<{ rev: number; colecciones: string[]; escribiendo?: Escribe[]; voz?: EnVoz[] }>("cambios", {
       desde: rev,
       ...(interesEscribiendo > 0 ? { escribiendo: true } : {}),
     });
     const primera = rev === null;
     rev = r.rev;
     if (r.escribiendo) ponerEscriben(r.escribiendo);
+    if (r.voz) ponerEnVoz(r.voz);
     if (!primera && r.colecciones.length) refrescarColecciones(r.colecciones);
   } catch {
     /* sin conexión: se reintenta */
@@ -468,6 +469,37 @@ export function suscribirEscribiendo(cb: (l: Escribe[]) => void): () => void {
     interesEscribiendo--;
     if (!interesEscribiendo) escriben = [];
   };
+}
+
+// Chat de voz de los grupos: quién está adentro (llega junto con "escribiendo…").
+export type EnVoz = { chat_id: string; uid: string; nombre: string };
+let enVoz: EnVoz[] = [];
+const oyentesVoz = new Set<(l: EnVoz[]) => void>();
+function ponerEnVoz(l: EnVoz[]) {
+  if (JSON.stringify(l) === JSON.stringify(enVoz)) return;
+  enVoz = l;
+  oyentesVoz.forEach((cb) => cb(l));
+}
+/** Para las pantallas de chat: quién está en el chat de voz de mis chats. */
+export function suscribirVoz(cb: (l: EnVoz[]) => void): () => void {
+  const fin = suscribirEscribiendo(() => undefined);
+  oyentesVoz.add(cb);
+  cb(enVoz);
+  return () => {
+    oyentesVoz.delete(cb);
+    fin();
+  };
+}
+/** Entrar / seguir / salir del chat de voz de un chat. Al entrar devuelve el nombre de la sala. */
+export async function avisarVoz(chatId: string, accion: "entrar" | "latido" | "salir"): Promise<{ sala?: string }> {
+  const r = await api<{ sala?: string }>("voz", { chatId, accion });
+  // Que se vea enseguida (sin esperar a la próxima pregunta).
+  if (subs.size && !pausada) {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    programar(200);
+  }
+  return r;
 }
 
 /** Avisa que estoy escribiendo o grabando en un chat (null: dejé de hacerlo). */

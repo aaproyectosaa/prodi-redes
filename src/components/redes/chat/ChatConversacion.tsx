@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { collection, limit, onSnapshot, orderBy, query } from "@/lib/db";
-import { ArrowLeft, Camera, Check, CheckCheck, FileText, Image as ImageIcon, Info, Loader2, Paperclip, Reply, Send, Sparkles, Upload, Video, X } from "lucide-react";
+import { ArrowLeft, Camera, Check, CheckCheck, FileText, Headphones, Image as ImageIcon, Info, Loader2, Paperclip, Reply, Send, Sparkles, Upload, Video, X } from "lucide-react";
 import { toast } from "sonner";
 import { db } from "@/integrations/firebase/client";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import { TextoIA } from "@/components/redes/TextoIA";
 import { TarjetaReferencia } from "./TarjetaReferencia";
 import { AudioMensaje, BarraGrabando, BotonMic, useGrabadorVoz } from "@/components/redes/chat/Voz";
 import { textoEscribiendo, useAvisarEscribiendo, useEscriben } from "@/lib/redes/escribiendo";
+import { entrarAlChatDeVoz, salirDelChatDeVoz, useChatVoz } from "@/lib/redes/chatVoz";
 import { ArchivoMensaje, SubidaBurbuja } from "@/components/redes/chat/Archivo";
 import { ChatIcon } from "@/components/redes/chat/ChatIcon";
 import { EtiquetaContacto, InfoChat } from "@/components/redes/chat/Grupos";
@@ -494,6 +495,16 @@ export function ChatConversacion({
     }
   };
 
+  // Chat de voz (grupos, como WhatsApp): sala de audio fija del chat; acá se ve quién está y se entra/sale.
+  const conVoz = chat.tipo !== "prodi" && chat.tipo !== "directo";
+  const { enVoz, miChat: miChatVoz } = useChatVoz();
+  const enEsteVoz = enVoz.filter((v) => v.chat_id === chat.id);
+  const estoyEnVoz = miChatVoz === chat.id;
+  const otrosEnVoz = enEsteVoz.filter((v) => v.uid !== uid);
+  const entrarVoz = () => {
+    entrarAlChatDeVoz(chat.id, nombre, jitsiBase).catch((err) => toast.error(err instanceof Error ? err.message : "No se pudo abrir el chat de voz"));
+  };
+
   const videollamada = async () => {
     setLlamando(true);
     try {
@@ -612,6 +623,18 @@ export function ChatConversacion({
             )}
           </span>
         </button>
+        {conVoz && !estoyEnVoz && (
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={entrarVoz}
+            className={cn("h-10 w-10 shrink-0 text-primary md:h-8 md:w-8", otrosEnVoz.length && "animate-pulse")}
+            aria-label="Chat de voz"
+            title="Chat de voz: una sala de audio del grupo, entrás y salís cuando quieras"
+          >
+            <Headphones className="h-4 w-4" />
+          </Button>
+        )}
         {/* Los contactos (solo chat) no arman reuniones: las crea el equipo o el cliente. */}
         {role !== "contacto" && chat.tipo !== "prodi" && (role !== "cliente" || chat.proyecto_id) &&
           (compacto ? (
@@ -634,6 +657,38 @@ export function ChatConversacion({
           ))}
         {acciones}
       </header>
+      {conVoz && (estoyEnVoz || otrosEnVoz.length > 0) && (
+        <div className="flex shrink-0 items-center gap-2 border-b bg-primary/[0.07] px-3 py-2 text-sm">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+            <Headphones className="h-3.5 w-3.5" />
+          </span>
+          <span className="min-w-0 flex-1 truncate">
+            <span className="font-medium">{estoyEnVoz ? "Estás en el chat de voz" : "Chat de voz"}</span>
+            {otrosEnVoz.length > 0 && (
+              <span className="text-muted-foreground">
+                {" · "}
+                {estoyEnVoz ? "con " : ""}
+                {otrosEnVoz.map((v) => (v.nombre || "Alguien").split(" ")[0]).join(", ")}
+                {estoyEnVoz ? "" : otrosEnVoz.length === 1 ? " está adentro" : " están adentro"}
+              </span>
+            )}
+          </span>
+          {estoyEnVoz ? (
+            <>
+              <Button size="sm" variant="ghost" className="h-8 shrink-0" onClick={entrarVoz}>
+                Volver
+              </Button>
+              <Button size="sm" variant="destructive" className="h-8 shrink-0" onClick={() => void salirDelChatDeVoz()}>
+                Salir
+              </Button>
+            </>
+          ) : (
+            <Button size="sm" className="h-8 shrink-0" onClick={entrarVoz}>
+              Unirse
+            </Button>
+          )}
+        </div>
+      )}
 
       <div ref={scroller} className={cn("min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-3", compacto ? "py-3" : "py-4 md:px-6")}>
         {cargando ? (

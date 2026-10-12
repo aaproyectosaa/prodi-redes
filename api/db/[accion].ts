@@ -5,9 +5,11 @@
 // POST /api/db/cambios   { desde, escribiendo? }  → qué colecciones cambiaron desde la última vez (para refrescar en vivo)
 //                                                  y, con el chat abierto, quién está escribiendo
 // POST /api/db/escribiendo { chatId, estado: "escribiendo" | "grabando" | null }
+// POST /api/db/voz         { chatId, accion: "entrar" | "latido" | "salir" }  (chat de voz de los grupos)
 //
 // Cada documento pasa por las reglas de acceso de api/_lib/reglas.ts.
 
+import { createHmac } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { aplicarEscritura, ejecutarConsulta, enTransaccion, getPool, leerDoc, partirRuta, type Consulta, type OpEscritura } from "../_lib/db";
 import { claveProhibida } from "../_lib/docs";
@@ -158,6 +160,7 @@ async function cambios(req: VercelRequest) {
   const clave = desde == null || !Number.isFinite(Number(desde)) ? "inicio" : String(Number(desde));
   // Con el chat abierto, también quién está escribiendo (es de cada persona: no va en la respuesta compartida).
   const escriben = conEscribiendo ? quienesEscriben(quien.uid).catch(() => []) : null;
+  const enVoz = conEscribiendo ? quienesEnVoz(quien.uid).catch(() => []) : null;
   const c = respuestas.get(clave);
   let r: Promise<{ rev: number; colecciones: string[] }>;
   if (c && c.hasta > Date.now()) r = c.r;
@@ -167,7 +170,7 @@ async function cambios(req: VercelRequest) {
     respuestas.set(clave, { r, hasta: Date.now() + CAMBIOS_TTL });
     r.catch(() => respuestas.delete(clave));
   }
-  return escriben ? { ...(await r), escribiendo: await escriben } : r;
+  return escriben ? { ...(await r), escribiendo: await escriben, voz: await enVoz } : r;
 }
 
 async function calcularCambios(desde: number | null) {
@@ -242,6 +245,71 @@ async function escribiendo(req: VercelRequest) {
   return { ok: true };
 }
 
+// ---------------------------------------------------------------------------
+// Chat de voz de los grupos (como WhatsApp): una sala de audio fija por chat (Jitsi, en otra pestaña) y quién
+// está adentro. Cada uno avisa cada 30 s que sigue; si cierra Prodi, a los 90 s deja de figurar.
+// ---------------------------------------------------------------------------
+
+const VIGENCIA_VOZ_S = 90;
+let tablaVoz: Promise<unknown> | null = null;
+function asegurarTablaVoz() {
+  tablaVoz ??= getPool()
+    .query(
+      "create table if not exists chat_voz (chat_id text not null, uid text not null, nombre text not null default '', desde timestamptz not null default now(), hasta timestamptz not null, primary key (chat_id, uid))"
+    )
+    .catch((e) => {
+      tablaVoz = null;
+      throw e;
+    });
+  return tablaVoz;
+}
+
+/** Nombre de la sala: fijo para cada chat pero imposible de adivinar sin la clave del servidor. */
+function salaDeVoz(chatId: string): string {
+  const clave = process.env.TOKEN_ENCRYPTION_KEY || process.env.CRON_SECRET;
+  if (!clave) throw new HttpError(500, "Falta configurar la clave del servidor para el chat de voz");
+  return `Prodi-voz-${createHmac("sha256", clave).update(`voz:${chatId}`).digest("hex").slice(0, 20)}`;
+}
+
+async function voz(req: VercelRequest) {
+  const caller = await requireCaller(req);
+  const { chatId, accion } = body<{ chatId?: string; accion?: "entrar" | "latido" | "salir" }>(req);
+  if (typeof chatId !== "string" || !ID_OK.test(chatId)) throw new HttpError(400, "Chat inválido");
+  await asegurarTablaVoz();
+  const pool = getPool();
+  if (accion === "salir") {
+    await pool.query("delete from chat_voz where chat_id = $1 and uid = $2", [chatId, caller.uid]);
+    return { ok: true };
+  }
+  const r = await pool.query("select data->>'tipo' as tipo from documentos where coleccion = 'chats' and id = $1 and data->'miembros' @> jsonb_build_array($2::text)", [
+    chatId,
+    caller.uid,
+  ]);
+  if (!r.rowCount) throw new HttpError(403, "No sos parte de este chat");
+  if (r.rows[0].tipo === "prodi") throw new HttpError(400, "El chat con Prodi no tiene chat de voz");
+  await pool.query(
+    `insert into chat_voz (chat_id, uid, nombre, hasta) values ($1, $2, $3, now() + make_interval(secs => $4))
+     on conflict (chat_id, uid) do update set nombre = excluded.nombre, hasta = excluded.hasta,
+       desde = case when chat_voz.hasta < now() then now() else chat_voz.desde end`,
+    [chatId, caller.uid, caller.nombre ?? "", VIGENCIA_VOZ_S]
+  );
+  return accion === "entrar" ? { ok: true, sala: salaDeVoz(chatId) } : { ok: true };
+}
+
+/** Quién está en el chat de voz de los chats de esta persona (incluida ella). */
+async function quienesEnVoz(uid: string) {
+  await asegurarTablaVoz();
+  const r = await getPool().query(
+    `select v.chat_id, v.uid, v.nombre from chat_voz v
+       join documentos d on d.coleccion = 'chats' and d.id = v.chat_id
+      where v.hasta > now() and d.data->'miembros' @> jsonb_build_array($1::text)
+      order by v.desde
+      limit 200`,
+    [uid]
+  );
+  return r.rows as { chat_id: string; uid: string; nombre: string }[];
+}
+
 /** Quién está escribiendo ahora en los chats de esta persona (sin contarla a ella). */
 async function quienesEscriben(uid: string) {
   await asegurarTablaEscribiendo();
@@ -266,6 +334,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "escribir") res.status(200).json(await escribir(req));
     else if (accion === "cambios") res.status(200).json(await cambios(req));
     else if (accion === "escribiendo") res.status(200).json(await escribiendo(req));
+    else if (accion === "voz") res.status(200).json(await voz(req));
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {
     const status = (err as { code?: number }).code;
