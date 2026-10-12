@@ -1,3 +1,16 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
 export function ConfirmDialog({
   open,
   title,
@@ -17,32 +30,27 @@ export function ConfirmDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  if (!open) return null;
   return (
-    <div className="modal-backdrop" role="presentation" onClick={() => !busy && onCancel()}>
-      <div
-        className="modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="confirm-title"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 id="confirm-title">{title}</h3>
-        {body ? <p className="meta">{body}</p> : null}
-        <div className="actions" style={{ justifyContent: "flex-end" }}>
-          <button type="button" className="btn line" disabled={busy} onClick={onCancel}>
-            Cancelar
-          </button>
-          <button
-            type="button"
-            className={`btn${danger ? " danger" : ""}`}
+    <AlertDialog open={open} onOpenChange={(v) => !v && !busy && onCancel()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          {body ? <AlertDialogDescription>{body}</AlertDialogDescription> : null}
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={busy}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
             disabled={busy}
-            onClick={onConfirm}
+            className={cn(danger && buttonVariants({ variant: "destructive" }))}
+            onClick={(e) => {
+              e.preventDefault();
+              onConfirm();
+            }}
           >
             {busy ? "Guardando…" : confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

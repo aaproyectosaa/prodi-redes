@@ -1,23 +1,41 @@
-import Link from "@/software/compat";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowRightLeft, Coins, Repeat, Unlock } from "lucide-react";
+import Link, { swFetch, useRouter } from "@/software/compat";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import {
+  ArrowRight,
+  BellRing,
+  CalendarCheck,
+  CheckCircle2,
+  CalendarDays,
+  Lock,
+  Repeat,
+  Wallet,
+  Wrench,
+} from "lucide-react";
 import { KpiCard } from "@/software/ui/KpiCard";
+import { PageHeader } from "@/software/ui/PageHeader";
+import { PeriodBar } from "@/software/ui/PeriodBar";
+import { EmptyState } from "@/software/ui/EmptyState";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
+import { mesLabel } from "@/lib/redes/format";
+import { cn } from "@/lib/utils";
 import {
   arDay,
   addDays,
   daysUntilFeeRelease,
   FEE_RELEASE_DAYS,
   feeReleaseOn,
+  formatArDay,
   isFeeReleased,
   money,
-  money2,
   paymentsHref,
   periodBounds,
   subscriptionsHref,
   yearMonth,
   type StatsPeriod,
 } from "@/software/lib/money";
-import { swFetch } from "@/software/compat";
 
 type SeriesPoint = { key: string; count: number; amount: number; fee: number };
 
@@ -97,88 +115,107 @@ type SubData = {
   };
 };
 
-const PERIODS: Array<{ id: StatsPeriod; label: string; tip: string }> = [
-  { id: "today", label: "Hoy", tip: "Solo lo de hoy" },
-  { id: "week", label: "Semana", tip: "Últimos 7 días" },
-  { id: "month", label: "Mes", tip: "Un mes completo (elegís cuál)" },
-  { id: "year", label: "Año", tip: "Desde el 1 de enero hasta hoy" },
-  { id: "all", label: "Todo", tip: "Todo el historial de fees" },
-];
+const sumPending = (items?: Array<{ pending: number }>) =>
+  (items || []).reduce((a, i) => a + Number(i.pending || 0), 0);
 
-function FeeChart({
-  series,
-  kind,
-  onBarClick,
+/** "$ 12,3 mil" para ejes y celdas chicas. */
+function compacto(n: number) {
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(n || 0);
+}
+
+/** Sección con el estilo de tarjeta de Prodi. */
+function Bloque({
+  title,
+  sub,
+  action,
+  children,
+  className,
 }: {
-  series: SeriesPoint[];
-  kind: "day" | "month";
-  onBarClick: (key: string) => void;
+  title: string;
+  sub?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
 }) {
-  const max = Math.max(...series.map((s) => s.fee), 1);
-  if (!series.length) {
-    return <p className="meta">Sin datos de fee en este período.</p>;
-  }
-
-  const w = Math.max(320, series.length * 28);
-  const h = 160;
-  const pad = { t: 12, r: 8, b: 28, l: 8 };
-  const innerW = w - pad.l - pad.r;
-  const innerH = h - pad.t - pad.b;
-  const gap = 4;
-  const barW = Math.max(6, (innerW - gap * (series.length - 1)) / series.length);
-
   return (
-    <div className="chart-scroll">
-      <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} role="img" aria-label="Fee por período">
-        {series.map((s, i) => {
-          const bh = (s.fee / max) * innerH;
-          const x = pad.l + i * (barW + gap);
-          const y = pad.t + innerH - bh;
-          const label =
-            kind === "month"
-              ? s.key.slice(5)
-              : s.key.slice(8);
-          return (
-            <g
-              key={s.key}
-              className="chart-bar"
-              style={{ cursor: s.count ? "pointer" : "default" }}
-              onClick={() => s.count && onBarClick(s.key)}
-            >
-              <title>
-                {kind === "month"
-                  ? `${s.key}: fee ${money(s.fee)}. Tocá para ver los pagos de ese mes.`
-                  : `${s.key}: fee ${money(s.fee)}. Tocá para ver los pagos de ese día.`}
-              </title>
-              <rect
-                x={x}
-                y={y}
-                width={barW}
-                height={Math.max(bh, s.fee ? 2 : 0)}
-                rx={3}
-                  fill={s.fee ? "var(--accent)" : "var(--line)"}
-                  opacity={s.fee ? 0.92 : 0.4}
-              />
-              {(series.length <= 16 || i % Math.ceil(series.length / 10) === 0) && (
-                <text
-                  x={x + barW / 2}
-                  y={h - 8}
-                  textAnchor="middle"
-                  fontSize="9"
-                  fill="var(--muted)"
-                >
-                  {label}
-                </text>
-              )}
-            </g>
-          );
-        })}
-      </svg>
+    <section className={cn("min-w-0 rounded-2xl border bg-card p-4 shadow-sm", className)}>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold">{title}</h2>
+          {sub ? <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p> : null}
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** Número chico con su explicación debajo. */
+function Dato({ value, label, tone }: { value: ReactNode; label: string; tone?: "ok" | "pending" }) {
+  return (
+    <div className="min-w-0 rounded-xl bg-muted/40 p-3">
+      <div
+        className={cn(
+          "text-lg font-bold tabular-nums tracking-tight [overflow-wrap:anywhere]",
+          tone === "ok" && "text-success",
+          tone === "pending" && "text-warning",
+        )}
+      >
+        {value}
+      </div>
+      <div className="mt-0.5 text-xs text-muted-foreground">{label}</div>
+    </div>
+  );
+}
+
+function VerTodo({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Button asChild variant="outline" size="sm" className="h-9 rounded-lg">
+      <Link href={href}>
+        {children}
+        <ArrowRight className="ml-1 h-3.5 w-3.5" />
+      </Link>
+    </Button>
+  );
+}
+
+const chartConfig: ChartConfig = {
+  fee: { label: "Comisión", color: "hsl(var(--primary))" },
+};
+
+function ChartTip({
+  active,
+  payload,
+  kind,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: SeriesPoint }>;
+  kind: "day" | "month";
+}) {
+  const p = payload?.[0]?.payload;
+  if (!active || !p) return null;
+  return (
+    <div className="min-w-[150px] rounded-lg border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md">
+      <p className="mb-1 font-semibold">{kind === "month" ? mesLabel(p.key) : formatArDay(p.key)}</p>
+      <p className="tabular-nums">
+        Comisión: <strong>{money(p.fee)}</strong>
+      </p>
+      <p className="text-muted-foreground">
+        {p.count} {p.count === 1 ? "cobro" : "cobros"}
+      </p>
+      {p.count ? <p className="mt-1 text-muted-foreground">Tocá para ver los pagos</p> : null}
     </div>
   );
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [period, setPeriod] = useState<StatsPeriod>("month");
   const [month, setMonth] = useState(yearMonth());
   const [data, setData] = useState<Stats | null>(null);
@@ -216,22 +253,10 @@ export default function DashboardPage() {
       if (statsRes.ok) setData(await statsRes.json());
       if (liqRes.ok) {
         const liq: Liq = await liqRes.json();
-        const feePend = (liq.feeItems || liq.items || []).reduce(
-          (a, i) => a + Number(i.pending || 0),
-          0,
-        );
-        const maintPend = (liq.maintenanceItems || []).reduce(
-          (a, i) => a + Number(i.pending || 0),
-          0,
-        );
-        const extraPend = (liq.extraItems || []).reduce(
-          (a, i) => a + Number(i.pending || 0),
-          0,
-        );
-        const subPend = (liq.subscriptionItems || []).reduce(
-          (a, i) => a + Number(i.pending || 0),
-          0,
-        );
+        const feePend = sumPending(liq.feeItems || liq.items);
+        const maintPend = sumPending(liq.maintenanceItems);
+        const extraPend = sumPending(liq.extraItems);
+        const subPend = sumPending(liq.subscriptionItems);
         setPendingFee(feePend);
         setPendingMaint(maintPend);
         setPendingExtra(extraPend);
@@ -251,10 +276,7 @@ export default function DashboardPage() {
     load();
   }, [load]);
 
-  const range = useMemo(
-    () => ({ from: data?.from ?? null, to: data?.to ?? null }),
-    [data],
-  );
+  const range = useMemo(() => ({ from: data?.from ?? null, to: data?.to ?? null }), [data]);
 
   const paymentsLink = (extra?: { clientId?: string; day?: string }) => {
     if (extra?.day) {
@@ -277,19 +299,21 @@ export default function DashboardPage() {
     const today = data?.today || arDay();
     const latest = addDays(today, -FEE_RELEASE_DAYS);
     const from = range.from;
-    const to =
-      range.to && range.to < latest ? range.to : latest;
+    const to = range.to && range.to < latest ? range.to : latest;
     if (from && from > to) {
       return paymentsLink();
     }
     return paymentsHref({ from, to, status: "approved" });
   };
 
+  const subsLink = subscriptionsHref({ from: range.from, to: range.to, status: "approved" });
+
   const feeReleased = Number(data?.kpis.fee_released || 0);
   const feeHeld = Number(data?.kpis.fee_held || 0);
   const feeTotal = Number(data?.kpis.fee || 0);
   const subTotal = Number(subs?.totals.approved_amount || 0);
   const incomeTotal = feeTotal + subTotal + totalMaint + totalExtra;
+  const subPendingCount = Number(subs?.totals.pending_count || 0);
 
   const calendar = useMemo(() => {
     if (!data || period !== "month") return [];
@@ -328,16 +352,20 @@ export default function DashboardPage() {
   }, [data, month, period]);
 
   const onBarClick = (key: string) => {
+    const point = data?.series.find((s) => s.key === key);
+    if (!point?.count) return;
     if (data?.seriesKind === "month") {
       const [y, m] = key.split("-").map(Number);
       const last = new Date(y, m, 0).getDate();
-      window.location.href = paymentsHref({
-        from: `${key}-01`,
-        to: `${key}-${String(last).padStart(2, "0")}`,
-        status: "approved",
-      });
+      router.push(
+        paymentsHref({
+          from: `${key}-01`,
+          to: `${key}-${String(last).padStart(2, "0")}`,
+          status: "approved",
+        }),
+      );
     } else {
-      window.location.href = paymentsHref({ from: key, to: key, status: "approved" });
+      router.push(paymentsHref({ from: key, to: key, status: "approved" }));
     }
   };
 
@@ -349,502 +377,520 @@ export default function DashboardPage() {
       clients,
       pendingClients,
       paidClients,
-      pendingTotal: pendingClients.reduce(
-        (a, c) => a + Number(c.monthly_amount || 0),
-        0,
-      ),
-      paidTotal: paidClients.reduce(
-        (a, c) => a + Number(c.paid_amount || c.monthly_amount || 0),
-        0,
-      ),
+      pendingTotal: pendingClients.reduce((a, c) => a + Number(c.monthly_amount || 0), 0),
+      paidTotal: paidClients.reduce((a, c) => a + Number(c.paid_amount || c.monthly_amount || 0), 0),
     };
   }, [maint]);
 
+  const entroText = {
+    today: "Entró hoy",
+    week: "Entró en los últimos 7 días",
+    month: `Entró en ${mesLabel(month)}`,
+    year: `Entró en el año ${arDay().slice(0, 4)}`,
+    all: "Entró en total",
+  }[period];
+  const rangeText =
+    range.from && range.to
+      ? range.from === range.to
+        ? formatArDay(range.from)
+        : `del ${formatArDay(range.from)} al ${formatArDay(range.to)}`
+      : "todo el historial";
+
+  // De dónde vino la plata del período.
+  const fuentes = [
+    {
+      id: "fee",
+      label: "Comisiones",
+      help: `${data?.kpis.approved_count || 0} cobros con la app de Mercado Pago`,
+      value: feeTotal,
+      href: paymentsLink(),
+      bar: "bg-primary",
+    },
+    {
+      id: "sub",
+      label: "Planes mensuales",
+      help: `${Number(subs?.totals.approved_count || 0)} cobros de planes`,
+      value: subTotal,
+      href: subsLink,
+      bar: "bg-primary/45",
+    },
+    {
+      id: "maint",
+      label: "Abonos de mantenimiento",
+      help: "Abonos cobrados en el período",
+      value: totalMaint,
+      href: "/mantenimientos",
+      bar: "bg-success",
+    },
+    {
+      id: "extra",
+      label: "Trabajos extra",
+      help: "Cargados en el período",
+      value: totalExtra,
+      href: "/liquidacion",
+      bar: "bg-warning",
+    },
+  ];
+
+  // Cosas que piden que alguien haga algo.
+  const tareas: Array<{
+    id: string;
+    icon: ReactNode;
+    title: string;
+    text: string;
+    cta: string;
+    href: string;
+  }> = [];
+  if (subPendingCount > 0) {
+    tareas.push({
+      id: "planes",
+      icon: <Repeat />,
+      title:
+        subPendingCount === 1
+          ? "Hay 1 alta nueva de plan mensual"
+          : `Hay ${subPendingCount} altas nuevas de planes mensuales`,
+      text: "Decidí si entran a Prodi Software o no.",
+      cta: "Aceptar o rechazar",
+      href: "/suscripciones",
+    });
+  }
+  if (pending > 0) {
+    tareas.push({
+      id: "reparto",
+      icon: <Wallet />,
+      title: `Hay ${money(pending)} para repartir`,
+      text: "Falta pagarle a cada persona del reparto su parte.",
+      cta: "Ir a repartir",
+      href: "/liquidacion",
+    });
+  }
+  if (maintSummary.pendingClients.length > 0) {
+    const n = maintSummary.pendingClients.length;
+    tareas.push({
+      id: "abonos",
+      icon: <Wrench />,
+      title: n === 1 ? "1 abono sin cobrar" : `${n} abonos sin cobrar`,
+      text: `Faltan ${money(maintSummary.pendingTotal)} de mantenimiento de ${mesLabel(maintMonth)}.`,
+      cta: "Ver abonos",
+      href: "/mantenimientos",
+    });
+  }
+
+  const repartoPartes = [
+    { label: "comisiones", v: pendingFee },
+    { label: "planes", v: pendingSub },
+    { label: "abonos", v: pendingMaint },
+    { label: "extra", v: pendingExtra },
+  ].filter((p) => p.v > 0);
+
+  const topFee = Math.max(...(data?.byClient || []).map((c) => c.fee), 1);
+  const series = data?.series || [];
+  const kind = data?.seriesKind || "day";
+  const todayKey = data?.today || arDay();
+
   return (
-    <div>
-      <div className="row" style={{ marginBottom: "0.75rem" }}>
-        <div>
-          <h1 className="page-title">Inicio</h1>
-          <p className="page-sub">
-            {data?.label || "Período"}
-            {range.from ? ` · ${range.from}` : ""}
-            {range.to ? ` → ${range.to}` : ""}. Tocá un número para abrir el detalle.
-          </p>
-        </div>
-      </div>
+    <div className="min-w-0 space-y-6">
+      <PageHeader
+        title="Inicio"
+        sub="Cuánto entró, de dónde vino, cuánto está disponible y cuánto hay para repartir. Tocá cualquier número para ver el detalle."
+        actions={<PeriodBar period={period} month={month} onPeriod={setPeriod} onMonth={setMonth} />}
+      />
 
-      <div className="period-tabs" role="tablist" aria-label="Período">
-        {PERIODS.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            role="tab"
-            aria-selected={period === p.id}
-            className={`period-tab${period === p.id ? " active" : ""}`}
-
-            onClick={() => setPeriod(p.id)}
-          >
-            {p.label}
-          </button>
-        ))}
-        {period === "month" ? (
-          <input
-            type="month"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-            className="period-month"
-            aria-label="Mes"
-
-          />
-        ) : null}
-      </div>
-
-      {loading && !data ? <p className="meta">Cargando…</p> : null}
-
-      <div className="hero-band">
-        <Link href="/liquidacion" className="card hero-total">
-          <div className="l">Total del período</div>
-          <div className="n">{money2(incomeTotal)}</div>
-          <p className="meta" style={{ marginBottom: 0 }}>
-            Fee {money(feeTotal)} · Suscrip. {money2(subTotal)} · Mant. {money(totalMaint)} · Extra {money(totalExtra)}. Sin ventas.
-          </p>
-        </Link>
-        <div className="hero-bits">
-          <KpiCard href={paymentsLink()} icon={<Coins size={16} />} label="Fee" value={money(feeTotal)} hint={feeHeld ? `Retenido ${money(feeHeld)}` : "Nada retenido"} />
-          <KpiCard href={releasedFeeLink()} icon={<Unlock size={16} />} label="Liberado" tone={feeReleased ? "ok" : undefined} value={money(feeReleased)} />
-          <KpiCard href="/liquidacion" icon={<ArrowRightLeft size={16} />} label="A transferir" tone={pending ? "pending" : "ok"} value={money(pending)} />
-          <KpiCard href={subscriptionsHref({ from: range.from, to: range.to, status: "approved" })} icon={<Repeat size={16} />} label="Suscripciones" value={money2(subTotal)} hint={`${data?.kpis.approved_count || 0} pagos con fee`} />
-        </div>
-      </div>
-
-      <div className="split-home">
-      <div className="home-queue">
-      <div className="card" style={{ marginBottom: "1rem" }}>
-        <div className="row card-head" style={{ marginBottom: "0.65rem" }}>
-          <h2
-            style={{ margin: 0, fontSize: "1.05rem" }}
-
-          >
-            Mantenimientos · {maintMonth}
+      {tareas.length ? (
+        <section className="space-y-3">
+          <h2 className="flex items-center gap-2 text-base font-semibold">
+            <BellRing className="h-4 w-4 text-warning" /> Para hacer
           </h2>
-          <Link
-            className="btn sm line"
-            href="/mantenimientos"
-
-          >
-            Ver todos
-          </Link>
-        </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-            gap: "0.65rem",
-            marginBottom: maintSummary.clients.length ? "0.85rem" : 0,
-          }}
-        >
-          <div>
-            <div className="n" style={{ fontSize: "1.15rem", fontWeight: 700 }}>
-              {money(Number(maint?.collected_in_month || 0))}
-            </div>
-            <div className="meta">
-              Ingresado · {Number(maint?.collected_count || 0)} cobros
-            </div>
-          </div>
-          <div>
-            <div
-              className="n"
-              style={{
-                fontSize: "1.15rem",
-                fontWeight: 700,
-                color: maintSummary.pendingTotal ? "var(--pending)" : "var(--ok)",
-              }}
-            >
-              {money(maintSummary.pendingTotal)}
-            </div>
-            <div className="meta">
-              Pendientes · {maintSummary.pendingClients.length}
-            </div>
-          </div>
-          <div>
-            <div className="n" style={{ fontSize: "1.15rem", fontWeight: 700 }}>
-              {money(maintSummary.paidTotal)}
-            </div>
-            <div className="meta">
-              Cubiertos · {maintSummary.paidClients.length}
-            </div>
-          </div>
-          {pendingMaint > 0 ? (
-            <div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {tareas.map((t) => (
               <div
-                className="n"
-                style={{
-                  fontSize: "1.15rem",
-                  fontWeight: 700,
-                  color: "var(--pending)",
-                }}
+                key={t.id}
+                className="flex min-w-0 flex-col gap-3 rounded-2xl border border-warning/40 bg-warning/[0.06] p-4 shadow-sm"
               >
-                {money(pendingMaint)}
+                <div className="flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-warning/15 text-warning [&_svg]:h-4 [&_svg]:w-4">
+                    {t.icon}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold [overflow-wrap:anywhere]">{t.title}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{t.text}</p>
+                  </div>
+                </div>
+                <Button asChild size="sm" className="mt-auto h-10 w-full rounded-lg sm:w-auto sm:self-start">
+                  <Link href={t.href}>
+                    {t.cta}
+                    <ArrowRight className="ml-1 h-4 w-4" />
+                  </Link>
+                </Button>
               </div>
-              <div className="meta">A transferir (mant.)</div>
-            </div>
-          ) : null}
-        </div>
-        {!maintSummary.clients.length ? (
-          <p className="meta" style={{ margin: 0 }}>
-            Todavía no hay clientes de mantenimiento.{" "}
-            <Link
-              href="/mantenimientos"
-              style={{ color: "var(--accent)", fontWeight: 600 }}
-            >
-              Agregar
-            </Link>
-          </p>
-        ) : maintSummary.pendingClients.length ? (
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Pendiente este mes</th>
-                  <th style={{ width: 120 }}>Mensual</th>
-                </tr>
-              </thead>
-              <tbody>
-                {maintSummary.pendingClients.map((c) => (
-                  <tr key={c.id}>
-                    <td>
-                      <Link
-                        href="/mantenimientos"
-                        style={{ color: "var(--accent)", fontWeight: 700 }}
-                      >
-                        {c.name}
-                      </Link>
-                    </td>
-                    <td className="mono" style={{ whiteSpace: "nowrap" }}>
-                      {money(c.monthly_amount)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            ))}
           </div>
-        ) : (
-          <p className="meta" style={{ margin: 0, color: "var(--ok)" }}>
-            Todos cobrados este mes ✓
-          </p>
-        )}
-      </div>
-
-      <div className="card" style={{ marginBottom: "1rem" }}>
-        <div className="row card-head" style={{ marginBottom: "0.65rem" }}>
-          <h2
-            style={{ margin: 0, fontSize: "1.05rem" }}
-
-          >
-            Suscripciones
-          </h2>
-          <Link className="btn sm line" href="/suscripciones">
-            Ver todas
-          </Link>
-        </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-            gap: "0.65rem",
-            marginBottom:
-              subs?.charges?.length || Number(subs?.totals.pending_count || 0)
-                ? "0.85rem"
-                : 0,
-          }}
-        >
-          <div>
-            <div className="n" style={{ fontSize: "1.15rem", fontWeight: 700 }}>
-              {money2(Number(subs?.totals.approved_amount || 0))}
-            </div>
-            <div className="meta">
-              Cobrado · {Number(subs?.totals.approved_count || 0)} en el período
-            </div>
-          </div>
-          <div>
-            <div className="n" style={{ fontSize: "1.15rem", fontWeight: 700 }}>
-              {Number(subs?.totals.active_count || 0)}
-            </div>
-            <div className="meta">Planes en Prodi Software</div>
-          </div>
-          <div>
-            <div className="n" style={{ fontSize: "1.15rem", fontWeight: 700 }}>
-              {money(Number(subs?.totals.monthly_recurring || 0))}
-            </div>
-            <div className="meta">Mensual estimado</div>
-          </div>
-          {Number(subs?.totals.pending_count || 0) > 0 ? (
-            <div>
-              <div
-                className="n"
-                style={{
-                  fontSize: "1.15rem",
-                  fontWeight: 700,
-                  color: "var(--pending)",
-                }}
-              >
-                {Number(subs?.totals.pending_count || 0)}
-              </div>
-              <div className="meta">Por decidir si entran</div>
-            </div>
-          ) : null}
-        </div>
-        {Number(subs?.totals.pending_count || 0) > 0 ? (
-          <p className="meta" style={{ margin: "0 0 0.85rem" }}>
-            Hay altas nuevas.{" "}
-            <Link
-              href="/suscripciones"
-              style={{ color: "var(--accent)", fontWeight: 600 }}
-            >
-              Aceptar o rechazar
-            </Link>{" "}
-            si entran a Prodi Software.
-          </p>
-        ) : null}
-        {!subs?.charges?.length ? (
-          <p className="meta" style={{ margin: 0 }}>
-            Todavía no hay cobros de planes en Prodi Software en este período.
-          </p>
-        ) : (
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Cliente</th>
-                  <th style={{ width: 120 }}>Monto</th>
-                </tr>
-              </thead>
-              <tbody>
-                {subs.charges.map((c) => (
-                  <tr key={c.id}>
-                    <td>
-                      <Link
-                        href={subscriptionsHref({
-                          from: range.from,
-                          to: range.to,
-                          status: "approved",
-                        })}
-                        style={{ color: "var(--accent)", fontWeight: 700 }}
-                      >
-                        {c.client_name || c.collector_name || "Sin cliente"}
-                      </Link>
-                      {c.description ? (
-                        <div className="meta">
-                          {c.description.length > 42
-                            ? `${c.description.slice(0, 42)}…`
-                            : c.description}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="mono" style={{ whiteSpace: "nowrap" }}>
-                      {money(c.amount)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {totalExtra > 0 || pendingExtra > 0 ? (
-        <div className="card" style={{ marginBottom: "1rem" }}>
-          <div className="row card-head" style={{ marginBottom: "0.35rem" }}>
-            <h2
-              style={{ margin: 0, fontSize: "1.05rem" }}
-
-            >
-              Otros cobros · este año
-            </h2>
-            <Link className="btn sm line" href="/liquidacion">
-              Liquidar
-            </Link>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-              gap: "0.65rem",
-            }}
-          >
-            <div>
-              <div className="n" style={{ fontSize: "1.15rem", fontWeight: 700 }}>
-                {money(totalExtra)}
-              </div>
-              <div className="meta">Cargados</div>
-            </div>
-            <div>
-              <div
-                className="n"
-                style={{
-                  fontSize: "1.15rem",
-                  fontWeight: 700,
-                  color: pendingExtra ? "var(--pending)" : "var(--ok)",
-                }}
-              >
-                {money(pendingExtra)}
-              </div>
-              <div className="meta">A transferir</div>
-            </div>
-          </div>
-        </div>
+        </section>
       ) : null}
 
-      </div>
-      <div className="home-main">
-      <div className="card" style={{ marginBottom: "1rem" }}>
-        <div className="row card-head" style={{ marginBottom: "0.5rem" }}>
-          <h2
-            style={{ margin: 0, fontSize: "1.05rem" }}
-
-          >
-            Fee {data?.seriesKind === "month" ? "por mes" : "por día"}
-          </h2>
-          <Link
-            className="btn sm line"
-            href={paymentsLink()}
-
-          >
-            Ver pagos
-          </Link>
-        </div>
-        <FeeChart
-          series={data?.series || []}
-          kind={data?.seriesKind || "day"}
-          onBarClick={onBarClick}
-        />
-      </div>
-
-      <div className="stack-2">
-        {period === "month" ? (
-          <div className="card">
-            <h2
-              style={{ marginTop: 0, fontSize: "1.05rem" }}
-
-            >
-              Calendario
-            </h2>
-            <div className="cal" style={{ marginBottom: "0.4rem" }}>
-              {["L", "M", "X", "J", "V", "S", "D"].map((d) => (
-                <div key={d} className="dow">
-                  {d}
-                </div>
-              ))}
-            </div>
-            <div className="cal">
-              {calendar.map((c) =>
-                c.empty ? (
-                  <div key={c.key} className="day empty" />
-                ) : (
-                  <Link
-                    key={c.key}
-                    href={paymentsLink({ day: c.key })}
-                    className={`day${c.count ? " has" : ""}${
-                      c.count ? (c.released ? " released" : " held") : ""
-                    }${c.count ? " clickable" : ""}`}
-
-                  >
-                    <div className="d">{c.label}</div>
-                    {c.count ? (
-                      <div className="day-fee">{money(c.fee || 0)}</div>
-                    ) : null}
-                  </Link>
-                ),
-              )}
-            </div>
-            <div className="cal-legend">
-              <span>
-                <i className="cal-swatch released" aria-hidden /> Liberado
-              </span>
-              <span>
-                <i className="cal-swatch held" aria-hidden /> Por liberar
-              </span>
-              <span className="meta">MP retiene {FEE_RELEASE_DAYS} días</span>
-            </div>
+      {loading && !data ? (
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Skeleton className="h-56 rounded-2xl lg:col-span-2" />
+          <div className="grid gap-4">
+            <Skeleton className="h-[104px] rounded-2xl" />
+            <Skeleton className="h-[104px] rounded-2xl" />
           </div>
-        ) : (
-          <div className="card">
-            <h2
-              style={{ marginTop: 0, fontSize: "1.05rem" }}
-
-            >
-              Resumen
-            </h2>
-            <p className="meta" style={{ marginTop: 0 }}>
-              Período: <strong>{data?.label}</strong>
-              {range.from ? ` · ${range.from}` : ""}
-              {range.to ? ` → ${range.to}` : ""}
-            </p>
-            <p className="meta">
-              Usá las barras del gráfico o las tarjetas de arriba para abrir Pagos con el
-              mismo filtro.
+        </div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-3">
+          {/* Lo principal: cuánto entró y de dónde */}
+          <section className="min-w-0 rounded-2xl border bg-card p-4 shadow-sm sm:p-5 lg:col-span-2">
+            <p className="text-xs font-medium text-muted-foreground">
+              {entroText} · {rangeText}
             </p>
             <Link
-              className="btn sm"
-              href={paymentsLink()}
-
+              href="/liquidacion"
+              className="mt-1 block text-[length:clamp(1.75rem,7vw,2.5rem)] font-bold tabular-nums tracking-tight [overflow-wrap:anywhere] hover:text-primary"
             >
-              Ir a Pagos filtrados
+              {money(incomeTotal)}
             </Link>
+            <p className="text-xs text-muted-foreground">
+              Lo que gana Prodi Software (no cuenta lo que venden los clientes).
+            </p>
+
+            <div className="mt-4 flex h-2.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
+              {incomeTotal > 0
+                ? fuentes.map((f) =>
+                    f.value > 0 ? (
+                      <div key={f.id} className={f.bar} style={{ width: `${(f.value / incomeTotal) * 100}%` }} />
+                    ) : null,
+                  )
+                : null}
+            </div>
+
+            <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+              {fuentes.map((f) => (
+                <li key={f.id} className="min-w-0">
+                  <Link
+                    href={f.href}
+                    className="flex items-center gap-3 rounded-xl border p-3 transition-colors hover:border-primary/40 hover:bg-muted/40"
+                  >
+                    <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", f.bar)} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium">{f.label}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{f.help}</span>
+                    </span>
+                    <span className="shrink-0 text-right">
+                      <span className="block text-sm font-semibold tabular-nums">{money(f.value)}</span>
+                      <span className="block text-xs tabular-nums text-muted-foreground">
+                        {incomeTotal > 0 ? `${Math.round((f.value / incomeTotal) * 100)}%` : "—"}
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-1 lg:content-start">
+            <KpiCard
+              href={releasedFeeLink()}
+              icon={feeReleased ? <CheckCircle2 /> : <Lock />}
+              label="Comisión disponible"
+              tone={feeReleased ? "ok" : undefined}
+              value={money(feeReleased)}
+              hint={
+                feeHeld
+                  ? `${money(feeHeld)} retenida por MP (se libera a los ${FEE_RELEASE_DAYS} días)`
+                  : "Nada retenido por Mercado Pago"
+              }
+            />
+            <KpiCard
+              href="/liquidacion"
+              icon={<Wallet />}
+              label="Para repartir"
+              tone={pending ? "pending" : "ok"}
+              value={money(pending)}
+              hint={
+                repartoPartes.length
+                  ? repartoPartes.map((p) => `${p.label} ${money(p.v)}`).join(" · ")
+                  : "Ya se le pagó a cada uno"
+              }
+            />
           </div>
-        )}
+        </div>
+      )}
 
-        <div className="card">
-          <div className="row" style={{ marginBottom: "0.75rem" }}>
-            <h2
-              style={{ margin: 0, fontSize: "1.05rem" }}
+      {/* Detalle */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="min-w-0 space-y-4 lg:col-span-2">
+          <Bloque
+            title={kind === "month" ? "Comisiones por mes" : "Comisiones por día"}
+            sub={`Lo que ganó Prodi Software. Tocá una barra para ver los pagos de ese ${kind === "month" ? "mes" : "día"}.`}
+            action={<VerTodo href={paymentsLink()}>Ver pagos</VerTodo>}
+          >
+            {!series.length || !series.some((s) => s.fee) ? (
+              <EmptyState title="Sin comisiones en este período">
+                Cuando los clientes cobren con la app de Mercado Pago, vas a ver acá cuánto ganó Prodi Software cada día.
+              </EmptyState>
+            ) : (
+              <ChartContainer config={chartConfig} className="aspect-auto h-56 w-full">
+                <BarChart
+                  data={series}
+                  margin={{ top: 8, right: 4, left: 0, bottom: 0 }}
+                  onClick={(s) => {
+                    if (s?.activeLabel) onBarClick(String(s.activeLabel));
+                  }}
+                  className="cursor-pointer"
+                >
+                  <CartesianGrid vertical={false} strokeOpacity={0.5} />
+                  <XAxis
+                    dataKey="key"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={6}
+                    minTickGap={8}
+                    tickFormatter={(k: string) =>
+                      kind === "month" ? mesLabel(k, { corto: true }).split(" ")[0] : String(Number(k.slice(8)))
+                    }
+                  />
+                  <YAxis tickLine={false} axisLine={false} width={56} tickFormatter={compacto} />
+                  <ChartTooltip cursor={{ fillOpacity: 0.4 }} content={<ChartTip kind={kind} />} />
+                  <Bar dataKey="fee" name="Comisión" fill="var(--color-fee)" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                </BarChart>
+              </ChartContainer>
+            )}
+          </Bloque>
 
+          {period === "month" ? (
+            <Bloque
+              title={`Calendario de ${mesLabel(month)}`}
+              sub={`Comisión de cada día. Mercado Pago la retiene ${FEE_RELEASE_DAYS} días antes de que esté disponible.`}
             >
-              Top clientes
-            </h2>
-            <Link className="btn sm line" href="/clients">
-              Ver todos
-            </Link>
-          </div>
-          {!data?.byClient?.length ? (
-            <div className="empty">Sin pagos en este período.</div>
-          ) : (
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Cliente</th>
-                    <th>Pagos</th>
-                    <th>Fee</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.byClient.map((a) => (
-                    <tr key={`${a.id}-${a.collector_id || ""}`}>
-                      <td>
+              <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-muted-foreground">
+                {["L", "M", "X", "J", "V", "S", "D"].map((d) => (
+                  <div key={d} className="pb-1">
+                    {d}
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {calendar.map((c) =>
+                  c.empty ? (
+                    <div key={c.key} />
+                  ) : c.count ? (
+                    <Link
+                      key={c.key}
+                      href={paymentsLink({ day: c.key })}
+                      title={`${formatArDay(c.key)}: comisión ${money(c.fee)} en ${c.count} ${
+                        c.count === 1 ? "cobro" : "cobros"
+                      }. ${
+                        c.released
+                          ? "Ya está disponible."
+                          : `Se libera el ${formatArDay(c.releaseOn || c.key)} (faltan ${c.daysLeft} días).`
+                      }`}
+                      className={cn(
+                        "flex min-h-[44px] min-w-0 flex-col items-center justify-center rounded-lg border p-1 transition-colors sm:min-h-[56px]",
+                        c.released
+                          ? "border-success/30 bg-success/10 hover:bg-success/20"
+                          : "border-warning/40 bg-warning/10 hover:bg-warning/20",
+                        c.key === todayKey && "ring-2 ring-primary/40",
+                      )}
+                    >
+                      <span className="text-xs font-semibold">{c.label}</span>
+                      <span
+                        className={cn(
+                          "hidden max-w-full truncate text-[10px] tabular-nums sm:block",
+                          c.released ? "text-success" : "text-warning",
+                        )}
+                      >
+                        {compacto(c.fee || 0)}
+                      </span>
+                      <span
+                        className={cn("mt-0.5 h-1.5 w-1.5 rounded-full sm:hidden", c.released ? "bg-success" : "bg-warning")}
+                      />
+                    </Link>
+                  ) : (
+                    <div
+                      key={c.key}
+                      className={cn(
+                        "flex min-h-[44px] items-center justify-center rounded-lg text-xs text-muted-foreground sm:min-h-[56px]",
+                        c.key === todayKey && "ring-2 ring-primary/40",
+                      )}
+                    >
+                      {c.label}
+                    </div>
+                  ),
+                )}
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block h-2.5 w-2.5 rounded-full bg-success" aria-hidden /> Disponible
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block h-2.5 w-2.5 rounded-full bg-warning" aria-hidden /> Retenida por MP
+                </span>
+                <span>Tocá un día para ver sus pagos.</span>
+              </div>
+            </Bloque>
+          ) : null}
+        </div>
+
+        <div className="min-w-0 space-y-4">
+          <Bloque
+            title="Mejores clientes"
+            sub="Los que más comisión dejaron en el período."
+            action={<VerTodo href="/clients">Clientes</VerTodo>}
+          >
+            {!data?.byClient?.length ? (
+              <EmptyState title="Sin cobros en este período">Probá con otro período arriba.</EmptyState>
+            ) : (
+              <ul className="space-y-3">
+                {data.byClient.map((a, i) => (
+                  <li key={`${a.id}-${a.collector_id || ""}`} className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="w-4 shrink-0 text-xs tabular-nums text-muted-foreground">{i + 1}</span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
                         {a.id !== "unknown" ? (
-                          <Link
-                            href={paymentsLink({ clientId: a.id })}
-                            style={{ color: "var(--accent)", fontWeight: 700 }}
-
-                          >
+                          <Link href={paymentsLink({ clientId: a.id })} className="hover:text-primary hover:underline">
                             {a.name}
                           </Link>
                         ) : (
-                          <strong>{a.name}</strong>
+                          a.name
                         )}
-                      </td>
-                      <td>{a.count}</td>
-                      <td>{money(a.fee)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </span>
+                      <span className="shrink-0 text-sm font-semibold tabular-nums">{money(a.fee)}</span>
+                    </div>
+                    <div className="ml-6 mt-1 flex items-center gap-2">
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-primary" style={{ width: `${(a.fee / topFee) * 100}%` }} />
+                      </div>
+                      <span className="shrink-0 text-[11px] text-muted-foreground">
+                        {a.count} {a.count === 1 ? "cobro" : "cobros"}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Bloque>
+
+          <Bloque
+            title="Abonos de mantenimiento"
+            sub={mesLabel(maintMonth)}
+            action={<VerTodo href="/mantenimientos">Ver abonos</VerTodo>}
+          >
+            {!maintSummary.clients.length ? (
+              <EmptyState title="Todavía no hay abonos de mantenimiento">
+                <Link href="/mantenimientos" className="font-semibold text-primary hover:underline">
+                  Agregá el primer cliente
+                </Link>{" "}
+                que paga un abono mensual.
+              </EmptyState>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <Dato
+                    value={money(Number(maint?.collected_in_month || 0))}
+                    label={`Cobrado · ${Number(maint?.collected_count || 0)} cobros`}
+                  />
+                  <Dato
+                    value={money(maintSummary.pendingTotal)}
+                    label={`Falta cobrar · ${maintSummary.pendingClients.length}`}
+                    tone={maintSummary.pendingTotal ? "pending" : "ok"}
+                  />
+                  <Dato value={money(maintSummary.paidTotal)} label={`Al día · ${maintSummary.paidClients.length}`} />
+                  {pendingMaint > 0 ? (
+                    <Dato value={money(pendingMaint)} label="Para repartir" tone="pending" />
+                  ) : null}
+                </div>
+                {maintSummary.pendingClients.length ? (
+                  <ul className="mt-3 divide-y rounded-xl border">
+                    {maintSummary.pendingClients.map((c) => (
+                      <li key={c.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                        <Link
+                          href="/mantenimientos"
+                          className="min-w-0 truncate text-sm font-medium hover:text-primary hover:underline"
+                        >
+                          {c.name}
+                        </Link>
+                        <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
+                          {money(c.monthly_amount)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-3 flex items-center gap-1.5 text-sm font-medium text-success">
+                    <CalendarCheck className="h-4 w-4" /> Todos cobrados este mes
+                  </p>
+                )}
+              </>
+            )}
+          </Bloque>
+
+          <Bloque
+            title="Planes mensuales"
+            sub="Suscripciones de Mercado Pago que entran a Prodi Software."
+            action={<VerTodo href="/suscripciones">Ver planes</VerTodo>}
+          >
+            <div className="grid grid-cols-2 gap-2">
+              <Dato
+                value={money(subTotal)}
+                label={`Cobrado · ${Number(subs?.totals.approved_count || 0)} en el período`}
+              />
+              <Dato value={Number(subs?.totals.active_count || 0)} label="Planes activos" />
+              <Dato value={money(Number(subs?.totals.monthly_recurring || 0))} label="Ingreso mensual estimado" />
+              {subPendingCount > 0 ? (
+                <Dato value={subPendingCount} label="Por decidir si entran" tone="pending" />
+              ) : null}
             </div>
-          )}
+            {!subs?.charges?.length ? (
+              <p className="mt-3 text-xs text-muted-foreground">Todavía no hay cobros de planes en este período.</p>
+            ) : (
+              <ul className="mt-3 divide-y rounded-xl border">
+                {subs.charges.map((c) => (
+                  <li key={c.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                    <div className="min-w-0">
+                      <Link href={subsLink} className="block truncate text-sm font-medium hover:text-primary hover:underline">
+                        {c.client_name || c.collector_name || "Sin cliente"}
+                      </Link>
+                      {c.description ? (
+                        <p className="truncate text-xs text-muted-foreground">{c.description}</p>
+                      ) : null}
+                    </div>
+                    <span className="shrink-0 text-sm tabular-nums">{money(c.amount)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Bloque>
+
+          {totalExtra > 0 || pendingExtra > 0 ? (
+            <Bloque
+              title="Trabajos extra"
+              sub="Cobros por trabajos fuera del abono, en el período."
+              action={<VerTodo href="/liquidacion">Repartir</VerTodo>}
+            >
+              <div className="grid grid-cols-2 gap-2">
+                <Dato value={money(totalExtra)} label="Cargados" />
+                <Dato
+                  value={money(pendingExtra)}
+                  label="Para repartir"
+                  tone={pendingExtra ? "pending" : "ok"}
+                />
+              </div>
+            </Bloque>
+          ) : null}
+
+          {period !== "month" ? (
+            <Bloque title="¿Querés ver día por día?" sub="El calendario aparece al elegir “Mes” arriba.">
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" className="h-9 rounded-lg" onClick={() => setPeriod("month")}>
+                  <CalendarDays className="mr-1 h-4 w-4" /> Ver por mes
+                </Button>
+                <VerTodo href={paymentsLink()}>
+                  Pagos filtrados
+                </VerTodo>
+              </div>
+            </Bloque>
+          ) : null}
         </div>
-      </div>
-      </div>
       </div>
     </div>
   );

@@ -45,10 +45,10 @@ export function navSoftware(roles: UserRole[]): NavSection[] {
       {
         items: [
           { label: "Inicio", icon: Gauge, path: "/software", mobile: true },
-          { label: "Pagos", icon: CreditCard, path: "/software/pagos", mobile: true },
+          { label: "Cobros", icon: CreditCard, path: "/software/pagos", mobile: true },
           { label: "Clientes", icon: Store, path: "/software/clientes", mobile: true },
-          { label: "Suscripciones", icon: Receipt, path: "/software/suscripciones" },
-          { label: "Mantenimientos", icon: ClipboardList, path: "/software/mantenimientos" },
+          { label: "Planes mensuales", icon: Receipt, path: "/software/suscripciones" },
+          { label: "Mantenimiento", icon: ClipboardList, path: "/software/mantenimientos" },
           { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
         ],
       },
@@ -57,7 +57,7 @@ export function navSoftware(roles: UserRole[]): NavSection[] {
         items: [
           { label: "Liquidación", icon: HandCoins, path: "/software/liquidacion" },
           { label: "Gastos", icon: Wallet, path: "/software/gastos" },
-          { label: "Reparto (porcentajes)", icon: Users, path: "/software/reparto" },
+          { label: "Reparto (%)", icon: Users, path: "/software/reparto" },
           { label: "Apps de Mercado Pago", icon: Landmark, path: "/software/apps" },
           { label: "Actividad", icon: BarChart3, path: "/software/actividad" },
         ],
@@ -68,7 +68,7 @@ export function navSoftware(roles: UserRole[]): NavSection[] {
       items: [
         { label: "Mis ganancias", icon: HandCoins, path: "/software/mis-ganancias", mobile: true },
         { label: "Clientes", icon: Store, path: "/software/clientes", mobile: true },
-        { label: "Pagos", icon: CreditCard, path: "/software/pagos", mobile: true },
+        { label: "Cobros", icon: CreditCard, path: "/software/pagos", mobile: true },
         { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
       ],
     },

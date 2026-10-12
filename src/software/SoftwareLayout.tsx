@@ -1,11 +1,10 @@
-// Marco de las pantallas de Prodi Software: sus estilos (encerrados en .sw) y entra en la empresa Software.
+// Marco de las pantallas de Prodi Software (mismo diseño que el resto de Prodi) y entra en la empresa Software.
 
 import { useEffect } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { useEmpresa } from "@/lib/empresa";
 import { swFetch } from "./compat";
-import "./software.css";
 
 export default function SoftwareLayout() {
   const { empresa, cambiar } = useEmpresa();
@@ -27,10 +26,8 @@ export default function SoftwareLayout() {
     swFetch("/api/sync", { method: "POST" }).catch(() => undefined);
   }, [direccion]);
   return (
-    <div className="sw">
-      <main className="main">
-        <Outlet />
-      </main>
+    <div className="mx-auto w-full min-w-0 max-w-7xl px-4 py-5 pb-mobile-nav md:px-8 md:py-8 md:pb-8">
+      <Outlet />
     </div>
   );
 }
