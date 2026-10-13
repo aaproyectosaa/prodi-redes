@@ -179,6 +179,16 @@ export function estaPublicada(p: PiezaIA, hoy = new Date().toISOString().slice(0
   return !!p.publicada_at || !!p._origen || (!!p.fecha_deseada && p.fecha_deseada < hoy);
 }
 
+/** Fecha de publicación (para cuándo la necesita el cliente). null la saca. */
+export async function cambiarFechaPieza(pieza: PiezaIA, fecha: string | null, by: string) {
+  assertEditable();
+  await updateDoc(doc(db, PIEZAS, pieza.id), {
+    fecha_deseada: fecha,
+    updated_at: now(),
+    historial: arrayUnion(evento(by, fecha ? `Para publicar el ${Number(fecha.slice(8))}/${Number(fecha.slice(5, 7))}` : "Sin fecha de publicación")),
+  });
+}
+
 /** Marca (o desmarca) la pieza como publicada. */
 export async function marcarPublicada(pieza: PiezaIA, by: string, publicada = true) {
   assertEditable();

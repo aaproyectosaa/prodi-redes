@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
+  CalendarDays,
   Check,
   Download,
   Flag,
@@ -43,6 +44,7 @@ import {
   empezarPieza,
   formatoInfo,
   generarVersion,
+  cambiarFechaPieza,
   estaPublicada,
   marcarPublicada,
   borrarVersiones,
@@ -89,6 +91,48 @@ const COLUMNAS: Columna[] = [
     filtro: (p) => p.estado === "entregada" && !estaPublicada(p) && p.updated_at >= new Date(Date.now() - 30 * 86_400_000).toISOString(),
   },
 ];
+
+/** Fecha de publicación de la pieza: se ve siempre y el equipo la cambia con un toque (como en los videos). */
+function FechaPublicacion({ pieza }: { pieza: PiezaIA }) {
+  const { user } = useUserProfileContext();
+  const [guardando, setGuardando] = useState(false);
+  const editable = !["entregada", "cancelada", "rechazada"].includes(pieza.estado);
+  const cambiar = async (fecha: string | null) => {
+    if (!user || fecha === (pieza.fecha_deseada ?? null)) return;
+    setGuardando(true);
+    try {
+      await cambiarFechaPieza(pieza, fecha, user.uid);
+      toast.success(fecha ? "Fecha de publicación guardada" : "Sin fecha de publicación");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo guardar la fecha");
+    } finally {
+      setGuardando(false);
+    }
+  };
+  return (
+    <label className={cn("flex items-center gap-2 rounded-xl border border-dashed px-3 py-2 text-sm", editable && "cursor-pointer hover:border-primary/50")}>
+      <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <span className="text-muted-foreground">Publicar</span>
+      {editable ? (
+        <input
+          type="date"
+          value={pieza.fecha_deseada ?? ""}
+          disabled={guardando}
+          onChange={(e) => void cambiar(e.target.value || null)}
+          className="min-w-0 flex-1 bg-transparent font-medium outline-none [color-scheme:light] dark:[color-scheme:dark]"
+          aria-label="Fecha de publicación"
+        />
+      ) : (
+        <span className="font-medium">{pieza.fecha_deseada ? pieza.fecha_deseada.split("-").reverse().join("/") : "sin fecha"}</span>
+      )}
+      {editable && pieza.fecha_deseada && (
+        <button type="button" onClick={(e) => { e.preventDefault(); void cambiar(null); }} className="text-xs text-muted-foreground hover:text-foreground" aria-label="Sacar la fecha">
+          Sacar
+        </button>
+      )}
+    </label>
+  );
+}
 
 /** Kanban de diseño (Karen): qué hacer, qué está esperando al cliente y qué se entregó. */
 export default function Piezas() {
@@ -719,6 +763,7 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                 />
               </div>
             )}
+            <FechaPublicacion pieza={pieza} />
             <div className="space-y-2 rounded-xl border bg-card p-3">
               {pieza.producto && (
                 <p>

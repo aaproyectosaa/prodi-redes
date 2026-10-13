@@ -285,15 +285,24 @@ export function NuevaPiezaEquipo({
               className="resize-none"
             />
             <Input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Texto que va en la pieza, tal cual (opcional)" className="mt-2" />
+            <label className="mt-2 flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+              <span className="shrink-0 text-muted-foreground">Publicar el</span>
+              <input
+                type="date"
+                value={fecha}
+                onChange={(e) => setFecha(e.target.value)}
+                className="min-w-0 flex-1 bg-transparent font-medium outline-none [color-scheme:light] dark:[color-scheme:dark]"
+                aria-label="Fecha de publicación"
+              />
+            </label>
             <button type="button" onClick={() => setMas((v) => !v)} className="mt-2 flex items-center gap-1 text-xs font-medium text-primary">
-              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", mas && "rotate-180")} /> Más datos (producto, oferta, para cuándo)
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", mas && "rotate-180")} /> Más datos (producto, oferta, llamado)
             </button>
             {mas && (
               <div className="mt-2 grid gap-2 sm:grid-cols-2 animate-in fade-in slide-in-from-top-1">
                 <Input value={producto} onChange={(e) => setProducto(e.target.value)} placeholder="Producto o servicio" />
                 <Input value={oferta} onChange={(e) => setOferta(e.target.value)} placeholder="Precio o promo" />
                 <Input value={cta} onChange={(e) => setCta(e.target.value)} placeholder="Llamado a la acción (ej: pedí por WhatsApp)" />
-                <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} aria-label="Para cuándo" />
               </div>
             )}
           </Paso>
