@@ -169,10 +169,11 @@ function alMantenerApretado(t: MutableRefObject<ReturnType<typeof setTimeout> | 
 }
 
 /**
- * Deslizar un mensaje hacia la derecha para responderlo (como en WhatsApp): la burbuja acompaña el dedo,
- * aparece la flechita y, si se pasa de la marca, vibra y queda respondiendo. Movimiento vertical: es scroll.
+ * Deslizar un mensaje (como en WhatsApp): a la derecha, responderlo; a la izquierda, ver el detalle (quién lo vio,
+ * reacciones, acciones). La burbuja acompaña el dedo, aparece el ícono y, si se pasa de la marca, vibra.
+ * Movimiento vertical: es scroll.
  */
-function DeslizarParaResponder({ children, onResponder }: { children: ReactNode; onResponder: () => void }) {
+function DeslizarParaResponder({ children, onResponder, onInfo }: { children: ReactNode; onResponder: () => void; onInfo?: () => void }) {
   const [dx, setDx] = useState(0);
   const inicio = useRef<{ x: number; y: number; eje: "x" | "y" | null } | null>(null);
   const MARCA = 60;
@@ -192,12 +193,13 @@ function DeslizarParaResponder({ children, onResponder }: { children: ReactNode;
         const my = t.clientY - s.y;
         if (!s.eje && (Math.abs(mx) > 8 || Math.abs(my) > 8)) s.eje = Math.abs(mx) > Math.abs(my) ? "x" : "y";
         if (s.eje !== "x") return;
-        const nuevo = Math.max(0, Math.min(90, mx));
-        if (nuevo >= MARCA && dx < MARCA) navigator.vibrate?.(10);
+        const nuevo = Math.max(onInfo ? -90 : 0, Math.min(90, mx));
+        if ((nuevo >= MARCA && dx < MARCA) || (nuevo <= -MARCA && dx > -MARCA)) navigator.vibrate?.(10);
         setDx(nuevo);
       }}
       onTouchEnd={() => {
         if (dx >= MARCA) onResponder();
+        else if (dx <= -MARCA) onInfo?.();
         inicio.current = null;
         setDx(0);
       }}
@@ -209,10 +211,19 @@ function DeslizarParaResponder({ children, onResponder }: { children: ReactNode;
       <span
         aria-hidden
         className="pointer-events-none absolute left-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-primary/15 text-primary transition-opacity"
-        style={{ opacity: Math.min(1, dx / MARCA), transform: `translateY(-50%) scale(${0.6 + Math.min(1, dx / MARCA) * 0.4})` }}
+        style={{ opacity: Math.max(0, Math.min(1, dx / MARCA)), transform: `translateY(-50%) scale(${0.6 + Math.max(0, Math.min(1, dx / MARCA)) * 0.4})` }}
       >
         <Reply className="h-4 w-4" />
       </span>
+      {onInfo && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-primary/15 text-primary transition-opacity"
+          style={{ opacity: Math.max(0, Math.min(1, -dx / MARCA)), transform: `translateY(-50%) scale(${0.6 + Math.max(0, Math.min(1, -dx / MARCA)) * 0.4})` }}
+        >
+          <Info className="h-4 w-4" />
+        </span>
+      )}
       <div style={{ transform: `translateX(${dx}px)`, transition: dx ? "none" : "transform 200ms ease-out" }}>{children}</div>
     </div>
   );
@@ -768,7 +779,7 @@ export function ChatConversacion({
                   {mostrarDia && (
                     <p className="my-3 text-center text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{dia}</p>
                   )}
-                  <DeslizarParaResponder onResponder={() => responder(m)}>
+                  <DeslizarParaResponder onResponder={() => responder(m)} onInfo={() => setInfoMsg(m)}>
                   <div className={cn("group/msj flex items-end gap-2", mio ? "justify-end" : "justify-start", !agrupado && "mt-2")}>
                     {mio && (
                       <button
