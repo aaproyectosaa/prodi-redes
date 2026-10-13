@@ -117,13 +117,25 @@ export function AudioMensaje({
 
 const TIPOS = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4", "audio/webm"];
 
-// Micrófono: si el navegador recuerda el permiso, se pide y se suelta en cada audio (no pregunta nada).
-// Si es de los que preguntan cada vez (iPhone, o eligieron "Solo esta vez"), después de grabar queda guardado
-// y apagado 2 minutos: el próximo audio lo reusa sin volver a preguntar.
+// Micrófono: si el navegador recuerda el permiso (Chrome, Android), se pide y se suelta en cada audio (no pregunta).
+// En el iPhone, iOS vuelve a preguntar cada vez que se suelta (aunque diga que ya está permitido): ahí queda tomado
+// (apagado) mientras la app está abierta y se suelta al salir de la app; así pregunta una vez por cada vez que se abre.
+// En los demás que preguntan cada vez ("Solo esta vez"), queda guardado 10 minutos.
 let micGuardado: MediaStream | null = null;
 let soltarMic = 0;
-const MIC_GUARDADO_MS = 2 * 60_000;
-const CLAVE_AYUDA_MIC = "prodi-ayuda-mic";
+const MIC_GUARDADO_MS = 10 * 60_000;
+const ES_IOS = typeof navigator !== "undefined" && (/iPhone|iPad|iPod/i.test(navigator.userAgent) || (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1));
+if (ES_IOS && typeof document !== "undefined") {
+  // Al salir de la app (o bloquear el celular) se suelta: no queda el micrófono tomado de fondo.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "hidden" || !micGuardado) return;
+    const enUso = micGuardado.getAudioTracks().some((t) => t.enabled);
+    if (enUso) return;
+    micGuardado.getTracks().forEach((t) => t.stop());
+    micGuardado = null;
+  });
+}
+const CLAVE_AYUDA_MIC = "prodi-ayuda-mic-2";
 
 async function permisoMic(): Promise<PermissionState | null> {
   try {
@@ -153,9 +165,12 @@ async function guardarMic(stream: MediaStream) {
     stream.getTracks().forEach((t) => t.stop());
     if (micGuardado === stream) micGuardado = null;
   };
-  const permiso = await permisoMic();
-  if (permiso === "granted") return soltar();
-  soltarMic = window.setTimeout(soltar, MIC_GUARDADO_MS);
+  // iPhone: queda tomado (y apagado) hasta que se sale de la app.
+  if (!ES_IOS) {
+    const permiso = await permisoMic();
+    if (permiso === "granted") return soltar();
+    soltarMic = window.setTimeout(soltar, MIC_GUARDADO_MS);
+  }
   // Una sola vez: cómo dejarlo permitido para siempre.
   try {
     if (localStorage.getItem(CLAVE_AYUDA_MIC)) return;
@@ -163,12 +178,11 @@ async function guardarMic(stream: MediaStream) {
   } catch {
     return;
   }
-  const iphone = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-  toast.message("Para que no te pida el micrófono cada vez", {
-    description: iphone
-      ? "En el iPhone: Ajustes → Apps → Safari → Micrófono → «Permitir»."
+  toast.message("Para que no te pida el micrófono", {
+    description: ES_IOS
+      ? "Ahora te lo pide una vez cada vez que abrís la app. Para que no pregunte nunca: en Safari tocá «aA» en la barra de arriba → Configuración del sitio web → Micrófono → «Permitir» (o en Ajustes → Apps → Safari → Micrófono → «Permitir»)."
       : "Cuando el navegador pregunte, elegí «Permitir» (no «Solo esta vez»).",
-    duration: 10_000,
+    duration: 14_000,
   });
 }
 
