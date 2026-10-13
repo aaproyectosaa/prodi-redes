@@ -17,6 +17,8 @@ import { SidebarExtrasProvider, useSidebarExtras } from "@/hooks/use-sidebar-ext
 import { useAltoVisible } from "@/hooks/use-alto-visible";
 import { useChatDock } from "@/lib/redes/chatDock";
 import { useMontosOcultos } from "@/lib/privacidad";
+import { vinoDeChat, volverAlChat } from "@/lib/chatApp";
+import { ArrowLeft } from "lucide-react";
 
 const LayoutInner = () => {
   const navigate = useNavigate();
@@ -54,7 +56,17 @@ const LayoutInner = () => {
           {/* En el celular el encabezado va primero: es el que deja libre la barra de estado del iPhone. */}
           <MobileAppHeader profile={profile} role={role} />
           <VerComoBanner />
-          <AvisoDescargarChat oculto={sinAvisoChat} />
+          {/* Se abrió desde Prodi Chat (en el celular no puede abrir la otra app): un toque para volver a los chats. */}
+          {vinoDeChat() && (
+            <button
+              type="button"
+              onClick={volverAlChat}
+              className="flex shrink-0 items-center gap-2 border-b bg-primary/10 px-4 py-2 text-left text-sm font-medium text-primary"
+            >
+              <ArrowLeft className="h-4 w-4" /> Volver a Prodi Chat
+            </button>
+          )}
+          <AvisoDescargarChat oculto={sinAvisoChat || vinoDeChat()} />
           <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
             {/* Al tocar el ojito se vuelve a dibujar la pantalla con los montos tapados o a la vista. */}
             <Outlet key={montosOcultos ? "ocultos" : "visibles"} />

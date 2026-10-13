@@ -93,9 +93,35 @@ function abrirVentana(url: string) {
   else window.location.href = url;
 }
 
+/** Esta ventana salió de Prodi Chat para ver algo del sistema (en el celular, Prodi Chat no puede abrir la otra app). */
+const CLAVE_VOLVER = "prodi-volver-chat";
+export const vinoDeChat = () => leer(sesion(), CLAVE_VOLVER) === "1";
+
+/** Desde el sistema (abierto desde Prodi Chat), volver a los chats en la misma ventana. */
+export function volverAlChat() {
+  try {
+    sesion()?.removeItem(CLAVE_VOLVER);
+  } catch {
+    /* nada */
+  }
+  window.location.href = CHAT_APP;
+}
+
 /** Abre una parte del sistema fuera de Prodi Chat (en el navegador o en la app Prodi). */
 export function abrirEnSistema(ruta: string) {
   const url = new URL(ruta, enHostChat() ? SISTEMA_ORIGEN : window.location.origin).href;
+  // Prodi Chat instalada en el mismo sitio (iPhone, Android): una ventana nueva se abre dentro de la misma app, que
+  // vuelve sola a los chats. Ahí se sale del modo chat en esta ventana y se muestra el sistema (con "volver al chat").
+  if (!enHostChat() && yaInstalada()) {
+    try {
+      sesion()?.removeItem(CLAVE_SESION);
+      sesion()?.setItem(CLAVE_VOLVER, "1");
+    } catch {
+      /* sin storage: igual lo intenta */
+    }
+    window.location.href = url;
+    return;
+  }
   abrirVentana(url);
 }
 
