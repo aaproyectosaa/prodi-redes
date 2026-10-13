@@ -2,7 +2,7 @@
 import { doc, updateDoc } from "@/lib/db";
 import { db } from "@/integrations/firebase/client";
 import { guardarPush } from "@/lib/auth";
-import { enHostChat } from "@/lib/chatApp";
+import { enHostChat, enModoChat } from "@/lib/chatApp";
 
 const SW_PATH = "/sw.js";
 
@@ -95,8 +95,9 @@ export async function subscribeWebPush(userId: string): Promise<string> {
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(`El navegador no pudo activar los avisos (${msg}). Borrá los datos del sitio y probá de nuevo.`);
   }
-  // De qué app es este dispositivo: con Prodi Chat en su propia dirección, sus avisos son solo del chat.
-  await guardarPush(sub.toJSON(), undefined, enHostChat() ? "chat" : "sistema");
+  // De qué app es este dispositivo: si se activaron desde Prodi Chat (en su dirección o en /chat-app), sus avisos son
+  // los del chat; los del sistema van a la app Prodi. Así no llegan dos veces.
+  await guardarPush(sub.toJSON(), undefined, enHostChat() || enModoChat() ? "chat" : "sistema");
   await updateDoc(doc(db, "profiles", userId), { push_enabled: true });
   return sub.endpoint;
 }
@@ -105,6 +106,27 @@ function base64ABytes(b64: string): Uint8Array<ArrayBuffer> {
   const pad = "=".repeat((4 - (b64.length % 4)) % 4);
   const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
   return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+
+/**
+ * Vuelve a anotar este equipo con la app desde la que se abrió (Prodi o Prodi Chat), sin pedir nada: así los
+ * avisos del chat llegan solo a Prodi Chat y no dos veces. Una vez por sesión, solo si ya tiene avisos activados.
+ */
+export async function reanotarAppPush(): Promise<void> {
+  try {
+    if (sessionStorage.getItem("prodi-push-app")) return;
+    sessionStorage.setItem("prodi-push-app", "1");
+  } catch {
+    /* sin storage: igual sigue */
+  }
+  try {
+    const reg = await navigator.serviceWorker.getRegistration("/");
+    const sub = await reg?.pushManager.getSubscription();
+    if (!sub) return;
+    await guardarPush(sub.toJSON(), undefined, enHostChat() || enModoChat() ? "chat" : "sistema");
+  } catch {
+    /* nada: se reintenta la próxima vez que se abra */
+  }
 }
 
 export async function unsubscribeWebPush(userId: string, _token?: string | null) {

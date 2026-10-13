@@ -2,9 +2,9 @@
 // con la app instalada. Las suscripciones de cada navegador están en `push_suscripciones`.
 
 //
-// Dos apps: Prodi (el sistema) y Prodi Chat. Con Prodi Chat en su propia dirección (VITE_CHAT_URL), cada
-// suscripción sabe de qué app es (`datos.app`) y los avisos del chat van solo a Prodi Chat y el resto
-// solo a Prodi, para que no se mezclen. Sin VITE_CHAT_URL, todo va a todos los dispositivos, como antes.
+// Dos apps: Prodi (el sistema) y Prodi Chat (en su dirección o en /chat-app). Cada suscripción sabe de qué app es
+// (`datos.app`): los avisos del chat van solo a Prodi Chat y el resto solo a Prodi, para que no lleguen dos veces.
+// Si la persona no tiene la app de ese tipo, le llegan igual a la otra (nunca se quedan sin aviso).
 
 import webpush from "web-push";
 import { getPool } from "./db";
@@ -77,16 +77,19 @@ export async function probarPush(uid: string): Promise<{ configurado: boolean; d
 export async function enviarPush(uid: string, aviso: { title: string; body: string; url: string; tag?: string }, canal: AppPush = "sistema"): Promise<number> {
   if (!configurar()) return 0;
   const r = await getPool().query("select endpoint, datos from push_suscripciones where uid = $1", [uid]);
-  const separadas = !!chatUrl();
   const todas = r.rows as { endpoint: string; datos: Suscripcion & { app?: AppPush } }[];
-  const delCanal = todas.filter((row) => !separadas || (row.datos.app === "chat" ? "chat" : "sistema") === canal);
-  // Si no tiene Prodi Chat instalado, los avisos del chat le llegan igual a Prodi (si no, no le llegaban nunca).
-  const filas = delCanal.length || canal !== "chat" ? delCanal : todas;
+  // Las suscripciones viejas (sin app) son del sistema.
+  const delCanal = todas.filter((row) => (row.datos.app === "chat" ? "chat" : "sistema") === canal);
+  // Si no tiene la app de ese canal (ej. no instaló Prodi Chat, o un contacto que solo usa Prodi Chat), a todas.
+  const filas = delCanal.length ? delCanal : todas;
   let enviados = 0;
   await Promise.all(
     filas.map(async (row) => {
       try {
-        await webpush.sendNotification(row.datos, JSON.stringify(aviso), { TTL: 24 * 3600 });
+        // En Prodi Chat dentro del mismo sitio, el aviso del chat abre /chat-app (si no, se abría el sistema).
+        const enChatApp = row.datos.app === "chat" && !chatUrl();
+        const url = enChatApp ? aviso.url.replace(/^(https?:\/\/[^/]+)?\/chat(?=[?#/]|$)/,(_m, o: string | undefined) => `${o ?? ""}/chat-app`) : aviso.url;
+        await webpush.sendNotification(row.datos, JSON.stringify({ ...aviso, url }), { TTL: 24 * 3600 });
         enviados++;
       } catch (err) {
         const status = (err as { statusCode?: number }).statusCode;

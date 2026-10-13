@@ -297,12 +297,14 @@ export function AvisoActivarAvisos({ uid }: { uid?: string }) {
     if (yaMostrado(CLAVE_AVISOS)) return;
     let cancel = () => undefined as void;
     let vivo = true;
-    void import("@/lib/webPush").then(async ({ isWebPushSupported, subscribeWebPush }) => {
+    void import("@/lib/webPush").then(async ({ isWebPushSupported, subscribeWebPush, reanotarAppPush }) => {
       if (!(await isWebPushSupported())) return;
       const permiso = Notification.permission;
       if (permiso === "granted") {
-        // Ya dio permiso: si el celular perdió la anotación, se vuelve a anotar solo, sin preguntar nada.
+        // Ya dio permiso: si el celular perdió la anotación, se vuelve a anotar solo, sin preguntar nada; si la tiene,
+        // se confirma de qué app es (Prodi o Prodi Chat), para que los avisos no lleguen dos veces.
         if (!(await equipoSuscripto())) await subscribeWebPush(uid).catch(() => undefined);
+        else await reanotarAppPush();
         return;
       }
       // Ya respondió en este equipo (activar, "más tarde" o bloqueado): no se vuelve a preguntar.
