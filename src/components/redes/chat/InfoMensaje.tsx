@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { CheckCheck, Clock, ListTodo, Loader2, Pencil, Reply } from "lucide-react";
+import { CheckCheck, ChevronDown, Clock, Copy, ListTodo, Loader2, Pencil, Reply } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import UserAvatar from "@/components/UserAvatar";
 import { editarMensaje, lecturasDe, PRODI_ID, REACCIONES } from "@/lib/redes/chat";
 import { fechaAR, formatearFecha, hoyAR } from "@/lib/fecha";
@@ -71,7 +72,7 @@ export function Cabecitas({
   );
 }
 
-/** "Info del mensaje": quiénes lo vieron (y cuándo fue su última lectura) y quiénes todavía no. */
+/** "Info del mensaje" (como WhatsApp): el mensaje arriba, reacciones, acciones con ícono y quiénes lo vieron. */
 export function InfoMensaje({
   chat,
   m,
@@ -94,93 +95,152 @@ export function InfoMensaje({
   onTarea?: () => void;
   onReaccionar?: (emoji: string) => void;
 }) {
+  const [verFaltan, setVerFaltan] = useState(false);
+  useEffect(() => setVerFaltan(false), [m?.id]);
   const lecturas = m ? lecturasDe(chat, m.at, m.by).filter((l) => l.uid !== PRODI_ID) : [];
   const vieron = lecturas.filter((l) => l.at).sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""));
   const faltan = lecturas.filter((l) => !l.at);
+  const total = vieron.length + faltan.length;
   const nombre = (id: string) => (id === uid ? "Vos" : perfilDe(id)?.nombre || chat.nombres?.[id] || "Usuario");
+  const perfil = (id: string) => perfilDe(id) ?? ({ id, nombre: nombre(id), email: "" } as Profile);
+  const mio = m?.by === uid;
+  const texto = m ? m.texto || m.leyenda || "Archivo" : "";
+  const copiar = async () => {
+    try {
+      await navigator.clipboard.writeText(texto);
+      toast.success("Copiado");
+      onOpenChange(false);
+    } catch {
+      toast.error("No se pudo copiar");
+    }
+  };
+  const acciones: { icono: ReactNode; label: string; onClick: () => void }[] = [
+    ...(onResponder ? [{ icono: <Reply className="h-5 w-5" />, label: "Responder", onClick: onResponder }] : []),
+    ...(m?.texto ? [{ icono: <Copy className="h-5 w-5" />, label: "Copiar", onClick: () => void copiar() }] : []),
+    ...(onTarea ? [{ icono: <ListTodo className="h-5 w-5" />, label: "Tarea", onClick: onTarea }] : []),
+    ...(onEditar ? [{ icono: <Pencil className="h-5 w-5" />, label: "Editar", onClick: onEditar }] : []),
+  ];
   const fila = (id: string, extra: ReactNode) => (
-    <li key={id} className="flex items-center gap-3 py-1.5">
-      <UserAvatar profile={perfilDe(id) ?? ({ id, nombre: nombre(id), email: "" } as Profile)} size="sm" />
-      <span className="min-w-0 flex-1 truncate text-sm">{nombre(id)}</span>
+    <li key={id} className="flex items-center gap-3 py-2">
+      <UserAvatar profile={perfil(id)} size="sm" />
+      <span className="min-w-0 flex-1 truncate text-sm font-medium">{nombre(id)}</span>
       {extra}
     </li>
   );
+
   return (
-    <Dialog open={!!m} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-2rem)] max-w-sm gap-3 rounded-2xl">
-        <DialogHeader>
-          <DialogTitle>Mensaje</DialogTitle>
-          <DialogDescription className="line-clamp-3 whitespace-pre-wrap break-words">
-            {m ? `${m.texto || m.leyenda || "Archivo"}` : ""}
-          </DialogDescription>
-        </DialogHeader>
+    <Sheet open={!!m} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="bottom"
+        className="mx-auto max-h-[88dvh] w-full max-w-lg gap-0 overflow-y-auto rounded-t-3xl border-x border-t px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-2 sm:bottom-4 sm:rounded-3xl sm:border"
+      >
+        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-muted-foreground/30" aria-hidden />
+        <SheetTitle className="sr-only">Mensaje</SheetTitle>
         {m && (
-          <p className="text-xs text-muted-foreground">
-            Enviado {cuandoLargo(m.at)}
-            {m.by !== uid && ` por ${nombre(m.by)}`}
-            {m.editado_at && ` · editado ${cuandoLargo(m.editado_at)}`}
-          </p>
+          <>
+            {/* El mensaje, como se ve en el chat. */}
+            <div className={cn("flex", mio ? "justify-end" : "justify-start")}>
+              <div
+                className={cn(
+                  "max-w-[85%] rounded-2xl px-3.5 py-2 text-sm shadow-sm",
+                  mio ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md border bg-card"
+                )}
+              >
+                {!mio && <p className="mb-0.5 text-[11px] font-semibold text-primary">{nombre(m.by)}</p>}
+                <p className="line-clamp-6 whitespace-pre-wrap break-words">{texto}</p>
+                <p className={cn("mt-1 text-right text-[10px]", mio ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                  {cuandoLargo(m.at)}
+                  {m.editado_at && " · editado"}
+                </p>
+              </div>
+            </div>
+
+            {/* Reacciones: tocá para poner o sacar la tuya. */}
+            {onReaccionar && (
+              <div className="mt-4 flex justify-between gap-1 rounded-full bg-muted/60 p-1.5">
+                {REACCIONES.map((e) => {
+                  const quienes = m.reacciones?.[e] ?? [];
+                  const mia = quienes.includes(uid);
+                  return (
+                    <button
+                      key={e}
+                      type="button"
+                      onClick={() => onReaccionar(e)}
+                      className={cn(
+                        "relative flex h-11 w-11 items-center justify-center rounded-full text-2xl transition-transform hover:scale-110 active:scale-90",
+                        mia && "bg-primary/20 ring-2 ring-primary/50"
+                      )}
+                      aria-label={`Reaccionar ${e}`}
+                    >
+                      {e}
+                      {quienes.length > 0 && (
+                        <span className="absolute -bottom-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-background px-1 text-[10px] font-bold ring-1 ring-border">
+                          {quienes.length}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Acciones con ícono. */}
+            {acciones.length > 0 && (
+              <div className={cn("mt-3 grid gap-2", acciones.length >= 4 ? "grid-cols-4" : acciones.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
+                {acciones.map((a) => (
+                  <button
+                    key={a.label}
+                    type="button"
+                    onClick={a.onClick}
+                    className="flex flex-col items-center gap-1.5 rounded-2xl bg-muted/60 py-3 text-xs font-medium transition-colors hover:bg-muted active:scale-95"
+                  >
+                    <span className="text-primary">{a.icono}</span>
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Quiénes lo vieron. */}
+            {total > 0 && (
+              <div className="mt-4 rounded-2xl border p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="flex items-center gap-1.5 text-sm font-semibold">
+                    <CheckCheck className={cn("h-4 w-4", vieron.length ? "text-primary" : "text-muted-foreground")} />
+                    {vieron.length === total ? "Lo vieron todos" : `Lo vieron ${vieron.length} de ${total}`}
+                  </p>
+                  <div className="flex">
+                    {vieron.slice(0, 5).map((l, i) => (
+                      <UserAvatar key={l.uid} profile={perfil(l.uid)} size="sm" className={cn("!h-6 !w-6 ring-2 ring-background", i > 0 && "-ml-2")} />
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${Math.round((vieron.length / total) * 100)}%` }} />
+                </div>
+                {vieron.length > 0 && (
+                  <ul className="mt-2 divide-y">{vieron.map((l) => fila(l.uid, <span className="shrink-0 text-xs text-muted-foreground">{cuandoLargo(l.at!)}</span>))}</ul>
+                )}
+                {faltan.length > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setVerFaltan((v) => !v)}
+                      className="mt-1 flex w-full items-center gap-1.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+                    >
+                      <Clock className="h-3.5 w-3.5" /> Sin ver ({faltan.length})
+                      <ChevronDown className={cn("ml-auto h-3.5 w-3.5 transition-transform", verFaltan && "rotate-180")} />
+                    </button>
+                    {verFaltan && <ul className="divide-y opacity-70">{faltan.map((l) => fila(l.uid, null))}</ul>}
+                  </>
+                )}
+              </div>
+            )}
+            <p className="mt-2 text-center text-[11px] text-muted-foreground">La hora es la última vez que cada uno abrió el chat.</p>
+          </>
         )}
-        {m && onReaccionar && (
-          <div className="flex justify-between gap-1 rounded-2xl bg-muted/60 p-1.5">
-            {REACCIONES.map((e) => {
-              const mia = (m.reacciones?.[e] ?? []).includes(uid);
-              return (
-                <button
-                  key={e}
-                  type="button"
-                  onClick={() => onReaccionar(e)}
-                  className={cn("flex h-10 w-10 items-center justify-center rounded-full text-xl transition-transform hover:scale-110 active:scale-95", mia && "bg-primary/15 ring-2 ring-primary/40")}
-                  aria-label={`Reaccionar ${e}`}
-                >
-                  {e}
-                </button>
-              );
-            })}
-          </div>
-        )}
-        {(onResponder || onTarea || onEditar) && (
-          <div className="grid gap-1.5">
-            {onResponder && (
-              <Button variant="outline" className="w-full justify-start" onClick={onResponder}>
-                <Reply className="mr-2 h-4 w-4" /> Responder
-              </Button>
-            )}
-            {onTarea && (
-              <Button variant="outline" className="w-full justify-start" onClick={onTarea}>
-                <ListTodo className="mr-2 h-4 w-4" /> Hacer tarea con este mensaje
-              </Button>
-            )}
-            {onEditar && (
-              <Button variant="outline" className="w-full justify-start" onClick={onEditar}>
-                <Pencil className="mr-2 h-4 w-4" /> Editar mensaje
-              </Button>
-            )}
-          </div>
-        )}
-        <div className="max-h-[50vh] space-y-3 overflow-y-auto">
-          <section>
-            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
-              <CheckCheck className="h-3.5 w-3.5" /> Visto ({vieron.length})
-            </p>
-            {vieron.length ? (
-              <ul>{vieron.map((l) => fila(l.uid, <span className="shrink-0 text-xs text-muted-foreground">{cuandoLargo(l.at!)}</span>))}</ul>
-            ) : (
-              <p className="py-1.5 text-sm text-muted-foreground">Nadie lo vio todavía.</p>
-            )}
-          </section>
-          {faltan.length > 0 && (
-            <section>
-              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <Clock className="h-3.5 w-3.5" /> Sin ver ({faltan.length})
-              </p>
-              <ul>{faltan.map((l) => fila(l.uid, null))}</ul>
-            </section>
-          )}
-        </div>
-        <p className="text-[11px] text-muted-foreground">La hora es la última vez que cada uno abrió el chat.</p>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }
 
