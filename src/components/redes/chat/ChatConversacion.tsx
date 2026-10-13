@@ -230,13 +230,15 @@ function VistoLinea({ chat, m, uid }: { chat: ChatT; m: Mensaje; uid: string }) 
 // En los grupos, cada persona con su color (como WhatsApp): sale de su id, así es el mismo en todos los chats.
 // Sin violeta (es el de tus propios mensajes).
 const TONOS = [12, 28, 45, 90, 145, 170, 192, 210, 335, 355, 75, 60];
-function tonoDe(uid: string): number {
+function tonoDe(uid: string | undefined): number {
+  // Hay mensajes viejos sin autor: color fijo, sin romper la pantalla.
+  const id = String(uid ?? "");
   let h = 0;
-  for (let i = 0; i < uid.length; i++) h = (h * 31 + uid.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
   return TONOS[h % TONOS.length];
 }
-const colorNombre = (uid: string) => `hsl(${tonoDe(uid)} 75% 55%)`;
-const colorGlobo = (uid: string) => ({ backgroundColor: `hsl(${tonoDe(uid)} 75% 55% / 0.09)`, borderColor: `hsl(${tonoDe(uid)} 75% 55% / 0.35)` });
+const colorNombre = (uid: string | undefined) => `hsl(${tonoDe(uid)} 75% 55%)`;
+const colorGlobo = (uid: string | undefined) => ({ backgroundColor: `hsl(${tonoDe(uid)} 75% 55% / 0.09)`, borderColor: `hsl(${tonoDe(uid)} 75% 55% / 0.35)` });
 
 export function ChatConversacion({
   chat,
@@ -957,7 +959,7 @@ export function ChatConversacion({
                       ocupado={creandoSug === m.id}
                       onCrear={() => {
                         const s = m.sugerencia_tarea!;
-                        if (!s.asignados.length) {
+                        if (!(s.asignados ?? []).length) {
                           setTareaSug(s);
                           setTareaMsg(m);
                           return;
@@ -1328,7 +1330,7 @@ function TarjetaTareaCreada({
   onDeshacer: () => void;
 }) {
   const fecha = s.vence ? new Date(`${s.vence}T12:00:00`).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "numeric" }) : null;
-  const partes = [s.asignados.length ? `para ${s.asignados.map(nombreDe).join(", ")}` : null, fecha, s.cliente_nombre].filter(Boolean);
+  const partes = [(s.asignados ?? []).length ? `para ${(s.asignados ?? []).map(nombreDe).join(", ")}` : null, fecha, s.cliente_nombre].filter(Boolean);
   return (
     <div className={cn("flex", mio ? "justify-end pr-1" : "pl-9")}>
       <div className="mt-0.5 flex max-w-[85%] items-start gap-2 rounded-xl border border-success/30 bg-success/[0.07] px-3 py-2 text-xs shadow-sm animate-in fade-in slide-in-from-bottom-1 motion-reduce:animate-none">
@@ -1370,7 +1372,7 @@ function TarjetaSugerencia({
   onDescartar: () => void;
 }) {
   const fecha = s.vence ? new Date(`${s.vence}T12:00:00`).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "numeric" }) : null;
-  const partes = [s.asignados.length ? `para ${s.asignados.map(nombreDe).join(", ")}` : "sin asignar", fecha, s.cliente_nombre].filter(Boolean);
+  const partes = [(s.asignados ?? []).length ? `para ${(s.asignados ?? []).map(nombreDe).join(", ")}` : "sin asignar", fecha, s.cliente_nombre].filter(Boolean);
   return (
     <div className={cn("flex", mio ? "justify-end pr-1" : "pl-9")}>
       <div className="mt-0.5 max-w-[85%] rounded-xl border border-primary/30 bg-primary/[0.06] px-3 py-2 text-xs shadow-sm animate-in fade-in slide-in-from-bottom-1 motion-reduce:animate-none">

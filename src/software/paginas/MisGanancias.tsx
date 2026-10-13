@@ -195,9 +195,9 @@ export default function MisGananciasSoftware() {
 
           <Section
             title="Transferencias que recibiste"
-            description={datos.transferencias.length ? `${datos.transferencias.length} ${periodo} · ${formatARS(totalTransferido)} en total` : undefined}
+            description={(datos.transferencias ?? []).length ? `${(datos.transferencias ?? []).length} ${periodo} · ${formatARS(totalTransferido)} en total` : undefined}
           >
-            {datos.transferencias.length === 0 ? (
+            {(datos.transferencias ?? []).length === 0 ? (
               <EmptyState title="Ninguna en este período">Cuando te paguen tu parte, la transferencia va a aparecer acá.</EmptyState>
             ) : (
               <div className="divide-y rounded-2xl border bg-card shadow-sm">

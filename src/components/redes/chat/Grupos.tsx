@@ -414,7 +414,7 @@ export function InfoChat({
 
           <div className="flex-1 space-y-3 p-5">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold">{chat.miembros.length} miembros</p>
+              <p className="text-sm font-semibold">{(chat.miembros ?? []).length} miembros</p>
               {esGrupo && admin && (
                 <Button size="sm" variant="outline" onClick={() => setSumando((v) => !v)}>
                   <UserPlus className="mr-1.5 h-4 w-4" /> Sumar

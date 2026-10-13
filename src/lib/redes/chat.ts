@@ -543,7 +543,7 @@ const ROLES_SOFTWARE = ["admin", "administracion", "programador"];
 /** ¿Es una conversación de Software? El grupo "Equipo Software" o un privado entre dos personas de Software. */
 export function esChatSoftware(chat: Chat, profiles: Profile[]): boolean {
   if (chat.tipo === "software") return true;
-  if (chat.tipo !== "directo" || chat.miembros.length !== 2) return false;
+  if (chat.tipo !== "directo" || (chat.miembros ?? []).length !== 2) return false;
   return chat.miembros.every((u) => {
     const p = profiles.find((x) => x.id === u);
     return !!p && [p.role, ...(p.roles_extra ?? [])].some((r) => ROLES_SOFTWARE.includes(r ?? ""));

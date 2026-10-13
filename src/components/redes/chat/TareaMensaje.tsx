@@ -43,7 +43,7 @@ export function TareaMensajeDialog({
     if (!m) return;
     if (sugerencia) {
       setTitulo(sugerencia.titulo);
-      setAsignados(sugerencia.asignados.length ? sugerencia.asignados.filter((u) => chat.miembros.includes(u)) : [uid]);
+      setAsignados((sugerencia.asignados ?? []).length ? (sugerencia.asignados ?? []).filter((u) => (chat.miembros ?? []).includes(u)) : [uid]);
       setVence(sugerencia.vence);
       setCliente(sugerencia.cliente_id && sugerencia.cliente_tipo ? { id: sugerencia.cliente_id, tipo: sugerencia.cliente_tipo, nombre: sugerencia.cliente_nombre ?? "Cliente" } : null);
       return;
