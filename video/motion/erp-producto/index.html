@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="es" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root { --violeta: #6f40fc; --violeta-claro: #efe9ff; --celeste: #0ea5e9; --tinta: #16131f; --gris: #6b6880; --linea: #e6e2f0; --verde: #16a34a; --rojo: #be123c; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #faf8ff; }
+      #root { position: relative; width: 100%; height: 100%; font-family: Inter, sans-serif; color: var(--tinta); }
+      #escenario { position: absolute; inset: 0; overflow: hidden; background: radial-gradient(120% 70% at 50% 0%, #ffffff 0%, #f4efff 45%, #e9e0ff 100%); }
+      #brillo { position: absolute; width: 1400px; height: 1400px; left: -160px; top: 700px; border-radius: 50%; background: radial-gradient(circle, rgba(111,64,252,0.22), transparent 62%); }
+      .escena { position: absolute; inset: 0; visibility: hidden; }
+      .oscura { background: radial-gradient(90% 60% at 50% 40%, #241a4a 0%, #0c0a16 60%, #07060c 100%); color: #fff; }
+
+      /* barra de módulos */
+      #nav { position: absolute; top: 120px; left: 70px; right: 70px; display: flex; justify-content: space-between; z-index: 20; }
+      .mod { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 130px; }
+      .mod .ic { width: 76px; height: 76px; border-radius: 50%; background: #fff; border: 2px solid var(--linea); display: flex; align-items: center; justify-content: center; font-size: 34px; color: #77728f; font-weight: 800; }
+      .mod .tx { font-size: 21px; font-weight: 700; color: #6b6782; }
+      .mod.on .ic { background: var(--violeta); border-color: var(--violeta); color: #fff; box-shadow: 0 10px 30px rgba(111,64,252,0.45); }
+      .mod.on .tx { color: var(--violeta); }
+      .mod.hecho .ic { color: var(--violeta); border-color: #cbbcff; }
+
+      /* títulos */
+      .titulo { position: absolute; left: 60px; right: 60px; top: 300px; text-align: center; }
+      .titulo h1 { font-size: 92px; font-weight: 900; letter-spacing: -0.045em; line-height: 0.98; }
+      .titulo h1 em { font-style: normal; color: var(--violeta); }
+      .titulo p { margin-top: 22px; font-size: 34px; font-weight: 600; color: var(--gris); }
+      .oscura .titulo h1 em { color: #a68bff; }
+
+      /* dispositivos */
+      .celu { position: absolute; left: 285px; top: 640px; width: 510px; height: 1030px; border-radius: 76px; background: #fff; border: 14px solid #17141f; box-shadow: 0 50px 120px rgba(40,20,90,0.28); overflow: hidden; }
+      .celu .isla { position: absolute; top: 18px; left: 50%; width: 140px; height: 38px; margin-left: -70px; border-radius: 19px; background: #17141f; z-index: 5; }
+      .celu .pant { position: absolute; inset: 0; padding: 86px 30px 30px; display: flex; flex-direction: column; gap: 16px; }
+      .tablet { position: absolute; left: 70px; top: 700px; width: 940px; height: 680px; border-radius: 44px; background: #fff; border: 16px solid #17141f; box-shadow: 0 50px 120px rgba(40,20,90,0.28); overflow: hidden; }
+      .tablet .pant { position: absolute; inset: 0; padding: 30px; display: flex; gap: 22px; }
+      .app-top { display: flex; align-items: center; justify-content: space-between; }
+      .app-top b { font-size: 28px; } .app-top span { font-size: 20px; color: var(--gris); font-weight: 600; }
+      .fila { display: flex; align-items: center; gap: 16px; padding: 14px 16px; border-radius: 18px; background: #f7f5fc; }
+      .fila .img { width: 64px; height: 64px; border-radius: 14px; flex: none; }
+      .fila .n { flex: 1; font-size: 22px; font-weight: 700; } .fila .n small { display: block; font-size: 17px; color: var(--gris); font-weight: 600; margin-top: 2px; }
+      .fila .p { font-size: 22px; font-weight: 800; }
+      .btn { height: 86px; border-radius: 22px; background: var(--violeta); color: #fff; font-size: 30px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+      .chip { position: absolute; display: flex; align-items: center; gap: 12px; padding: 16px 24px; border-radius: 22px; background: #fff; box-shadow: 0 18px 50px rgba(40,20,90,0.18); font-size: 26px; font-weight: 800; white-space: nowrap; }
+      .chip .pt { width: 16px; height: 16px; border-radius: 50%; }
+      .ok { opacity: 0; position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; background: rgba(255,255,255,0.96); }
+      .ok .t { width: 160px; height: 160px; border-radius: 50%; background: var(--verde); color: #fff; font-size: 96px; font-weight: 900; display: flex; align-items: center; justify-content: center; }
+      .ok .x { font-size: 38px; font-weight: 900; }
+      .dedo { position: absolute; width: 74px; height: 74px; border-radius: 50%; background: rgba(111,64,252,0.25); border: 5px solid rgba(111,64,252,0.75); }
+
+      /* 0 · gancho */
+      .anillo { position: absolute; left: 540px; top: 1060px; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%; border: 3px solid rgba(166,139,255,0.7); }
+      #nucleo { position: absolute; left: 520px; top: 1040px; width: 40px; height: 40px; border-radius: 50%; background: #a68bff; box-shadow: 0 0 60px #a68bff; }
+      #e0 .titulo { top: 560px; } #e0 .titulo h1 { font-size: 112px; }
+      .flota { position: absolute; padding: 14px 22px; border-radius: 18px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.85); font-size: 24px; font-weight: 700; }
+
+      /* 2 · factura */
+      .factura { position: absolute; left: 230px; top: 700px; width: 620px; padding: 44px; border-radius: 34px; background: #fff; box-shadow: 0 40px 100px rgba(40,20,90,0.22); }
+      .factura .cab { display: flex; justify-content: space-between; align-items: flex-start; }
+      .factura .tipo { width: 90px; height: 90px; border: 4px solid var(--tinta); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 56px; font-weight: 900; }
+      .factura .lin { height: 18px; border-radius: 9px; background: #efedf5; margin-top: 18px; }
+      .factura .tot { margin-top: 34px; display: flex; justify-content: space-between; font-size: 40px; font-weight: 900; }
+      .sello { position: absolute; right: -40px; bottom: -40px; padding: 18px 30px; border-radius: 22px; background: var(--verde); color: #fff; font-size: 30px; font-weight: 900; transform: rotate(-6deg); box-shadow: 0 20px 50px rgba(22,163,74,0.4); }
+
+      /* 3 · caja */
+      .caja-l { width: 380px; display: flex; flex-direction: column; gap: 14px; }
+      .caja-r { flex: 1; border-radius: 26px; background: #f7f5fc; padding: 28px; display: flex; flex-direction: column; gap: 14px; }
+      .linea-c { display: flex; justify-content: space-between; font-size: 24px; font-weight: 700; } .linea-c span { color: var(--gris); }
+      .caja-r .total { margin-top: auto; padding-top: 18px; border-top: 2px dashed var(--linea); display: flex; justify-content: space-between; font-size: 34px; font-weight: 900; }
+
+      /* 5 · clientes */
+      .cli .av { width: 58px; height: 58px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 22px; color: #fff; }
+      .etq { padding: 6px 12px; border-radius: 10px; font-size: 16px; font-weight: 800; }
+
+      /* 6 · números */
+      #n-total { font-size: 170px; font-weight: 900; letter-spacing: -0.05em; text-align: center; margin-top: 760px; }
+      #n-sub { text-align: center; font-size: 32px; color: rgba(255,255,255,0.6); font-weight: 600; }
+      #barras { position: absolute; left: 140px; right: 140px; top: 1230px; height: 300px; display: flex; align-items: flex-end; gap: 18px; }
+      #barras i { flex: 1; border-radius: 12px 12px 4px 4px; background: linear-gradient(180deg, #a68bff, var(--violeta)); transform-origin: 50% 100%; }
+
+      /* 7 · todo conectado */
+      #iso { position: absolute; left: 440px; top: 960px; width: 200px; }
+      .orbita { position: absolute; left: 540px; top: 1060px; width: 0; height: 0; }
+
+      /* 8 · cierre */
+      #e8 .centro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+      #logo-c { width: 640px; }
+      #pill { margin-top: 30px; padding: 12px 36px; border-radius: 999px; background: var(--celeste); color: #04121a; font-size: 40px; font-weight: 900; letter-spacing: 0.22em; }
+      #cta { margin-top: 90px; font-size: 104px; font-weight: 900; letter-spacing: -0.045em; } #cta em { font-style: normal; color: var(--violeta); }
+      #web { margin-top: 30px; font-size: 42px; font-weight: 800; color: var(--violeta); }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="45" data-width="1080" data-height="1920">
+      <div id="escenario" class="clip" data-start="0" data-duration="45" data-track-index="0" data-layout-allow-overlap data-layout-allow-overflow>
+        <div id="brillo"></div>
+
+        <!-- 0 · gancho -->
+        <div class="escena oscura" id="e0">
+          <div class="anillo"></div><div class="anillo"></div><div class="anillo"></div><div class="anillo"></div><div id="nucleo"></div>
+          <div class="flota" style="left: 100px; top: 360px">Venta #1042 · $ 48.900</div>
+          <div class="flota" style="right: 90px; top: 1500px">▲ 20% este mes</div>
+          <div class="flota" style="left: 120px; top: 1640px">Stock al día ✓</div>
+          <div class="titulo"><h1>¿Y si tu empresa se manejara <em>sola?</em></h1></div>
+        </div>
+
+        <!-- 1 · ventas + stock -->
+        <div class="escena" id="e1">
+          <div class="titulo"><h1>Vendés, y el stock <em>baja solo.</em></h1><p>En el local u online</p></div>
+          <div class="celu"><div class="isla"></div>
+            <div class="pant">
+              <div class="app-top"><b>Nueva venta</b><span>Caja 1</span></div>
+              <div class="fila"><div class="img" style="background: linear-gradient(135deg,#c4b5fd,#7c3aed)"></div><div class="n">Remera negra<small>Stock: <b id="stock1">24</b></small></div><div class="p">$ 18.900</div></div>
+              <div class="fila"><div class="img" style="background: linear-gradient(135deg,#bae6fd,#0284c7)"></div><div class="n">Jean clásico<small>Stock: 12</small></div><div class="p">$ 42.000</div></div>
+              <div class="fila"><div class="img" style="background: linear-gradient(135deg,#fecdd3,#e11d48)"></div><div class="n">Buzo oversize<small>Stock: 8</small></div><div class="p">$ 36.500</div></div>
+              <div style="flex: 1"></div>
+              <div class="app-top"><b>Total</b><b>$ 18.900</b></div>
+              <div class="btn" id="btn-cobrar">Cobrar</div>
+            </div>
+            <div class="ok" id="ok1"><div class="t">✓</div><div class="x">¡Venta registrada!</div></div>
+          </div>
+          <div class="dedo" id="dedo1" style="left: 560px; top: 1560px"></div>
+          <div class="chip" id="chip-stock" style="left: 700px; top: 700px"><span class="pt" style="background: var(--violeta)"></span>Stock 24 → 23</div>
+          <div class="chip" id="chip-online" style="left: 80px; top: 1180px"><span class="pt" style="background: var(--celeste)"></span>Venta online</div>
+        </div>
+
+        <!-- 2 · factura -->
+        <div class="escena" id="e2">
+          <div class="titulo"><h1>Facturás en <em>un clic.</em></h1><p>Factura electrónica, sin errores</p></div>
+          <div class="factura">
+            <div class="cab"><div><b style="font-size: 40px">Factura</b><div style="font-size: 22px; color: var(--gris); font-weight: 600; margin-top: 8px">N.º 0003-00012847</div></div><div class="tipo">B</div></div>
+            <div class="lin" style="width: 90%; margin-top: 34px"></div><div class="lin" style="width: 70%"></div><div class="lin" style="width: 80%"></div><div class="lin" style="width: 55%"></div>
+            <div class="tot"><span>Total</span><span>$ 18.900</span></div>
+            <div class="sello" id="sello">✓ Emitida</div>
+          </div>
+          <div class="chip" id="chip-mail" style="left: 120px; top: 1420px"><span class="pt" style="background: var(--celeste)"></span>Enviada al cliente</div>
+        </div>
+
+        <!-- 3 · caja -->
+        <div class="escena" id="e3">
+          <div class="titulo"><h1>La caja <em>cierra sola.</em></h1><p>Sin diferencias, sin planillas</p></div>
+          <div class="tablet"><div class="pant">
+            <div class="caja-l">
+              <div class="app-top"><b>Cierre de caja</b></div>
+              <div class="fila"><div class="n">Efectivo</div><div class="p">$ 412.300</div></div>
+              <div class="fila"><div class="n">Mercado Pago</div><div class="p">$ 688.150</div></div>
+              <div class="fila"><div class="n">Tarjetas</div><div class="p">$ 184.050</div></div>
+              <div class="fila"><div class="n">Transferencias</div><div class="p">$ 96.000</div></div>
+            </div>
+            <div class="caja-r">
+              <div class="linea-c"><span>Ventas del día</span><b>142</b></div>
+              <div class="linea-c"><span>Esperado</span><b>$ 1.380.500</b></div>
+              <div class="linea-c"><span>Contado</span><b id="contado">$ 0</b></div>
+              <div class="total"><span>Diferencia</span><span id="dif" style="color: var(--verde)">$ 0</span></div>
+            </div>
+          </div></div>
+          <div class="chip" id="chip-caja" style="left: 300px; top: 1460px"><span class="pt" style="background: var(--verde)"></span>Caja cerrada · todo cuadra</div>
+        </div>
+
+        <!-- 4 · alerta de stock -->
+        <div class="escena" id="e4">
+          <div class="titulo"><h1>Te avisa <em>antes</em> de que falte.</h1><p>Reposición inteligente</p></div>
+          <div class="celu"><div class="isla"></div>
+            <div class="pant">
+              <div class="app-top"><b>Stock</b><span>Depósito</span></div>
+              <div class="fila"><div class="img" style="background: linear-gradient(135deg,#c4b5fd,#7c3aed)"></div><div class="n">Remera negra<small id="st-rem" style="color: var(--rojo)">Quedan 3</small></div></div>
+              <div class="fila"><div class="img" style="background: linear-gradient(135deg,#bae6fd,#0284c7)"></div><div class="n">Jean clásico<small>Quedan 12</small></div></div>
+              <div class="fila"><div class="img" style="background: linear-gradient(135deg,#fecdd3,#e11d48)"></div><div class="n">Buzo oversize<small>Quedan 8</small></div></div>
+              <div class="fila"><div class="img" style="background: linear-gradient(135deg,#fde68a,#d97706)"></div><div class="n">Gorra<small>Quedan 30</small></div></div>
+            </div>
+          </div>
+          <div class="chip" id="aviso" style="left: 150px; top: 560px; padding: 22px 28px; font-size: 26px; z-index: 6"><span style="font-size: 40px">🔔</span><div>Remera negra: quedan 3<div style="font-size: 20px; color: var(--violeta)">Tocá para reponer</div></div></div>
+        </div>
+
+        <!-- 5 · clientes -->
+        <div class="escena" id="e5">
+          <div class="titulo"><h1>Tus clientes, <em>siempre a mano.</em></h1><p>Lista para promos que los hacen volver</p></div>
+          <div class="celu"><div class="isla"></div>
+            <div class="pant">
+              <div class="app-top"><b>Clientes</b><span id="n-cli">0 clientes</span></div>
+              <div class="fila cli"><div class="av" style="background: #7c3aed">MG</div><div class="n">María González<small>12 compras</small></div><span class="etq" style="background: var(--violeta-claro); color: var(--violeta)">VIP</span></div>
+              <div class="fila cli"><div class="av" style="background: #0284c7">JP</div><div class="n">Juan Pérez<small>5 compras</small></div><span class="etq" style="background: #e0f2fe; color: #0369a1">Frecuente</span></div>
+              <div class="fila cli"><div class="av" style="background: #e11d48">LR</div><div class="n">Lucía Romero<small>1 compra</small></div><span class="etq" style="background: #ffe4e6; color: var(--rojo)">Nueva</span></div>
+              <div class="fila cli"><div class="av" style="background: #d97706">DM</div><div class="n">Diego Martínez<small>8 compras</small></div><span class="etq" style="background: #fef3c7; color: #b45309">Frecuente</span></div>
+              <div style="flex: 1"></div>
+              <div class="btn" id="btn-promo">Enviar promo 10% OFF</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6 · números -->
+        <div class="escena oscura" id="e6">
+          <div class="titulo"><h1>Tus números, <em>solos.</em></h1></div>
+          <div id="n-total">$ 0</div>
+          <div id="n-sub">Ventas · últimos 30 días</div>
+          <div id="barras"></div>
+          <div class="chip" id="ch-g" style="left: 90px; top: 1600px; background: #1b1530; color: #fff"><span class="pt" style="background: #22c55e"></span>Ganancia real +18%</div>
+          <div class="chip" id="ch-m" style="left: 560px; top: 1600px; background: #1b1530; color: #fff"><span class="pt" style="background: #a68bff"></span>Lo que más sale</div>
+        </div>
+
+        <!-- 7 · todo conectado -->
+        <div class="escena" id="e7">
+          <div class="titulo"><h1>Todo conectado, <em>en un solo sistema.</em></h1></div>
+          <div class="orbita" id="orbita"></div>
+          <img id="iso" src="assets/isotipo.png" />
+        </div>
+
+        <!-- 8 · cierre -->
+        <div class="escena" id="e8">
+          <div class="centro">
+            <img id="logo-c" src="assets/logo-horizontal-negro.png" />
+            <div id="pill">SOFTWARE</div>
+            <div id="cta">Pedí tu <em>demo.</em></div>
+            <div id="web">somosprodi.com</div>
+          </div>
+        </div>
+
+        <!-- barra de módulos (escenas 1 a 6) -->
+        <div id="nav">
+          <div class="mod"><div class="ic">$</div><div class="tx">Ventas</div></div>
+          <div class="mod"><div class="ic">≡</div><div class="tx">Facturas</div></div>
+          <div class="mod"><div class="ic">▣</div><div class="tx">Caja</div></div>
+          <div class="mod"><div class="ic">▦</div><div class="tx">Stock</div></div>
+          <div class="mod"><div class="ic">☺</div><div class="tx">Clientes</div></div>
+          <div class="mod"><div class="ic">◔</div><div class="tx">Números</div></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ===== Tiempos de cada escena (segundos). Al tener la voz en off, se ajustan acá. =====
+      const ESC = [0, 4.2, 9.6, 14.6, 19.6, 24.6, 30.0, 36.4, 41.0, 45];
+      // =========================================================================
+
+      const tl = gsap.timeline({ paused: true });
+      const $ = (s) => document.querySelector(s);
+      const $$ = (s) => [...document.querySelectorAll(s)];
+      const onda = (inicio, dur, dibujar) => {
+        const p = { t: 0 };
+        dibujar(0);
+        tl.to(p, { t: 1, duration: dur, ease: "none", onUpdate: () => dibujar(p.t) }, inicio);
+      };
+      const pesos = (n) => "$ " + Math.round(n).toLocaleString("es-AR");
+      const entrarTitulo = (e, t) => {
+        tl.from(`${e} .titulo h1`, { y: 70, opacity: 0, duration: 0.5, ease: "expo.out" }, t + 0.1);
+        tl.from(`${e} .titulo h1 em`, { color: "#16131f", duration: 0.3 }, t + 0.5);
+        if ($(`${e} .titulo p`)) tl.from(`${e} .titulo p`, { y: 30, opacity: 0, duration: 0.4, ease: "expo.out" }, t + 0.35);
+      };
+
+      // mostrar cada escena en su tramo (cruce rápido)
+      $$(".escena").forEach((el, i) => {
+        tl.set(el, { visibility: "visible" }, ESC[i]);
+        tl.fromTo(el, { opacity: 0 }, { opacity: 1, duration: 0.25 }, ESC[i]);
+        if (i < 8) tl.set(el, { visibility: "hidden" }, ESC[i + 1] + 0.25);
+      });
+
+      // barra de módulos: aparece en la escena 1, avanza y se va en la 6
+      const mods = $$(".mod");
+      tl.set("#nav", { opacity: 0 }, 0).to("#nav", { opacity: 1, duration: 0.3 }, ESC[1]);
+      // el módulo de la escena actual queda encendido y los anteriores "hechos"
+      onda(0, ESC[9], (p) => {
+        const s = p * ESC[9];
+        mods.forEach((m, i) => {
+          const desde = ESC[i + 1], hasta = ESC[i + 2];
+          m.className = s >= desde && s < hasta ? "mod on" : s >= hasta ? "mod hecho" : "mod";
+        });
+      });
+      mods.forEach((m, i) => tl.fromTo(m.querySelector(".ic"), { scale: 0.6 }, { scale: 1, duration: 0.4, ease: "back.out(3)", immediateRender: false }, ESC[i + 1]));
+      tl.to("#nav", { opacity: 0, duration: 0.3 }, ESC[7]);
+
+      // 0 · gancho
+      tl.to(".anillo", { scale: 14, opacity: 0, duration: 1.8, stagger: 0.45, ease: "power2.out", startAt: { scale: 0.4, opacity: 1 } }, 0.1);
+      tl.from("#nucleo", { scale: 0, duration: 0.5, ease: "back.out(3)" }, 0.05);
+      tl.from(".flota", { y: 40, opacity: 0, duration: 0.5, stagger: 0.25, ease: "expo.out" }, 0.6);
+      tl.from("#e0 .titulo h1", { y: 80, opacity: 0, filter: "blur(14px)", duration: 0.7, ease: "expo.out" }, 0.3);
+      tl.from("#e0 .titulo h1 em", { color: "#ffffff", duration: 0.4 }, 1.6);
+      tl.to("#e0 .titulo", { scale: 1.06, duration: 3.8, ease: "none" }, 0.3);
+
+      // 1 · ventas
+      let t = ESC[1];
+      entrarTitulo("#e1", t);
+      tl.from("#e1 .celu", { y: 900, duration: 0.7, ease: "expo.out" }, t)
+        .from("#e1 .fila", { x: 120, opacity: 0, duration: 0.4, stagger: 0.12, ease: "expo.out" }, t + 0.5)
+        .from("#chip-online", { scale: 0, duration: 0.4, ease: "back.out(2.5)" }, t + 1.3)
+        .from("#dedo1", { x: 260, y: 200, opacity: 0, duration: 0.5, ease: "power3.out" }, t + 2.0)
+        .to("#dedo1", { scale: 0.75, duration: 0.1, yoyo: true, repeat: 1 }, t + 2.6)
+        .to("#btn-cobrar", { scale: 0.95, duration: 0.1, yoyo: true, repeat: 1 }, t + 2.6)
+        .to("#dedo1", { opacity: 0, duration: 0.2 }, t + 2.9)
+        .fromTo("#ok1", { opacity: 0 }, { opacity: 1, duration: 0.2 }, t + 2.8)
+        .from("#ok1 .t", { scale: 0, rotation: -90, duration: 0.5, ease: "back.out(2.5)" }, t + 2.8)
+        .to("#ok1", { opacity: 0, duration: 0.25 }, t + 3.8)
+        .set("#stock1", { textContent: "23" }, t + 3.9)
+        .fromTo("#stock1", { color: "#16131f" }, { color: "#6f40fc", duration: 0.2 }, t + 3.9)
+        .from("#chip-stock", { scale: 0, duration: 0.45, ease: "back.out(2.5)" }, t + 3.9)
+        .to("#e1 .celu", { y: -20, duration: 4.3, ease: "none" }, t + 0.75);
+
+      // 2 · factura
+      t = ESC[2];
+      entrarTitulo("#e2", t);
+      tl.from(".factura", { y: 700, rotation: 8, duration: 0.7, ease: "expo.out" }, t)
+        .from(".factura .lin", { scaleX: 0, transformOrigin: "0 50%", duration: 0.35, stagger: 0.12, ease: "power2.out" }, t + 0.6)
+        .from("#sello", { scale: 3, opacity: 0, duration: 0.35, ease: "expo.in" }, t + 1.9)
+        .to(".factura", { x: 10, duration: 0.05, yoyo: true, repeat: 3 }, t + 2.25)
+        .from("#chip-mail", { scale: 0, duration: 0.45, ease: "back.out(2.5)" }, t + 2.8)
+        .to(".factura", { y: -30, duration: 4.2, ease: "none" }, t + 0.75);
+
+      // 3 · caja
+      t = ESC[3];
+      entrarTitulo("#e3", t);
+      tl.from("#e3 .tablet", { y: 900, duration: 0.7, ease: "expo.out" }, t)
+        .from("#e3 .caja-l .fila", { x: -80, opacity: 0, duration: 0.35, stagger: 0.1, ease: "expo.out" }, t + 0.5)
+        .from("#e3 .linea-c", { opacity: 0, duration: 0.3, stagger: 0.12 }, t + 0.9)
+        .from("#chip-caja", { scale: 0, duration: 0.45, ease: "back.out(2.5)" }, t + 3.0)
+        .to("#e3 .tablet", { scale: 1.03, duration: 5, ease: "none" }, t);
+      onda(t + 1.2, 1.6, (p) => { $("#contado").textContent = pesos(1380500 * (1 - Math.pow(1 - p, 3))); });
+      tl.from("#dif", { scale: 2, duration: 0.4, ease: "back.out(3)" }, t + 2.8);
+
+      // 4 · alerta de stock
+      t = ESC[4];
+      entrarTitulo("#e4", t);
+      tl.from("#e4 .celu", { y: 900, duration: 0.7, ease: "expo.out" }, t)
+        .from("#e4 .fila", { x: 120, opacity: 0, duration: 0.4, stagger: 0.1, ease: "expo.out" }, t + 0.5)
+        .from("#aviso", { y: -260, opacity: 0, duration: 0.55, ease: "back.out(1.8)" }, t + 1.6)
+        .to("#aviso", { rotation: 2, duration: 0.08, yoyo: true, repeat: 5 }, t + 2.2)
+        .to("#st-rem", { scale: 1.15, duration: 0.25, yoyo: true, repeat: 3, transformOrigin: "0 50%" }, t + 2.2)
+        .to("#e4 .celu", { y: -20, duration: 4.2, ease: "none" }, t + 0.75);
+
+      // 5 · clientes
+      t = ESC[5];
+      entrarTitulo("#e5", t);
+      tl.from("#e5 .celu", { y: 900, duration: 0.7, ease: "expo.out" }, t)
+        .from("#e5 .fila", { x: 120, opacity: 0, duration: 0.4, stagger: 0.14, ease: "expo.out" }, t + 0.5)
+        .from("#btn-promo", { scale: 0.6, opacity: 0, duration: 0.45, ease: "back.out(2)" }, t + 2.4)
+        .to("#btn-promo", { scale: 1.05, duration: 0.3, yoyo: true, repeat: 3 }, t + 3.0)
+        .to("#e5 .celu", { y: -20, duration: 4.6, ease: "none" }, t + 0.75);
+      onda(t + 0.6, 2.2, (p) => { $("#n-cli").textContent = `${Math.round(420 * (1 - Math.pow(1 - p, 3)))} clientes`; });
+
+      // 6 · números
+      t = ESC[6];
+      tl.from("#e6 .titulo h1", { y: 70, opacity: 0, duration: 0.5, ease: "expo.out" }, t + 0.1);
+      const alturas = [0.3, 0.42, 0.38, 0.55, 0.5, 0.66, 0.6, 0.78, 0.72, 0.9, 0.85, 1];
+      $("#barras").innerHTML = alturas.map((h) => `<i style="height:${h * 100}%"></i>`).join("");
+      tl.from("#n-total", { scale: 0.6, opacity: 0, duration: 0.5, ease: "expo.out" }, t + 0.3)
+        .from("#n-sub", { opacity: 0, duration: 0.4 }, t + 0.6)
+        .from("#barras i", { scaleY: 0, duration: 0.5, stagger: 0.06, ease: "back.out(1.6)" }, t + 0.8)
+        .from("#ch-g", { scale: 0, duration: 0.45, ease: "back.out(2.5)" }, t + 2.6)
+        .from("#ch-m", { scale: 0, duration: 0.45, ease: "back.out(2.5)" }, t + 3.6);
+      onda(t + 0.3, 2.6, (p) => { $("#n-total").textContent = pesos(7284500 * (1 - Math.pow(1 - p, 3))); });
+
+      // 7 · todo conectado: los módulos orbitan y entran al isotipo
+      t = ESC[7];
+      entrarTitulo("#e7", t);
+      const iconos = ["$", "≡", "▣", "▦", "☺", "◔"];
+      $("#orbita").innerHTML = iconos.map((c) => `<div class="mod on" style="position:absolute; left:-38px; top:-38px; width:76px"><div class="ic">${c}</div></div>`).join("");
+      const orb = $$("#orbita .mod");
+      onda(t + 0.2, 3.4, (p) => {
+        const r = 380 * (1 - Math.max(0, (p - 0.55) / 0.45));
+        orb.forEach((m, i) => {
+          const a = (i / orb.length) * Math.PI * 2 + p * 4;
+          m.style.transform = `translate(${Math.cos(a) * r}px, ${Math.sin(a) * r}px) scale(${0.6 + 0.4 * (r / 380)})`;
+          m.style.opacity = r < 30 ? 0 : 1;
+        });
+      });
+      tl.from("#iso", { scale: 0, rotation: -90, duration: 0.6, ease: "back.out(2)" }, t + 0.3)
+        .to("#iso", { scale: 1.35, duration: 0.25, yoyo: true, repeat: 1, ease: "sine.inOut" }, t + 3.6);
+
+      // 8 · cierre
+      t = ESC[8];
+      tl.from("#logo-c", { scale: 1.8, opacity: 0, filter: "blur(16px)", duration: 0.6, ease: "expo.out" }, t)
+        .from("#pill", { y: 50, opacity: 0, duration: 0.4, ease: "back.out(2)" }, t + 0.4)
+        .from("#cta", { scale: 1.6, opacity: 0, duration: 0.45, ease: "expo.out" }, t + 0.9)
+        .from("#web", { y: 30, opacity: 0, duration: 0.4, ease: "expo.out" }, t + 1.4)
+        .to("#e8 .centro", { scale: 1.04, duration: 4, ease: "none" }, t);
+
+      // brillo de fondo que se mueve suave todo el tiempo
+      tl.to("#brillo", { x: 300, y: -500, duration: 45, ease: "sine.inOut" }, 0);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
