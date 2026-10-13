@@ -9,14 +9,14 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useTecladoAbierto } from "@/components/MobileNav";
 import { noLeido, tituloChat } from "@/lib/redes/chat";
 import { ChatIcon } from "./ChatIcon";
-import { abrirEnDock, ANCHO_PANEL, chatDeLink, dock, LISTA, useChatDock, useSinLeerDock } from "@/lib/redes/chatDock";
+import { abrirEnDock, ANCHO_PANEL, chatDeLink, dock, LISTA, ROLES_DOCK, useChatDock, useSinLeerDock } from "@/lib/redes/chatDock";
 import { cn } from "@/lib/utils";
 import type { Chat as ChatT } from "@/lib/redes/types";
 
 const ChatDockPaneles = lazy(() => import("./ChatDockPanel"));
 
 /** Los mismos roles que entran a /chat. */
-const ROLES_CHAT = ["admin", "productor", "editor", "pauta", "diseno", "administracion", "cliente"];
+const ROLES_CHAT = ROLES_DOCK;
 
 // Medidas de la fila de abajo (compu), en px.
 const MARGEN = 16;

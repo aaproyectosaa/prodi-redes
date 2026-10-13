@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { auth } from "@/integrations/firebase/client";
 import { getRoleInfo } from "@/lib/roles";
 import { navForRoles, type NavItem } from "@/lib/redes/nav";
+import { ROLES_DOCK } from "@/lib/redes/chatDock";
 import { useEmpresa } from "@/lib/empresa";
 import { SelectorEmpresa } from "@/components/SelectorEmpresa";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
@@ -65,9 +66,13 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
     navigate("/auth");
   };
 
-  const { roles } = useUserProfileContext();
+  const { roles, viewingAs } = useUserProfileContext();
   const { empresa } = useEmpresa();
-  const sections = navForRoles(role, roles, empresa);
+  // En la compu el chat está en el botón flotante: el menú no lo repite (en el celular sigue en la barra de abajo).
+  const conDock = !viewingAs && ROLES_DOCK.includes(role ?? "");
+  const sections = navForRoles(role, roles, empresa)
+    .map((s) => ({ ...s, items: conDock ? s.items.filter((i) => i.path !== "/chat") : s.items }))
+    .filter((s) => s.items.length > 0);
   const pendientes = usePendientes();
   const plegables = useSeccionesPlegables();
   const roleLabel = getRoleInfo(role).label;

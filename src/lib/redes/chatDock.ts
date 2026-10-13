@@ -3,6 +3,9 @@ import { useSyncExternalStore } from "react";
 import type { ReferenciaChat } from "./types";
 
 /** En `desplegados`: la lista de chats. */
+/** Quiénes tienen el chat flotante (en la compu el menú no repite "Chat"). */
+export const ROLES_DOCK = ["admin", "productor", "editor", "pauta", "diseno", "administracion", "programador", "cliente"];
+
 export const LISTA = "lista";
 /** Conversaciones abiertas a la vez; al abrir otra se cierra la menos usada. */
 export const MAX_ABIERTOS = 4;
