@@ -8,6 +8,7 @@
 // POST /api/db/voz         { chatId, accion: "entrar" | "latido" | "salir" }  (chat de voz de los grupos)
 // POST /api/db/senal       { chatId, para, tipo: "oferta" | "respuesta" | "chau", data }  (para conectar la llamada)
 // POST /api/db/senales     {}  → las señales que me mandaron (se entregan una vez)
+// POST /api/db/sin-leer    {}  → cuántos mensajes sin leer tiene cada chat mío { conteos: { chatId: n } }
 //
 // Cada documento pasa por las reglas de acceso de api/_lib/reglas.ts.
 
@@ -463,6 +464,39 @@ async function quienesEscriben(uid: string) {
   return r.rows as { chat_id: string; uid: string; nombre: string; estado: string }[];
 }
 
+/**
+ * Mensajes sin leer de cada chat del usuario (para la lista de chats, como WhatsApp). Una sola consulta para todos:
+ * por cada chat con algo nuevo, cuenta los mensajes de otros (sin los avisos del sistema) desde su última lectura.
+ */
+async function sinLeer(req: VercelRequest) {
+  const caller = await requireCaller(req);
+  if (caller.role === "pending" || !caller.role) return { conteos: {} };
+  const pool = getPool();
+  const uid = caller.uid;
+  const r = await pool.query(
+    "select id, data->'ultimo' as ultimo, data->'leido'->>$1 as leido from documentos where coleccion = 'chats' and data->'miembros' @> jsonb_build_array($1::text)",
+    [uid]
+  );
+  const pendientes = (r.rows as { id: string; ultimo: { by?: string; at?: string } | null; leido: string | null }[])
+    .filter((c) => c.ultimo?.at && c.ultimo.by !== uid && (c.leido ?? "") < c.ultimo.at)
+    .slice(0, 300);
+  if (!pendientes.length) return { conteos: {} };
+  const q = await pool.query(
+    `select v.col, count(d.id)::int as n
+       from unnest($1::text[], $2::text[]) as v(col, desde)
+       left join documentos d
+         on d.coleccion = v.col
+        and d.data->>'at' > v.desde
+        and coalesce(d.data->>'by', '') <> $3
+        and coalesce(d.data->>'tipo', 'texto') <> 'sistema'
+      group by v.col`,
+    [pendientes.map((c) => `chats/${c.id}/mensajes`), pendientes.map((c) => c.leido ?? ""), uid]
+  );
+  const conteos: Record<string, number> = {};
+  for (const row of q.rows as { col: string; n: number }[]) conteos[row.col.split("/")[1]] = Math.max(1, Math.min(999, row.n));
+  return { conteos };
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
@@ -477,6 +511,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "voz") res.status(200).json(await voz(req));
     else if (accion === "senal") res.status(200).json(await senal(req));
     else if (accion === "senales") res.status(200).json(await senales(req));
+    else if (accion === "sin-leer") res.status(200).json(await sinLeer(req));
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {
     const status = (err as { code?: number }).code;

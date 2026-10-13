@@ -27,7 +27,7 @@ import { NuevoGrupo, useContactos } from "@/components/redes/chat/Grupos";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useAppData } from "@/contexts/app-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
-import { abrirDirecto, noLeido, PRODI_ID, tituloChat } from "@/lib/redes/chat";
+import { abrirDirecto, noLeido, PRODI_ID, tituloChat, useConteoSinLeer } from "@/lib/redes/chat";
 import {
   archivar,
   asignarEtiqueta,
@@ -206,6 +206,8 @@ export function ChatLista({
   };
 
   const titulo = (c: ChatT) => tituloChat(c, uid, profiles, role);
+  // Cuántos mensajes sin leer tiene cada chat (el número verde de WhatsApp; mientras llega, el puntito).
+  const conteos = useConteoSinLeer(chats, uid);
   const etiquetaPorId = useMemo(() => new Map(prefs.etiquetas.map((e) => [e.id, e])), [prefs.etiquetas]);
   // Un filtro de una etiqueta que se borró vuelve a "Todos".
   const filtroOk: Filtro = filtro.startsWith("e:") && !etiquetaPorId.has(filtro.slice(2)) ? "todos" : filtro;
@@ -465,7 +467,14 @@ export function ChatLista({
                             : "Sin mensajes"}
                     </p>
                     )}
-                    {unread && <span className="ml-auto h-2.5 w-2.5 shrink-0 rounded-full bg-primary" aria-label="Sin leer" />}
+                    {unread &&
+                      (conteos[c.id] ? (
+                        <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold tabular-nums text-primary-foreground" aria-label={`${conteos[c.id]} sin leer`}>
+                          {conteos[c.id] > 99 ? "99+" : conteos[c.id]}
+                        </span>
+                      ) : (
+                        <span className="ml-auto h-2.5 w-2.5 shrink-0 rounded-full bg-primary" aria-label="Sin leer" />
+                      ))}
                   </div>
                   {(etiquetas.length > 0 || (buscando && archivado)) && (
                     <div className="mt-1 flex flex-wrap gap-1">

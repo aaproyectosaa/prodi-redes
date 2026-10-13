@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   addDoc,
   collection,
@@ -587,4 +588,34 @@ export async function tareaDesdeMensaje(
 ) {
   assertEditable();
   return callApi<{ ok: boolean; tarea_id: string }>("/api/ia/tarea-chat", { chat_id: chat.id, mensaje_id: m.id, ...datos });
+}
+
+/**
+ * Cuántos mensajes sin leer tiene cada chat (para la lista, como WhatsApp). Se le pregunta al servidor cuando cambia
+ * algo en los chats sin leer (un mensaje nuevo, uno que se leyó), con una pausa corta; una sola consulta para todos.
+ */
+export function useConteoSinLeer(chats: Chat[], uid: string | undefined): Record<string, number> {
+  const [conteos, setConteos] = useState<Record<string, number>>({});
+  const clave = chats
+    .filter((c) => noLeido(c, uid))
+    .map((c) => `${c.id}:${c.ultimo?.at ?? ""}:${c.leido?.[uid ?? ""] ?? ""}`)
+    .sort()
+    .join("|");
+  useEffect(() => {
+    if (!uid || !clave) {
+      setConteos({});
+      return;
+    }
+    let vivo = true;
+    const t = window.setTimeout(() => {
+      callApi<{ conteos: Record<string, number> }>("/api/db/sin-leer", {})
+        .then((r) => vivo && setConteos(r.conteos ?? {}))
+        .catch(() => undefined);
+    }, 600);
+    return () => {
+      vivo = false;
+      window.clearTimeout(t);
+    };
+  }, [clave, uid]);
+  return conteos;
 }

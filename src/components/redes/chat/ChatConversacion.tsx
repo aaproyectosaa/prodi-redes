@@ -289,6 +289,9 @@ export function ChatConversacion({
   const { clienteById, chats } = useRedes();
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
   const [cargando, setCargando] = useState(true);
+  // Hasta dónde había leído al abrir este chat (se toma una vez, antes de marcarlo leído): ahí va "N mensajes sin leer".
+  const [corte, setCorte] = useState(() => ({ id: chat.id, hasta: chat.leido?.[uid] ?? "" }));
+  if (corte.id !== chat.id) setCorte({ id: chat.id, hasta: chat.leido?.[uid] ?? "" });
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [llamando, setLlamando] = useState(false);
@@ -405,14 +408,20 @@ export function ChatConversacion({
 
   // Al volver a desplegarla sin nada nuevo, queda donde estaba.
   const visto = useRef("");
+  const ubicado = useRef("");
   useEffect(() => {
     if (!activa) return;
     const ahora = `${chat.id}|${mensajes.length}|${subidas.length}|${pensando}`;
-    if (ahora !== visto.current) fin.current?.scrollIntoView({ block: "end" });
+    // La primera vez que se ve este chat ya cargado: si hay mensajes sin leer, se arranca en el primero (como WhatsApp).
+    const primera = !cargando && ubicado.current !== chat.id;
+    if (primera) ubicado.current = chat.id;
+    const franja = primera ? document.getElementById(`sin-leer-${chat.id}`) : null;
+    if (franja) franja.scrollIntoView({ block: "start" });
+    else if (ahora !== visto.current) fin.current?.scrollIntoView({ block: "end" });
     visto.current = ahora;
     void marcarLeido(chat, uid);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mensajes.length, chat.id, subidas.length, pensando, activa]);
+  }, [mensajes.length, chat.id, subidas.length, pensando, activa, cargando]);
 
   // Si se achica la lista (se abre el teclado) estando abajo de todo, se sigue viendo lo último.
   useEffect(() => {
@@ -435,6 +444,8 @@ export function ChatConversacion({
     };
   }, []);
 
+  const nuevos = corte.hasta ? mensajes.filter((m) => m.by !== uid && m.tipo !== "sistema" && m.at > corte.hasta) : [];
+  const primerNuevo = nuevos[0]?.id ?? null;
   const leidoHasta = chat.leido?.[uid] ?? "";
   const sinLeer = noLeido(chat, uid)
     ? mensajes.filter((m) => m.by !== uid && m.tipo !== "sistema" && m.at > leidoHasta).length || 1
@@ -778,6 +789,15 @@ export function ChatConversacion({
                 <div key={m.id} id={`msj-${m.id}`} className="scroll-mt-24 rounded-xl transition-colors duration-700">
                   {mostrarDia && (
                     <p className="my-3 text-center text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{dia}</p>
+                  )}
+                  {m.id === primerNuevo && (
+                    <div id={`sin-leer-${chat.id}`} className="my-3 flex scroll-mt-16 items-center gap-3" role="separator">
+                      <span className="h-px flex-1 bg-primary/30" />
+                      <span className="rounded-full bg-primary/10 px-3 py-1 text-[11px] font-semibold text-primary">
+                        {nuevos.length === 1 ? "1 mensaje sin leer" : `${nuevos.length} mensajes sin leer`}
+                      </span>
+                      <span className="h-px flex-1 bg-primary/30" />
+                    </div>
                   )}
                   <DeslizarParaResponder onResponder={() => responder(m)} onInfo={() => setInfoMsg(m)}>
                   <div className={cn("group/msj flex items-end gap-2", mio ? "justify-end" : "justify-start", !agrupado && "mt-2")}>
