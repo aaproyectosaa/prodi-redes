@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="es" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root { --violeta: #6f40fc; --celeste: #0ea5e9; --fondo: #050507; --blanco: #f4f4f6; --gris: #15151c; --rojo: #ff3b5c; --verde: #22c55e; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: var(--fondo); }
+      #root { position: relative; width: 100%; height: 100%; font-family: Inter, sans-serif; color: var(--blanco); }
+      .escena { position: absolute; inset: 0; overflow: hidden; background: var(--fondo); }
+      .centro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+      .mono { font-family: "JetBrains Mono", monospace; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; }
+      .grande { font-weight: 900; letter-spacing: -0.045em; line-height: 0.9; text-transform: uppercase; }
+      .cel { color: var(--celeste); }
+
+      #marco { position: absolute; inset: 0; pointer-events: none; z-index: 50; }
+      #marco .esq { position: absolute; width: 46px; height: 46px; border-color: rgba(255,255,255,0.35); border-style: solid; }
+      #marco .tl { top: 70px; left: 60px; border-width: 3px 0 0 3px; } #marco .tr { top: 70px; right: 60px; border-width: 3px 3px 0 0; }
+      #marco .bl { bottom: 70px; left: 60px; border-width: 0 0 3px 3px; } #marco .br { bottom: 70px; right: 60px; border-width: 0 3px 3px 0; }
+      #marco .rotulo { position: absolute; font-size: 22px; color: rgba(255,255,255,0.55); }
+      #tc { bottom: 82px; right: 120px; } #marca-chica { top: 82px; left: 120px; }
+
+      /* 1 excel */
+      #planilla { position: absolute; left: 90px; top: 300px; width: 900px; display: grid; grid-template-columns: 70px repeat(5, 1fr); }
+      #planilla div { height: 62px; border: 1px solid rgba(255,255,255,0.14); font-family: "JetBrains Mono", monospace; font-size: 24px; color: rgba(255,255,255,0.55); display: flex; align-items: center; padding-left: 12px; background: #0b0b10; }
+      #planilla .cab { background: #16161e; color: rgba(255,255,255,0.4); justify-content: center; padding: 0; }
+      #planilla .err { color: var(--rojo); font-weight: 700; }
+      #t-excel { position: absolute; left: 0; right: 0; top: 1160px; font-size: 112px; text-align: center; }
+
+      /* 2 tarjetas */
+      .tarjeta { position: absolute; width: 420px; padding: 34px 36px; border-radius: 34px; background: var(--gris); border: 2px solid rgba(255,255,255,0.1); box-shadow: 0 30px 80px rgba(0,0,0,0.6); }
+      .tarjeta .ico { width: 84px; height: 84px; border-radius: 22px; display: flex; align-items: center; justify-content: center; font-size: 46px; font-weight: 900; }
+      .tarjeta .nom { margin-top: 22px; font-size: 48px; font-weight: 900; letter-spacing: -0.02em; }
+      .tarjeta .sub { margin-top: 6px; font-size: 27px; color: rgba(255,255,255,0.5); font-weight: 600; }
+      #pregunta { position: absolute; left: 600px; top: 1010px; font-size: 300px; font-weight: 900; color: var(--rojo); opacity: 0; }
+
+      /* 3 pará */
+      #para { position: relative; font-size: 230px; }
+      #para .capa { position: absolute; inset: 0; mix-blend-mode: screen; }
+      #para .r { color: var(--rojo); } #para .c { color: #00e5ff; }
+      .franja { position: absolute; left: 0; right: 0; height: 24px; background: rgba(255,255,255,0.9); opacity: 0; }
+
+      /* 4 un solo sistema */
+      #pill-top { position: absolute; left: 0; right: 0; top: 200px; display: flex; justify-content: center; }
+      #pill-top div { padding: 12px 34px; border-radius: 999px; background: var(--celeste); color: #04121a; font-size: 38px; font-weight: 900; letter-spacing: 0.18em; }
+      #t-solo { position: absolute; left: 0; right: 0; top: 330px; font-size: 122px; text-align: center; }
+      #t-solo .l2 { color: var(--celeste); }
+
+      /* 5 celular con panel */
+      #celu { position: absolute; left: 230px; top: 300px; width: 620px; height: 1240px; border-radius: 80px; border: 16px solid #24242c; background: #0d0d13; overflow: hidden; box-shadow: 0 60px 160px rgba(111,64,252,0.45); padding: 110px 34px 0; display: flex; flex-direction: column; gap: 22px; }
+      #celu .isla { position: absolute; top: 24px; left: 50%; width: 160px; height: 42px; margin-left: -80px; border-radius: 21px; background: #000; }
+      #celu .tit { font-size: 36px; font-weight: 900; }
+      .kpi { border-radius: 26px; background: var(--gris); padding: 24px 26px; }
+      .kpi .k { font-size: 24px; color: rgba(255,255,255,0.5); font-weight: 700; }
+      .kpi .v { margin-top: 6px; font-size: 62px; font-weight: 900; letter-spacing: -0.03em; }
+      .kpi .d { font-size: 22px; font-weight: 800; color: var(--verde); }
+      #grafico { height: 300px; border-radius: 26px; background: var(--gris); padding: 24px; display: flex; align-items: flex-end; gap: 12px; }
+      #grafico .bar { flex: 1; border-radius: 10px 10px 4px 4px; background: linear-gradient(180deg, var(--celeste), var(--violeta)); transform-origin: 50% 100%; }
+      #t-celu { position: absolute; left: 0; right: 0; top: 1600px; font-size: 76px; font-weight: 900; text-align: center; letter-spacing: -0.02em; }
+
+      /* 6 cierre */
+      .rayo { position: absolute; left: 540px; top: 860px; height: 4px; width: 520px; transform-origin: 0 50%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.9)); opacity: 0; }
+      #logo { width: 700px; }
+      #pill { margin-top: 36px; padding: 14px 40px; border-radius: 999px; background: var(--celeste); color: #04121a; font-size: 46px; font-weight: 900; letter-spacing: 0.22em; }
+      #demo { margin-top: 80px; font-size: 124px; }
+      #web { margin-top: 40px; font-size: 44px; color: var(--violeta); font-weight: 800; filter: brightness(1.5); }
+      #dale { position: absolute; left: 640px; top: 1330px; padding: 16px 40px; border-radius: 24px; background: #fff; color: var(--violeta); font-size: 74px; font-weight: 900; border: 8px solid var(--violeta); transform: rotate(-8deg); box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="17.5" data-width="1080" data-height="1920">
+      <audio id="voz" src="assets/voz.m4a" data-start="0" data-duration="15" data-track-index="2"></audio>
+
+      <!-- 1 · ¿Seguís con Excel? (0–3.4) -->
+      <div id="s1" class="escena clip" data-start="0" data-duration="3.4" data-track-index="0">
+        <div id="planilla"></div>
+        <div id="t-excel" class="grande"><div class="l1">¿Seguís con</div><div class="l2 cel">Excel?</div></div>
+      </div>
+      <!-- 2 · stock / ventas / facturas (3.4–7.5) -->
+      <div id="s2" class="escena clip" data-start="3.4" data-duration="4.1" data-track-index="0">
+        <div class="tarjeta" id="c-stock" style="left: 90px; top: 300px; transform: rotate(-7deg)"><div class="ico" style="background: rgba(14,165,233,0.18); color: var(--celeste)">▦</div><div class="nom">Stock</div><div class="sub">por un lado</div></div>
+        <div class="tarjeta" id="c-ventas" style="left: 570px; top: 640px; transform: rotate(6deg)"><div class="ico" style="background: rgba(34,197,94,0.18); color: var(--verde)">$</div><div class="nom">Ventas</div><div class="sub">en el cuaderno</div></div>
+        <div class="tarjeta" id="c-fact" style="left: 120px; top: 1000px; transform: rotate(4deg)"><div class="ico" style="background: rgba(111,64,252,0.22); color: #a68bff">≡</div><div class="nom">Facturas</div><div class="sub">¿dónde?</div></div>
+        <div id="pregunta">?</div>
+      </div>
+      <!-- 3 · ¡PARÁ! (7.5–8.2) -->
+      <div id="s3" class="escena clip" data-start="7.5" data-duration="0.7" data-track-index="0">
+        <div class="centro"><div id="para" class="grande" data-layout-allow-overlap><span class="base">¡Pará!</span><span class="capa r" data-layout-allow-overlap>¡Pará!</span><span class="capa c" data-layout-allow-overlap>¡Pará!</span></div></div>
+        <div class="franja" style="top: 800px"></div><div class="franja" style="top: 990px; height: 12px"></div><div class="franja" style="top: 1120px; height: 40px"></div>
+      </div>
+      <!-- 4 · todo en un solo sistema (8.2–10.7) -->
+      <div id="s4" class="escena clip" data-start="8.2" data-duration="2.5" data-track-index="0">
+        <div id="pill-top"><div>PRODI SOFTWARE</div></div>
+        <div id="t-solo" class="grande"><div class="l1">Todo en un</div><div class="l2">solo sistema.</div></div>
+        <div class="tarjeta" id="d-stock" style="left: 90px; top: 800px; width: 410px"><div class="ico" style="background: rgba(14,165,233,0.18); color: var(--celeste)">▦</div><div class="nom">Stock</div><div class="sub">al día</div></div>
+        <div class="tarjeta" id="d-ventas" style="left: 580px; top: 800px; width: 410px"><div class="ico" style="background: rgba(34,197,94,0.18); color: var(--verde)">$</div><div class="nom">Ventas</div><div class="sub">en tiempo real</div></div>
+        <div class="tarjeta" id="d-fact" style="left: 90px; top: 1180px; width: 410px"><div class="ico" style="background: rgba(111,64,252,0.22); color: #a68bff">≡</div><div class="nom">Facturas</div><div class="sub">electrónicas</div></div>
+        <div class="tarjeta" id="d-cli" style="left: 580px; top: 1180px; width: 410px"><div class="ico" style="background: rgba(255,59,92,0.18); color: var(--rojo)">☺</div><div class="nom">Clientes</div><div class="sub">con historial</div></div>
+      </div>
+      <!-- 5 · desde el celu (10.7–12.6) -->
+      <div id="s5" class="escena clip" data-start="10.7" data-duration="1.9" data-track-index="0">
+        <div id="celu">
+          <div class="isla"></div>
+          <div class="tit">Hoy</div>
+          <div class="kpi"><div class="k">Ventas</div><div class="v" id="n-ventas">$ 0</div><div class="d">▲ 18%</div></div>
+          <div class="kpi"><div class="k">Pedidos</div><div class="v" id="n-pedidos">0</div><div class="d">▲ 12%</div></div>
+          <div id="grafico"></div>
+        </div>
+        <div id="t-celu">Desde el <span class="cel">celu.</span></div>
+      </div>
+      <!-- 6 · cierre (12.6–17.5) -->
+      <div id="s6" class="escena clip" data-start="12.6" data-duration="4.9" data-track-index="0">
+        <div id="rayos"></div>
+        <div class="centro">
+          <img id="logo" src="assets/logo-horizontal-blanco.png" />
+          <div id="pill">SOFTWARE</div>
+          <div id="demo" class="grande">Pedí tu <span class="cel">demo</span></div>
+          <div id="web">somosprodi.com</div>
+        </div>
+        <div id="dale">¡Dale!</div>
+      </div>
+      <!-- marco fijo -->
+      <div id="marco" class="clip" data-start="0" data-duration="12.6" data-track-index="1">
+        <div class="esq tl"></div><div class="esq tr"></div><div class="esq bl"></div><div class="esq br"></div>
+        <div id="marca-chica" class="rotulo mono">Prodi ✦ Sistemas ERP</div>
+        <div id="tc" class="rotulo mono">00:00:00</div>
+      </div>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      const $ = (s) => document.querySelector(s);
+      const $$ = (s) => [...document.querySelectorAll(s)];
+      const onda = (inicio, dur, dibujar) => {
+        const p = { t: 0 };
+        dibujar(0);
+        tl.to(p, { t: 1, duration: dur, ease: "none", onUpdate: () => dibujar(p.t) }, inicio);
+      };
+
+      onda(0, 12.6, (t) => {
+        const s = t * 12.6, f = Math.floor((s % 1) * 30);
+        $("#tc").textContent = `00:${String(Math.floor(s)).padStart(2, "0")}:${String(f).padStart(2, "0")}`;
+      });
+
+      // 1 · "¿Seguís llevando el negocio con un Excel que ya no entendés ni vos?"
+      const datos = [["Remera", "12", "#¡REF!", "$ 8.900", "??"], ["Buzo", "#N/A", "4", "$ 21.000", "ver"], ["Jean", "7", "7", "#¡DIV/0!", "ok?"], ["Gorra", "—", "#¡VALOR!", "$ 6.500", ""], ["Campera", "3", "3", "$ 54.000", "llamar"], ["Medias", "#¡REF!", "20", "$ 2.100", "??"], ["Short", "9", "", "#N/A", "x"], ["Bolso", "1", "1", "$ 33.000", "falta"]];
+      const celdas = [["", "A", "B", "C", "D", "E"], ...datos.map((f, i) => [String(i + 1), ...f])];
+      $("#planilla").innerHTML = celdas.map((fila, i) => fila.map((c, j) => `<div class="${i === 0 || j === 0 ? "cab" : ""} ${/^#|\?\?/.test(c) ? "err" : ""}">${c}</div>`).join("")).join("");
+      const todas = $$("#planilla div");
+      tl.from(todas, { opacity: 0, duration: 0.3, stagger: 0.006, ease: "none" }, 0)
+        .from("#t-excel .l1", { y: 120, opacity: 0, duration: 0.4, ease: "expo.out" }, 0.05)
+        .from("#t-excel .l2", { scale: 2.2, opacity: 0, duration: 0.4, ease: "back.out(2)" }, 1.45);
+      todas.forEach((el, i) => {
+        if (i % 6 === 0 || i < 6) return;
+        const k = (i * 37) % 11;
+        tl.to(el, { x: (k - 5) * 24, y: ((i * 53) % 9 - 4) * 28, rotation: (k - 5) * 6, duration: 0.7, ease: "power2.in" }, 2.2 + (k % 4) * 0.05);
+      });
+      tl.to("#t-excel", { x: 14, duration: 0.06, yoyo: true, repeat: 5 }, 2.6)
+        .to("#s1", { opacity: 0, duration: 0.12 }, 3.28);
+
+      // 2 · "El stock por un lado, las ventas en el cuaderno, las facturas... vaya uno a saber dónde"
+      tl.from("#c-stock", { x: -900, rotation: -40, duration: 0.45, ease: "back.out(1.4)" }, 3.5)
+        .from("#c-ventas", { x: 900, rotation: 40, duration: 0.45, ease: "back.out(1.4)" }, 4.4)
+        .from("#c-fact", { y: 900, rotation: -30, duration: 0.45, ease: "back.out(1.4)" }, 5.5)
+        .to("#c-stock", { x: -700, y: -300, rotation: -50, duration: 0.45, ease: "power3.in" }, 6.3)
+        .to("#c-ventas", { x: 700, y: -200, rotation: 60, duration: 0.45, ease: "power3.in" }, 6.4)
+        .to("#c-fact", { x: -200, y: 1000, rotation: 40, duration: 0.45, ease: "power3.in" }, 6.5)
+        .to("#pregunta", { opacity: 1, duration: 0.01 }, 6.6)
+        .from("#pregunta", { scale: 0.2, rotation: -30, duration: 0.4, ease: "back.out(3)" }, 6.6)
+        .to("#pregunta", { rotation: 12, duration: 0.15, yoyo: true, repeat: 3 }, 7.0)
+        .to("#s2", { opacity: 0, duration: 0.08 }, 7.42);
+
+      // 3 · "¡Pará un poco!"
+      tl.from("#para", { scale: 2.6, opacity: 0, duration: 0.18, ease: "expo.out" }, 7.5);
+      [[7.6, -22, 10], [7.68, 16, -8], [7.76, -10, 14], [7.84, 0, 0], [8.0, 20, -12], [8.08, 0, 0]].forEach(([t, a, b]) => {
+        tl.set("#para .r", { x: a, y: b / 3 }, t).set("#para .c", { x: -a, y: -b / 3 }, t);
+      });
+      $$(".franja").forEach((f, i) => tl.set(f, { opacity: 1, x: i % 2 ? 60 : -60 }, 7.6 + i * 0.06).set(f, { opacity: 0 }, 7.65 + i * 0.06));
+
+      // 4 · "con Prodi Software tenés todo en un solo sistema"
+      tl.from("#pill-top div", { scale: 0, duration: 0.35, ease: "back.out(2.5)" }, 8.35)
+        .from("#t-solo .l1", { y: -160, opacity: 0, duration: 0.35, ease: "expo.out" }, 9.05)
+        .from("#t-solo .l2", { y: -160, opacity: 0, duration: 0.35, ease: "expo.out" }, 9.85);
+      [["#d-stock", -500, -600, -30], ["#d-ventas", 500, -400, 25], ["#d-fact", -600, 500, 35], ["#d-cli", 500, 600, -25]].forEach(([id, x, y, r], i) => {
+        tl.from(id, { x, y, rotation: r, opacity: 0, duration: 0.5, ease: "expo.out" }, 9.4 + i * 0.1);
+      });
+      tl.to("#s4 .tarjeta", { borderColor: "rgba(14,165,233,0.75)", duration: 0.15, stagger: 0.05 }, 10.2)
+        .to("#s4 .tarjeta, #t-solo, #pill-top", { scale: 0.85, opacity: 0, duration: 0.18, ease: "power3.in" }, 10.52);
+
+      // 5 · "y lo manejás desde el celu"
+      const barras = [0.35, 0.5, 0.42, 0.62, 0.55, 0.74, 0.68, 0.86, 0.8, 0.95];
+      $("#grafico").innerHTML = barras.map((h) => `<div class="bar" style="height:${h * 100}%"></div>`).join("");
+      tl.from("#celu", { y: 1400, rotation: 10, duration: 0.5, ease: "expo.out" }, 10.7)
+        .from("#celu .kpi", { scale: 0.7, opacity: 0, duration: 0.3, stagger: 0.08, ease: "back.out(1.8)" }, 10.95)
+        .from("#grafico .bar", { scaleY: 0, duration: 0.4, stagger: 0.04, ease: "back.out(1.6)" }, 11.15)
+        .from("#t-celu", { y: 100, opacity: 0, duration: 0.3, ease: "expo.out" }, 11.4)
+        .to("#celu", { scale: 1.04, rotation: -2, duration: 1.3, ease: "none" }, 11.2)
+        .to("#s5", { opacity: 0, duration: 0.1 }, 12.5);
+      onda(10.9, 1.4, (t) => {
+        const e = 1 - Math.pow(1 - t, 3);
+        $("#n-ventas").textContent = "$ " + Math.round(1284500 * e).toLocaleString("es-AR");
+        $("#n-pedidos").textContent = Math.round(86 * e);
+      });
+
+      // 6 · "Mandanos un mensajito y pedí tu demo. ¡Dale!"
+      const rayos = $("#rayos");
+      for (let i = 0; i < 36; i++) rayos.insertAdjacentHTML("beforeend", `<div class="rayo" style="transform: rotate(${i * 10 + (i % 3) * 3}deg) translateX(${120 + (i % 4) * 40}px)"></div>`);
+      tl.fromTo(".rayo", { opacity: 0, scaleX: 0 }, { opacity: 1, scaleX: 1, duration: 0.3, stagger: 0.006, ease: "expo.out" }, 12.6)
+        .to(".rayo", { opacity: 0, x: 160, duration: 0.5, stagger: 0.004, ease: "power2.in" }, 13.1)
+        .from("#logo", { scale: 2, opacity: 0, filter: "blur(16px)", duration: 0.45, ease: "expo.out" }, 12.65)
+        .from("#pill", { y: 60, opacity: 0, duration: 0.3, ease: "back.out(2)" }, 13.0)
+        .from("#demo", { scale: 2.2, opacity: 0, duration: 0.35, ease: "expo.out" }, 13.65)
+        .from("#web", { y: 30, opacity: 0, duration: 0.3, ease: "expo.out" }, 14.1)
+        .from("#dale", { scale: 0, rotation: -40, duration: 0.4, ease: "back.out(3)" }, 14.45)
+        .to("#dale", { scale: 1.08, duration: 0.3, yoyo: true, repeat: 5, ease: "sine.inOut" }, 14.9)
+        .to("#s6 .centro", { scale: 1.04, duration: 4.9, ease: "none" }, 12.6);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
