@@ -11,7 +11,8 @@
     "instalar-whisper": "tsx scripts/instalar-whisper.ts",
     "hf:preview": "hyperframes preview hyperframes",
     "hf:check": "hyperframes check hyperframes",
-    "hf:render": "hyperframes render hyperframes --workers 2"
+    "hf:render": "hyperframes render hyperframes --workers 2",
+    "sfx": "tsx scripts/sfx.ts"
   },
   "dependencies": {
     "@remotion/captions": "4.0.533",
