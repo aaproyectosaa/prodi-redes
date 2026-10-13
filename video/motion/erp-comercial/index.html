@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="es" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root { --violeta: #6f40fc; --lila: #b9a4ff; --celeste: #0ea5e9; --blanco: #f5f4fa; --suave: rgba(245,244,250,0.62); --verde: #34d399; --naranja: #fb923c; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #06050b; }
+      #root { position: relative; width: 100%; height: 100%; font-family: Inter, sans-serif; color: var(--blanco); }
+      #escenario { position: absolute; inset: 0; overflow: hidden; background: #06050b; }
+      #cielo { position: absolute; inset: 0; }
+      #piso { position: absolute; left: -540px; right: -540px; bottom: -200px; height: 1100px; transform-origin: 50% 100%; transform: perspective(700px) rotateX(68deg);
+        background-image: linear-gradient(rgba(185,164,255,0.35) 2px, transparent 2px), linear-gradient(90deg, rgba(185,164,255,0.35) 2px, transparent 2px); background-size: 120px 120px;
+        -webkit-mask-image: linear-gradient(to top, #000 10%, transparent 85%); mask-image: linear-gradient(to top, #000 10%, transparent 85%); }
+      #rayos { position: absolute; inset: 0; }
+      .rayo { position: absolute; height: 3px; border-radius: 2px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.75), transparent); }
+      #mundo { position: absolute; inset: 0; transform-origin: 50% 45%; }
+      #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 40; }
+
+      /* reloj */
+      #hud { position: absolute; left: 0; right: 0; top: 0; height: 520px; z-index: 5; }
+      #reloj { position: absolute; top: 140px; left: 0; right: 0; text-align: center; font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 172px; letter-spacing: -0.02em; text-shadow: 0 0 40px rgba(185,164,255,0.45); }
+      #reloj .dp { color: var(--lila); }
+      #momento { position: absolute; top: 350px; left: 0; right: 0; text-align: center; font-family: "JetBrains Mono", monospace; font-size: 28px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--suave); }
+      #dia { position: absolute; top: 420px; left: 120px; right: 120px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.12); }
+      #dia .lleno { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 2px; background: linear-gradient(90deg, var(--celeste), var(--violeta)); box-shadow: 0 0 18px var(--violeta); }
+      #dia .sol { position: absolute; top: -13px; left: 0; width: 30px; height: 30px; margin-left: -15px; border-radius: 50%; background: #fff; box-shadow: 0 0 34px #fff; }
+
+      /* palabra golpe (abajo, gigante) */
+      .golpe { position: absolute; left: 0; right: 0; top: 1490px; text-align: center; font-size: 190px; font-weight: 900; letter-spacing: -0.05em; line-height: 1; text-transform: uppercase; visibility: hidden; z-index: 20; }
+      .golpe .rel { background: linear-gradient(90deg, #ffffff, var(--lila) 50%, var(--celeste)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+      .golpe .eco { position: absolute; left: 0; right: 0; top: 0; color: var(--violeta); opacity: 0.35; filter: blur(2px); z-index: -1; }
+
+      /* intro */
+      #intro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; visibility: hidden; }
+      #intro .l { font-weight: 900; letter-spacing: -0.05em; line-height: 0.92; text-transform: uppercase; text-align: center; }
+      #i1 { font-size: 220px; } #i2 { font-size: 104px; color: var(--suave); } #i3 { margin-top: 40px; }
+      #i3 img { width: 640px; }
+
+      .momento { position: absolute; inset: 0; visibility: hidden; }
+      .vidrio { position: absolute; border-radius: 40px; background: linear-gradient(160deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04)); border: 1.5px solid rgba(255,255,255,0.18); box-shadow: 0 40px 100px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.18); padding: 40px; overflow: hidden; }
+      .vidrio .brillo, .noti .brillo { position: absolute; top: -50%; left: -60%; width: 40%; height: 200%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent); transform: rotate(20deg); }
+      .cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
+      .cab b { font-size: 36px; font-weight: 800; } .cab span { font-family: "JetBrains Mono", monospace; font-size: 22px; color: var(--suave); }
+      .item { display: flex; align-items: center; gap: 20px; padding: 18px 0; border-top: 1px solid rgba(255,255,255,0.1); font-size: 32px; font-weight: 700; }
+      .item .pt { width: 18px; height: 18px; border-radius: 50%; flex: none; box-shadow: 0 0 12px currentColor; }
+      .item .n { flex: 1; } .item .v { font-family: "JetBrains Mono", monospace; font-weight: 700; }
+      .noti { position: absolute; left: 100px; width: 880px; display: flex; align-items: center; gap: 24px; padding: 28px 32px; border-radius: 30px; background: linear-gradient(160deg, rgba(255,255,255,0.14), rgba(255,255,255,0.05)); border: 1.5px solid rgba(255,255,255,0.2); box-shadow: 0 30px 80px rgba(0,0,0,0.5); overflow: hidden; }
+      .noti .ic { width: 84px; height: 84px; border-radius: 22px; display: flex; align-items: center; justify-content: center; font-size: 42px; font-weight: 900; flex: none; }
+      .noti .tx { flex: 1; font-size: 32px; font-weight: 800; } .noti .tx small { display: block; font-size: 23px; color: var(--suave); font-weight: 600; margin-top: 4px; }
+      .noti .monto { font-family: "JetBrains Mono", monospace; font-size: 32px; font-weight: 700; color: var(--verde); }
+      .gigante { font-family: "JetBrains Mono", monospace; font-weight: 700; letter-spacing: -0.04em; }
+
+      #ranura { position: absolute; left: 190px; top: 1380px; width: 700px; height: 26px; border-radius: 13px; background: #000; box-shadow: inset 0 4px 10px rgba(0,0,0,0.9), 0 0 30px rgba(111,64,252,0.6); z-index: 3; }
+      #ticket-mask { position: absolute; left: 230px; top: 600px; width: 620px; height: 793px; overflow: hidden; }
+      #ticket { position: absolute; left: 0; bottom: 0; width: 620px; padding: 46px 44px; border-radius: 26px 26px 0 0; background: #fbfaff; color: #16131f; }
+      #ticket .l { height: 16px; border-radius: 8px; background: #ebe8f3; margin-top: 18px; }
+      #ticket .t { margin-top: 34px; padding-top: 24px; border-top: 3px dashed #d9d4e8; display: flex; justify-content: space-between; font-size: 44px; font-weight: 900; }
+      #sello { position: absolute; left: 620px; top: 1160px; padding: 18px 30px; border-radius: 22px; background: var(--verde); color: #052e1f; font-size: 36px; font-weight: 900; transform: rotate(-8deg); box-shadow: 0 20px 60px rgba(52,211,153,0.55); z-index: 4; }
+
+      #aviso { top: 640px; border-color: rgba(251,146,60,0.6); background: linear-gradient(160deg, rgba(251,146,60,0.25), rgba(251,146,60,0.08)); }
+      #pulso { position: absolute; left: 132px; top: 668px; width: 84px; height: 84px; border-radius: 22px; border: 4px solid var(--naranja); }
+      #barra-stock { position: absolute; left: 100px; top: 900px; width: 880px; }
+      #barra-stock .riel { height: 30px; border-radius: 15px; background: rgba(255,255,255,0.1); overflow: hidden; }
+      #barra-stock .nivel { height: 100%; width: 100%; border-radius: 15px; background: linear-gradient(90deg, var(--naranja), #f43f5e); box-shadow: 0 0 24px rgba(244,63,94,0.6); }
+      #barra-stock .lbl { display: flex; justify-content: space-between; margin-top: 16px; font-family: "JetBrains Mono", monospace; font-size: 26px; color: var(--suave); }
+      #reponer { position: absolute; left: 290px; top: 1100px; width: 500px; height: 110px; border-radius: 28px; background: var(--naranja); color: #2a1203; font-size: 38px; font-weight: 900; display: flex; align-items: center; justify-content: center; box-shadow: 0 20px 60px rgba(251,146,60,0.5); }
+
+      #caja { left: 100px; top: 620px; width: 880px; }
+      #dif { position: absolute; left: 230px; top: 1110px; width: 620px; text-align: center; padding: 26px; border-radius: 30px; border: 4px solid var(--verde); color: var(--verde); font-size: 50px; font-weight: 900; background: rgba(52,211,153,0.1); box-shadow: 0 0 50px rgba(52,211,153,0.35); }
+
+      #sillon { position: absolute; left: 0; right: 0; top: 620px; text-align: center; }
+      #sillon .k { font-size: 36px; color: var(--suave); font-weight: 700; }
+      #ganancia { font-size: 160px; margin-top: 10px; text-shadow: 0 0 60px rgba(52,211,153,0.45); }
+      #linea-g { position: absolute; left: 100px; top: 1000px; width: 880px; height: 300px; }
+      #monedas { position: absolute; inset: 0; }
+      .moneda { position: absolute; width: 60px; height: 60px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff8c4, #fbbf24 55%, #b45309); color: #7c2d12; font-weight: 900; font-size: 34px; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4); }
+
+      #grilla { position: absolute; left: 100px; top: 600px; width: 880px; display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+      #grilla div { height: 190px; border-radius: 30px; background: linear-gradient(160deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04)); border: 1.5px solid rgba(255,255,255,0.18); display: flex; flex-direction: column; justify-content: center; padding: 30px; gap: 8px; }
+      #grilla b { font-size: 38px; } #grilla span { font-family: "JetBrains Mono", monospace; font-size: 24px; color: var(--verde); }
+
+      #cierre { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; visibility: hidden; z-index: 30; }
+      #logo { width: 700px; }
+      #pill { margin-top: 32px; padding: 12px 36px; border-radius: 999px; background: var(--celeste); color: #04121a; font-size: 42px; font-weight: 900; letter-spacing: 0.22em; }
+      #boton { position: relative; margin-top: 110px; padding: 40px 80px; border-radius: 40px; background: linear-gradient(135deg, var(--violeta), #8b5cf6 50%, var(--celeste)); font-size: 76px; font-weight: 900; letter-spacing: -0.03em; box-shadow: 0 30px 90px rgba(111,64,252,0.65); overflow: hidden; }
+      #boton .brillo { position: absolute; top: -50%; left: -60%; width: 35%; height: 200%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent); transform: rotate(20deg); }
+      #anillo-boton { position: absolute; inset: -6px; border-radius: 46px; border: 4px solid var(--lila); }
+      #web { margin-top: 44px; font-size: 44px; font-weight: 800; color: var(--lila); }
+      #cursor { position: absolute; left: 640px; top: 1320px; width: 0; height: 0; z-index: 35; border-left: 34px solid #fff; border-top: 20px solid transparent; border-bottom: 20px solid transparent; transform: rotate(-60deg); filter: drop-shadow(0 6px 10px rgba(0,0,0,0.6)); }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="36.5" data-width="1080" data-height="1920">
+      <audio id="voz" src="assets/voz.m4a" data-start="0" data-duration="34.1" data-track-index="2"></audio>
+      <div id="escenario" class="clip" data-start="0" data-duration="36.5" data-track-index="0" data-layout-allow-overlap data-layout-allow-overflow>
+        <div id="cielo"></div><div id="piso"></div><div id="rayos"></div>
+
+        <div id="mundo">
+          <div id="hud">
+            <div id="reloj">08<span class="dp">:</span>59</div>
+            <div id="momento">mañana</div>
+            <div id="dia"><div class="lleno"></div><div class="sol"></div></div>
+          </div>
+
+          <div id="intro">
+            <div class="l" id="i1">Un día</div>
+            <div class="l" id="i2">en tu negocio</div>
+            <div class="l" id="i3"><img src="assets/logo-horizontal-blanco.png" /></div>
+          </div>
+
+          <div class="momento" id="m1">
+            <div class="vidrio" id="stock" style="left: 100px; top: 600px; width: 880px"><div class="brillo"></div>
+              <div class="cab"><b>Stock al abrir</b><span>09:00</span></div>
+              <div class="item"><span class="pt" style="background: var(--verde); color: var(--verde)"></span><span class="n">Remera negra</span><span class="v">24</span></div>
+              <div class="item"><span class="pt" style="background: var(--verde); color: var(--verde)"></span><span class="n">Jean clásico</span><span class="v">12</span></div>
+              <div class="item"><span class="pt" style="background: var(--verde); color: var(--verde)"></span><span class="n">Buzo oversize</span><span class="v">8</span></div>
+              <div class="item"><span class="pt" style="background: var(--naranja); color: var(--naranja)"></span><span class="n">Gorra lisa</span><span class="v">3</span></div>
+            </div>
+          </div>
+
+          <div class="momento" id="m2">
+            <div class="noti" id="v1" style="top: 600px"><div class="brillo"></div><div class="ic" style="background: rgba(14,165,233,0.22); color: var(--celeste)">$</div><div class="tx">Venta en el local<small>Remera negra × 1</small></div><div class="monto">+$ 18.900</div></div>
+            <div class="noti" id="v2" style="top: 790px"><div class="brillo"></div><div class="ic" style="background: rgba(111,64,252,0.3); color: var(--lila)">⌁</div><div class="tx">Venta online<small>Remera negra × 1</small></div><div class="monto">+$ 18.900</div></div>
+            <div class="vidrio" id="cont-stock" style="left: 290px; top: 1010px; width: 500px; text-align: center; padding: 30px"><div class="brillo"></div>
+              <div style="font-size: 28px; color: var(--suave); font-weight: 700">Remera negra en stock</div>
+              <div class="gigante" id="n-stock" style="font-size: 150px; margin-top: 4px">24</div>
+            </div>
+          </div>
+
+          <div class="momento" id="m3">
+            <div id="ticket-mask"><div id="ticket">
+              <div style="display: flex; justify-content: space-between"><b style="font-size: 42px">Factura B</b><span style="font-family: 'JetBrains Mono', monospace; font-size: 22px; color: #6b6880">0003-00012847</span></div>
+              <div class="l" style="width: 90%; margin-top: 30px"></div><div class="l" style="width: 65%"></div><div class="l" style="width: 80%"></div><div class="l" style="width: 50%"></div>
+              <div class="t"><span>Total</span><span>$ 18.900</span></div>
+            </div></div>
+            <div id="ranura"></div>
+            <div id="sello">✓ Emitida</div>
+          </div>
+
+          <div class="momento" id="m4">
+            <div class="noti" id="aviso"><div class="ic" style="background: rgba(251,146,60,0.3); color: var(--naranja)">!</div><div class="tx">Se está terminando<small>Remera negra · tu más vendida</small></div></div>
+            <div id="pulso"></div>
+            <div id="barra-stock"><div class="riel"><div class="nivel"></div></div><div class="lbl"><span>Stock</span><span id="quedan">quedan 24</span></div></div>
+            <div id="reponer">Reponer ahora →</div>
+          </div>
+
+          <div class="momento" id="m5">
+            <div class="vidrio" id="caja"><div class="brillo"></div>
+              <div class="cab"><b>Cierre de caja</b><span>20:00</span></div>
+              <div class="item"><span class="n">Esperado</span><span class="v">$ 1.380.500</span></div>
+              <div class="item"><span class="n">Contado</span><span class="v" id="contado">$ 0</span></div>
+            </div>
+            <div id="dif">Diferencia: $ 0 ✓</div>
+          </div>
+
+          <div class="momento" id="m6">
+            <div id="monedas"></div>
+            <div id="sillon"><div class="k">Hoy ganaste</div><div class="gigante" id="ganancia">$ 0</div></div>
+            <svg id="linea-g" viewBox="0 0 880 300"><defs><linearGradient id="gg" x1="0" x2="1"><stop offset="0" stop-color="#0ea5e9" /><stop offset="1" stop-color="#34d399" /></linearGradient></defs><path id="trazo" d="M0 270 C 90 250, 140 230, 210 200 S 330 210, 400 150 S 530 120, 600 90 S 780 40, 880 15" fill="none" stroke="url(#gg)" stroke-width="12" stroke-linecap="round" /></svg>
+          </div>
+
+          <div class="momento" id="m7">
+            <div id="grilla">
+              <div><b>Stock</b><span>al día ✓</span></div><div><b>Ventas</b><span>registradas ✓</span></div>
+              <div><b>Facturas</b><span>emitidas ✓</span></div><div><b>Caja</b><span>cuadrada ✓</span></div>
+              <div><b>Avisos</b><span>a tiempo ✓</span></div><div><b>Números</b><span>al instante ✓</span></div>
+            </div>
+          </div>
+
+          <!-- palabras golpe -->
+          <div class="golpe" id="g1"><span class="eco">Stock</span><span class="rel">Stock ✓</span></div>
+          <div class="golpe" id="g2"><span class="eco">Solo</span><span class="rel">Solo.</span></div>
+          <div class="golpe" id="g3"><span class="eco">1 clic</span><span class="rel">1 clic</span></div>
+          <div class="golpe" id="g4" style="font-size: 160px"><span class="eco">Te avisa</span><span class="rel">Te avisa</span></div>
+          <div class="golpe" id="g5" style="font-size: 170px"><span class="eco">Al peso</span><span class="rel">Al peso</span></div>
+          <div class="golpe" id="g6" style="font-size: 200px; top: 1360px"><span class="eco">Hoy</span><span class="rel">Hoy +</span></div>
+          <div class="golpe" id="g7" style="font-size: 150px"><span class="eco">Ordenado</span><span class="rel">Ordenado</span></div>
+        </div>
+
+        <div id="cierre">
+          <img id="logo" src="assets/logo-horizontal-blanco.png" />
+          <div id="pill">SOFTWARE</div>
+          <div id="boton"><div id="anillo-boton"></div><div class="brillo"></div>Pedí tu demo →</div>
+          <div id="web">somosprodi.com</div>
+        </div>
+        <div id="cursor"></div>
+        <div id="flash"></div>
+      </div>
+    </div>
+
+    <script>
+      // ===== Tiempos sincronizados con la voz (palabra por palabra) =====
+      const ESC = [0, 2.8, 7.1, 12.4, 16.3, 20.9, 24.8, 28.7, 31.8, 36.5];
+      const HORA = [null, "09:00", "11:30", "13:00", "17:00", "20:00", "21:00"];
+      const GOLPE = [["#g1", 6.4], ["#g2", 11.8], ["#g3", 15.55], ["#g4", 17.75], ["#g5", 24.05], ["#g6", 27.7], ["#g7", 29.7]];
+      // ==================================================================
+
+      const tl = gsap.timeline({ paused: true });
+      const $ = (s) => document.querySelector(s);
+      const $$ = (s) => [...document.querySelectorAll(s)];
+      const onda = (inicio, dur, dibujar) => { const p = { t: 0 }; dibujar(0); tl.to(p, { t: 1, duration: dur, ease: "none", onUpdate: () => dibujar(p.t) }, inicio); };
+      const pesos = (n) => "$ " + Math.round(n).toLocaleString("es-AR");
+      const aMin = (h) => { const [a, b] = h.split(":").map(Number); return a * 60 + b; };
+      const fmt = (m) => { const h = Math.floor(m / 60), mm = Math.round(m % 60); return `${String(h).padStart(2, "0")}<span class="dp">:</span>${String(mm).padStart(2, "0")}`; };
+      const mezcla = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+      const flash = (t, f = 0.85) => tl.fromTo("#flash", { opacity: f }, { opacity: 0, duration: 0.3, ease: "power2.out", immediateRender: false }, t);
+      const temblor = (t, fuerza = 14) => [0, 1, 2, 3, 4, 5].forEach((k) => tl.set("#mundo", { x: k === 5 ? 0 : (k % 2 ? -fuerza : fuerza) * (1 - k / 6), y: k === 5 ? 0 : (k % 2 ? fuerza / 2 : -fuerza / 2) }, t + k * 0.035));
+
+      // rayos de luz que cruzan todo el tiempo (velocidad)
+      const rayos = $("#rayos");
+      for (let i = 0; i < 22; i++) rayos.insertAdjacentHTML("beforeend", `<div class="rayo" style="top:${(i * 89) % 1920}px; width:${220 + (i * 53) % 320}px"></div>`);
+      const rs = $$(".rayo");
+      onda(0, ESC[9], (p) => {
+        const s = p * ESC[9];
+        rs.forEach((r, i) => {
+          const vel = 900 + (i * 137) % 900;
+          const x = ((s * vel + i * 400) % 2200) - 500;
+          r.style.transform = `translateX(${x}px)`;
+          r.style.opacity = 0.15 + ((i * 7) % 5) / 10;
+        });
+        $("#piso").style.backgroundPosition = `0 ${s * 260}px`;
+      });
+
+      // cielo de mañana a noche + reloj que corre + sol en la barra del día
+      const CIELO = [[[14, 165, 233], [40, 30, 90]], [[56, 120, 230], [70, 40, 150]], [[111, 64, 252], [60, 20, 110]], [[200, 80, 200], [80, 20, 90]], [[70, 40, 160], [15, 10, 40]], [[40, 20, 110], [8, 6, 20]]];
+      onda(0, ESC[9], (p) => {
+        const s = p * ESC[9];
+        let min = aMin("08:59");
+        for (let i = 1; i <= 6; i++) if (s >= ESC[i]) {
+          const desde = i === 1 ? aMin("08:59") : aMin(HORA[i - 1]);
+          const k = Math.min(1, (s - ESC[i]) / 0.45);
+          min = desde + (aMin(HORA[i]) - desde) * (1 - Math.pow(1 - k, 3));
+        }
+        $("#reloj").innerHTML = fmt(min);
+        const dia = Math.max(0, Math.min(1, (min - 480) / (22 * 60 - 480)));
+        $("#dia .lleno").style.width = `${dia * 100}%`;
+        $("#dia .sol").style.left = `${dia * 100}%`;
+        const f = dia * (CIELO.length - 1), i = Math.min(CIELO.length - 2, Math.floor(f)), t = f - i;
+        $("#cielo").style.background = `radial-gradient(120% 55% at 50% 0%, rgba(${mezcla(CIELO[i][0], CIELO[i + 1][0], t)},0.6) 0%, rgba(${mezcla(CIELO[i][1], CIELO[i + 1][1], t)},0.65) 45%, #06050b 85%)`;
+      });
+      ["mañana", "mañana", "mediodía", "tarde", "noche", "noche"].forEach((m, i) => tl.set("#momento", { textContent: m }, ESC[i + 1]));
+      tl.set("#hud", { opacity: 0 }, 0).to("#hud", { opacity: 1, duration: 0.2 }, ESC[1]);
+      for (let i = 1; i <= 6; i++) tl.fromTo("#reloj", { scale: 1.35, filter: "blur(6px)" }, { scale: 1, filter: "blur(0px)", duration: 0.45, ease: "back.out(3)", immediateRender: false }, ESC[i]);
+      tl.to("#hud", { opacity: 0, duration: 0.2 }, ESC[7]);
+
+      // transición entre horas: barrido con desenfoque + destello
+      for (let i = 1; i <= 8; i++) {
+        flash(ESC[i], i === 8 ? 1 : 0.7);
+        tl.fromTo("#mundo", { x: 260, filter: "blur(14px)" }, { x: 0, filter: "blur(0px)", duration: 0.35, ease: "expo.out", immediateRender: false }, ESC[i]);
+      }
+      // zoom de cámara lento dentro de cada momento
+      for (let i = 1; i <= 7; i++) tl.fromTo("#mundo", { scale: 1 }, { scale: 1.05, duration: ESC[i + 1] - ESC[i], ease: "none", immediateRender: false }, ESC[i]);
+
+      // mostrar / ocultar momentos
+      $$(".momento").forEach((el, k) => {
+        const i = k + 1;
+        tl.set(el, { visibility: "visible" }, ESC[i]);
+        tl.set(el, { visibility: "hidden" }, ESC[i + 1]);
+      });
+      // brillo que recorre las tarjetas
+      $$(".vidrio .brillo, .noti .brillo").forEach((b, i) => tl.fromTo(b, { xPercent: 0 }, { xPercent: 560, duration: 0.9, ease: "power2.inOut", immediateRender: false }, 0.5 + i * 0.01));
+
+      // palabras golpe: entran grandes, se asientan y se van
+      GOLPE.forEach(([id, t]) => {
+        tl.set(id, { visibility: "visible" }, t);
+        tl.fromTo(id, { scale: 2.4, opacity: 0, filter: "blur(16px)" }, { scale: 1, opacity: 1, filter: "blur(0px)", duration: 0.28, ease: "expo.out", immediateRender: false }, t);
+        tl.fromTo(`${id} .eco`, { x: 0 }, { x: 18, y: 10, duration: 0.6, ease: "power2.out", immediateRender: false }, t);
+        tl.to(id, { scale: 0.85, opacity: 0, y: 40, duration: 0.25, ease: "power2.in" }, t + 1.1);
+        tl.set(id, { visibility: "hidden" }, t + 1.36);
+        temblor(t, 10);
+      });
+
+      // INTRO 0–2.8 · "Así es un día en tu negocio con PRODI"
+      tl.set("#intro", { visibility: "visible" }, 0)
+        .from("#i1", { scale: 3, opacity: 0, filter: "blur(20px)", duration: 0.4, ease: "expo.out" }, 0.25)
+        .from("#i2", { y: 120, opacity: 0, duration: 0.35, ease: "expo.out" }, 1.0)
+        .from("#i3", { scale: 0.3, opacity: 0, duration: 0.45, ease: "back.out(2.5)" }, 2.25)
+        .to("#intro", { scale: 1.08, duration: 2.6, ease: "none" }, 0.2)
+        .set("#intro", { visibility: "hidden" }, ESC[1]);
+      temblor(0.25, 16); temblor(2.3, 12);
+
+      // 09:00 · stock
+      let t = ESC[1];
+      tl.from("#stock", { rotationY: 35, rotationX: 10, y: 300, opacity: 0, duration: 0.6, ease: "expo.out", transformPerspective: 1200 }, 4.0)
+        .from("#stock .item", { x: 80, opacity: 0, duration: 0.3, stagger: 0.09, ease: "expo.out" }, 4.3)
+        .from("#stock .pt", { scale: 0, duration: 0.3, stagger: 0.09, ease: "back.out(3)" }, 4.6);
+
+      // 11:30 · ventas
+      t = ESC[2];
+      tl.from("#cont-stock", { y: 400, opacity: 0, duration: 0.5, ease: "expo.out" }, t + 0.3)
+        .from("#v1", { x: -1100, duration: 0.45, ease: "expo.out" }, 8.15)
+        .set("#n-stock", { textContent: "23" }, 8.5).fromTo("#n-stock", { scale: 1.45, color: "#34d399" }, { scale: 1, color: "#f5f4fa", duration: 0.4, immediateRender: false }, 8.5)
+        .from("#v2", { x: 1100, duration: 0.45, ease: "expo.out" }, 9.55)
+        .set("#n-stock", { textContent: "22" }, 9.9).fromTo("#n-stock", { scale: 1.45, color: "#34d399" }, { scale: 1, color: "#f5f4fa", duration: 0.4, immediateRender: false }, 9.9);
+      temblor(8.15, 8); temblor(9.55, 8);
+
+      // 13:00 · factura
+      t = ESC[3];
+      tl.from("#ranura", { scaleX: 0, duration: 0.35, ease: "expo.out" }, t + 0.2)
+        .from("#ticket", { yPercent: 100, duration: 1.4, ease: "power2.out" }, 13.6)
+        .from("#sello", { scale: 3.2, opacity: 0, rotation: -30, duration: 0.25, ease: "expo.in" }, 15.4);
+      temblor(15.65, 16); flash(15.65, 0.35);
+
+      // 17:00 · aviso
+      t = ESC[4];
+      tl.from("#aviso", { y: -500, opacity: 0, duration: 0.5, ease: "back.out(1.8)" }, 17.7)
+        .to("#pulso", { scale: 1.9, opacity: 0, duration: 0.7, repeat: 3, ease: "power2.out", startAt: { scale: 1, opacity: 1 } }, 17.9)
+        .from("#barra-stock", { opacity: 0, duration: 0.25 }, 17.0)
+        .from("#reponer", { scale: 0, duration: 0.4, ease: "back.out(2.5)" }, 20.2)
+        .to("#reponer", { scale: 1.07, duration: 0.2, yoyo: true, repeat: 1, ease: "sine.inOut" }, 20.6);
+      onda(17.0, 3.0, (p) => {
+        const q = Math.round(24 - 21 * (1 - Math.pow(1 - p, 2)));
+        $("#barra-stock .nivel").style.width = `${(q / 24) * 100}%`;
+        $("#quedan").textContent = `quedan ${q}`;
+      });
+      temblor(17.75, 18);
+
+      // 20:00 · caja
+      t = ESC[5];
+      tl.from("#caja", { rotationY: -35, y: 300, opacity: 0, duration: 0.6, ease: "expo.out", transformPerspective: 1200 }, 22.0)
+        .from("#dif", { scale: 0.3, opacity: 0, duration: 0.35, ease: "back.out(3)" }, 24.05);
+      onda(22.4, 1.6, (p) => { $("#contado").textContent = pesos(1380500 * (1 - Math.pow(1 - p, 3))); });
+
+      // 21:00 · ganancia con monedas
+      t = ESC[6];
+      const trazo = $("#trazo"), largo = 1100;
+      trazo.style.strokeDasharray = largo;
+      onda(t + 0.4, 2.2, (p) => { trazo.style.strokeDashoffset = largo * (1 - p); });
+      onda(t + 0.4, 3.0, (p) => { $("#ganancia").textContent = pesos(486200 * (1 - Math.pow(1 - p, 3))); });
+      tl.from("#sillon", { y: 80, opacity: 0, duration: 0.45, ease: "expo.out" }, t + 0.1)
+        .fromTo("#ganancia", { scale: 1 }, { scale: 1.12, duration: 0.15, yoyo: true, repeat: 1, immediateRender: false }, 27.7);
+      const mon = $("#monedas");
+      for (let i = 0; i < 16; i++) mon.insertAdjacentHTML("beforeend", `<div class="moneda" style="left:${80 + (i * 61) % 900}px; top:-80px">$</div>`);
+      $$(".moneda").forEach((m, i) => tl.to(m, { y: 2100, rotation: (i % 2 ? 1 : -1) * 540, duration: 1.4 + (i % 4) * 0.2, ease: "power1.in" }, 27.6 + (i % 8) * 0.08));
+
+      // ordenado
+      t = ESC[7];
+      tl.from("#grilla div", { scale: 0.2, opacity: 0, rotation: (i) => (i % 2 ? 15 : -15), duration: 0.45, stagger: 0.07, ease: "back.out(2)" }, t + 0.1)
+        .from("#grilla span", { opacity: 0, x: -20, duration: 0.2, stagger: 0.07 }, t + 0.6);
+
+      // cierre · PRODI Software → Pedí tu demo (botón + cursor que toca)
+      t = ESC[8];
+      tl.set("#mundo", { visibility: "hidden" }, t)
+        .set("#cierre", { visibility: "visible" }, t)
+        .from("#logo", { scale: 2, opacity: 0, filter: "blur(18px)", duration: 0.45, ease: "expo.out" }, t)
+        .from("#pill", { y: 50, opacity: 0, duration: 0.35, ease: "back.out(2)" }, 32.2)
+        .from("#boton", { scale: 0.2, opacity: 0, duration: 0.45, ease: "back.out(2.2)" }, 32.95)
+        .fromTo("#boton .brillo", { xPercent: 0 }, { xPercent: 640, duration: 0.7, ease: "power2.inOut", repeat: 2, repeatDelay: 0.6, immediateRender: false }, 33.4)
+        .from("#web", { y: 30, opacity: 0, duration: 0.35, ease: "expo.out" }, 33.5)
+        .from("#cursor", { x: 300, y: 300, opacity: 0, duration: 0.45, ease: "power3.out" }, 33.6)
+        .to("#cursor", { scale: 0.8, duration: 0.08, yoyo: true, repeat: 1 }, 34.1)
+        .to("#boton", { scale: 0.94, duration: 0.08, yoyo: true, repeat: 1 }, 34.1)
+        .fromTo("#anillo-boton", { scale: 1, opacity: 1 }, { scale: 1.35, opacity: 0, duration: 0.6, repeat: 3, ease: "power2.out", immediateRender: false }, 34.15)
+        .to("#cierre", { scale: 1.04, duration: ESC[9] - t, ease: "none" }, t);
+      temblor(t, 14);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
