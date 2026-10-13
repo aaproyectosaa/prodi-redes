@@ -457,6 +457,8 @@ export function ChatConversacion({
     const t = texto.trim() || (referencia ? `Sobre ${referencia.titulo}` : "");
     if (!t) return;
     avisarEscribiendo(null);
+    // Si estaba escribiendo (teclado abierto), después de mandar sigue escribiendo.
+    const conTeclado = document.activeElement === caja.current;
     setEnviando(true);
     setSugerir(null);
     try {
@@ -483,6 +485,7 @@ export function ChatConversacion({
       toast.error(err instanceof Error ? err.message : "No se pudo enviar");
     } finally {
       setEnviando(false);
+      if (conTeclado) requestAnimationFrame(() => caja.current?.focus());
     }
   };
 
@@ -1249,7 +1252,15 @@ export function ChatConversacion({
           </div>
           {/* Sin texto escrito: micrófono para mandar un audio (como en WhatsApp). */}
           {texto.trim() ? (
-            <Button size="icon" className="h-11 w-11 shrink-0 rounded-full" onClick={enviar} disabled={enviando} aria-label="Enviar">
+            <Button
+              size="icon"
+              className="h-11 w-11 shrink-0 rounded-full"
+              // Que tocar "Enviar" no le saque el foco al texto: así el teclado no se cierra (lo cerrás vos).
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={enviar}
+              disabled={enviando}
+              aria-label="Enviar"
+            >
               {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
           ) : (
