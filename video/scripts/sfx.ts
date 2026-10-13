@@ -1,7 +1,8 @@
 // Efectos de sonido sintetizados con ffmpeg (sin descargas ni créditos).
 //
 //   pnpm sfx crear                         genera la biblioteca en video/sfx/*.wav
-//   pnpm sfx mezclar <voz> <cues.json> <salida.m4a> [--duracion 35.5]
+//   pnpm sfx mezclar <voz> <cues.json> <salida.m4a> [--duracion 35.5] [--lib sfx-cine]
+//        --lib sfx-cine = efectos cinematográficos de ElevenLabs (whoosh, golpe, subida, logo, glitch, ding, pop, monedas)
 //        cues.json = [["whoosh", 8.95], ["golpe", 10.75, -4], ...]  (nombre, segundo, dB opcional)
 //        mezcla la voz con los efectos (los efectos van ~10 dB por debajo de la voz) y normaliza a -14 LUFS
 
@@ -55,16 +56,19 @@ function crear() {
   console.log(`✔ ${Object.keys(LIBRERIA).length} efectos en video/sfx/`);
 }
 
-function mezclar(voz: string, cuesArchivo: string, salida: string, duracion?: number) {
-  if (!fs.existsSync(path.join(DIR, "whoosh.wav"))) crear();
+// lib: carpeta de efectos. Si tiene anclas.json ({nombre: segundos}), el segundo del cue es donde cae
+// el golpe del sonido (no su arranque): ej. el pico de un whoosh justo en el corte de cámara.
+function mezclar(voz: string, cuesArchivo: string, salida: string, duracion?: number, lib = DIR) {
+  if (lib === DIR && !fs.existsSync(path.join(DIR, "whoosh.wav"))) crear();
+  const anclas: Record<string, number> = fs.existsSync(path.join(lib, "anclas.json")) ? JSON.parse(fs.readFileSync(path.join(lib, "anclas.json"), "utf8")) : {};
   const cues: [string, number, number?][] = JSON.parse(fs.readFileSync(cuesArchivo, "utf8"));
   const entradas = ["-i", voz];
   const filtros: string[] = [];
   cues.forEach(([nombre, t, db = 0], i) => {
-    const f = path.join(DIR, `${nombre}.wav`);
-    if (!fs.existsSync(f)) throw new Error(`No existe el efecto "${nombre}"`);
+    const f = path.join(lib, `${nombre}.wav`);
+    if (!fs.existsSync(f)) throw new Error(`No existe el efecto "${nombre}" en ${lib}`);
     entradas.push("-i", f);
-    const ms = Math.round(t * 1000);
+    const ms = Math.max(0, Math.round((t - (anclas[nombre] ?? 0)) * 1000));
     filtros.push(`[${i + 1}:a]adelay=${ms}|${ms},volume=${(-10 + db).toFixed(1)}dB[s${i}]`);
   });
   const todos = cues.map((_, i) => `[s${i}]`).join("");
@@ -78,6 +82,8 @@ function mezclar(voz: string, cuesArchivo: string, salida: string, duracion?: nu
 const [cmd, ...a] = process.argv.slice(2);
 const dIdx = a.indexOf("--duracion");
 const dur = dIdx >= 0 ? Number(a[dIdx + 1]) : undefined;
+const lIdx = a.indexOf("--lib");
+const lib = lIdx >= 0 ? path.resolve(a[lIdx + 1]) : DIR;
 if (cmd === "crear") crear();
-else if (cmd === "mezclar" && a.length >= 3) mezclar(a[0], a[1], a[2], dur);
+else if (cmd === "mezclar" && a.length >= 3) mezclar(a[0], a[1], a[2], dur, lib);
 else console.log(fs.readFileSync(import.meta.filename, "utf8").split("\n").filter((l) => l.startsWith("//")).map((l) => l.slice(3)).join("\n"));
