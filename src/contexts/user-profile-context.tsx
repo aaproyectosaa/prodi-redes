@@ -1,6 +1,7 @@
 import {
   createContext,
   useCallback,
+  useRef,
   useContext,
   useEffect,
   useMemo,
@@ -45,25 +46,38 @@ const UserProfileContext = createContext<UserProfileContextValue | null>(null);
 function useProfileDoc(uid: string | null | undefined) {
   const [profile, setProfile] = useState<Profile | undefined>(undefined);
   const [loading, setLoading] = useState(true);
+  // Si falla la lectura (sin señal, el servidor tarda…) NO se toma como "no tiene perfil": eso mostraba
+  // "Cuenta pendiente de asignación" de golpe. Se queda con lo último y se reintenta en unos segundos.
+  const [intento, setIntento] = useState(0);
+  const ultimoUid = useRef<string | null | undefined>(uid);
   useEffect(() => {
     if (!uid) {
       setProfile(undefined);
       setLoading(false);
       return;
     }
-    setLoading(true);
-    return onSnapshot(
+    // Otro usuario: arranca de cero. El mismo (reintento): se mantiene lo que había.
+    if (ultimoUid.current !== uid) {
+      ultimoUid.current = uid;
+      setProfile(undefined);
+      setLoading(true);
+    }
+    let reintento: ReturnType<typeof setTimeout> | undefined;
+    const fin = onSnapshot(
       doc(db, "profiles", uid),
       (snap) => {
         setProfile(snap.exists() ? ({ id: snap.id, ...snap.data() } as Profile) : undefined);
         setLoading(false);
       },
       () => {
-        setProfile(undefined);
-        setLoading(false);
+        reintento = setTimeout(() => setIntento((n) => n + 1), 4_000);
       }
     );
-  }, [uid]);
+    return () => {
+      if (reintento) clearTimeout(reintento);
+      fin();
+    };
+  }, [uid, intento]);
   return { profile, loading };
 }
 
