@@ -5,6 +5,7 @@ import { ArrowLeft, Camera, Check, CheckCheck, FileText, Headphones, Image as Im
 import { toast } from "sonner";
 import { db } from "@/integrations/firebase/client";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import UserAvatar from "@/components/UserAvatar";
@@ -348,6 +349,35 @@ export function ChatConversacion({
     if (subidas.some((s) => s.estado === "listo")) limpiarSubidasListas(new Set(mensajes.map((m) => m.id)));
   }, [mensajes, subidas]);
 
+  // Lo pegado con Ctrl+V: queda arriba de la caja para verlo (y escribirle algo) antes de mandarlo, como WhatsApp.
+  const [pegados, setPegados] = useState<{ id: string; file: File; url: string | null }[]>([]);
+  const [verPegado, setVerPegado] = useState<{ file: File; url: string | null } | null>(null);
+  // Al cambiar de chat, lo pegado no se pasa al otro.
+  useEffect(() => {
+    setPegados((ps) => {
+      ps.forEach((x) => x.url && URL.revokeObjectURL(x.url));
+      return [];
+    });
+  }, [chat.id]);
+  const pegar = (files: File[]) =>
+    setPegados((ps) =>
+      [
+        ...ps,
+        ...files.map((f) => ({
+          id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          // Las capturas pegadas vienen como "image.png": se les pone un nombre con la fecha.
+          file: f.name && f.name !== "image.png" ? f : new File([f], `captura-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.${(f.type.split("/")[1] || "png").replace("jpeg", "jpg")}`, { type: f.type }),
+          url: f.type.startsWith("image/") ? URL.createObjectURL(f) : null,
+        })),
+      ].slice(0, 10)
+    );
+  const quitarPegado = (id: string) =>
+    setPegados((ps) => {
+      const x = ps.find((y) => y.id === id);
+      if (x?.url) URL.revokeObjectURL(x.url);
+      return ps.filter((y) => y.id !== id);
+    });
+
   const mandarArchivos = (files: File[]) => {
     if (!files.length) return;
     try {
@@ -487,6 +517,18 @@ export function ChatConversacion({
   };
 
   const enviar = async () => {
+    if (pegados.length) {
+      try {
+        subirArchivosChat(chat.id, pegados.map((x) => x.file), texto.trim() || undefined);
+        pegados.forEach((x) => x.url && URL.revokeObjectURL(x.url));
+        setPegados([]);
+        setTexto("");
+        avisarEscribiendo(null);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "No se pudo mandar");
+      }
+      return;
+    }
     const t = texto.trim() || (referencia ? `Sobre ${referencia.titulo}` : "");
     if (!t) return;
     avisarEscribiendo(null);
@@ -1114,6 +1156,40 @@ export function ChatConversacion({
             </Button>
           </div>
         )}
+        {pegados.length > 0 && (
+          <div className="mx-auto mb-2 flex max-w-3xl flex-wrap items-end gap-2 rounded-xl border bg-muted/40 p-2 animate-in fade-in slide-in-from-bottom-1 motion-reduce:animate-none">
+            {pegados.map((x) => (
+              <div key={x.id} className="group/peg relative">
+                <button
+                  type="button"
+                  onClick={() => setVerPegado(x)}
+                  className="block overflow-hidden rounded-lg border bg-background transition-transform hover:scale-[1.03]"
+                  title="Ver grande"
+                >
+                  {x.url ? (
+                    <img src={x.url} alt={x.file.name} className="h-20 w-20 object-cover" />
+                  ) : (
+                    <span className="flex h-20 w-28 flex-col items-center justify-center gap-1 px-2 text-center text-[10px] text-muted-foreground">
+                      <FileText className="h-5 w-5" />
+                      <span className="line-clamp-2 break-all">{x.file.name}</span>
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => quitarPegado(x.id)}
+                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-foreground text-background shadow"
+                  aria-label="Sacar"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+            <p className="ml-1 self-center text-[11px] text-muted-foreground">
+              Escribí algo si querés y tocá Enviar (Enter). <button type="button" className="underline" onClick={() => setPegados([])}>Cancelar</button>
+            </p>
+          </div>
+        )}
         <div className="mx-auto flex max-w-3xl items-end gap-1 min-[380px]:gap-2">
           {voz.grabando ? (
             <BarraGrabando
@@ -1297,7 +1373,7 @@ export function ChatConversacion({
                 const files = Array.from(e.clipboardData.files ?? []);
                 if (!files.length) return;
                 e.preventDefault();
-                mandarArchivos(files);
+                pegar(files);
               }}
               rows={1}
               placeholder={chat.tipo === "prodi" ? "Pedile algo a Prodi…" : ayudaCaja}
@@ -1305,7 +1381,7 @@ export function ChatConversacion({
             />
           </div>
           {/* Sin texto escrito: micrófono para mandar un audio (como en WhatsApp). */}
-          {texto.trim() ? (
+          {texto.trim() || pegados.length ? (
             <Button
               size="icon"
               className="h-11 w-11 shrink-0 rounded-full"
@@ -1325,6 +1401,16 @@ export function ChatConversacion({
         </div>
       </footer>
       {!enCelular && <CamaraDialog open={camara} onOpenChange={setCamara} onFoto={(f) => mandarArchivos([f])} />}
+      <Dialog open={!!verPegado} onOpenChange={(v) => !v && setVerPegado(null)}>
+        <DialogContent className="max-w-[95vw] gap-3 p-3 sm:max-w-4xl">
+          <DialogTitle className="truncate pr-8 text-sm">{verPegado?.file.name}</DialogTitle>
+          {verPegado?.url ? (
+            <img src={verPegado.url} alt={verPegado.file.name} className="mx-auto max-h-[80dvh] w-auto rounded-md object-contain" />
+          ) : (
+            <p className="py-8 text-center text-sm text-muted-foreground">Este archivo no tiene vista previa. Se manda tal cual.</p>
+          )}
+        </DialogContent>
+      </Dialog>
       {!privado && <InfoChat chat={chat} open={info} onOpenChange={setInfo} onSalio={onBack} />}
       <InfoMensaje
         chat={chat}
