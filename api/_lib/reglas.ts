@@ -99,7 +99,9 @@ async function companeros(c: Contexto): Promise<Set<string>> {
 /** Un link que se puede abrir sin riesgo: solo https (nada de javascript: ni data:). */
 const linkOk = (v: unknown) => v == null || v === "" || (typeof v === "string" && v.length <= 500 && /^https:\/\/[^\s"<>`]+$/i.test(v));
 /** Lo que la app deja crear como mensaje (archivos, bots y Prodi los escribe solo el servidor). */
-const TIPOS_MENSAJE = ["texto", "audio", "llamada", "minuta", "sistema"];
+const TIPOS_MENSAJE = ["texto", "audio", "llamada", "minuta", "sistema", "sticker"];
+/** Sticker: solo el código del emoji (la imagen la arma la app con la dirección de Google). */
+const STICKER_OK = /^[0-9a-f]{2,6}(_[0-9a-f]{2,6}){0,6}$/;
 
 const lista = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 const mismoSet = (a: string[], b: string[]) => a.length === b.length && new Set(a).size === a.length && b.every((x) => a.includes(x));
@@ -331,6 +333,7 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
     if (sub === "mensajes" && (delServidor(despues) || (delServidor(antes) && !(borra && esAdmin(c))))) return false;
     // Nadie (ni el admin desde la app) guarda un link que no sea https: un "javascript:" se ejecutaría al tocarlo.
     if (sub === "mensajes" && despues && (!linkOk(despues.link) || (crea && !TIPOS_MENSAJE.includes(String(despues.tipo ?? "texto"))))) return false;
+    if (sub === "mensajes" && despues && despues.sticker != null && !STICKER_OK.test(String(despues.sticker))) return false;
     if (esAdmin(c)) return true;
     // Editar un mensaje de texto propio: solo el texto (y la marca de editado).
     if (

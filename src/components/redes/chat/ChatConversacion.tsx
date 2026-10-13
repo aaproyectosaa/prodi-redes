@@ -34,6 +34,7 @@ import { limpiarSubidasListas, subirArchivosChat, useSubidasChat, CHAT_MAX_MB } 
 import { TextoIA } from "@/components/redes/TextoIA";
 import { TarjetaReferencia } from "./TarjetaReferencia";
 import { AudioMensaje, BarraGrabando, BotonMic, useGrabadorVoz } from "@/components/redes/chat/Voz";
+import { BotonStickers, StickerMensaje } from "@/components/redes/chat/Stickers";
 import { textoEscribiendo, useAvisarEscribiendo, useEscriben } from "@/lib/redes/escribiendo";
 import { entrarAlChatDeVoz, useChatVoz, useLlamada } from "@/lib/redes/chatVoz";
 import { ArchivoMensaje, SubidaBurbuja } from "@/components/redes/chat/Archivo";
@@ -41,6 +42,7 @@ import { ChatIcon } from "@/components/redes/chat/ChatIcon";
 import { EtiquetaContacto, InfoChat } from "@/components/redes/chat/Grupos";
 import { Cabecitas, EditarMensajeDialog, InfoMensaje, vistosHasta } from "@/components/redes/chat/InfoMensaje";
 import { TareaMensajeDialog } from "@/components/redes/chat/TareaMensaje";
+import { TextoConCodigo, tieneCodigo } from "@/components/redes/chat/TextoCodigo";
 import { CamaraDialog, camaraDelSistema } from "@/components/redes/chat/Camara";
 import { comprimirFoto } from "@/lib/imagen";
 import { crearReunion } from "@/lib/redes/reuniones";
@@ -453,6 +455,15 @@ export function ChatConversacion({
   const escriben = useEscriben();
   const escribeAhora = chat.tipo === "prodi" ? null : textoEscribiendo(escriben, chat.id, chat.tipo === "directo");
 
+  const mandarSticker = async (emoji: string, codigo: string) => {
+    try {
+      await enviarMensaje(chat, uid, emoji, { tipo: "sticker", sticker: codigo, remitente: nombre, respondeA: respondiendo });
+      setRespondiendo(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo mandar el sticker");
+    }
+  };
+
   const enviar = async () => {
     const t = texto.trim() || (referencia ? `Sobre ${referencia.titulo}` : "");
     if (!t) return;
@@ -559,6 +570,8 @@ export function ChatConversacion({
   };
 
   // Los clientes no leen los perfiles del equipo: se usan los nombres guardados en el chat.
+  // Prodi Software: el grupo "Equipo Software" y los privados entre su gente (código en los mensajes, tareas sugeridas).
+  const enSoftware = esChatSoftware(chat, profiles);
   const perfilDe = (id: string): Profile | undefined =>
     profiles.find((p) => p.id === id) ?? (chat.nombres?.[id] ? ({ id, nombre: chat.nombres[id], email: "" } as Profile) : undefined);
   const nombreDe = (id: string, fallback?: string) => perfilDe(id)?.nombre || fallback || "Usuario";
@@ -793,14 +806,16 @@ export function ChatConversacion({
                     )}
                     <div
                       {...alMantenerApretado(tMantener, () => setInfoMsg(m))}
-                      style={!mio && !bot && chat.tipo !== "directo" ? colorGlobo(m.by) : undefined}
+                      style={!mio && !bot && chat.tipo !== "directo" && m.tipo !== "sticker" ? colorGlobo(m.by) : undefined}
                       className={cn(
                         "min-w-0 rounded-2xl px-3.5 py-2 text-sm shadow-sm [-webkit-touch-callout:none]", compacto ? "max-w-[85%]" : "max-w-[82%] sm:max-w-[70%]",
                         mio
                           ? "rounded-br-md bg-primary text-primary-foreground"
                           : bot
                             ? "rounded-bl-md border border-[#6F40FC]/30 bg-gradient-to-br from-[#6F40FC]/[0.07] to-[#E040A0]/[0.07]"
-                            : "rounded-bl-md bg-card border"
+                            : "rounded-bl-md bg-card border",
+                        // Sticker: grande, sin globo (como WhatsApp).
+                        m.tipo === "sticker" && "!border-0 !bg-transparent !px-0 !text-foreground !shadow-none"
                       )}
                     >
                       {bot && !agrupado ? (
@@ -887,12 +902,19 @@ export function ChatConversacion({
                           </p>
                           <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{m.texto}</p>
                         </div>
+                      ) : m.tipo === "sticker" && m.sticker ? (
+                        <StickerMensaje codigo={m.sticker} emoji={m.texto} />
                       ) : m.tipo === "audio" && m.audio ? (
                         <AudioMensaje chatId={chat.id} audio={m.audio} mio={mio} />
                       ) : (
-                        <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-                          {conMenciones(m.texto, mio)}
-                        </p>
+                        // Chats de Software: ```código``` con colores y "Copiar" (Redes, como siempre).
+                        enSoftware && tieneCodigo(m.texto) ? (
+                          <TextoConCodigo texto={m.texto} mio={mio} render={(t) => conMenciones(t, mio)} />
+                        ) : (
+                          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                            {conMenciones(m.texto, mio)}
+                          </p>
+                        )
                       )}
                       <button
                         type="button"
@@ -1192,6 +1214,7 @@ export function ChatConversacion({
               <Camera className="h-5 w-5" />
             </Button>
           )}
+          <BotonStickers disabled={enviando} onElegir={(emoji, codigo) => void mandarSticker(emoji, codigo)} />
           <div className="relative min-w-0 flex-1">
             {sugerencias.length > 0 && (
               <div className="absolute bottom-full left-0 z-10 mb-2 w-full max-w-sm overflow-hidden rounded-xl border bg-popover shadow-lg">

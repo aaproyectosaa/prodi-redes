@@ -487,7 +487,7 @@ export interface Chat {
 }
 
 /** "archivo" y "bot" (respuestas de @prodi) solo los escribe el servidor. */
-export type TipoMensaje = "texto" | "llamada" | "minuta" | "sistema" | "audio" | "archivo" | "bot";
+export type TipoMensaje = "texto" | "llamada" | "minuta" | "sistema" | "audio" | "archivo" | "bot" | "sticker";
 
 /** Archivo mandado por el chat (está en Drive; se ve con /api/drive/media-token si sos miembro del chat). */
 export interface ArchivoChat {
@@ -510,6 +510,8 @@ export interface Mensaje {
   reunion_id?: string | null;
   /** Mensaje de voz: el audio está en chats/{chat}/audios/{id} (se baja al reproducirlo). */
   audio?: { id: string; mime: string; duracion: number } | null;
+  /** Sticker (tipo "sticker"): código del emoji animado, ej. "1f602". */
+  sticker?: string | null;
   archivo?: ArchivoChat | null;
   /** Texto que acompaña al archivo. */
   leyenda?: string | null;

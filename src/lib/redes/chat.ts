@@ -128,6 +128,8 @@ export async function enviarMensaje(
     menciones?: string[];
     /** Tarjeta del video o pieza de la que se habla. */
     referencia?: ReferenciaChat | null;
+    /** Sticker: código del emoji animado (el texto es el emoji, para avisos y vista previa). */
+    sticker?: string | null;
   } = {}
 ) {
   assertEditable();
@@ -145,6 +147,7 @@ export async function enviarMensaje(
     ...(r ? { responde_a: { id: r.id, by: r.by, by_nombre: r.by_nombre ?? "", texto: (r.texto || r.leyenda || (r.audio ? "🎤 Audio" : "📎 Archivo")).slice(0, 160) } } : {}),
     ...(menciones.length ? { menciones } : {}),
     ...(opts.referencia ? { referencia: opts.referencia } : {}),
+    ...(opts.sticker ? { sticker: opts.sticker } : {}),
   };
   const ref = await addDoc(collection(db, CHATS, chat.id, "mensajes"), msg);
   await updateDoc(doc(db, CHATS, chat.id), {
