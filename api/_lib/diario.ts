@@ -325,3 +325,91 @@ export async function recordatoriosEdicion(base: string): Promise<number> {
   }
   return enviados;
 }
+
+// ---------------------------------------------------------------------------
+// Revisión interna: si producción no aprueba (o pide cambios), avisos seguidos hasta que lo haga.
+// Corre cada vez que alguien usa Prodi (no solo una vez por día): ver api/db cambios.
+// ---------------------------------------------------------------------------
+
+/** Desde cuánto tiempo en revisión interna se empieza a avisar, y cada cuánto. */
+const INTERNO_CADA_MS = 2 * 3600_000;
+/** Al tercer aviso sin respuesta, también se enteran los admins. */
+const INTERNO_ESCALAR = 3;
+
+function horaAR(): number {
+  return Number(new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires", hour: "numeric", hour12: false })) % 24;
+}
+
+export async function recordatoriosRevisionInterna(base: string, o: { todoElDia?: boolean } = {}): Promise<number> {
+  // De 9 a 21 (de noche no se molesta a nadie).
+  const hora = horaAR();
+  if (!o.todoElDia && (hora < 9 || hora >= 21)) return 0;
+  const db = adminDb();
+  const limite = new Date(Date.now() - INTERNO_CADA_MS).toISOString();
+  // Los avisos cuentan desde que entró a esta revisión (si vuelve a revisión, arranca de cero).
+  const vence = (v: Data) => {
+    if (v.etapa !== "revision_interna" || v.demo_ejemplo) return false;
+    const desde = String(v.etapa_desde ?? "");
+    if (!desde || desde > limite) return false;
+    const ultimo = String(v.recordatorio_interno_at ?? "");
+    return !ultimo || ultimo < desde || ultimo <= limite;
+  };
+  const snap = await db.collection("videos").where("etapa", "==", "revision_interna").get();
+  const proyectos = new Map<string, Data>();
+  let admins: string[] | null = null;
+  let enviados = 0;
+  for (const d of snap.docs) {
+    if (!vence(d.data())) continue;
+    const v = await db.runTransaction(async (tx) => {
+      const x = (await tx.get(d.ref)).data();
+      if (!x || !vence(x)) return null;
+      const ultimo = String(x.recordatorio_interno_at ?? "");
+      const n = !ultimo || ultimo < String(x.etapa_desde ?? "") ? 1 : Number(x.recordatorios_interno ?? 0) + 1;
+      tx.update(d.ref, { recordatorios_interno: n, recordatorio_interno_at: new Date().toISOString() });
+      return { ...(x as Data), n } as Data & { n: number };
+    });
+    if (!v) continue;
+    const pid = String(v.proyecto_id ?? "");
+    if (!proyectos.has(pid)) proyectos.set(pid, (await db.collection("projects").doc(pid).get()).data() ?? {});
+    const p = proyectos.get(pid)!;
+    if (p.enabled === false) continue;
+    const team = (p.team_roles ?? {}) as Record<string, string[]>;
+    const productores = v.productor_id ? [String(v.productor_id)] : (team.productor ?? []);
+    const horas = Math.max(2, Math.round((Date.now() - new Date(String(v.etapa_desde)).getTime()) / 3600_000));
+    const cliente = String(p.nombre ?? "Cliente");
+    await enviarAviso(
+      {
+        destinatarios: productores,
+        titulo: v.n === 1 ? "Tenés un video para aprobar 🎬" : `⏰ Sigue esperando tu OK (hace ${horas} h)`,
+        cuerpo: `${cliente} · “${v.titulo}”. Miralo y aprobalo (o pedí cambios) para que le llegue al cliente.`,
+        link: `/videos?video=${d.id}`,
+        clave: `revision_interna_rec:${d.id}:${v.etapa_desde}:${v.n}`,
+        proyectoId: pid,
+        videoId: d.id,
+        // Seguido por la app; por mail solo la primera vez.
+        mail: v.n === 1,
+      },
+      base
+    );
+    if (v.n >= INTERNO_ESCALAR) {
+      admins ??= (await db.collection("profiles").where("role", "==", "admin").get()).docs.filter((x) => x.data().activo !== false).map((x) => x.id);
+      const avisar = admins.filter((a) => !productores.includes(a));
+      if (avisar.length)
+        await enviarAviso(
+          {
+            destinatarios: avisar,
+            titulo: `${cliente}: video sin aprobar hace ${horas} h`,
+            cuerpo: `“${v.titulo}” está en revisión interna y producción no lo aprobó (${v.n} avisos).`,
+            link: `/videos?video=${d.id}`,
+            clave: `revision_interna_admin:${d.id}:${v.etapa_desde}:${v.n}`,
+            proyectoId: pid,
+            videoId: d.id,
+            mail: v.n === INTERNO_ESCALAR,
+          },
+          base
+        );
+    }
+    enviados++;
+  }
+  return enviados;
+}

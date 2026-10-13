@@ -21,6 +21,7 @@ import { sincronizarCalendario } from "../_lib/calendario";
 import { publicarEnChat } from "../_lib/chat-server";
 import { waitUntil } from "@vercel/functions";
 import { armarMinutaDeLlamada } from "../_lib/minuta-llamada";
+import { recordatoriosRevisionInterna } from "../_lib/diario";
 import type { Data } from "../_lib/db";
 
 /** Colecciones con fecha que van a Google Calendar (se ponen al día después de guardar). */
@@ -168,6 +169,11 @@ async function cambios(req: VercelRequest) {
   const clave = desde == null || !Number.isFinite(Number(desde)) ? "inicio" : String(Number(desde));
   // Con el chat abierto, también quién está escribiendo (es de cada persona: no va en la respuesta compartida).
   waitUntil(cerrarLlamadasTerminadas().catch(() => undefined));
+  // Videos en revisión interna sin aprobar: avisos seguidos a producción (a lo sumo una revisión cada 10 min).
+  if (Date.now() - ultimaRevisionInterna > 10 * 60_000) {
+    ultimaRevisionInterna = Date.now();
+    waitUntil(recordatoriosRevisionInterna(appUrl()).catch((e) => console.warn("[revision interna]", e)));
+  }
   const escriben = conEscribiendo ? quienesEscriben(quien.uid).catch(() => []) : null;
   const enVoz = conEscribiendo ? quienesEnVoz(quien.uid).catch(() => []) : null;
   const c = respuestas.get(clave);
@@ -301,6 +307,7 @@ async function anotarEnLlamada(chatId: string, uid: string, nombre: string) {
 }
 
 let ultimoCierre = 0;
+let ultimaRevisionInterna = 0;
 /** Las llamadas donde ya no queda nadie (colgaron o cerraron la app): se registran en su chat. */
 async function cerrarLlamadasTerminadas(forzar = false): Promise<{ chat_id: string; inicio: string }[]> {
   if (!forzar && Date.now() - ultimoCierre < 10_000) return [];
