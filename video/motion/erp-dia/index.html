@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="es" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root { --violeta: #6f40fc; --lila: #b9a4ff; --celeste: #0ea5e9; --blanco: #f5f4fa; --suave: rgba(245,244,250,0.62); --verde: #34d399; --naranja: #fb923c; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #07060c; }
+      #root { position: relative; width: 100%; height: 100%; font-family: Inter, sans-serif; color: var(--blanco); }
+      #escenario { position: absolute; inset: 0; overflow: hidden; background: #07060c; }
+      #cielo { position: absolute; inset: 0; }
+      #grano { position: absolute; inset: 0; background-image: radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 6px 6px; opacity: 0.5; }
+
+      /* reloj + barra del día */
+      #reloj { position: absolute; top: 150px; left: 0; right: 0; text-align: center; font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 168px; letter-spacing: -0.02em; }
+      #reloj .dp { color: var(--lila); }
+      #momento { position: absolute; top: 360px; left: 0; right: 0; text-align: center; font-family: "JetBrains Mono", monospace; font-size: 28px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--suave); }
+      #dia { position: absolute; top: 430px; left: 120px; right: 120px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.12); }
+      #dia .lleno { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 2px; background: linear-gradient(90deg, var(--celeste), var(--violeta)); }
+      #dia .sol { position: absolute; top: -13px; left: 0; width: 30px; height: 30px; margin-left: -15px; border-radius: 50%; background: #fff; box-shadow: 0 0 30px #fff; }
+      #dia .marca { position: absolute; top: -5px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: rgba(255,255,255,0.25); }
+
+      /* frase de cada momento */
+      .frase { position: absolute; left: 70px; right: 70px; top: 520px; text-align: center; font-size: 80px; font-weight: 900; letter-spacing: -0.04em; line-height: 1; visibility: hidden; }
+      .frase em { font-style: normal; background: linear-gradient(90deg, var(--celeste), var(--lila)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+      /* tarjetas de vidrio */
+      .momento { position: absolute; inset: 0; visibility: hidden; }
+      .vidrio { position: absolute; border-radius: 40px; background: rgba(255,255,255,0.07); border: 1.5px solid rgba(255,255,255,0.16); box-shadow: 0 40px 100px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.12); padding: 40px; }
+      .cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px; }
+      .cab b { font-size: 34px; font-weight: 800; } .cab span { font-family: "JetBrains Mono", monospace; font-size: 22px; color: var(--suave); }
+      .item { display: flex; align-items: center; gap: 20px; padding: 18px 0; border-top: 1px solid rgba(255,255,255,0.1); font-size: 30px; font-weight: 700; }
+      .item .pt { width: 18px; height: 18px; border-radius: 50%; flex: none; }
+      .item .n { flex: 1; } .item .v { font-family: "JetBrains Mono", monospace; font-weight: 700; }
+      .noti { position: absolute; left: 110px; width: 860px; display: flex; align-items: center; gap: 24px; padding: 28px 32px; border-radius: 30px; background: rgba(255,255,255,0.09); border: 1.5px solid rgba(255,255,255,0.16); box-shadow: 0 30px 80px rgba(0,0,0,0.45); }
+      .noti .ic { width: 80px; height: 80px; border-radius: 22px; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 900; flex: none; }
+      .noti .tx { flex: 1; font-size: 30px; font-weight: 800; } .noti .tx small { display: block; font-size: 22px; color: var(--suave); font-weight: 600; margin-top: 4px; }
+      .noti .monto { font-family: "JetBrains Mono", monospace; font-size: 30px; font-weight: 700; }
+      .gigante { font-family: "JetBrains Mono", monospace; font-weight: 700; letter-spacing: -0.04em; }
+
+      /* factura que sale de la ranura */
+      #ranura { position: absolute; left: 190px; top: 1500px; width: 700px; height: 26px; border-radius: 13px; background: #000; box-shadow: inset 0 4px 10px rgba(0,0,0,0.9), 0 1px 0 rgba(255,255,255,0.2); z-index: 3; }
+      #ticket-mask { position: absolute; left: 230px; top: 700px; width: 620px; height: 813px; overflow: hidden; }
+      #ticket { position: absolute; left: 0; bottom: 0; width: 620px; padding: 46px 44px; border-radius: 26px 26px 0 0; background: #fbfaff; color: #16131f; }
+      #ticket .l { height: 16px; border-radius: 8px; background: #ebe8f3; margin-top: 18px; }
+      #ticket .t { margin-top: 34px; padding-top: 24px; border-top: 3px dashed #d9d4e8; display: flex; justify-content: space-between; font-size: 42px; font-weight: 900; }
+      #sello { position: absolute; left: 610px; top: 1080px; padding: 18px 30px; border-radius: 22px; background: var(--verde); color: #052e1f; font-size: 34px; font-weight: 900; transform: rotate(-8deg); box-shadow: 0 20px 60px rgba(52,211,153,0.45); z-index: 4; }
+
+      /* aviso */
+      #aviso { top: 800px; border-color: rgba(251,146,60,0.55); background: rgba(251,146,60,0.12); }
+      #pulso { position: absolute; left: 150px; top: 840px; width: 80px; height: 80px; border-radius: 22px; border: 4px solid var(--naranja); }
+      #barra-stock { position: absolute; left: 110px; top: 1080px; width: 860px; }
+      #barra-stock .riel { height: 26px; border-radius: 13px; background: rgba(255,255,255,0.1); overflow: hidden; }
+      #barra-stock .nivel { height: 100%; width: 100%; border-radius: 13px; background: linear-gradient(90deg, var(--naranja), #f43f5e); }
+      #barra-stock .lbl { display: flex; justify-content: space-between; margin-top: 16px; font-family: "JetBrains Mono", monospace; font-size: 24px; color: var(--suave); }
+      #reponer { position: absolute; left: 330px; top: 1290px; width: 420px; height: 100px; border-radius: 26px; background: var(--naranja); color: #2a1203; font-size: 34px; font-weight: 900; display: flex; align-items: center; justify-content: center; }
+
+      /* caja */
+      #caja { left: 110px; top: 760px; width: 860px; }
+      #dif { position: absolute; left: 250px; top: 1350px; width: 580px; text-align: center; padding: 26px; border-radius: 30px; border: 3px solid var(--verde); color: var(--verde); font-size: 46px; font-weight: 900; }
+
+      /* ganancia */
+      #sillon { position: absolute; left: 0; right: 0; top: 820px; text-align: center; }
+      #sillon .k { font-size: 34px; color: var(--suave); font-weight: 700; }
+      #ganancia { font-size: 150px; margin-top: 10px; }
+      #linea-g { position: absolute; left: 110px; top: 1180px; width: 860px; height: 300px; }
+      #ganancia-chip { position: absolute; left: 340px; top: 1520px; padding: 16px 30px; border-radius: 999px; background: rgba(52,211,153,0.15); color: var(--verde); font-size: 30px; font-weight: 800; }
+
+      /* ordenado: mini tarjetas en grilla */
+      #grilla { position: absolute; left: 110px; top: 780px; width: 860px; display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+      #grilla div { height: 190px; border-radius: 30px; background: rgba(255,255,255,0.07); border: 1.5px solid rgba(255,255,255,0.16); display: flex; flex-direction: column; justify-content: center; padding: 30px; gap: 8px; }
+      #grilla b { font-size: 36px; } #grilla span { font-family: "JetBrains Mono", monospace; font-size: 22px; color: var(--verde); }
+
+      /* cierre */
+      #cierre { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; visibility: hidden; }
+      #logo { width: 660px; }
+      #pill { margin-top: 32px; padding: 12px 36px; border-radius: 999px; background: var(--celeste); color: #04121a; font-size: 40px; font-weight: 900; letter-spacing: 0.22em; }
+      #cta { margin-top: 90px; font-size: 110px; font-weight: 900; letter-spacing: -0.045em; } #cta em { font-style: normal; color: var(--lila); }
+      #web { margin-top: 26px; font-size: 42px; font-weight: 800; color: var(--lila); }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="38" data-width="1080" data-height="1920">
+      <div id="escenario" class="clip" data-start="0" data-duration="38" data-track-index="0" data-layout-allow-overlap data-layout-allow-overflow>
+        <div id="cielo"></div><div id="grano"></div>
+
+        <div id="hud">
+          <div id="reloj">08<span class="dp">:</span>59</div>
+          <div id="momento">Un día en tu negocio</div>
+          <div id="dia"><div class="lleno"></div><div class="sol"></div></div>
+        </div>
+
+        <!-- frases (una por momento) -->
+        <div class="frase" id="f0">Un día en tu negocio <em>con PRODI.</em></div>
+        <div class="frase" id="f1">Abrís, y ya sabés <em>qué tenés.</em></div>
+        <div class="frase" id="f2">Vendés, y el stock <em>baja solo.</em></div>
+        <div class="frase" id="f3">La factura <em>sale sola.</em></div>
+        <div class="frase" id="f4">Te avisa <em>antes</em> de que falte.</div>
+        <div class="frase" id="f5">La caja cuadra <em>al peso.</em></div>
+        <div class="frase" id="f6">Y desde el sillón, <em>cuánto ganaste.</em></div>
+        <div class="frase" id="f7">Tu negocio, <em>ordenado.</em></div>
+
+        <!-- 1 · 9:00 stock -->
+        <div class="momento" id="m1">
+          <div class="vidrio" id="stock" style="left: 110px; top: 760px; width: 860px">
+            <div class="cab"><b>Stock al abrir</b><span>09:00</span></div>
+            <div class="item"><span class="pt" style="background: var(--verde)"></span><span class="n">Remera negra</span><span class="v">24</span></div>
+            <div class="item"><span class="pt" style="background: var(--verde)"></span><span class="n">Jean clásico</span><span class="v">12</span></div>
+            <div class="item"><span class="pt" style="background: var(--verde)"></span><span class="n">Buzo oversize</span><span class="v">8</span></div>
+            <div class="item"><span class="pt" style="background: var(--naranja)"></span><span class="n">Gorra lisa</span><span class="v">3</span></div>
+          </div>
+        </div>
+
+        <!-- 2 · 11:30 ventas -->
+        <div class="momento" id="m2">
+          <div class="noti" id="v1" style="top: 780px"><div class="ic" style="background: rgba(14,165,233,0.2); color: var(--celeste)">$</div><div class="tx">Venta en el local<small>Remera negra × 1</small></div><div class="monto">$ 18.900</div></div>
+          <div class="noti" id="v2" style="top: 960px"><div class="ic" style="background: rgba(111,64,252,0.25); color: var(--lila)">⌁</div><div class="tx">Venta online<small>Remera negra × 1</small></div><div class="monto">$ 18.900</div></div>
+          <div class="vidrio" id="cont-stock" style="left: 290px; top: 1200px; width: 500px; text-align: center; padding: 34px">
+            <div style="font-size: 28px; color: var(--suave); font-weight: 700">Remera negra en stock</div>
+            <div class="gigante" id="n-stock" style="font-size: 150px; margin-top: 6px">24</div>
+          </div>
+        </div>
+
+        <!-- 3 · 13:00 factura -->
+        <div class="momento" id="m3">
+          <div id="ticket-mask"><div id="ticket">
+            <div style="display: flex; justify-content: space-between"><b style="font-size: 40px">Factura B</b><span style="font-family: 'JetBrains Mono', monospace; font-size: 22px; color: #6b6880">0003-00012847</span></div>
+            <div class="l" style="width: 90%; margin-top: 30px"></div><div class="l" style="width: 65%"></div><div class="l" style="width: 80%"></div><div class="l" style="width: 50%"></div>
+            <div class="t"><span>Total</span><span>$ 18.900</span></div>
+          </div></div>
+          <div id="ranura"></div>
+          <div id="sello">✓ Emitida</div>
+        </div>
+
+        <!-- 4 · 17:00 aviso -->
+        <div class="momento" id="m4">
+          <div class="noti" id="aviso"><div class="ic" style="background: rgba(251,146,60,0.25); color: var(--naranja)">!</div><div class="tx">Se está terminando<small>Remera negra · tu más vendida</small></div></div>
+          <div id="pulso"></div>
+          <div id="barra-stock"><div class="riel"><div class="nivel"></div></div><div class="lbl"><span>Stock</span><span id="quedan">quedan 24</span></div></div>
+          <div id="reponer">Reponer ahora</div>
+        </div>
+
+        <!-- 5 · 20:00 caja -->
+        <div class="momento" id="m5">
+          <div class="vidrio" id="caja">
+            <div class="cab"><b>Cierre de caja</b><span>20:00</span></div>
+            <div class="item"><span class="n">Esperado</span><span class="v">$ 1.380.500</span></div>
+            <div class="item"><span class="n">Contado</span><span class="v" id="contado">$ 0</span></div>
+          </div>
+          <div id="dif">Diferencia: $ 0 ✓</div>
+        </div>
+
+        <!-- 6 · 21:00 ganancia -->
+        <div class="momento" id="m6">
+          <div id="sillon"><div class="k">Hoy ganaste</div><div class="gigante" id="ganancia">$ 0</div></div>
+          <svg id="linea-g" viewBox="0 0 860 300"><defs><linearGradient id="gg" x1="0" x2="1"><stop offset="0" stop-color="#0ea5e9" /><stop offset="1" stop-color="#b9a4ff" /></linearGradient></defs><path id="trazo" d="M0 270 C 90 250, 140 230, 210 200 S 330 210, 400 150 S 530 120, 600 90 S 760 40, 860 20" fill="none" stroke="url(#gg)" stroke-width="10" stroke-linecap="round" /></svg>
+          <div id="ganancia-chip">▲ 18% vs. ayer</div>
+        </div>
+
+        <!-- 7 · ordenado -->
+        <div class="momento" id="m7">
+          <div id="grilla">
+            <div><b>Stock</b><span>al día ✓</span></div><div><b>Ventas</b><span>registradas ✓</span></div>
+            <div><b>Facturas</b><span>emitidas ✓</span></div><div><b>Caja</b><span>cuadrada ✓</span></div>
+            <div><b>Avisos</b><span>a tiempo ✓</span></div><div><b>Números</b><span>al instante ✓</span></div>
+          </div>
+        </div>
+
+        <!-- cierre -->
+        <div id="cierre">
+          <img id="logo" src="assets/logo-horizontal-blanco.png" />
+          <div id="pill">SOFTWARE</div>
+          <div id="cta">Pedí tu <em>demo.</em></div>
+          <div id="web">somosprodi.com</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ===== Tiempos de cada momento (segundos). Con la voz en off se ajustan acá. =====
+      const ESC = [0, 3.2, 7.6, 13.2, 17.4, 22.6, 26.8, 30.6, 33.4, 38];
+      const HORA = [null, "09:00", "11:30", "13:00", "17:00", "20:00", "21:00"];
+      // ================================================================================
+
+      const tl = gsap.timeline({ paused: true });
+      const $ = (s) => document.querySelector(s);
+      const $$ = (s) => [...document.querySelectorAll(s)];
+      const onda = (inicio, dur, dibujar) => { const p = { t: 0 }; dibujar(0); tl.to(p, { t: 1, duration: dur, ease: "none", onUpdate: () => dibujar(p.t) }, inicio); };
+      const pesos = (n) => "$ " + Math.round(n).toLocaleString("es-AR");
+      const aMin = (h) => { const [a, b] = h.split(":").map(Number); return a * 60 + b; };
+      const fmt = (m) => { const h = Math.floor(m / 60), mm = Math.round(m % 60); return `${String(h).padStart(2, "0")}<span class="dp">:</span>${String(mm).padStart(2, "0")}`; };
+
+      // cielo que va de la mañana a la noche + reloj que corre entre horas + sol sobre la barra del día
+      const mezcla = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+      const CIELO = [[[14, 165, 233], [40, 30, 90]], [[56, 120, 230], [70, 40, 150]], [[111, 64, 252], [60, 20, 110]], [[180, 70, 200], [70, 20, 90]], [[70, 40, 160], [15, 10, 40]], [[40, 20, 110], [8, 6, 20]]];
+      const marcas = HORA.slice(1).map((h) => (aMin(h) - 480) / (22 * 60 - 480));
+      marcas.forEach((m) => $("#dia").insertAdjacentHTML("beforeend", `<div class="marca" style="left:${m * 100}%"></div>`));
+      onda(0, ESC[9], (p) => {
+        const s = p * ESC[9];
+        let min = aMin("08:59");
+        for (let i = 1; i <= 6; i++) {
+          if (s >= ESC[i]) {
+            const desde = i === 1 ? aMin("08:59") : aMin(HORA[i - 1]);
+            const k = Math.min(1, (s - ESC[i]) / 0.7);
+            min = desde + (aMin(HORA[i]) - desde) * (1 - Math.pow(1 - k, 3));
+          }
+        }
+        if (s >= ESC[7]) min = aMin("21:00");
+        $("#reloj").innerHTML = fmt(min);
+        const dia = Math.max(0, Math.min(1, (min - 480) / (22 * 60 - 480)));
+        $("#dia .lleno").style.width = `${dia * 100}%`;
+        $("#dia .sol").style.left = `${dia * 100}%`;
+        $("#dia .sol").style.background = dia > 0.75 ? "#d9ceff" : "#ffffff";
+        const f = dia * (CIELO.length - 1), i = Math.min(CIELO.length - 2, Math.floor(f)), t = f - i;
+        const c1 = mezcla(CIELO[i][0], CIELO[i + 1][0], t), c2 = mezcla(CIELO[i][1], CIELO[i + 1][1], t);
+        $("#cielo").style.background = `radial-gradient(120% 55% at 50% 0%, rgba(${c1},0.55) 0%, rgba(${c2},0.6) 45%, #07060c 85%)`;
+      });
+      ["mañana", "mañana", "mediodía", "tarde", "noche", "noche"].forEach((m, i) => tl.set("#momento", { textContent: m }, ESC[i + 1]));
+      tl.fromTo("#reloj", { scale: 1 }, { scale: 1, duration: 0.01 }, 0);
+      for (let i = 1; i <= 6; i++) tl.fromTo("#reloj", { scale: 1.12 }, { scale: 1, duration: 0.5, ease: "back.out(3)", immediateRender: false }, ESC[i]);
+      tl.from("#hud", { y: -300, opacity: 0, duration: 0.8, ease: "expo.out" }, 0.1);
+      tl.to("#hud", { y: -500, opacity: 0, duration: 0.4, ease: "power3.in" }, ESC[8] - 0.2);
+
+      // frases: entran palabra por palabra y salen al cambiar de momento
+      $$(".frase").forEach((el, i) => {
+        tl.set(el, { visibility: "visible" }, ESC[i]);
+        tl.from(el, { y: 60, opacity: 0, filter: "blur(10px)", duration: 0.5, ease: "expo.out" }, ESC[i] + 0.05);
+        tl.to(el, { y: -40, opacity: 0, duration: 0.2, ease: "power2.in" }, ESC[i + 1] - 0.2);
+      });
+
+      // momentos: aparecen y se van con el cambio de hora
+      $$(".momento").forEach((el, k) => {
+        const i = k + 1;
+        tl.set(el, { visibility: "visible" }, ESC[i]);
+        tl.to(el, { opacity: 0, scale: 0.94, duration: 0.25, ease: "power2.in" }, ESC[i + 1] - 0.25);
+        tl.set(el, { visibility: "hidden" }, ESC[i + 1]);
+      });
+
+      // 1 · 09:00 stock
+      let t = ESC[1];
+      tl.from("#stock", { y: 400, opacity: 0, duration: 0.7, ease: "expo.out" }, t + 0.2)
+        .from("#stock .item", { x: 60, opacity: 0, duration: 0.35, stagger: 0.12, ease: "expo.out" }, t + 0.6)
+        .from("#stock .pt", { scale: 0, duration: 0.3, stagger: 0.12, ease: "back.out(3)" }, t + 1.0);
+
+      // 2 · 11:30 ventas y stock que baja
+      t = ESC[2];
+      tl.from("#v1", { x: -1100, duration: 0.6, ease: "expo.out" }, t + 0.5)
+        .from("#v2", { x: 1100, duration: 0.6, ease: "expo.out" }, t + 1.6)
+        .from("#cont-stock", { y: 300, opacity: 0, duration: 0.6, ease: "expo.out" }, t + 0.3)
+        .set("#n-stock", { textContent: "23" }, t + 1.0).fromTo("#n-stock", { scale: 1.3, color: "#b9a4ff" }, { scale: 1, color: "#f5f4fa", duration: 0.4 }, t + 1.0)
+        .set("#n-stock", { textContent: "22" }, t + 2.1).fromTo("#n-stock", { scale: 1.3, color: "#b9a4ff" }, { scale: 1, color: "#f5f4fa", duration: 0.4 }, t + 2.1);
+
+      // 3 · 13:00 la factura sale de la ranura
+      t = ESC[3];
+      tl.from("#ranura", { scaleX: 0, duration: 0.4, ease: "expo.out" }, t + 0.2)
+        .from("#ticket", { yPercent: 100, duration: 1.4, ease: "power2.out" }, t + 0.5)
+        .from("#sello", { scale: 3, opacity: 0, duration: 0.3, ease: "expo.in" }, t + 2.2)
+        .to("#ticket-mask", { x: 8, duration: 0.05, yoyo: true, repeat: 3 }, t + 2.5);
+
+      // 4 · 17:00 aviso de stock
+      t = ESC[4];
+      tl.from("#aviso", { y: -300, opacity: 0, duration: 0.6, ease: "back.out(1.6)" }, t + 0.3)
+        .to("#pulso", { scale: 1.8, opacity: 0, duration: 0.8, repeat: 3, ease: "power2.out", startAt: { scale: 1, opacity: 1 } }, t + 0.7)
+        .from("#barra-stock", { opacity: 0, duration: 0.3 }, t + 0.5)
+        .from("#reponer", { scale: 0, duration: 0.45, ease: "back.out(2.5)" }, t + 2.6)
+        .to("#reponer", { scale: 1.06, duration: 0.3, yoyo: true, repeat: 3, ease: "sine.inOut" }, t + 3.1);
+      onda(t + 0.6, 1.8, (p) => {
+        const q = Math.round(24 - 21 * (1 - Math.pow(1 - p, 2)));
+        $("#barra-stock .nivel").style.width = `${(q / 24) * 100}%`;
+        $("#quedan").textContent = `quedan ${q}`;
+      });
+
+      // 5 · 20:00 caja que cuadra
+      t = ESC[5];
+      tl.from("#caja", { y: 400, opacity: 0, duration: 0.7, ease: "expo.out" }, t + 0.2)
+        .from("#dif", { scale: 0.4, opacity: 0, duration: 0.45, ease: "back.out(2.5)" }, t + 2.4);
+      onda(t + 0.7, 1.6, (p) => { $("#contado").textContent = pesos(1380500 * (1 - Math.pow(1 - p, 3))); });
+
+      // 6 · 21:00 ganancia del día
+      t = ESC[6];
+      const trazo = $("#trazo"), largo = 1100;
+      trazo.style.strokeDasharray = largo;
+      onda(t + 0.3, 1.6, (p) => { trazo.style.strokeDashoffset = largo * (1 - p); });
+      onda(t + 0.3, 2.0, (p) => { $("#ganancia").textContent = pesos(486200 * (1 - Math.pow(1 - p, 3))); });
+      tl.from("#sillon", { y: 60, opacity: 0, duration: 0.5, ease: "expo.out" }, t + 0.1)
+        .from("#ganancia-chip", { scale: 0, duration: 0.45, ease: "back.out(2.5)" }, t + 2.3);
+
+      // 7 · todo ordenado
+      t = ESC[7];
+      tl.from("#grilla div", { scale: 0.3, opacity: 0, rotation: (i) => (i % 2 ? 12 : -12), duration: 0.5, stagger: 0.1, ease: "back.out(1.8)" }, t + 0.1)
+        .from("#grilla span", { opacity: 0, x: -20, duration: 0.25, stagger: 0.1 }, t + 0.8);
+
+      // cierre
+      t = ESC[8];
+      tl.set("#cierre", { visibility: "visible" }, t)
+        .from("#logo", { scale: 1.8, opacity: 0, filter: "blur(16px)", duration: 0.6, ease: "expo.out" }, t)
+        .from("#pill", { y: 50, opacity: 0, duration: 0.4, ease: "back.out(2)" }, t + 0.4)
+        .from("#cta", { scale: 1.6, opacity: 0, duration: 0.45, ease: "expo.out" }, t + 1.0)
+        .from("#web", { y: 30, opacity: 0, duration: 0.4, ease: "expo.out" }, t + 1.5)
+        .to("#cierre", { scale: 1.04, duration: ESC[9] - t, ease: "none" }, t);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
