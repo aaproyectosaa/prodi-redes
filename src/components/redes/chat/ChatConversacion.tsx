@@ -227,6 +227,17 @@ function VistoLinea({ chat, m, uid }: { chat: ChatT; m: Mensaje; uid: string }) 
   );
 }
 
+// En los grupos, cada persona con su color (como WhatsApp): sale de su id, así es el mismo en todos los chats.
+// Sin violeta (es el de tus propios mensajes).
+const TONOS = [12, 28, 45, 90, 145, 170, 192, 210, 335, 355, 75, 60];
+function tonoDe(uid: string): number {
+  let h = 0;
+  for (let i = 0; i < uid.length; i++) h = (h * 31 + uid.charCodeAt(i)) >>> 0;
+  return TONOS[h % TONOS.length];
+}
+const colorNombre = (uid: string) => `hsl(${tonoDe(uid)} 75% 55%)`;
+const colorGlobo = (uid: string) => ({ backgroundColor: `hsl(${tonoDe(uid)} 75% 55% / 0.09)`, borderColor: `hsl(${tonoDe(uid)} 75% 55% / 0.35)` });
+
 export function ChatConversacion({
   chat,
   uid,
@@ -777,6 +788,7 @@ export function ChatConversacion({
                     )}
                     <div
                       {...alMantenerApretado(tMantener, () => setInfoMsg(m))}
+                      style={!mio && !bot && chat.tipo !== "directo" ? colorGlobo(m.by) : undefined}
                       className={cn(
                         "min-w-0 rounded-2xl px-3.5 py-2 text-sm shadow-sm [-webkit-touch-callout:none]", compacto ? "max-w-[85%]" : "max-w-[82%] sm:max-w-[70%]",
                         mio
@@ -792,7 +804,7 @@ export function ChatConversacion({
                         </p>
                       ) : (
                         !mio && !agrupado && chat.tipo !== "directo" && (
-                          <p className="mb-0.5 flex items-center gap-1.5 text-[11px] font-semibold text-primary">
+                          <p className="mb-0.5 flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: colorNombre(m.by) }}>
                             {nombreDe(m.by, m.by_nombre)}
                             {etiquetaPersona(m.by) === "Contacto" && <EtiquetaContacto />}
                           </p>
@@ -806,8 +818,12 @@ export function ChatConversacion({
                             "mb-1.5 block w-full rounded-lg border-l-4 px-2 py-1 text-left text-xs",
                             mio ? "border-white/70 bg-white/15" : "border-primary bg-muted/70"
                           )}
+                          style={!mio && chat.tipo !== "directo" && m.responde_a.by !== uid ? { borderColor: colorNombre(m.responde_a.by) } : undefined}
                         >
-                          <span className={cn("block font-semibold", mio ? "text-primary-foreground" : "text-primary")}>
+                          <span
+                            className={cn("block font-semibold", mio ? "text-primary-foreground" : "text-primary")}
+                            style={!mio && chat.tipo !== "directo" && m.responde_a.by !== uid ? { color: colorNombre(m.responde_a.by) } : undefined}
+                          >
                             {m.responde_a.by === uid ? "Vos" : nombreDe(m.responde_a.by, m.responde_a.by_nombre)}
                           </span>
                           <span className={cn("line-clamp-2", mio ? "text-primary-foreground/80" : "text-muted-foreground")}>{m.responde_a.texto}</span>
