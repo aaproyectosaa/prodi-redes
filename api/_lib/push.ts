@@ -78,9 +78,10 @@ export async function enviarPush(uid: string, aviso: { title: string; body: stri
   if (!configurar()) return 0;
   const r = await getPool().query("select endpoint, datos from push_suscripciones where uid = $1", [uid]);
   const separadas = !!chatUrl();
-  const filas = (r.rows as { endpoint: string; datos: Suscripcion & { app?: AppPush } }[]).filter(
-    (row) => !separadas || (row.datos.app === "chat" ? "chat" : "sistema") === canal
-  );
+  const todas = r.rows as { endpoint: string; datos: Suscripcion & { app?: AppPush } }[];
+  const delCanal = todas.filter((row) => !separadas || (row.datos.app === "chat" ? "chat" : "sistema") === canal);
+  // Si no tiene Prodi Chat instalado, los avisos del chat le llegan igual a Prodi (si no, no le llegaban nunca).
+  const filas = delCanal.length || canal !== "chat" ? delCanal : todas;
   let enviados = 0;
   await Promise.all(
     filas.map(async (row) => {
