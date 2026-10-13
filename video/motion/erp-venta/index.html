@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="es" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root { --violeta: #6f40fc; --lila: #b9a4ff; --celeste: #0ea5e9; --blanco: #f5f4fa; --suave: rgba(245,244,250,0.65); --verde: #34d399; --rojo: #ff3b5c; --naranja: #fb923c; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #06050b; }
+      #root { position: relative; width: 100%; height: 100%; font-family: Inter, sans-serif; color: var(--blanco); }
+      #escenario { position: absolute; inset: 0; overflow: hidden; background: #06050b; }
+      #fondo-rojo { position: absolute; inset: 0; opacity: 0; background: radial-gradient(90% 60% at 50% 45%, rgba(255,59,92,0.38), rgba(80,8,20,0.6) 55%, #0b0306 100%); }
+      #fondo-violeta { position: absolute; inset: 0; opacity: 0; background: radial-gradient(100% 60% at 50% 30%, rgba(111,64,252,0.6), rgba(30,15,80,0.7) 50%, #06050b 90%); }
+      #piso { position: absolute; left: -540px; right: -540px; bottom: -200px; height: 1100px; opacity: 0; transform-origin: 50% 100%; transform: perspective(700px) rotateX(68deg);
+        background-image: linear-gradient(rgba(185,164,255,0.35) 2px, transparent 2px), linear-gradient(90deg, rgba(185,164,255,0.35) 2px, transparent 2px); background-size: 120px 120px;
+        -webkit-mask-image: linear-gradient(to top, #000 10%, transparent 85%); mask-image: linear-gradient(to top, #000 10%, transparent 85%); }
+      #ruido { position: absolute; inset: 0; background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.03) 0 2px, transparent 2px 5px); }
+      #rayos { position: absolute; inset: 0; opacity: 0; }
+      .rayo { position: absolute; height: 3px; border-radius: 2px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.75), transparent); }
+      #mundo { position: absolute; inset: 0; transform-origin: 50% 45%; }
+      #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 60; }
+      #negro { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 55; }
+      .escena { position: absolute; inset: 0; visibility: hidden; }
+      .grande { font-weight: 900; letter-spacing: -0.05em; line-height: 0.92; text-transform: uppercase; text-align: center; }
+      .gr { background: linear-gradient(90deg, #ffffff, var(--lila) 50%, var(--celeste)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+      /* A · problema */
+      #pregunta { position: absolute; left: 60px; right: 60px; top: 230px; font-size: 92px; }
+      #pregunta em { font-style: normal; color: var(--rojo); }
+      .caos { position: absolute; border-radius: 30px; box-shadow: 0 30px 80px rgba(0,0,0,0.6); }
+      #planilla { left: 70px; top: 700px; width: 560px; background: #0d0d10; border: 2px solid rgba(255,255,255,0.15); padding: 18px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; transform: rotate(-9deg); }
+      #planilla i { height: 44px; border-radius: 6px; background: rgba(255,255,255,0.07); font-style: normal; font-family: "JetBrains Mono", monospace; font-size: 18px; color: rgba(255,255,255,0.5); display: flex; align-items: center; padding-left: 8px; }
+      #planilla i.e { color: var(--rojo); font-weight: 700; }
+      #cuaderno { left: 560px; top: 820px; width: 420px; height: 520px; background: #fdf6dc; transform: rotate(8deg); padding: 40px 34px; background-image: repeating-linear-gradient(#fdf6dc 0 46px, #c9d7f0 46px 48px); color: #24324a; font-family: Inter, sans-serif; font-style: italic; font-size: 32px; font-weight: 600; line-height: 48px; }
+      #cuaderno s { color: #b91c1c; }
+      .msj { position: absolute; left: 90px; max-width: 640px; padding: 22px 30px; border-radius: 28px 28px 28px 6px; background: #1f2c34; color: #e9edef; font-size: 32px; font-weight: 600; box-shadow: 0 16px 40px rgba(0,0,0,0.5); }
+      .msj b { display: block; font-size: 22px; color: #25d366; margin-bottom: 4px; }
+      #badge { position: absolute; left: 820px; top: 1180px; width: 150px; height: 150px; border-radius: 50%; background: var(--rojo); color: #fff; font-size: 58px; font-weight: 900; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 60px rgba(255,59,92,0.7); }
+      .menos { position: absolute; left: 0; right: 0; text-align: center; font-size: 200px; color: var(--rojo); text-shadow: 0 0 60px rgba(255,59,92,0.6); visibility: hidden; }
+      .menos small { display: block; font-size: 52px; color: #fff; letter-spacing: 0.02em; margin-top: 6px; text-shadow: none; }
+
+      /* B · basta */
+      #basta { position: relative; font-size: 240px; }
+      #basta .capa { position: absolute; inset: 0; mix-blend-mode: screen; }
+      #basta .r { color: var(--rojo); } #basta .c { color: #00e5ff; }
+      .franja { position: absolute; left: 0; right: 0; height: 26px; background: rgba(255,255,255,0.9); opacity: 0; }
+
+      /* C · revelación */
+      #llego { position: absolute; left: 0; right: 0; top: 640px; text-align: center; font-size: 54px; font-weight: 800; color: var(--suave); }
+      #logo-rev { position: absolute; left: 170px; top: 820px; width: 740px; }
+      #pill-rev { position: absolute; left: 0; right: 0; top: 1050px; display: flex; justify-content: center; }
+      #pill-rev div { padding: 14px 44px; border-radius: 999px; background: var(--celeste); color: #04121a; font-size: 50px; font-weight: 900; letter-spacing: 0.22em; box-shadow: 0 0 60px rgba(14,165,233,0.55); }
+      .rayo-x { position: absolute; left: 540px; top: 900px; height: 5px; width: 600px; transform-origin: 0 50%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.95)); opacity: 0; }
+
+      /* D · módulos */
+      #mods { position: absolute; left: 90px; top: 520px; width: 900px; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+      .mod { height: 360px; border-radius: 40px; background: linear-gradient(160deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04)); border: 2px solid rgba(255,255,255,0.2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; box-shadow: 0 30px 80px rgba(0,0,0,0.45); }
+      .mod .ic { width: 130px; height: 130px; border-radius: 36px; display: flex; align-items: center; justify-content: center; font-size: 70px; font-weight: 900; }
+      .mod b { font-size: 50px; font-weight: 900; letter-spacing: -0.03em; }
+      #un-lugar { position: absolute; left: 0; right: 0; top: 1360px; font-size: 104px; }
+
+      /* E/F/G · producto */
+      .vidrio { position: absolute; border-radius: 40px; background: linear-gradient(160deg, rgba(255,255,255,0.14), rgba(255,255,255,0.05)); border: 2px solid rgba(255,255,255,0.2); box-shadow: 0 40px 100px rgba(0,0,0,0.5); padding: 40px; overflow: hidden; }
+      .titulo-b { position: absolute; left: 50px; right: 50px; top: 240px; font-size: 100px; }
+      .noti { position: absolute; left: 100px; width: 880px; display: flex; align-items: center; gap: 24px; padding: 30px 34px; border-radius: 32px; background: linear-gradient(160deg, rgba(255,255,255,0.16), rgba(255,255,255,0.06)); border: 2px solid rgba(255,255,255,0.2); box-shadow: 0 30px 80px rgba(0,0,0,0.5); }
+      .noti .ic { width: 90px; height: 90px; border-radius: 24px; display: flex; align-items: center; justify-content: center; font-size: 46px; font-weight: 900; flex: none; }
+      .noti .tx { flex: 1; font-size: 34px; font-weight: 800; } .noti .tx small { display: block; font-size: 24px; color: var(--suave); font-weight: 600; margin-top: 4px; }
+      .noti .monto { font-family: "JetBrains Mono", monospace; font-size: 36px; font-weight: 700; color: var(--verde); }
+      .mono { font-family: "JetBrains Mono", monospace; font-weight: 700; letter-spacing: -0.04em; }
+      #stock-n { font-size: 260px; text-align: center; }
+      #btn-fact { position: absolute; left: 240px; top: 1200px; width: 600px; height: 140px; border-radius: 36px; background: linear-gradient(135deg, var(--violeta), var(--celeste)); font-size: 56px; font-weight: 900; display: flex; align-items: center; justify-content: center; box-shadow: 0 30px 80px rgba(111,64,252,0.55); }
+      #factura { position: absolute; left: 240px; top: 560px; width: 600px; padding: 44px; border-radius: 30px; background: #fbfaff; color: #16131f; box-shadow: 0 40px 100px rgba(0,0,0,0.5); }
+      #factura .l { height: 16px; border-radius: 8px; background: #ebe8f3; margin-top: 16px; }
+      #factura .t { margin-top: 30px; padding-top: 22px; border-top: 3px dashed #d9d4e8; display: flex; justify-content: space-between; font-size: 42px; font-weight: 900; }
+      #ok-fact { position: absolute; left: 700px; top: 520px; width: 170px; height: 170px; border-radius: 50%; background: var(--verde); color: #052e1f; font-size: 100px; font-weight: 900; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 60px rgba(52,211,153,0.6); }
+      #celu { position: absolute; left: 250px; top: 520px; width: 580px; height: 1160px; border-radius: 84px; border: 16px solid #1d1b26; background: #0d0c14; overflow: hidden; box-shadow: 0 60px 160px rgba(111,64,252,0.5); padding: 120px 36px 0; }
+      #celu .isla { position: absolute; top: 24px; left: 50%; width: 160px; height: 42px; margin-left: -80px; border-radius: 21px; background: #000; }
+      #celu .k { font-size: 30px; color: var(--suave); font-weight: 700; display: flex; align-items: center; gap: 12px; }
+      #celu .vivo { width: 16px; height: 16px; border-radius: 50%; background: var(--rojo); box-shadow: 0 0 14px var(--rojo); }
+      #gan { font-size: 92px; margin-top: 10px; color: var(--verde); text-shadow: 0 0 40px rgba(52,211,153,0.4); }
+      #celu svg { margin-top: 40px; }
+      #celu .mini { margin-top: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+      #celu .mini div { border-radius: 24px; background: rgba(255,255,255,0.07); padding: 22px; font-size: 24px; color: var(--suave); font-weight: 700; }
+      #celu .mini b { display: block; font-size: 40px; color: #fff; margin-top: 4px; }
+
+      /* H · confianza */
+      .sello { position: absolute; left: 110px; width: 860px; display: flex; align-items: center; gap: 34px; padding: 40px 44px; border-radius: 40px; background: linear-gradient(160deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05)); border: 2px solid rgba(185,164,255,0.45); box-shadow: 0 30px 80px rgba(0,0,0,0.5); }
+      .sello .ic { width: 140px; height: 140px; border-radius: 40px; display: flex; align-items: center; justify-content: center; font-size: 76px; flex: none; }
+      .sello b { font-size: 64px; font-weight: 900; letter-spacing: -0.03em; } .sello small { display: block; font-size: 30px; color: var(--suave); font-weight: 600; margin-top: 6px; }
+
+      /* I · cta */
+      #dejá { position: absolute; left: 40px; right: 40px; top: 360px; font-size: 136px; }
+      #boton { position: absolute; left: 120px; top: 1080px; width: 840px; height: 190px; border-radius: 52px; background: linear-gradient(135deg, var(--violeta), #8b5cf6 50%, var(--celeste)); font-size: 78px; font-weight: 900; letter-spacing: -0.03em; display: flex; align-items: center; justify-content: center; box-shadow: 0 40px 110px rgba(111,64,252,0.7); overflow: hidden; }
+      #boton .brillo { position: absolute; top: -50%; left: -40%; width: 30%; height: 200%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent); transform: rotate(20deg); }
+      #anillo { position: absolute; left: 114px; top: 1074px; width: 852px; height: 202px; border-radius: 58px; border: 5px solid var(--lila); opacity: 0; }
+      #cursor { position: absolute; left: 700px; top: 1250px; width: 0; height: 0; border-left: 40px solid #fff; border-top: 24px solid transparent; border-bottom: 24px solid transparent; transform: rotate(-60deg); filter: drop-shadow(0 6px 10px rgba(0,0,0,0.6)); }
+
+      /* J · cierre */
+      #cierre { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+      #logo-c { width: 700px; }
+      #pill-c { margin-top: 30px; padding: 12px 38px; border-radius: 999px; background: var(--celeste); color: #04121a; font-size: 42px; font-weight: 900; letter-spacing: 0.22em; }
+      #control { margin-top: 90px; font-size: 104px; }
+      #web { margin-top: 40px; font-size: 46px; font-weight: 800; color: var(--lila); }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="35.5" data-width="1080" data-height="1920">
+      <audio id="voz" src="assets/voz.m4a" data-start="0" data-duration="33.3" data-track-index="2"></audio>
+      <div id="escenario" class="clip" data-start="0" data-duration="35.5" data-track-index="0" data-layout-allow-overlap data-layout-allow-overflow>
+        <div id="fondo-rojo"></div><div id="fondo-violeta"></div><div id="piso"></div><div id="rayos"></div><div id="ruido"></div>
+        <div id="mundo">
+          <!-- A · problema -->
+          <div class="escena" id="eA">
+            <div id="pregunta" class="grande">¿Todavía manejás tu negocio <em>así?</em></div>
+            <div class="caos" id="planilla"></div>
+            <div class="caos" id="cuaderno">Ventas lunes<br />Remera x2 <s>$18.000</s><br />Jean ?? llamar<br />Debe Juan $$<br />stock??</div>
+            <div class="msj" id="m1" style="top: 1220px"><b>Cliente</b>¿Tenés stock del talle M?</div>
+            <div class="msj" id="m2" style="top: 1350px; left: 150px"><b>Proveedor</b>¿Me pasás el pedido?</div>
+            <div class="msj" id="m3" style="top: 1480px"><b>Cliente</b>¿Me hacés la factura? 🙏</div>
+            <div class="msj" id="m4" style="top: 1610px; left: 180px"><b>Cliente</b>¿Cuánto es? ¿Aceptan MP?</div>
+            <div id="badge">99+</div>
+          </div>
+          <div class="menos grande" id="n1" style="top: 760px">−Ventas<small>se te escapan clientes</small></div>
+          <div class="menos grande" id="n2" style="top: 760px">−Tiempo<small>horas en planillas</small></div>
+          <div class="menos grande" id="n3" style="top: 760px">−Plata<small>y no sabés dónde</small></div>
+
+          <!-- B · ¡BASTA! -->
+          <div class="escena" id="eB">
+            <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center"><div id="basta" class="grande" data-layout-allow-overlap><span class="base">¡Basta!</span><span class="capa r" data-layout-allow-overlap>¡Basta!</span><span class="capa c" data-layout-allow-overlap>¡Basta!</span></div></div>
+            <div class="franja" style="top: 780px"></div><div class="franja" style="top: 980px; height: 14px"></div><div class="franja" style="top: 1110px; height: 44px"></div>
+          </div>
+
+          <!-- C · revelación -->
+          <div class="escena" id="eC">
+            <div id="rayos-x"></div>
+            <div id="llego">Llegó el sistema de gestión de</div>
+            <img id="logo-rev" src="assets/logo-horizontal-blanco.png" />
+            <div id="pill-rev"><div>SOFTWARE</div></div>
+          </div>
+
+          <!-- D · módulos -->
+          <div class="escena" id="eD">
+            <div id="mods">
+              <div class="mod" id="md1"><div class="ic" style="background: rgba(14,165,233,0.2); color: var(--celeste)">▦</div><b>Stock</b></div>
+              <div class="mod" id="md2"><div class="ic" style="background: rgba(52,211,153,0.2); color: var(--verde)">$</div><b>Ventas</b></div>
+              <div class="mod" id="md3"><div class="ic" style="background: rgba(111,64,252,0.3); color: var(--lila)">≡</div><b>Facturación</b></div>
+              <div class="mod" id="md4"><div class="ic" style="background: rgba(251,146,60,0.22); color: var(--naranja)">☺</div><b>Clientes</b></div>
+            </div>
+            <div id="un-lugar" class="grande"><span class="gr">Todo en un<br />solo lugar.</span></div>
+          </div>
+
+          <!-- E · stock solo -->
+          <div class="escena" id="eE">
+            <div class="titulo-b grande">Vendés, y el stock<br /><span class="gr">se actualiza solo.</span></div>
+            <div class="noti" id="venta" style="top: 640px"><div class="ic" style="background: rgba(52,211,153,0.22); color: var(--verde)">$</div><div class="tx">Nueva venta<small>Remera negra × 1</small></div><div class="monto">+$ 18.900</div></div>
+            <div class="vidrio" style="left: 240px; top: 900px; width: 600px; text-align: center">
+              <div style="font-size: 32px; color: var(--suave); font-weight: 700">Remera negra · stock</div>
+              <div class="mono" id="stock-n">24</div>
+            </div>
+          </div>
+
+          <!-- F · factura en un clic -->
+          <div class="escena" id="eF">
+            <div class="titulo-b grande" style="top: 260px">Facturás<br /><span class="gr">en un clic.</span></div>
+            <div id="factura">
+              <div style="display: flex; justify-content: space-between"><b style="font-size: 44px">Factura B</b><span style="font-family: 'JetBrains Mono', monospace; font-size: 22px; color: #6b6880">0003-00012847</span></div>
+              <div class="l" style="width: 90%; margin-top: 30px"></div><div class="l" style="width: 65%"></div><div class="l" style="width: 80%"></div>
+              <div class="t"><span>Total</span><span>$ 18.900</span></div>
+            </div>
+            <div id="ok-fact">✓</div>
+            <div id="btn-fact">Facturar</div>
+            <div id="cursor-f" style="position:absolute; left:640px; top:1290px; width:0; height:0; border-left:40px solid #fff; border-top:24px solid transparent; border-bottom:24px solid transparent; transform: rotate(-60deg); filter: drop-shadow(0 6px 10px rgba(0,0,0,0.6))"></div>
+          </div>
+
+          <!-- G · ganancias en tiempo real -->
+          <div class="escena" id="eG">
+            <div class="titulo-b grande" style="top: 200px; font-size: 84px">Tus ganancias,<br /><span class="gr">en tiempo real.</span></div>
+            <div id="celu"><div class="isla"></div>
+              <div class="k"><span class="vivo"></span>Ganancia de hoy · en vivo</div>
+              <div class="mono" id="gan">$ 0</div>
+              <svg width="508" height="260" viewBox="0 0 508 260"><defs><linearGradient id="gg" x1="0" x2="1"><stop offset="0" stop-color="#0ea5e9" /><stop offset="1" stop-color="#34d399" /></linearGradient></defs><path id="trazo" d="M0 240 C 60 225, 100 205, 150 180 S 230 185, 280 130 S 380 100, 420 70 S 480 25, 508 12" fill="none" stroke="url(#gg)" stroke-width="10" stroke-linecap="round" /></svg>
+              <div class="mini"><div>Ventas<b id="n-ventas">0</b></div><div>Ticket prom.<b>$ 21.400</b></div></div>
+            </div>
+          </div>
+
+          <!-- H · a medida + soporte -->
+          <div class="escena" id="eH">
+            <div class="titulo-b grande" style="top: 300px; font-size: 96px">Hecho <span class="gr">a medida</span><br />de tu negocio.</div>
+            <div class="sello" id="s1" style="top: 820px"><div class="ic" style="background: rgba(111,64,252,0.3); color: var(--lila)">✂</div><div><b>A tu medida</b><small>Se adapta a cómo trabajás</small></div></div>
+            <div class="sello" id="s2" style="top: 1110px"><div class="ic" style="background: rgba(14,165,233,0.22); color: var(--celeste)">✆</div><div><b>Soporte real</b><small>Personas que te responden</small></div></div>
+          </div>
+
+          <!-- I · CTA -->
+          <div class="escena" id="eI">
+            <div id="dejá" class="grande">¡Dejá de<br /><span style="color: var(--rojo)">perder plata!</span></div>
+            <div id="boton"><div class="brillo"></div>Pedí tu demo hoy →</div>
+            <div id="anillo"></div>
+            <div id="cursor"></div>
+          </div>
+
+          <!-- J · cierre -->
+          <div class="escena" id="eJ">
+            <div id="cierre">
+              <img id="logo-c" src="assets/logo-horizontal-blanco.png" />
+              <div id="pill-c">SOFTWARE</div>
+              <div id="control" class="grande">Tu negocio,<br /><span class="gr">bajo control.</span></div>
+              <div id="web">somosprodi.com</div>
+            </div>
+          </div>
+        </div>
+        <div id="negro"></div>
+        <div id="flash"></div>
+      </div>
+    </div>
+
+    <script>
+      // ===== Tiempos de cada escena según la voz =====
+      const T = { A: 0, B: 8.25, C: 8.95, D: 11.75, E: 16.35, F: 18.85, G: 20.55, H: 23.65, I: 27.05, J: 30.05, FIN: 35.5 };
+      // ===============================================
+
+      const tl = gsap.timeline({ paused: true });
+      const $ = (s) => document.querySelector(s);
+      const $$ = (s) => [...document.querySelectorAll(s)];
+      const onda = (inicio, dur, dibujar) => { const p = { t: 0 }; dibujar(0); tl.to(p, { t: 1, duration: dur, ease: "none", onUpdate: () => dibujar(p.t) }, inicio); };
+      const pesos = (n) => "$ " + Math.round(n).toLocaleString("es-AR");
+      const flash = (t, f = 0.8) => tl.fromTo("#flash", { opacity: f }, { opacity: 0, duration: 0.3, ease: "power2.out", immediateRender: false }, t);
+      const temblor = (t, fz = 14) => [0, 1, 2, 3, 4, 5].forEach((k) => tl.set("#mundo", { x: k === 5 ? 0 : (k % 2 ? -fz : fz) * (1 - k / 6), y: k === 5 ? 0 : (k % 2 ? fz / 2 : -fz / 2) }, t + k * 0.035));
+      const escena = (id, desde, hasta) => tl.set(id, { visibility: "visible" }, desde).set(id, { visibility: "hidden" }, hasta);
+      const corte = (t) => { flash(t, 0.7); tl.fromTo("#mundo", { scale: 1.12, filter: "blur(12px)" }, { scale: 1, filter: "blur(0px)", duration: 0.35, ease: "expo.out", immediateRender: false }, t); };
+
+      // rayos de luz (solo en la parte de la solución)
+      for (let i = 0; i < 22; i++) $("#rayos").insertAdjacentHTML("beforeend", `<div class="rayo" style="top:${(i * 89) % 1920}px; width:${220 + (i * 53) % 320}px"></div>`);
+      const rs = $$(".rayo");
+      onda(0, T.FIN, (p) => {
+        const s = p * T.FIN;
+        rs.forEach((r, i) => { const x = ((s * (900 + (i * 137) % 900) + i * 400) % 2200) - 500; r.style.transform = `translateX(${x}px)`; r.style.opacity = 0.15 + ((i * 7) % 5) / 10; });
+        $("#piso").style.backgroundPosition = `0 ${s * 260}px`;
+      });
+
+      // ====== A · PROBLEMA (0 – 8.25) ======
+      escena("#eA", 0, 4.55);
+      const celdas = ["Remera", "12", "#¡REF!", "$ 8.900", "Buzo", "#N/A", "4", "??", "Jean", "7", "#¡DIV/0!", "$ 42.000", "Gorra", "—", "#¡VALOR!", "falta"];
+      $("#planilla").innerHTML = celdas.map((c) => `<i class="${/^#|\?\?/.test(c) ? "e" : ""}">${c}</i>`).join("");
+      tl.from("#pregunta", { y: -200, opacity: 0, duration: 0.45, ease: "expo.out" }, 0.1)
+        .from("#planilla", { x: -900, rotation: -40, duration: 0.45, ease: "back.out(1.3)" }, 1.55)
+        .from("#cuaderno", { x: 900, rotation: 40, duration: 0.45, ease: "back.out(1.3)" }, 2.35);
+      ["#m1", "#m2", "#m3", "#m4"].forEach((m, i) => tl.from(m, { scale: 0, opacity: 0, transformOrigin: "0% 100%", duration: 0.3, ease: "back.out(2)" }, 3.2 + i * 0.16));
+      tl.from("#badge", { scale: 0, duration: 0.35, ease: "back.out(3)" }, 3.75)
+        .to("#badge", { scale: 1.15, duration: 0.15, yoyo: true, repeat: 3 }, 4.1);
+      temblor(1.55, 10); temblor(2.35, 10); temblor(3.5, 12);
+      // se amontona y se desarma
+      tl.to("#planilla, #cuaderno, .msj, #badge, #pregunta", { y: 1200, rotation: (i) => (i % 2 ? 25 : -25), opacity: 0, duration: 0.4, stagger: 0.03, ease: "power3.in" }, 4.3);
+      // −VENTAS / −TIEMPO / −PLATA
+      [["#n1", 4.6], ["#n2", 5.9], ["#n3", 6.9]].forEach(([id, t], i, a) => {
+        tl.set(id, { visibility: "visible" }, t)
+          .fromTo(id, { scale: 2.6, opacity: 0, filter: "blur(16px)" }, { scale: 1, opacity: 1, filter: "blur(0px)", duration: 0.25, ease: "expo.out", immediateRender: false }, t)
+          .to(id, { y: 260, opacity: 0, scale: 0.8, duration: 0.2, ease: "power2.in" }, (a[i + 1]?.[1] ?? T.B) - 0.2)
+          .set(id, { visibility: "hidden" }, a[i + 1]?.[1] ?? T.B);
+        temblor(t, 16); flash(t, 0.25);
+      });
+      tl.set("#fondo-rojo", { opacity: 1 }, 0).fromTo("#fondo-rojo", { scale: 1 }, { scale: 1.15, duration: 8, ease: "none", immediateRender: false }, 0);
+
+      // ====== B · ¡BASTA! (8.25 – 8.95) ======
+      escena("#eB", T.B, T.C);
+      tl.from("#basta", { scale: 3, opacity: 0, duration: 0.18, ease: "expo.out" }, T.B);
+      [[0.08, -24, 10], [0.16, 18, -8], [0.24, -12, 14], [0.32, 0, 0], [0.44, 22, -12], [0.52, 0, 0]].forEach(([d, a, b]) => tl.set("#basta .r", { x: a, y: b / 3 }, T.B + d).set("#basta .c", { x: -a, y: -b / 3 }, T.B + d));
+      $$(".franja").forEach((f, i) => tl.set(f, { opacity: 1, x: i % 2 ? 60 : -60 }, T.B + 0.06 + i * 0.06).set(f, { opacity: 0 }, T.B + 0.11 + i * 0.06));
+      temblor(T.B, 26); flash(T.B, 0.9);
+      tl.to("#negro", { opacity: 1, duration: 0.05 }, T.C - 0.12).to("#negro", { opacity: 0, duration: 0.25 }, T.C);
+
+      // ====== C · REVELACIÓN (8.95 – 11.75) ======
+      escena("#eC", T.C, T.D);
+      tl.to("#fondo-rojo", { opacity: 0, duration: 0.01 }, T.C).to("#fondo-violeta", { opacity: 1, duration: 0.4 }, T.C).to("#piso", { opacity: 1, duration: 0.6 }, T.C).to("#rayos", { opacity: 1, duration: 0.4 }, T.C);
+      for (let i = 0; i < 40; i++) $("#rayos-x").insertAdjacentHTML("beforeend", `<div class="rayo-x" style="transform: rotate(${i * 9}deg) translateX(${100 + (i % 4) * 50}px)"></div>`);
+      tl.from("#llego", { y: 60, opacity: 0, duration: 0.4, ease: "expo.out" }, 9.0)
+        .fromTo(".rayo-x", { opacity: 0, scaleX: 0 }, { opacity: 1, scaleX: 1, duration: 0.3, stagger: 0.004, ease: "expo.out", immediateRender: false }, 10.75)
+        .to(".rayo-x", { opacity: 0, x: 200, duration: 0.6, stagger: 0.003, ease: "power2.in" }, 11.1)
+        .from("#logo-rev", { scale: 2.6, opacity: 0, filter: "blur(20px)", duration: 0.4, ease: "expo.out" }, 10.75)
+        .from("#pill-rev div", { scale: 0, duration: 0.35, ease: "back.out(3)" }, 11.15)
+        .to("#llego, #logo-rev, #pill-rev", { scale: 1.06, duration: 2.6, ease: "none" }, 9.0);
+      flash(10.75, 1); temblor(10.75, 18);
+
+      // ====== D · MÓDULOS (11.75 – 16.35) ======
+      escena("#eD", T.D, T.E); corte(T.D);
+      [["#md1", 11.8], ["#md2", 12.4], ["#md3", 13.0], ["#md4", 14.05]].forEach(([id, t], i) => {
+        tl.from(id, { scale: 0.2, opacity: 0, rotation: i % 2 ? 18 : -18, duration: 0.35, ease: "back.out(2.2)" }, t)
+          .from(`${id} .ic`, { rotation: -45, scale: 0.3, duration: 0.4, ease: "back.out(3)" }, t + 0.05);
+        temblor(t, 8);
+      });
+      tl.to("#mods", { scale: 0.92, y: -40, duration: 0.35, ease: "power2.out" }, 14.85)
+        .to(".mod", { borderColor: "rgba(185,164,255,0.85)", boxShadow: "0 0 50px rgba(111,64,252,0.6)", duration: 0.2, stagger: 0.04 }, 14.85)
+        .from("#un-lugar", { scale: 2.2, opacity: 0, filter: "blur(14px)", duration: 0.35, ease: "expo.out" }, 14.85);
+      temblor(15.5, 12);
+
+      // ====== E · STOCK SOLO (16.35 – 18.85) ======
+      escena("#eE", T.E, T.F); corte(T.E);
+      tl.from("#eE .titulo-b", { y: -120, opacity: 0, duration: 0.4, ease: "expo.out" }, T.E)
+        .from("#venta", { x: -1100, duration: 0.4, ease: "expo.out" }, 16.4)
+        .from("#eE .vidrio", { y: 400, opacity: 0, duration: 0.45, ease: "expo.out" }, 16.6)
+        .set("#stock-n", { textContent: "23" }, 17.55)
+        .fromTo("#stock-n", { scale: 1.5, color: "#34d399" }, { scale: 1, color: "#f5f4fa", duration: 0.45, immediateRender: false }, 17.55);
+      temblor(17.55, 10);
+
+      // ====== F · FACTURA EN UN CLIC (18.85 – 20.55) ======
+      escena("#eF", T.F, T.G); corte(T.F);
+      tl.from("#eF .titulo-b", { y: -120, opacity: 0, duration: 0.35, ease: "expo.out" }, T.F)
+        .from("#btn-fact", { scale: 0, duration: 0.35, ease: "back.out(2.5)" }, 18.95)
+        .from("#cursor-f", { x: 300, y: 300, opacity: 0, duration: 0.4, ease: "power3.out" }, 19.3)
+        .to("#cursor-f", { scale: 0.8, duration: 0.07, yoyo: true, repeat: 1 }, 19.95)
+        .to("#btn-fact", { scale: 0.93, duration: 0.07, yoyo: true, repeat: 1 }, 19.95)
+        .from("#factura", { y: 500, scale: 0.6, opacity: 0, duration: 0.4, ease: "back.out(1.6)" }, 20.05)
+        .from("#ok-fact", { scale: 0, rotation: -90, duration: 0.35, ease: "back.out(3)" }, 20.2);
+      temblor(20.05, 12); flash(20.05, 0.35);
+
+      // ====== G · GANANCIAS EN TIEMPO REAL (20.55 – 23.65) ======
+      escena("#eG", T.G, T.H); corte(T.G);
+      const trazo = $("#trazo"), largo = 700; trazo.style.strokeDasharray = largo;
+      tl.from("#eG .titulo-b", { y: -120, opacity: 0, duration: 0.4, ease: "expo.out" }, T.G)
+        .from("#celu", { y: 1300, rotation: 8, duration: 0.55, ease: "expo.out" }, 20.6)
+        .to("#celu .vivo", { opacity: 0.2, duration: 0.3, yoyo: true, repeat: 7 }, 21.0)
+        .to("#celu", { scale: 1.04, rotation: -2, duration: 2.4, ease: "none" }, 21.2);
+      onda(20.9, 2.6, (p) => {
+        const e = 1 - Math.pow(1 - p, 3);
+        $("#gan").textContent = pesos(486200 * e);
+        $("#n-ventas").textContent = Math.round(23 * e);
+        trazo.style.strokeDashoffset = largo * (1 - e);
+      });
+
+      // ====== H · A MEDIDA + SOPORTE (23.65 – 27.05) ======
+      escena("#eH", T.H, T.I); corte(T.H);
+      tl.from("#eH .titulo-b", { y: -120, opacity: 0, duration: 0.4, ease: "expo.out" }, T.H)
+        .from("#s1", { x: -1100, duration: 0.45, ease: "expo.out" }, 24.1)
+        .from("#s2", { x: 1100, duration: 0.45, ease: "expo.out" }, 25.65)
+        .from("#s1 .ic, #s2 .ic", { scale: 0, rotation: -60, duration: 0.4, stagger: 1.55, ease: "back.out(3)" }, 24.3);
+      temblor(24.1, 8); temblor(25.65, 8);
+
+      // ====== I · CTA (27.05 – 30.05) ======
+      escena("#eI", T.I, T.J); corte(T.I);
+      tl.from("#dejá", { scale: 2.2, opacity: 0, filter: "blur(14px)", duration: 0.35, ease: "expo.out" }, 27.1)
+        .from("#boton", { scale: 0.2, opacity: 0, duration: 0.4, ease: "back.out(2.2)" }, 28.85)
+        .fromTo("#boton .brillo", { xPercent: 0 }, { xPercent: 600, duration: 0.6, ease: "power2.inOut", immediateRender: false }, 29.1)
+        .from("#cursor", { x: 300, y: 300, opacity: 0, duration: 0.35, ease: "power3.out" }, 29.2)
+        .to("#cursor", { scale: 0.8, duration: 0.07, yoyo: true, repeat: 1 }, 29.65)
+        .to("#boton", { scale: 0.94, duration: 0.07, yoyo: true, repeat: 1 }, 29.65)
+        .fromTo("#anillo", { scale: 1, opacity: 1 }, { scale: 1.25, opacity: 0, duration: 0.4, ease: "power2.out", immediateRender: false }, 29.7);
+      temblor(27.1, 18); temblor(28.85, 10);
+
+      // ====== J · CIERRE (30.05 – 35.5) ======
+      escena("#eJ", T.J, T.FIN + 1); corte(T.J);
+      tl.from("#logo-c", { scale: 2, opacity: 0, filter: "blur(18px)", duration: 0.45, ease: "expo.out" }, 30.1)
+        .from("#pill-c", { y: 50, opacity: 0, duration: 0.35, ease: "back.out(2)" }, 30.5)
+        .from("#control", { scale: 1.8, opacity: 0, duration: 0.4, ease: "expo.out" }, 31.25)
+        .from("#web", { y: 30, opacity: 0, duration: 0.35, ease: "expo.out" }, 32.4)
+        .to("#cierre", { scale: 1.05, duration: 5.4, ease: "none" }, 30.1);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
