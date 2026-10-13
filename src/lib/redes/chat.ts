@@ -250,7 +250,7 @@ export async function enviarAudio(chat: Chat, by: string, blob: Blob, duracion: 
   assertEditable();
   if (duracion < 1) throw new Error("El audio es muy corto");
   const data = await aBase64(blob);
-  if (data.length > 990_000) throw new Error("El audio es muy largo (máximo 3 minutos)");
+  if (data.length > 1_990_000) throw new Error("El audio es muy largo (máximo 3 minutos)");
   const mime = (blob.type || "audio/webm").split(";")[0];
   const at = now();
   const ref = doc(collection(db, CHATS, chat.id, "audios"));

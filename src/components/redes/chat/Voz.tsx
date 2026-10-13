@@ -139,7 +139,11 @@ async function pedirMic(): Promise<MediaStream> {
     micGuardado.getAudioTracks().forEach((t) => (t.enabled = true));
     return micGuardado;
   }
-  micGuardado = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  // Mensaje de voz (no es una llamada): sin cancelación de eco, que acá no hace falta y mete cortes y sonido metálico;
+  // sí reducción de ruido y volumen automático. Mono a 48 kHz.
+  micGuardado = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 48000 },
+  });
   return micGuardado;
 }
 
@@ -198,7 +202,10 @@ export function useGrabadorVoz() {
       return;
     }
     const mimeType = TIPOS.find((t) => MediaRecorder.isTypeSupported?.(t));
-    const r = new MediaRecorder(stream, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: 24000 });
+    // Calidad: Opus (Chrome, Android) a 48 kbps suena como WhatsApp; el AAC del iPhone necesita más (64 kbps).
+    // Antes iba a 24 kbps y en el iPhone sonaba metálico. 3 minutos siguen entrando en el límite (~2 MB).
+    const esAac = (mimeType ?? "").includes("mp4") || (!mimeType && /iPhone|iPad|Macintosh/i.test(navigator.userAgent));
+    const r = new MediaRecorder(stream, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: esAac ? 64000 : 48000 });
     partes.current = [];
     r.ondataavailable = (e) => {
       if (e.data.size) partes.current.push(e.data);

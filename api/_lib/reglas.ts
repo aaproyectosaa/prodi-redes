@@ -350,7 +350,8 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       return miembroDelChat(c, padreId!);
     if (!crea || borra) return false;
     if (!(await miembroDelChat(c, padreId!)) || despues!.by !== c.uid) return false;
-    if (sub === "audios") return typeof despues!.data === "string" && despues!.data.length < 1_000_000;
+    // Hasta ~2 MB en base64: 3 minutos con buena calidad (48 kbps Opus o 64 kbps AAC en el iPhone).
+    if (sub === "audios") return typeof despues!.data === "string" && despues!.data.length < 2_000_000;
     return true;
   }
 
