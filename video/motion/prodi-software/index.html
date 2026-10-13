@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="es" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root {
+        --violeta: #6f40fc;
+        --celeste: #0ea5e9;
+        --fondo: #050507;
+        --blanco: #f4f4f6;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: var(--fondo); }
+      #root { position: relative; width: 100%; height: 100%; font-family: Inter, sans-serif; color: var(--blanco); }
+      .escena { position: absolute; inset: 0; overflow: hidden; background: var(--fondo); }
+      .centro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+      .mono { font-family: "JetBrains Mono", monospace; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; }
+      .grande { font-weight: 900; letter-spacing: -0.045em; line-height: 0.88; text-transform: uppercase; }
+      .letra { display: inline-block; }
+
+      /* marco tipo "editor" que acompaña toda la pieza */
+      #marco { position: absolute; inset: 0; pointer-events: none; z-index: 50; }
+      #marco .esq { position: absolute; width: 46px; height: 46px; border-color: rgba(255,255,255,0.35); border-style: solid; }
+      #marco .tl { top: 70px; left: 60px; border-width: 3px 0 0 3px; }
+      #marco .tr { top: 70px; right: 60px; border-width: 3px 3px 0 0; }
+      #marco .bl { bottom: 70px; left: 60px; border-width: 0 0 3px 3px; }
+      #marco .br { bottom: 70px; right: 60px; border-width: 0 3px 3px 0; }
+      #marco .rotulo { position: absolute; font-size: 22px; color: rgba(255,255,255,0.55); }
+      #tc { bottom: 82px; right: 120px; }
+      #marca-chica { top: 82px; left: 120px; }
+
+      /* 1 intro */
+      #eje-x { position: absolute; left: 140px; top: 1180px; height: 3px; width: 0; background: var(--blanco); }
+      #eje-y { position: absolute; left: 140px; top: 1180px; width: 3px; height: 0; background: var(--blanco); transform: translateY(-100%); }
+      #punto { position: absolute; left: 132px; top: 1172px; width: 19px; height: 19px; border-radius: 50%; background: var(--celeste); box-shadow: 0 0 30px var(--celeste); }
+      .anillo { position: absolute; left: 540px; top: 960px; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; border: 4px solid var(--violeta); opacity: 0; }
+
+      /* 2 título */
+      #t-prodi { font-size: 300px; }
+      #t-soft { font-size: 128px; color: var(--celeste); margin-top: 24px; position: relative; }
+      #t-soft .capa { position: absolute; inset: 0; mix-blend-mode: screen; opacity: 0; }
+      #t-soft .r { color: #ff2d55; } #t-soft .c { color: #00e5ff; }
+
+      /* 3 grilla */
+      #grilla { position: absolute; left: 90px; top: 360px; width: 900px; height: 1200px; display: grid; grid-template-columns: repeat(11, 1fr); grid-template-rows: repeat(15, 1fr); place-items: center; }
+      #grilla span { font-weight: 900; font-size: 54px; line-height: 1; }
+
+      /* 4 apps */
+      #t-apps { font-size: 330px; color: var(--fondo); -webkit-text-stroke: 5px var(--blanco); }
+      #t-cobran { font-size: 170px; margin-top: 10px; }
+      #t-cobran b { color: var(--violeta); }
+
+      /* 5 celular */
+      #celu { position: absolute; left: 270px; top: 430px; width: 540px; height: 1080px; border-radius: 76px; background: #111116; border: 14px solid #24242c; box-shadow: 0 60px 140px rgba(111,64,252,0.45); overflow: hidden; }
+      #celu .isla { position: absolute; top: 22px; left: 50%; width: 150px; height: 40px; margin-left: -75px; border-radius: 20px; background: #000; }
+      #celu .pant { position: absolute; inset: 0; padding: 120px 44px 0; display: flex; flex-direction: column; gap: 26px; }
+      #celu .tit { font-size: 30px; font-weight: 700; color: rgba(255,255,255,0.6); }
+      #celu .monto { font-size: 104px; font-weight: 900; letter-spacing: -0.04em; }
+      #celu .item { height: 74px; border-radius: 20px; background: rgba(255,255,255,0.06); }
+      #celu .boton { margin-top: 30px; height: 120px; border-radius: 30px; background: var(--celeste); display: flex; align-items: center; justify-content: center; font-size: 34px; font-weight: 800; color: #04121a; }
+      #ok { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 30px; background: var(--violeta); opacity: 0; }
+      #ok .tilde { width: 210px; height: 210px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 130px; font-weight: 900; color: var(--violeta); }
+      #ok .txt { font-size: 52px; font-weight: 900; }
+      #cursor { position: absolute; width: 70px; height: 70px; border-radius: 50%; background: rgba(255,255,255,0.85); border: 6px solid rgba(255,255,255,0.4); left: 700px; top: 1500px; }
+
+      /* 6 blob */
+      #blob { position: absolute; left: 190px; top: 560px; width: 700px; height: 700px; background: radial-gradient(circle at 32% 28%, #ffffff 0%, #b9a4ff 12%, var(--violeta) 42%, #2a0f8f 75%, #0b0530 100%); filter: drop-shadow(0 50px 120px rgba(14,165,233,0.45)); }
+      #blob-txt { position: absolute; left: 0; right: 0; top: 1390px; text-align: center; font-size: 76px; font-weight: 900; letter-spacing: -0.03em; }
+      #blob-txt em { font-style: normal; color: var(--celeste); }
+
+      /* 7 voxels */
+      #esc-vox { perspective: 1600px; }
+      #vox { position: absolute; left: 540px; top: 900px; width: 0; height: 0; transform-style: preserve-3d; transform: rotateX(58deg) rotateZ(45deg); }
+      #vox i { position: absolute; width: 58px; height: 58px; border-radius: 8px; background: #e9e7f3; transform-style: preserve-3d; box-shadow: 0 0 0 2px rgba(0,0,0,0.25) inset; }
+      #vox-txt { position: absolute; left: 0; right: 0; top: 1500px; text-align: center; font-size: 64px; font-weight: 900; text-transform: uppercase; letter-spacing: -0.02em; }
+
+      /* 8 código */
+      #codigo { position: absolute; left: 110px; top: 330px; width: 860px; font-family: "JetBrains Mono", monospace; font-size: 30px; line-height: 1.55; color: rgba(255,255,255,0.22); white-space: pre; }
+      #codigo b { color: rgba(111,64,252,0.75); font-weight: 500; } #codigo u { color: rgba(14,165,233,0.75); text-decoration: none; }
+      #t-pixel { font-size: 150px; text-align: center; }
+      #t-pixel .l2 { color: var(--celeste); }
+      #t-pixel .punto { color: var(--violeta); }
+
+      /* 9 palabras */
+      .palabra { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 900; text-transform: uppercase; letter-spacing: -0.04em; opacity: 0; }
+
+      /* 10 glitch */
+      #glitch { position: relative; font-size: 185px; text-align: center; }
+      #glitch .capa { position: absolute; inset: 0; }
+      #glitch .r { color: #ff2d55; mix-blend-mode: screen; } #glitch .c { color: #00e5ff; mix-blend-mode: screen; }
+      .franja { position: absolute; left: 0; right: 0; height: 26px; background: rgba(255,255,255,0.9); opacity: 0; }
+
+      /* 11 cierre */
+      .rayo { position: absolute; left: 540px; top: 900px; height: 4px; width: 520px; transform-origin: 0 50%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.9)); opacity: 0; }
+      #logo { width: 760px; }
+      #pill { margin-top: 40px; padding: 14px 40px; border-radius: 999px; background: var(--celeste); color: #04121a; font-size: 50px; font-weight: 900; letter-spacing: 0.22em; }
+      #tagline { margin-top: 70px; font-size: 52px; font-weight: 800; color: rgba(255,255,255,0.88); }
+      #web { margin-top: 26px; font-size: 40px; color: var(--violeta); font-weight: 800; letter-spacing: 0.04em; filter: brightness(1.5); }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="19" data-width="1080" data-height="1920">
+      <!-- 1 · intro -->
+      <div id="s1" class="escena clip" data-start="0" data-duration="1.5" data-track-index="0">
+        <div id="eje-y"></div><div id="eje-x"></div><div id="punto"></div>
+        <div class="anillo"></div><div class="anillo"></div><div class="anillo"></div>
+      </div>
+      <!-- 2 · PRODI SOFTWARE -->
+      <div id="s2" class="escena clip" data-start="1.5" data-duration="2" data-track-index="0">
+        <div class="centro">
+          <div id="t-prodi" class="grande"></div>
+          <div id="t-soft" class="grande" data-layout-allow-overlap><span class="base">Software</span><span class="capa r" data-layout-allow-overlap>Software</span><span class="capa c" data-layout-allow-overlap>Software</span></div>
+        </div>
+      </div>
+      <!-- 3 · grilla -->
+      <div id="s3" class="escena clip" data-start="3.5" data-duration="1.5" data-track-index="0"><div id="grilla"></div></div>
+      <!-- 4 · apps que cobran -->
+      <div id="s4" class="escena clip" data-start="5" data-duration="1.5" data-track-index="0">
+        <div class="centro"><div id="t-apps" class="grande">Apps</div><div id="t-cobran" class="grande">que <b>cobran.</b></div></div>
+      </div>
+      <!-- 5 · celular -->
+      <div id="s5" class="escena clip" data-start="6.5" data-duration="2" data-track-index="0">
+        <div id="celu">
+          <div class="pant">
+            <div class="tit">Total a pagar</div>
+            <div class="monto">$ 12.500</div>
+            <div class="item"></div><div class="item" style="width: 78%"></div><div class="item" style="width: 88%"></div>
+            <div class="boton">Pagar con Mercado Pago</div>
+          </div>
+          <div id="ok"><div class="tilde">✓</div><div class="txt">¡Pago aprobado!</div></div>
+          <div class="isla"></div>
+        </div>
+        <div id="cursor"></div>
+      </div>
+      <!-- 6 · blob -->
+      <div id="s6" class="escena clip" data-start="8.5" data-duration="1.5" data-track-index="0">
+        <div id="blob"></div>
+        <div id="blob-txt">Tu negocio,<br /><em>en una app.</em></div>
+      </div>
+      <!-- 7 · voxels -->
+      <div id="esc-vox" class="escena clip" data-start="10" data-duration="1.5" data-track-index="0">
+        <div id="vox"></div>
+        <div id="vox-txt">Diseño + código</div>
+      </div>
+      <!-- 8 · cada píxel es código -->
+      <div id="s8" class="escena clip" data-start="11.5" data-duration="1.5" data-track-index="0">
+        <div id="codigo"></div>
+        <div class="centro"><div id="t-pixel" class="grande"><div class="l1">Cada píxel</div><div class="l2">es código<span class="punto">.</span></div></div></div>
+      </div>
+      <!-- 9 · palabras al golpe -->
+      <div id="s9" class="escena clip" data-start="13" data-duration="1.5" data-track-index="0">
+        <div class="palabra" id="p1" style="background: var(--violeta); font-size: 190px">Cobros</div>
+        <div class="palabra" id="p2" style="background: var(--fondo); color: var(--celeste); font-size: 112px">Suscripciones</div>
+        <div class="palabra" id="p3" style="background: var(--blanco); color: var(--fondo); font-size: 108px">Mantenimiento</div>
+      </div>
+      <!-- 10 · a medida -->
+      <div id="s10" class="escena clip" data-start="14.5" data-duration="1" data-track-index="0">
+        <div class="centro"><div id="glitch" class="grande" data-layout-allow-overlap><span class="base">A medida</span><span class="capa r" data-layout-allow-overlap>A medida</span><span class="capa c" data-layout-allow-overlap>A medida</span></div></div>
+        <div class="franja" style="top: 820px"></div><div class="franja" style="top: 1010px; height: 14px"></div><div class="franja" style="top: 1130px; height: 40px"></div>
+      </div>
+      <!-- 11 · cierre -->
+      <div id="s11" class="escena clip" data-start="15.5" data-duration="3.5" data-track-index="0">
+        <div id="rayos"></div>
+        <div class="centro">
+          <img id="logo" src="assets/logo-horizontal-blanco.png" />
+          <div id="pill">SOFTWARE</div>
+          <div id="tagline">Apps con Mercado Pago</div>
+          <div id="web">somosprodi.com</div>
+        </div>
+      </div>
+      <!-- marco fijo -->
+      <div id="marco" class="clip" data-start="0" data-duration="15.5" data-track-index="1">
+        <div class="esq tl"></div><div class="esq tr"></div><div class="esq bl"></div><div class="esq br"></div>
+        <div id="marca-chica" class="rotulo mono">Prodi ✦ Software</div>
+        <div id="tc" class="rotulo mono">00:00:00</div>
+      </div>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      const $ = (s) => document.querySelector(s);
+      const $$ = (s) => [...document.querySelectorAll(s)];
+      const VIOLETA = [111, 64, 252], CELESTE = [14, 165, 233];
+      const mezcla = (a, b, t) => `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(",")})`;
+      // un "proxy" que avanza con el timeline y redibuja: funciona igual al hacer seek cuadro a cuadro
+      const onda = (inicio, dur, dibujar) => {
+        const p = { t: 0 };
+        dibujar(0);
+        tl.to(p, { t: 1, duration: dur, ease: "none", onUpdate: () => dibujar(p.t) }, inicio);
+      };
+
+      // timecode del marco
+      onda(0, 15.5, (t) => {
+        const s = t * 15.5, f = Math.floor((s % 1) * 30);
+        $("#tc").textContent = `00:${String(Math.floor(s)).padStart(2, "0")}:${String(f).padStart(2, "0")}`;
+      });
+
+      // 1 · intro: ejes que se dibujan y anillos que laten
+      tl.to("#eje-x", { width: 800, duration: 0.6, ease: "power3.out" }, 0.05)
+        .to("#eje-y", { height: 620, duration: 0.6, ease: "power3.out" }, 0.25)
+        .to("#punto", { x: 800, y: -620, duration: 0.9, ease: "expo.inOut" }, 0.4)
+        .to("#s1 .anillo", { scale: 9, opacity: 0, duration: 0.9, stagger: 0.25, ease: "power2.out", startAt: { scale: 0.5, opacity: 1 } }, 0.5)
+        .to("#s1", { scale: 1.15, opacity: 0, duration: 0.2, ease: "power2.in" }, 1.3);
+
+      // 2 · PRODI letra por letra + SOFTWARE con glitch
+      $("#t-prodi").innerHTML = [..."PRODI"].map((l) => `<span class="letra">${l}</span>`).join("");
+      tl.from("#t-prodi .letra", { scale: 2.6, opacity: 0, filter: "blur(18px)", duration: 0.45, stagger: 0.06, ease: "expo.out" }, 1.5)
+        .from("#t-soft", { y: 140, opacity: 0, duration: 0.4, ease: "expo.out" }, 2.0)
+        .to("#t-soft .r", { opacity: 1, x: -14, duration: 0.04 }, 2.5).to("#t-soft .c", { opacity: 1, x: 14, duration: 0.04 }, 2.5)
+        .to("#t-soft .r", { x: 10, duration: 0.04 }, 2.58).to("#t-soft .c", { x: -10, duration: 0.04 }, 2.58)
+        .to("#t-soft .r, #t-soft .c", { opacity: 0, x: 0, duration: 0.04 }, 2.66)
+        .to("#t-prodi", { scale: 1.08, duration: 1.4, ease: "none" }, 2.0)
+        .to("#s2 .centro", { scale: 0.6, opacity: 0, duration: 0.18, ease: "power3.in" }, 3.32);
+
+      // 3 · grilla de "+" que respira en onda desde el centro
+      const grilla = $("#grilla");
+      for (let i = 0; i < 165; i++) grilla.insertAdjacentHTML("beforeend", "<span>+</span>");
+      const cruces = $$("#grilla span");
+      onda(3.5, 1.5, (t) => {
+        cruces.forEach((el, i) => {
+          const x = (i % 11) - 5, y = Math.floor(i / 11) - 7;
+          const d = Math.sqrt(x * x + y * y);
+          const v = 0.5 + 0.5 * Math.sin(d * 0.9 - t * 14);
+          el.style.transform = `scale(${0.25 + v * 1.25}) rotate(${v * 90}deg)`;
+          el.style.color = mezcla(VIOLETA, CELESTE, v);
+          el.style.opacity = 0.25 + v * 0.75;
+        });
+      });
+      tl.from("#grilla", { scale: 0.3, opacity: 0, duration: 0.35, ease: "expo.out" }, 3.5)
+        .to("#grilla", { scale: 2.4, opacity: 0, duration: 0.25, ease: "power3.in" }, 4.75);
+
+      // 4 · APPS que cobran
+      tl.from("#t-apps", { scale: 0.4, opacity: 0, duration: 0.4, ease: "back.out(2)" }, 5.0)
+        .from("#t-cobran", { y: 160, opacity: 0, duration: 0.35, ease: "expo.out" }, 5.5)
+        .to("#t-apps", { color: "#f4f4f6", duration: 0.05 }, 6.0)
+        .to("#s4 .centro", { x: -1100, duration: 0.25, ease: "power3.in" }, 6.25);
+
+      // 5 · celular: entra, toca el botón y aprueba
+      tl.from("#celu", { y: 1400, rotation: 12, duration: 0.55, ease: "expo.out" }, 6.5)
+        .from("#cursor", { x: 300, y: 400, opacity: 0, duration: 0.3, ease: "power3.out" }, 6.8)
+        .to("#cursor", { x: -160, y: -140, duration: 0.35, ease: "power2.inOut" }, 7.1)
+        .to("#cursor", { scale: 0.75, duration: 0.08, yoyo: true, repeat: 1 }, 7.45)
+        .to("#celu .boton", { scale: 0.94, duration: 0.08, yoyo: true, repeat: 1 }, 7.45)
+        .to("#ok", { opacity: 1, duration: 0.15 }, 7.6)
+        .from("#ok .tilde", { scale: 0, rotation: -90, duration: 0.45, ease: "back.out(2.5)" }, 7.6)
+        .from("#ok .txt", { y: 50, opacity: 0, duration: 0.3, ease: "expo.out" }, 7.75)
+        .to("#cursor", { opacity: 0, duration: 0.15 }, 7.7)
+        .to("#celu", { scale: 1.06, rotation: -3, duration: 1.2, ease: "none" }, 7.3)
+        .to("#celu", { y: -1500, duration: 0.25, ease: "power3.in" }, 8.25);
+
+      // 6 · blob que se deforma
+      const formas = ["50% 50% 50% 50% / 50% 50% 50% 50%", "62% 38% 55% 45% / 45% 60% 40% 55%", "40% 60% 35% 65% / 60% 40% 65% 35%", "55% 45% 65% 35% / 38% 62% 45% 55%", "48% 52% 42% 58% / 55% 45% 58% 42%"];
+      tl.from("#blob", { scale: 0, duration: 0.45, ease: "back.out(1.8)" }, 8.5);
+      formas.slice(1).forEach((f, i) => tl.to("#blob", { borderRadius: f, rotation: (i + 1) * 28, duration: 0.3, ease: "sine.inOut" }, 8.5 + i * 0.3));
+      tl.from("#blob-txt", { y: 80, opacity: 0, duration: 0.35, ease: "expo.out" }, 8.85)
+        .to("#blob", { scale: 3.5, opacity: 0, duration: 0.25, ease: "power3.in" }, 9.75)
+        .to("#blob-txt", { opacity: 0, duration: 0.15 }, 9.8);
+
+      // 7 · grilla 3D en onda
+      const vox = $("#vox"), N = 11, PASO = 66;
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) vox.insertAdjacentHTML("beforeend", `<i data-x="${x}" data-y="${y}"></i>`);
+      const cubos = $$("#vox i");
+      onda(10, 1.5, (t) => {
+        cubos.forEach((el) => {
+          const x = +el.dataset.x - (N - 1) / 2, y = +el.dataset.y - (N - 1) / 2;
+          const d = Math.sqrt(x * x + y * y);
+          const v = Math.max(0, Math.sin(d * 0.75 - t * 12));
+          el.style.transform = `translate(${x * PASO - 29}px, ${y * PASO - 29}px) translateZ(${v * 140}px)`;
+          el.style.background = v > 0.05 ? mezcla([233, 231, 243], d < 2.2 ? CELESTE : VIOLETA, Math.min(1, v * 1.2)) : "#e9e7f3";
+        });
+      });
+      tl.from("#vox", { scale: 0.2, opacity: 0, duration: 0.4, ease: "expo.out" }, 10)
+        .from("#vox-txt", { y: 80, opacity: 0, duration: 0.3, ease: "expo.out" }, 10.4)
+        .to("#vox", { rotationZ: 90, duration: 1.5, ease: "none" }, 10)
+        .to("#esc-vox", { opacity: 0, duration: 0.15 }, 11.35);
+
+      // 8 · código de fondo que se escribe + CADA PÍXEL ES CÓDIGO
+      const lineas = [
+        "<b>const</b> app = <u>crearApp</u>({",
+        "  negocio: <u>\"tu marca\"</u>,",
+        "  cobros: <u>mercadoPago</u>(),",
+        "  suscripciones: <b>true</b>,",
+        "});",
+        "",
+        "app.<u>cobrar</u>(12500);",
+        "<b>// ✓ pago aprobado</b>",
+        "",
+        "<b>export default</b> app;",
+      ];
+      $("#codigo").innerHTML = lineas.map((l) => `<div class="cl" style="overflow:hidden">${l || "&nbsp;"}</div>`).join("");
+      tl.from("#codigo .cl", { width: 0, duration: 0.18, stagger: 0.08, ease: "none" }, 11.5)
+        .from("#t-pixel .l1", { x: -900, duration: 0.35, ease: "expo.out" }, 11.55)
+        .from("#t-pixel .l2", { x: 900, duration: 0.35, ease: "expo.out" }, 11.9)
+        .from("#t-pixel .punto", { scale: 4, opacity: 0, duration: 0.3, ease: "back.out(3)" }, 12.3)
+        .to("#s8 .centro", { scale: 1.12, duration: 1.3, ease: "none" }, 11.6)
+        .to("#s8", { opacity: 0, duration: 0.12 }, 12.88);
+
+      // 9 · una palabra por golpe
+      [["#p1", 13.0], ["#p2", 13.5], ["#p3", 14.0]].forEach(([id, t]) => {
+        tl.set(id, { opacity: 1 }, t).from(id, { scale: 1.5, duration: 0.3, ease: "expo.out" }, t).set(id, { opacity: 0 }, t + 0.5);
+      });
+
+      // 10 · A MEDIDA con glitch y franjas
+      tl.from("#glitch", { scaleX: 1.8, scaleY: 0.2, opacity: 0, duration: 0.25, ease: "expo.out" }, 14.5);
+      [[14.6, -18, 12], [14.68, 14, -9], [14.76, -8, 16], [14.84, 0, 0], [15.1, 22, -14], [15.18, 0, 0]].forEach(([t, a, b]) => {
+        tl.set("#glitch .r", { x: a, y: b / 3 }, t).set("#glitch .c", { x: -a, y: -b / 3 }, t);
+      });
+      $$(".franja").forEach((f, i) => tl.set(f, { opacity: 1, x: i % 2 ? 60 : -60 }, 14.62 + i * 0.07).set(f, { opacity: 0 }, 14.68 + i * 0.07));
+      tl.to("#glitch", { scale: 0.85, opacity: 0, duration: 0.12 }, 15.38);
+
+      // 11 · cierre: rayos de velocidad y logo
+      const rayos = $("#rayos");
+      for (let i = 0; i < 36; i++) rayos.insertAdjacentHTML("beforeend", `<div class="rayo" style="transform: rotate(${i * 10 + (i % 3) * 3}deg) translateX(${120 + (i % 4) * 40}px)"></div>`);
+      tl.fromTo(".rayo", { opacity: 0, scaleX: 0 }, { opacity: 1, scaleX: 1, duration: 0.3, stagger: 0.006, ease: "expo.out" }, 15.5)
+        .to(".rayo", { opacity: 0, x: 160, duration: 0.5, stagger: 0.004, ease: "power2.in" }, 16.0)
+        .from("#logo", { scale: 2.2, opacity: 0, filter: "blur(20px)", duration: 0.5, ease: "expo.out" }, 15.55)
+        .from("#pill", { y: 60, opacity: 0, duration: 0.35, ease: "back.out(2)" }, 16.0)
+        .from("#tagline", { y: 40, opacity: 0, duration: 0.35, ease: "expo.out" }, 16.5)
+        .from("#web", { y: 30, opacity: 0, duration: 0.35, ease: "expo.out" }, 17.0)
+        .to("#s11 .centro", { scale: 1.05, duration: 3.5, ease: "none" }, 15.5);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

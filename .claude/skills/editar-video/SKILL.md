@@ -86,6 +86,12 @@ Barra de progreso arriba automática. Colores de la marca; subtítulos con `--co
 - **Animación del cierre**: `Cierre` en `src/Reel.tsx`.
 - **Previsualizar en vivo**: `pnpm studio` (Remotion Studio; cargar `public/trabajo/<id>/props.json` como props).
 
+## Reels de motion graphics (sin filmación)
+
+Cuando pide "un video como este" con una referencia de animaciones (showreel, presentación de marca): un proyecto por pieza en `video/motion/<nombre>/` (index.html + assets/ + hyperframes.json + meta.json), una escena `.clip` por golpe y un solo timeline GSAP. Ejemplo hecho: `video/motion/prodi-software/` (19 s, escenas cada 0,5 s a 120 BPM: tipografía cinética, grilla en onda, celular con pago aprobado, blob, grilla 3D, código, palabras al golpe, glitch, cierre con rayos y logo). Para ondas/grillas usar el patrón `onda()` (proxy que redibuja en `onUpdate`, así funciona al hacer seek cuadro a cuadro). `pnpm exec hyperframes check motion/<nombre>` tiene que pasar (texto con contorno → `color` igual al fondo; capas de glitch → `data-layout-allow-overlap`). Render: `pnpm exec hyperframes render motion/<nombre> --workers 2 -o salida/<nombre>.mp4` (~1 min). Sale sin audio: armar los cortes a un tempo fijo y que la música se agregue en Instagram o con un MP3 que pase Lucas.
+
+PRODI: violeta `#6F40FC`, Software celeste `#0EA5E9`, fondo casi negro, Inter; logos en `public/brand/`; web somosprodi.com. PRODI Software = apps para cobrar con Mercado Pago + mantenimiento.
+
 ## HyperFrames (placas y motion graphics)
 
 Para piezas gráficas sin video de cámara: placa de cierre más elaborada, intro, "3 claves" en texto animado, contador, lower third. Es HTML + GSAP; leer `video/hyperframes/CLAUDE.md` antes de armar una composición nueva.
