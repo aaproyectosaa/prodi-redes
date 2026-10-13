@@ -42,7 +42,7 @@ import { ChatIcon } from "@/components/redes/chat/ChatIcon";
 import { EtiquetaContacto, InfoChat } from "@/components/redes/chat/Grupos";
 import { Cabecitas, EditarMensajeDialog, InfoMensaje, vistosHasta } from "@/components/redes/chat/InfoMensaje";
 import { TareaMensajeDialog } from "@/components/redes/chat/TareaMensaje";
-import { TextoConCodigo, tieneCodigo } from "@/components/redes/chat/TextoCodigo";
+import { TextoConCodigo, esError, tieneCodigo } from "@/components/redes/chat/TextoCodigo";
 import { CamaraDialog, camaraDelSistema } from "@/components/redes/chat/Camara";
 import { comprimirFoto } from "@/lib/imagen";
 import { crearReunion } from "@/lib/redes/reuniones";
@@ -908,7 +908,7 @@ export function ChatConversacion({
                         <AudioMensaje chatId={chat.id} audio={m.audio} mio={mio} />
                       ) : (
                         // Chats de Software: ```código``` con colores y "Copiar" (Redes, como siempre).
-                        enSoftware && tieneCodigo(m.texto) ? (
+                        enSoftware && (tieneCodigo(m.texto) || esError(m.texto)) ? (
                           <TextoConCodigo texto={m.texto} mio={mio} render={(t) => conMenciones(t, mio)} />
                         ) : (
                           <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">

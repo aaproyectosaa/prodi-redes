@@ -6,6 +6,18 @@ import { Check, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
+/**
+ * ¿Es un error pegado? (un log o stack trace: varias líneas con "Error", "Exception", "Traceback", líneas "at …" o
+ * "File …, line N"). Se muestra plegado para que no tape la conversación.
+ */
+export function esError(texto: string): boolean {
+  const lineas = texto.trim().split("\n");
+  if (lineas.length < 4) return false;
+  const pila = lineas.filter((l) => /^\s+at\s|^\s*File ".*", line \d+|^\s+\^+\s*$/.test(l)).length;
+  const marca = /\b(\w*Error|Exception|Traceback|Uncaught|FATAL|ERR!|panic:|failed|Unhandled)\b/i.test(lineas.slice(0, 5).join("\n"));
+  return pila >= 2 || (marca && lineas.length >= 5);
+}
+
 /** ¿El texto tiene código? (un bloque entre ``` o `algo` suelto). */
 export const tieneCodigo = (texto: string) => /```[\s\S]*?```|`[^`\n]+`/.test(texto);
 
@@ -39,8 +51,15 @@ function colorear(codigo: string): ReactNode[] {
   return out;
 }
 
-function BloqueCodigo({ codigo, lenguaje }: { codigo: string; lenguaje: string }) {
+/** Líneas que se ven de un error plegado (las primeras, que son las que dicen qué pasó). */
+const LINEAS_PLEGADO = 3;
+
+function BloqueCodigo({ codigo, lenguaje, error = false }: { codigo: string; lenguaje: string; error?: boolean }) {
   const [copiado, setCopiado] = useState(false);
+  const lineas = codigo.split("\n");
+  const plegable = error && lineas.length > LINEAS_PLEGADO;
+  const [abierto, setAbierto] = useState(false);
+  const visible = plegable && !abierto ? lineas.slice(0, LINEAS_PLEGADO).join("\n") : codigo;
   const copiar = async () => {
     try {
       await navigator.clipboard.writeText(codigo);
@@ -51,17 +70,26 @@ function BloqueCodigo({ codigo, lenguaje }: { codigo: string; lenguaje: string }
     }
   };
   return (
-    <div className="my-1 overflow-hidden rounded-lg border border-white/10 bg-zinc-900 text-left text-zinc-100 shadow-sm">
+    <div className={cn("my-1 overflow-hidden rounded-lg border bg-zinc-900 text-left text-zinc-100 shadow-sm", error ? "border-red-500/40" : "border-white/10")}>
       <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-zinc-800/80 px-2.5 py-1 text-[10px] text-zinc-400">
-        <span className="font-mono uppercase tracking-wide">{lenguaje || "código"}</span>
+        <span className={cn("font-mono uppercase tracking-wide", error && "text-red-300")}>{error ? `⚠ error · ${lineas.length} líneas` : lenguaje || "código"}</span>
         <button type="button" onClick={() => void copiar()} className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-white/10 hover:text-zinc-100">
           {copiado ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
           {copiado ? "Copiado" : "Copiar"}
         </button>
       </div>
       <pre className="max-h-80 overflow-auto px-3 py-2 font-mono text-[12px] leading-relaxed">
-        <code>{colorear(codigo)}</code>
+        <code>{error ? <span className="text-red-200">{visible}</span> : colorear(visible)}</code>
       </pre>
+      {plegable && (
+        <button
+          type="button"
+          onClick={() => setAbierto((v) => !v)}
+          className="w-full border-t border-white/10 bg-zinc-800/60 px-3 py-1 text-left text-[11px] font-medium text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+        >
+          {abierto ? "Ver menos" : `Ver todo (${lineas.length - LINEAS_PLEGADO} líneas más)`}
+        </button>
+      )}
     </div>
   );
 }
@@ -76,8 +104,13 @@ export function TextoConCodigo({ texto, mio, render }: { texto: string; mio: boo
     <div className="min-w-0 space-y-1">
       {partes.map((p, i) => {
         const bloque = p.match(/^```([^\n`]*)\n?([\s\S]*?)```$/);
-        if (bloque) return <BloqueCodigo key={i} lenguaje={bloque[1].trim()} codigo={bloque[2].replace(/\n$/, "")} />;
+        if (bloque) {
+          const codigo = bloque[2].replace(/\n$/, "");
+          return <BloqueCodigo key={i} lenguaje={bloque[1].trim()} codigo={codigo} error={esError(codigo)} />;
+        }
         if (!p.trim()) return null;
+        // Un error pegado sin ``` también va plegado.
+        if (esError(p)) return <BloqueCodigo key={i} lenguaje="" codigo={p.trim()} error />;
         // Código suelto dentro del texto: `así`.
         const trozos = p.replace(/^\n+|\n+$/g, "").split(/(`[^`\n]+`)/g);
         return (
