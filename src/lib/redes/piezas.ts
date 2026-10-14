@@ -100,6 +100,18 @@ export function versionesDe(p: PiezaIA): VersionVista[] {
 }
 
 export const versionEnviada = (p: PiezaIA) => versionesDe(p).find((v) => v.id === p.version_enviada_id) ?? null;
+/** Las que se mandaron al cliente (una o varias juntas), en el orden en que se mandaron. */
+export const versionesEnviadas = (p: PiezaIA) => {
+  const ids = p.versiones_enviadas?.length ? p.versiones_enviadas : p.version_enviada_id ? [p.version_enviada_id] : [];
+  const todas = versionesDe(p);
+  return ids.map((id) => todas.find((v) => v.id === id)).filter((v): v is NonNullable<typeof v> => !!v);
+};
+/** Las aprobadas por el cliente (una o varias). */
+export const versionesAprobadas = (p: PiezaIA) => {
+  const ids = p.versiones_aprobadas?.length ? p.versiones_aprobadas : p.version_aprobada_id ? [p.version_aprobada_id] : [];
+  const todas = versionesDe(p);
+  return ids.map((id) => todas.find((v) => v.id === id)).filter((v): v is NonNullable<typeof v> => !!v);
+};
 export const versionFinal = (p: PiezaIA) =>
   versionesDe(p).find((v) => v.id === p.version_aprobada_id) ?? null;
 
@@ -221,18 +233,24 @@ export async function empezarPieza(pieza: PiezaIA) {
   await updateDoc(doc(db, PIEZAS, pieza.id), { estado: "en_proceso", updated_at: now() });
 }
 
-/** Diseño le manda una versión al cliente para que la apruebe. */
-export async function mandarAlCliente(pieza: PiezaIA, versionId: string, project: Project | undefined, by: string) {
+/** Diseño le manda una versión (o varias juntas) al cliente para que las apruebe. */
+export async function mandarAlCliente(pieza: PiezaIA, versionId: string | string[], project: Project | undefined, by: string) {
   assertEditable();
+  const ids = Array.isArray(versionId) ? versionId : [versionId];
+  const varias = ids.length > 1;
   await updateDoc(doc(db, PIEZAS, pieza.id), {
     estado: "para_aprobar",
-    version_enviada_id: versionId,
+    version_enviada_id: ids[0],
+    versiones_enviadas: varias ? ids : null,
+    respuestas_cliente: null,
     updated_at: now(),
-    historial: arrayUnion(evento(by, (pieza.rondas ?? 0) > 0 ? "Corrección enviada al cliente" : "Enviada al cliente para aprobar")),
+    historial: arrayUnion(
+      evento(by, varias ? `Enviadas al cliente para aprobar (${ids.length})` : (pieza.rondas ?? 0) > 0 ? "Corrección enviada al cliente" : "Enviada al cliente para aprobar")
+    ),
   });
   void avisar({
     destinatarios: equipoDe(project, "cliente"),
-    titulo: "Tenés una pieza para aprobar",
+    titulo: varias ? `Tenés ${ids.length} piezas para aprobar` : "Tenés una pieza para aprobar",
     cuerpo: `${formatoInfo(pieza.formato).label}: ${(pieza.producto || pieza.pedido).slice(0, 90)}`,
     link: `/cliente?tab=piezas&pieza=${pieza.id}`,
     clave: `pieza_aprobar:${pieza.id}`,
@@ -242,13 +260,13 @@ export async function mandarAlCliente(pieza: PiezaIA, versionId: string, project
 
 /** El cliente la aprueba: queda lista para descargar. */
 // (La hace el servidor: valida el estado y avisa a diseño.)
-export async function aprobarPieza(pieza: PiezaIA, _project: Project | undefined, _by: string) {
-  await callApi("/api/publico/pieza-cliente", { pieza_id: pieza.id, decision: "aprobar" });
+export async function aprobarPieza(pieza: PiezaIA, _project: Project | undefined, _by: string, versionId?: string) {
+  await callApi("/api/publico/pieza-cliente", { pieza_id: pieza.id, decision: "aprobar", ...(versionId ? { version_id: versionId } : {}) });
 }
 
 /** El cliente pide cambios: vuelve a diseño con su comentario. */
-export async function pedirCambiosPieza(pieza: PiezaIA, _project: Project | undefined, _by: string, nota: string) {
-  await callApi("/api/publico/pieza-cliente", { pieza_id: pieza.id, decision: "cambios", nota });
+export async function pedirCambiosPieza(pieza: PiezaIA, _project: Project | undefined, _by: string, nota: string, versionId?: string) {
+  await callApi("/api/publico/pieza-cliente", { pieza_id: pieza.id, decision: "cambios", nota, ...(versionId ? { version_id: versionId } : {}) });
 }
 
 /** Diseño no la puede hacer: si se pagó, se devuelve el pago. */

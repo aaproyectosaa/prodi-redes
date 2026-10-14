@@ -323,6 +323,12 @@ export interface PiezaIA {
   /** La versión que se le mandó al cliente para aprobar. */
   version_enviada_id?: string | null;
   version_aprobada_id: string | null;
+  /** Varias versiones mandadas juntas al cliente (aprueba o pide cambios de cada una). */
+  versiones_enviadas?: string[] | null;
+  /** Respuesta del cliente por versión (cuando se mandaron varias). */
+  respuestas_cliente?: Record<string, { estado: "aprobada" | "cambios"; nota?: string | null; at: string }> | null;
+  /** Las que el cliente aprobó (cuando se mandaron varias). */
+  versiones_aprobadas?: string[] | null;
   /** Cuándo se publicó en las redes (sale de "Entregadas" y pasa al historial). */
   publicada_at?: string | null;
   feedback_cliente?: string | null;

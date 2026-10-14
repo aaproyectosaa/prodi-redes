@@ -134,6 +134,8 @@ export interface PedidoPieza {
   pieza_id?: string;
   decision?: string;
   nota?: string;
+  /** Cuando se mandaron varias versiones juntas: a cuál responde. */
+  version_id?: string;
 }
 
 const FORMATOS: Record<string, string> = {
@@ -168,6 +170,46 @@ export async function responderPiezaApp(caller: Caller, b: PedidoPieza, base: st
     const esCliente = caller.role === "cliente" && (team.cliente ?? []).includes(caller.uid);
     if (!esCliente && caller.role !== "admin") throw new HttpError(403, "No tenés acceso a esta pieza");
     if (pz.estado !== "para_aprobar") throw new HttpError(409, "Esta pieza ya fue respondida");
+    // Varias versiones juntas: se responde cada una; recién con todas respondidas la pieza cambia de estado.
+    const enviadas = Array.isArray(pz.versiones_enviadas) ? (pz.versiones_enviadas as string[]) : [];
+    if (enviadas.length > 1) {
+      const vid = texto(b.version_id, 200);
+      if (!vid || !enviadas.includes(vid)) throw new HttpError(400, "Elegí a qué versión respondés");
+      const respuestas = { ...((pz.respuestas_cliente ?? {}) as Record<string, { estado: string; nota?: string | null; at: string }>) };
+      respuestas[vid] = { estado: decision === "aprobar" ? "aprobada" : "cambios", nota: decision === "cambios" ? nota : null, at: now };
+      const n = enviadas.findIndex((x) => x === vid) + 1;
+      const todas = enviadas.every((x) => respuestas[x]);
+      const aprobadas = enviadas.filter((x) => respuestas[x]?.estado === "aprobada");
+      const accion = decision === "aprobar" ? `Aprobó la ${n}° de ${enviadas.length}` : `Pidió cambios en la ${n}° de ${enviadas.length}`;
+      if (!todas) {
+        tx.update(ref, { respuestas_cliente: respuestas, updated_at: now, historial: FieldValue.arrayUnion({ at: now, by: caller.uid, accion, nota: decision === "cambios" ? nota : null }) });
+      } else if (aprobadas.length === enviadas.length) {
+        tx.update(ref, {
+          respuestas_cliente: respuestas,
+          estado: "entregada",
+          version_aprobada_id: aprobadas[0],
+          versiones_aprobadas: aprobadas,
+          updated_at: now,
+          historial: FieldValue.arrayUnion({ at: now, by: caller.uid, accion: `Aprobadas por el cliente (las ${enviadas.length})`, nota: null }),
+        });
+      } else {
+        // Alguna con cambios: vuelve a diseño con lo que pidió en cada una (las aprobadas quedan aprobadas).
+        const pedidos = enviadas
+          .map((x, i) => (respuestas[x]?.estado === "cambios" ? `Versión ${i + 1}: ${respuestas[x]?.nota ?? ""}` : null))
+          .filter(Boolean)
+          .join("\n");
+        tx.update(ref, {
+          respuestas_cliente: respuestas,
+          estado: "en_proceso",
+          versiones_aprobadas: aprobadas,
+          feedback_cliente: pedidos,
+          rondas: FieldValue.increment(1),
+          updated_at: now,
+          historial: FieldValue.arrayUnion({ at: now, by: caller.uid, accion: "El cliente pidió cambios", nota: pedidos }),
+        });
+      }
+      return { pz: { ...pz, _todas: todas, _aprobadas: aprobadas.length === enviadas.length }, p };
+    }
     if (decision === "aprobar") {
       tx.update(ref, {
         estado: "entregada",
@@ -188,6 +230,31 @@ export async function responderPiezaApp(caller: Caller, b: PedidoPieza, base: st
   });
 
   const diseno = (await disenadorasDe(pz.proyecto_id)).filter((id) => id !== caller.uid);
+  // Varias versiones: se avisa a diseño recién cuando respondió todas.
+  if (Array.isArray(pz.versiones_enviadas) && pz.versiones_enviadas.length > 1) {
+    if (!pz._todas) return { ok: true };
+    await enviarAviso(
+      pz._aprobadas
+        ? {
+            destinatarios: diseno,
+            titulo: "Piezas aprobadas 🎉",
+            cuerpo: `${p.nombre ?? "Cliente"} aprobó las ${pz.versiones_enviadas.length}`,
+            link: `/piezas?pieza=${piezaId}`,
+            clave: `pieza_ok:${piezaId}`,
+            proyectoId: pz.proyecto_id,
+          }
+        : {
+            destinatarios: diseno,
+            titulo: "El cliente pidió cambios en una pieza",
+            cuerpo: `${p.nombre ?? "Cliente"}: revisá las versiones con cambios`,
+            link: `/piezas?pieza=${piezaId}`,
+            clave: `pieza_cambios:${piezaId}`,
+            proyectoId: pz.proyecto_id,
+          },
+      base
+    );
+    return { ok: true };
+  }
   await enviarAviso(
     decision === "aprobar"
       ? {

@@ -49,6 +49,8 @@ import {
   precioDe,
   cupoDe,
   versionEnviada,
+  versionesAprobadas,
+  versionesEnviadas,
   versionFinal,
   type FormatoInfo,
 } from "@/lib/redes/piezas";
@@ -185,6 +187,11 @@ export function PiezaClienteCard({ pieza, onAbrir }: { pieza: PiezaIA; onAbrir?:
             </p>
           </div>
         )}
+        {(teToca ? versionesEnviadas(pieza) : pieza.estado === "entregada" ? versionesAprobadas(pieza) : []).length > 1 && (
+          <span className="absolute bottom-2 right-2 rounded-full bg-black/70 px-2 py-0.5 text-[11px] font-semibold text-white">
+            {(teToca ? versionesEnviadas(pieza) : versionesAprobadas(pieza)).length} piezas
+          </span>
+        )}
         {teToca && (
           <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold uppercase text-white">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Te toca
@@ -246,6 +253,10 @@ export function PiezaAprobarDialog({ pieza, onClose }: { pieza: PiezaIA | null; 
   const v = pieza.estado === "entregada" ? versionFinal(pieza) : versionEnviada(pieza);
   const cliente = clienteById(pieza.proyecto_id);
   const puede = pieza.estado === "para_aprobar";
+  const lista = pieza.estado === "entregada" ? versionesAprobadas(pieza) : versionesEnviadas(pieza);
+  if (lista.length > 1 && (puede || pieza.estado === "entregada")) {
+    return <VariasDialog pieza={pieza} lista={lista} cliente={cliente} uid={user?.uid ?? ""} onClose={onClose} />;
+  }
 
   const aprobar = async () => {
     setBusy("ok");
@@ -323,6 +334,124 @@ export function PiezaAprobarDialog({ pieza, onClose }: { pieza: PiezaIA | null; 
             </Button>
           )
         )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Varias versiones juntas: el cliente aprueba o pide cambios de cada una (o las descarga, si ya están aprobadas). */
+function VariasDialog({
+  pieza,
+  lista,
+  cliente,
+  uid,
+  onClose,
+}: {
+  pieza: PiezaIA;
+  lista: ReturnType<typeof versionesEnviadas>;
+  cliente: ReturnType<ReturnType<typeof useRedes>["clienteById"]>;
+  uid: string;
+  onClose: () => void;
+}) {
+  const [cambiosDe, setCambiosDe] = useState<string | null>(null);
+  const [nota, setNota] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const puede = pieza.estado === "para_aprobar";
+  const respuestas = pieza.respuestas_cliente ?? {};
+  const faltan = lista.filter((x) => !respuestas[x.id]).length;
+  const responder = async (id: string, decision: "aprobar" | "cambios") => {
+    if (decision === "cambios" && nota.trim().length < 5) {
+      toast.error("Contanos qué cambiarías");
+      return;
+    }
+    setBusy(id);
+    try {
+      if (decision === "aprobar") await aprobarPieza(pieza, cliente, uid, id);
+      else await pedirCambiosPieza(pieza, cliente, uid, nota.trim(), id);
+      setCambiosDe(null);
+      setNota("");
+      toast.success(faltan <= 1 ? "¡Listo! Ya respondiste todas." : decision === "aprobar" ? "Aprobada" : "Recibimos tus cambios");
+      if (faltan <= 1) onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo enviar");
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[94dvh] w-[calc(100vw-1.5rem)] max-w-lg overflow-y-auto rounded-2xl">
+        <DialogHeader className="text-left">
+          <DialogTitle>{puede ? `¿Van así? (${lista.length})` : `Tus piezas (${lista.length})`}</DialogTitle>
+          <DialogDescription>
+            {puede ? `Aprobá o pedí cambios de cada una${faltan < lista.length ? ` · te faltan ${faltan}` : ""}.` : "Ya están aprobadas: descargalas."}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          {lista.map((x, i) => {
+            const r = respuestas[x.id];
+            return (
+              <div key={x.id} className="overflow-hidden rounded-2xl border bg-card">
+                <div className="relative bg-muted">
+                  <VersionImg v={x} className="max-h-[50dvh]" />
+                  <span className="absolute left-2 top-2 rounded-md bg-black/65 px-2 py-0.5 text-xs font-semibold text-white">
+                    {i + 1} de {lista.length}
+                  </span>
+                  {r && (
+                    <span
+                      className={cn(
+                        "absolute right-2 top-2 rounded-md px-2 py-0.5 text-xs font-semibold text-white",
+                        r.estado === "aprobada" ? "bg-emerald-600" : "bg-orange-500"
+                      )}
+                    >
+                      {r.estado === "aprobada" ? "Aprobada" : "Pediste cambios"}
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-2 p-3">
+                  {!puede ? (
+                    <Button asChild variant="secondary" className="w-full">
+                      <a href={driveDownload(x.drive_file_id)} target="_blank" rel="noreferrer" download>
+                        <Download className="mr-2 h-4 w-4" /> Descargar
+                      </a>
+                    </Button>
+                  ) : r ? (
+                    r.nota && <p className="text-xs text-muted-foreground">Tu pedido: {r.nota}</p>
+                  ) : cambiosDe === x.id ? (
+                    <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <Textarea autoFocus rows={3} value={nota} onChange={(e) => setNota(e.target.value)} placeholder="¿Qué cambiarías de esta?" />
+                      <div className="flex justify-end gap-2">
+                        <Button variant="ghost" onClick={() => setCambiosDe(null)}>
+                          Volver
+                        </Button>
+                        <Button onClick={() => void responder(x.id, "cambios")} disabled={busy === x.id}>
+                          {busy === x.id && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          Mandar cambios
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setNota("");
+                          setCambiosDe(x.id);
+                        }}
+                      >
+                        <Pencil className="mr-2 h-4 w-4" /> Pedir cambios
+                      </Button>
+                      <Button onClick={() => void responder(x.id, "aprobar")} disabled={busy === x.id} className="bg-emerald-600 hover:bg-emerald-600/90">
+                        {busy === x.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ThumbsUp className="mr-2 h-4 w-4" />}
+                        Aprobar
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </DialogContent>
     </Dialog>
   );

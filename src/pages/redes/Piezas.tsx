@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import {
   CalendarDays,
   Check,
+  CheckSquare,
   Download,
   Flag,
   Image as ImageIcon,
@@ -552,6 +553,8 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
   const [componerId, setComponerId] = useState<string | null>(null);
   // Modo borrar: versiones marcadas para sacar.
   const [aBorrar, setABorrar] = useState<Set<string> | null>(null);
+  // "Elegir varias": se mandan juntas al cliente (en el orden en que se tocaron).
+  const [varias, setVarias] = useState<string[] | null>(null);
   const [borrando, setBorrando] = useState(false);
   // "Mandar por chat": a una persona, un grupo o el chat del cliente.
   const [compartir, setCompartir] = useState(false);
@@ -607,6 +610,7 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
     setSel(null);
     setAjustes("");
     setABorrar(null);
+    setVarias(null);
     setComponerId(null);
   }, [pieza?.id]);
   // Al aparecer una versión nueva, queda elegida.
@@ -666,11 +670,12 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
     }
   };
   const mandar = async () => {
-    if (!sel) return;
+    const ids = varias?.length ? varias : sel ? [sel] : [];
+    if (!ids.length) return;
     setMandando(true);
     try {
-      await mandarAlCliente(pieza, sel, cliente, user?.uid ?? "");
-      toast.success("Le llegó al cliente para aprobar");
+      await mandarAlCliente(pieza, ids.length > 1 ? ids : ids[0], cliente, user?.uid ?? "");
+      toast.success(ids.length > 1 ? `Le llegaron las ${ids.length} al cliente para aprobar` : "Le llegó al cliente para aprobar");
       onClose();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo mandar");
@@ -965,7 +970,14 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
             <section className="space-y-2">
               <div className="flex items-baseline justify-between gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">3 · Elegí la versión</p>
-                {aBorrar ? (
+                {varias ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-medium text-primary">{varias.length ? `${varias.length} elegidas` : "Tocá las que van"}</span>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setVarias(null)}>
+                      Cancelar
+                    </Button>
+                  </div>
+                ) : aBorrar ? (
                   <div className="flex items-center gap-1.5">
                     <Button size="sm" variant="destructive" className="h-7 text-xs" disabled={!aBorrar.size || borrando} onClick={() => void borrarMarcadas()}>
                       {borrando ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Trash2 className="mr-1 h-3.5 w-3.5" />}
@@ -979,6 +991,11 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                   versiones.length > 0 && (
                     <div className="flex items-center gap-2">
                       <p className="hidden text-[11px] text-muted-foreground sm:block">Tocá para elegir · «Ver» para abrirla grande</p>
+                      {puedeTrabajar && versiones.length > 1 && (
+                        <button type="button" onClick={() => setVarias(sel ? [sel] : [])} className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline">
+                          <CheckSquare className="h-3.5 w-3.5" /> Elegir varias
+                        </button>
+                      )}
                       {puedeTrabajar && (
                         <button type="button" onClick={() => setABorrar(new Set(sel ? [sel] : []))} className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-destructive">
                           <Trash2 className="h-3.5 w-3.5" /> Borrar
@@ -997,11 +1014,15 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
               ) : (
                 <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3">
                   {versiones.map((v, i) => {
-                    const marcada = sel === v.id;
-                    const aprobada = v.id === pieza.version_aprobada_id;
-                    const enviada = v.id === pieza.version_enviada_id;
+                    const nVarias = varias ? varias.indexOf(v.id) + 1 : 0;
+                    const marcada = varias ? nVarias > 0 : sel === v.id;
+                    const aprobada = v.id === pieza.version_aprobada_id || !!pieza.versiones_aprobadas?.includes(v.id);
+                    const enviada = v.id === pieza.version_enviada_id || !!pieza.versiones_enviadas?.includes(v.id);
                     const esPdf = v.mime_type === "application/pdf";
                     const tocar = () => {
+                      if (varias) {
+                        return setVarias((l) => (l ?? []).includes(v.id) ? (l ?? []).filter((x) => x !== v.id) : [...(l ?? []), v.id]);
+                      }
                       if (aBorrar) {
                         const n = new Set(aBorrar);
                         if (n.has(v.id)) n.delete(v.id);
@@ -1059,8 +1080,11 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                         )}
                         {marcada && !aBorrar && (
                           <span className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded-full bg-primary py-0.5 pl-1 pr-2 text-[10px] font-semibold text-primary-foreground">
-                            <Check className="h-3.5 w-3.5" /> Elegida
+                            <Check className="h-3.5 w-3.5" /> {varias ? `${nVarias}°` : "Elegida"}
                           </span>
+                        )}
+                        {varias && !marcada && (
+                          <span className="absolute right-1.5 top-1.5 h-6 w-6 rounded-full border-2 border-white bg-black/40 shadow" />
                         )}
                         <button
                           type="button"
@@ -1123,13 +1147,26 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
               )}
               {pieza.estado === "entregada" ? null : pieza.estado === "para_aprobar" ? (
                 <div className="rounded-2xl border border-orange-500/30 bg-orange-500/[0.06] p-3 text-sm">
-                  <b>Esperando al cliente.</b> Le mandaste la v{enviadaN || "?"} {hace(pieza.updated_at)}. Cuando la apruebe o pida cambios te llega el aviso.
+                  <b>Esperando al cliente.</b>{" "}
+                  {(pieza.versiones_enviadas?.length ?? 0) > 1
+                    ? `Le mandaste ${pieza.versiones_enviadas!.length} versiones ${hace(pieza.updated_at)} (respondió ${Object.keys(pieza.respuestas_cliente ?? {}).length}). Cuando responda todas te llega el aviso.`
+                    : `Le mandaste la v${enviadaN || "?"} ${hace(pieza.updated_at)}. Cuando la apruebe o pida cambios te llega el aviso.`}
                 </div>
               ) : (
                 puedeTrabajar && (
-                  <Button className="h-12 w-full text-base" onClick={() => void mandar()} disabled={!sel || mandando}>
+                  <Button className="h-12 w-full text-base" onClick={() => void mandar()} disabled={(varias ? !varias.length : !sel) || mandando}>
                     {mandando ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Send className="mr-2 h-5 w-5" />}
-                    {sel ? `Mandar la v${nElegida} al cliente para aprobar` : versiones.length ? "Elegí una versión para mandarla" : "Primero creá una versión"}
+                    {varias
+                      ? varias.length > 1
+                        ? `Mandar las ${varias.length} al cliente para aprobar`
+                        : varias.length === 1
+                          ? "Mandar 1 al cliente para aprobar"
+                          : "Tocá las versiones que van"
+                      : sel
+                        ? `Mandar la v${nElegida} al cliente para aprobar`
+                        : versiones.length
+                          ? "Elegí una versión para mandarla"
+                          : "Primero creá una versión"}
                   </Button>
                 )
               )}
