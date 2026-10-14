@@ -43,7 +43,7 @@ import { ChatIcon } from "@/components/redes/chat/ChatIcon";
 import { EtiquetaContacto, InfoChat } from "@/components/redes/chat/Grupos";
 import { Cabecitas, EditarMensajeDialog, InfoMensaje, vistosHasta } from "@/components/redes/chat/InfoMensaje";
 import { TareaMensajeDialog } from "@/components/redes/chat/TareaMensaje";
-import { TextoConCodigo, esError, tieneCodigo } from "@/components/redes/chat/TextoCodigo";
+import { TextoConCodigo, esError, textoRico, tieneCodigo } from "@/components/redes/chat/TextoCodigo";
 import { CamaraDialog, camaraDelSistema } from "@/components/redes/chat/Camara";
 import { comprimirFoto } from "@/lib/imagen";
 import { crearReunion } from "@/lib/redes/reuniones";
@@ -985,7 +985,7 @@ export function ChatConversacion({
                           <TextoConCodigo texto={m.texto} mio={mio} render={(t) => conMenciones(t, mio)} />
                         ) : (
                           <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-                            {conMenciones(m.texto, mio)}
+                            {textoRico(m.texto, mio, (t) => conMenciones(t, mio))}
                           </p>
                         )
                       )}

@@ -4,7 +4,7 @@
 import { Fragment, useState, type ReactNode } from "react";
 import { Check, Copy } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, hrefSeguro } from "@/lib/utils";
 
 /**
  * ¿Es un error pegado? (un log o stack trace: varias líneas con "Error", "Exception", "Traceback", líneas "at …" o
@@ -18,8 +18,73 @@ export function esError(texto: string): boolean {
   return pila >= 2 || (marca && lineas.length >= 5);
 }
 
-/** ¿El texto tiene código? (un bloque entre ``` o `algo` suelto). */
-export const tieneCodigo = (texto: string) => /```[\s\S]*?```|`[^`\n]+`/.test(texto);
+/** ¿El texto tiene un bloque de código (``` con varias líneas)? */
+export const tieneCodigo = (texto: string) => /```[^\n`]*\n[\s\S]*?```/.test(texto);
+
+// Lo que se reconoce solo dentro del texto, sin poner comillas:
+// - links (https://… o www.…);
+// - código marcado: `así` o ```así``` en una línea;
+// - nombres de variables como MP_ACCESS_TOKEN;
+// - claves, tokens e ids: tiras largas de letras y números (APP_USR-1234…, 6f1a9c…).
+const RICO =
+  /(https?:\/\/[^\s<>"']*[^\s<>"'.,;:!?)\]]|www\.[^\s<>"']*[^\s<>"'.,;:!?)\]])|```([^`\n]+)```|`([^`\n]+)`|(\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+(?:-[A-Za-z0-9_-]+)?\b|\b(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9][A-Za-z0-9_-]{19,}\b)/g;
+
+/** Código suelto: se toca y se copia. */
+function CodigoSuelto({ codigo, mio }: { codigo: string; mio: boolean }) {
+  const [copiado, setCopiado] = useState(false);
+  return (
+    <button
+      type="button"
+      title="Tocá para copiar"
+      onClick={(e) => {
+        e.stopPropagation();
+        void navigator.clipboard
+          .writeText(codigo)
+          .then(() => {
+            setCopiado(true);
+            setTimeout(() => setCopiado(false), 1200);
+          })
+          .catch(() => toast.error("No se pudo copiar"));
+      }}
+      className={cn(
+        "inline rounded px-1 py-px text-left font-mono text-[0.88em] [overflow-wrap:anywhere] transition-colors",
+        mio ? "bg-black/25 hover:bg-black/35" : "bg-muted text-foreground hover:bg-muted-foreground/20"
+      )}
+    >
+      {codigo}
+      {copiado ? <Check className="ml-1 inline h-3 w-3 align-[-1px]" /> : <Copy className="ml-1 inline h-3 w-3 align-[-1px] opacity-50" />}
+    </button>
+  );
+}
+
+/** Texto con links y código reconocidos solos; lo demás (ej. las menciones) va con `render`. */
+export function textoRico(texto: string, mio: boolean, render: (t: string) => ReactNode): ReactNode[] {
+  const out: ReactNode[] = [];
+  let ultimo = 0;
+  let k = 0;
+  RICO.lastIndex = 0;
+  for (let m = RICO.exec(texto); m; m = RICO.exec(texto)) {
+    if (m.index > ultimo) out.push(<Fragment key={k++}>{render(texto.slice(ultimo, m.index))}</Fragment>);
+    const [txt, link, triple, simple, auto] = m;
+    if (link) {
+      out.push(
+        <a
+          key={k++}
+          href={hrefSeguro(link.startsWith("www.") ? `https://${link}` : link)}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className={cn("underline underline-offset-2 [overflow-wrap:anywhere]", mio ? "text-white" : "text-primary")}
+        >
+          {link}
+        </a>
+      );
+    } else out.push(<CodigoSuelto key={k++} codigo={(triple ?? simple ?? auto).trim()} mio={mio} />);
+    ultimo = m.index + txt.length;
+  }
+  if (ultimo < texto.length) out.push(<Fragment key={k++}>{render(texto.slice(ultimo))}</Fragment>);
+  return out;
+}
 
 const PALABRAS = new Set(
   (
@@ -99,11 +164,12 @@ function BloqueCodigo({ codigo, lenguaje, error = false }: { codigo: string; len
  * código, ej. las menciones, va con `render`). `mio`: el globo propio (fondo violeta) para el código suelto.
  */
 export function TextoConCodigo({ texto, mio, render }: { texto: string; mio: boolean; render: (t: string) => ReactNode }) {
-  const partes = texto.split(/(```[^\n`]*\n?[\s\S]*?```)/g);
+  // Bloque = ``` con varias líneas (```así``` en una línea es código suelto).
+  const partes = texto.split(/(```[^\n`]*\n[\s\S]*?```)/g);
   return (
     <div className="min-w-0 space-y-1">
       {partes.map((p, i) => {
-        const bloque = p.match(/^```([^\n`]*)\n?([\s\S]*?)```$/);
+        const bloque = p.match(/^```([^\n`]*)\n([\s\S]*?)```$/);
         if (bloque) {
           const codigo = bloque[2].replace(/\n$/, "");
           return <BloqueCodigo key={i} lenguaje={bloque[1].trim()} codigo={codigo} error={esError(codigo)} />;
@@ -111,19 +177,10 @@ export function TextoConCodigo({ texto, mio, render }: { texto: string; mio: boo
         if (!p.trim()) return null;
         // Un error pegado sin ``` también va plegado.
         if (esError(p)) return <BloqueCodigo key={i} lenguaje="" codigo={p.trim()} error />;
-        // Código suelto dentro del texto: `así`.
-        const trozos = p.replace(/^\n+|\n+$/g, "").split(/(`[^`\n]+`)/g);
+        // Links y código suelto dentro del texto.
         return (
           <p key={i} className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-            {trozos.map((t, j) =>
-              /^`[^`\n]+`$/.test(t) ? (
-                <code key={j} className={cn("rounded px-1 py-0.5 font-mono text-[0.9em]", mio ? "bg-black/20" : "bg-muted")}>
-                  {t.slice(1, -1)}
-                </code>
-              ) : (
-                <Fragment key={j}>{render(t)}</Fragment>
-              )
-            )}
+            {textoRico(p.replace(/^\n+|\n+$/g, ""), mio, render)}
           </p>
         );
       })}
