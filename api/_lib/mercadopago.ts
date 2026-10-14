@@ -21,7 +21,7 @@ async function mp(path: string, init: RequestInit = {}): Promise<any> {
     },
   });
   const json: any = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`Mercado Pago: ${json?.message ?? res.status}`);
+  if (!res.ok) throw Object.assign(new Error(`Mercado Pago: ${json?.message ?? res.status}`), { status: res.status });
   return json;
 }
 

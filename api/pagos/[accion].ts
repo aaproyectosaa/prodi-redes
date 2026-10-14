@@ -173,6 +173,17 @@ async function crear(req: VercelRequest) {
 }
 
 async function webhook(req: VercelRequest) {
+  try {
+    return await procesarWebhook(req);
+  } catch (err) {
+    // Un pago o suscripción que no existe (ej. "Simular notificación" de Mercado Pago, que manda uno inventado):
+    // se responde OK para que no reintente; no hay nada que aplicar.
+    if ((err as { status?: number }).status === 404) return { ok: true, ignorado: "no existe en Mercado Pago" };
+    throw err;
+  }
+}
+
+async function procesarWebhook(req: VercelRequest) {
   const b = body<{ type?: string; action?: string; data?: { id?: string | number }; topic?: string; resource?: string }>(req);
   const q = req.query as Record<string, string>;
   const tipo = b.type ?? q.type ?? q.topic ?? b.topic ?? "";
