@@ -47,30 +47,115 @@ const hora = (min: number) => {
 };
 const horas = (min: number) => (min < 60 ? `${Math.round(min)} min` : `${(min / 60).toFixed(1).replace(".", ",")} h`);
 
+// Eje del día para las barras de horario (6 a 24 h).
+const EJE_DESDE = 6 * 60;
+const EJE_HASTA = 24 * 60;
+const pos = (min: number) => `${(Math.min(Math.max(min, EJE_DESDE), EJE_HASTA) - EJE_DESDE) / (EJE_HASTA - EJE_DESDE) * 100}%`;
+
+/** Una franja del día: de la hora de inicio a la de fin, sobre el eje de 6 a 24 h. */
+function Franja({ u, tono, alto = "h-2.5" }: { u?: Uso; tono: "fuerte" | "suave"; alto?: string }) {
+  return (
+    <div className={cn("relative w-full overflow-hidden rounded-full bg-muted/60", alto)}>
+      {/* Guías cada 3 h */}
+      {[9, 12, 15, 18, 21].map((h) => (
+        <span key={h} className="absolute inset-y-0 w-px bg-background/70" style={{ left: pos(h * 60) }} />
+      ))}
+      {u && (
+        <span
+          className={cn("absolute inset-y-0 rounded-full", tono === "fuerte" ? "bg-primary" : "bg-primary/40")}
+          style={{ left: pos(u.entrada), width: `max(6px, calc(${pos(u.salida)} - ${pos(u.entrada)}))` }}
+        />
+      )}
+    </div>
+  );
+}
+
+function Eje() {
+  return (
+    <div className="relative h-3 text-[10px] tabular-nums text-muted-foreground">
+      {[6, 9, 12, 15, 18, 21, 24].map((h, i, xs) => (
+        <span
+          key={h}
+          className={cn("absolute", i === 0 ? "" : i === xs.length - 1 ? "-translate-x-full" : "-translate-x-1/2")}
+          style={{ left: pos(h * 60) }}
+        >
+          {h}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function Dato({ label, valor, ayuda }: { label: string; valor: string; ayuda?: string }) {
+  return (
+    <div className="rounded-lg border bg-background/40 p-3">
+      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p className="text-xl font-bold tabular-nums">{valor}</p>
+      {ayuda && <p className="text-[11px] text-muted-foreground">{ayuda}</p>}
+    </div>
+  );
+}
+
+/** Horarios de una persona: jornada (por su actividad) y tiempo con la app abierta. */
 function UsoLinea({ datos, uid, grande = false }: { datos: DatosUso | null; uid: string; grande?: boolean }) {
   const uso = datos?.usos.find((u) => u.uid === uid);
   const act = datos?.actividad.find((u) => u.uid === uid);
-  const fila = (titulo: string, u: Uso, verbo: string) => (
-    <p className="min-w-0">
-      <span className="text-muted-foreground">{titulo}: </span>
-      empieza <b className="tabular-nums">{hora(u.entrada)}</b> · termina <b className="tabular-nums">{hora(u.salida)}</b> · {verbo}{" "}
-      <b className="tabular-nums">{horas(u.minutos)}/día</b>
-      <span className="text-muted-foreground"> ({u.dias} {u.dias === 1 ? "día" : "días"})</span>
-    </p>
-  );
-  return (
-    <div className={cn("flex gap-2 rounded-lg border bg-background/40 px-2.5 py-2", grande ? "p-4 text-sm" : "text-xs")}>
-      <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      <div className="min-w-0 flex-1 space-y-0.5">
-        {!datos ? (
-          <p className="text-muted-foreground">Horarios: cargando…</p>
-        ) : (
-          <>
-            {act ? fila("Jornada", act, "trabaja") : <p className="text-muted-foreground">Jornada: sin acciones suficientes en 30 días</p>}
-            {uso ? fila("App abierta", uso, "la usa") : <p className="text-muted-foreground">App abierta: se mide desde hoy</p>}
-          </>
-        )}
+  const dias = (n: number) => `${n} ${n === 1 ? "día" : "días"}`;
+
+  if (!grande) {
+    // Tarjeta del equipo: una franja y el resumen.
+    return (
+      <div className="space-y-1.5 rounded-lg border bg-background/40 p-2.5">
+        <div className="flex items-baseline justify-between gap-2 text-[11px]">
+          <span className="flex items-center gap-1 text-muted-foreground">
+            <Clock className="h-3 w-3" /> Horario
+          </span>
+          {act ? (
+            <span className="tabular-nums">
+              <b>{hora(act.entrada)} – {hora(act.salida)}</b>
+              <span className="text-muted-foreground"> · {horas(act.minutos)}/día</span>
+            </span>
+          ) : (
+            <span className="text-muted-foreground">{datos ? "sin datos" : "…"}</span>
+          )}
+        </div>
+        <Franja u={act} tono="fuerte" alto="h-2" />
       </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <div className="mb-3 flex items-baseline justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-sm font-semibold">
+          <Clock className="h-4 w-4 text-muted-foreground" /> Horarios
+        </p>
+        <p className="text-[11px] text-muted-foreground">Promedio de los últimos 30 días</p>
+      </div>
+      {!datos ? (
+        <p className="text-sm text-muted-foreground">Cargando…</p>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] md:items-center">
+          <div className="grid grid-cols-3 gap-2">
+            <Dato label="Empieza" valor={act ? hora(act.entrada) : "—"} />
+            <Dato label="Termina" valor={act ? hora(act.salida) : "—"} />
+            <Dato label="Por día" valor={act ? horas(act.minutos) : "—"} ayuda={act ? dias(act.dias) : undefined} />
+          </div>
+          <div className="space-y-2">
+            <div className="grid grid-cols-[76px_minmax(0,1fr)_64px] items-center gap-x-3 gap-y-2 text-xs">
+              <span className="text-muted-foreground">Jornada</span>
+              <Franja u={act} tono="fuerte" />
+              <span className="text-right tabular-nums">{act ? horas(act.minutos) : "—"}</span>
+              <span className="text-muted-foreground">App abierta</span>
+              <Franja u={uso} tono="suave" />
+              <span className="text-right tabular-nums text-muted-foreground">{uso ? horas(uso.minutos) : "desde hoy"}</span>
+              <span />
+              <Eje />
+              <span />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -155,7 +240,7 @@ export default function Reportes() {
     <PageShell title="Reportes" subtitle="Qué hizo cada persona y cómo viene rindiendo." actions={<MesSelect mes={mes} setMes={setMes} />}>
       <Section
         title="Equipo"
-        description={`Horarios: promedio de los últimos 30 días, hora de Argentina. "Jornada" sale de la primera y última acción de cada día (videos, piezas y chats); "App abierta" es el tiempo real usándola${uso?.desde ? ` (se mide desde el ${uso.desde.split("-").reverse().join("/")})` : ""}.`}
+        description="Horario promedio de los últimos 30 días, según su primera y última acción de cada día."
       >
         {equipo.length === 0 ? (
           <EmptyState title="No hay personas con rol de equipo" />
