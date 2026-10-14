@@ -767,6 +767,7 @@ export function PedirVideoDialog({
                               setOtro("");
                               setAviso(null);
                             }}
+                            onSumarIdea={(x) => setOtros((xs) => [...xs, x])}
                             onQuitar={(i) => setOtros((xs) => xs.filter((_, j) => j !== i))}
                             promoPct={promoPct}
                           />
@@ -1042,13 +1043,17 @@ function Listo({
   );
 }
 
-/** Los videos que se filman en esta salida: el principal y los que se suman. */
+/**
+ * "¿Filmamos más de un video ese día?": la invitación a sumar videos a la misma salida (un viaje, promo desde el 2º),
+ * la lista numerada y un botón grande que abre el campo con ideas de un toque.
+ */
 function VideosDeLaFilmacion({
   principal,
   otros,
   otro,
   setOtro,
   onAgregar,
+  onSumarIdea,
   onQuitar,
   promoPct,
 }: {
@@ -1057,49 +1062,92 @@ function VideosDeLaFilmacion({
   otro: string;
   setOtro: (v: string) => void;
   onAgregar: () => void;
+  onSumarIdea: (t: string) => void;
   onQuitar: (i: number) => void;
   promoPct: number;
 }) {
+  const [abierto, setAbierto] = useState(false);
   const lleno = 1 + otros.length >= MAX_VIDEOS_JORNADA;
+  const todos = [principal, ...otros];
+  const ideas = TIPOS.filter((x) => x.titulo && !todos.some((y) => y.toLowerCase() === x.titulo.toLowerCase())).slice(0, 5);
   return (
-    <div className="space-y-2.5 rounded-2xl border bg-card p-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold">Videos de esta filmación</p>
-        {promoPct > 0 && (
-          <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-            Desde el 2º, {promoPct}% menos
-          </span>
-        )}
+    <div className="relative overflow-hidden rounded-2xl border-2 border-primary/40 bg-gradient-to-br from-primary/[0.10] via-card to-fuchsia-500/[0.08] p-4">
+      <div className="flex items-start gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#6F40FC] to-[#E040A0] text-white shadow-lg shadow-primary/30">
+          <Clapperboard className="h-5 w-5" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-base font-bold leading-tight">{otros.length ? `${todos.length} videos en la misma filmación` : "¿Filmamos más de un video ese día?"}</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">Aprovechá la salida: el viaje se paga una sola vez.</p>
+        </div>
       </div>
-      <ol className="space-y-1.5">
-        {[principal, ...otros].map((t, i) => (
-          <li key={`${i}-${t}`} className="flex items-center gap-2 rounded-xl bg-muted/40 px-3 py-2 text-sm">
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-bold text-primary">{i + 1}</span>
-            <span className="min-w-0 flex-1 truncate">{t}</span>
-            {i > 0 && (
-              <button type="button" onClick={() => onQuitar(i - 1)} className="rounded-full p-1 text-muted-foreground hover:bg-muted" aria-label="Quitar">
-                <X className="h-3.5 w-3.5" />
+      {promoPct > 0 && (
+        <div className="mt-3 flex items-center gap-2 rounded-xl bg-emerald-500/12 px-3 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+          <BadgePercent className="h-4 w-4 shrink-0" />
+          <span>
+            Desde el 2º video, <b>{promoPct}% menos</b> en cada extra.
+          </span>
+        </div>
+      )}
+
+      <ol className="mt-3 space-y-1.5">
+        {todos.map((x, i) => (
+          <li key={`${i}-${x}`} className="flex items-center gap-2.5 rounded-xl border bg-background/80 px-3 py-2.5 text-sm shadow-sm animate-in fade-in slide-in-from-bottom-1">
+            <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold", i === 0 ? "bg-primary text-primary-foreground" : "bg-primary/15 text-primary")}>
+              {i + 1}
+            </span>
+            <span className="min-w-0 flex-1 truncate font-medium">{x}</span>
+            {i > 0 ? (
+              <button type="button" onClick={() => onQuitar(i - 1)} className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={`Quitar ${x}`}>
+                <X className="h-4 w-4" />
               </button>
+            ) : (
+              <span className="text-[11px] text-muted-foreground">el que pediste</span>
             )}
           </li>
         ))}
       </ol>
-      {!lleno && (
-        <form
-          className="flex gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            onAgregar();
-          }}
-        >
-          <Input value={otro} onChange={(e) => setOtro(e.target.value)} placeholder="Otro video para filmar el mismo día" className="h-10" />
-          <Button type="submit" variant="outline" className="h-10 shrink-0" disabled={otro.trim().length < 3}>
-            <Plus className="h-4 w-4 sm:mr-1.5" />
-            <span className="hidden sm:inline">Sumar</span>
-          </Button>
-        </form>
-      )}
-      <p className="text-[11px] text-muted-foreground">Se filman todos en la misma salida: el viaje se paga una sola vez.</p>
+
+      {!lleno &&
+        (abierto ? (
+          <div className="mt-2 space-y-2 rounded-xl border bg-background p-2.5 animate-in fade-in slide-in-from-top-1">
+            <form
+              className="flex gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                onAgregar();
+              }}
+            >
+              <Input autoFocus value={otro} onChange={(e) => setOtro(e.target.value)} placeholder="¿De qué se trata? (ej. Combo familiar)" className="h-11" />
+              <Button type="submit" className="h-11 shrink-0" disabled={otro.trim().length < 3}>
+                Sumar
+              </Button>
+            </form>
+            {ideas.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {ideas.map((x) => (
+                  <button
+                    key={x.label}
+                    type="button"
+                    onClick={() => onSumarIdea(x.titulo)}
+                    className="inline-flex items-center gap-1.5 rounded-full border bg-muted/40 px-3 py-1.5 text-xs font-medium transition-colors hover:border-primary/50 hover:bg-primary/10"
+                  >
+                    <x.icon className="h-3.5 w-3.5 text-primary" /> {x.titulo}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAbierto(true)}
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary/50 bg-background/60 px-3 py-3 text-sm font-semibold text-primary transition-colors hover:border-primary hover:bg-primary/10"
+          >
+            <Plus className="h-4 w-4" /> Sumar otro video a esta filmación
+          </button>
+        ))}
+      {lleno && <p className="mt-2 text-center text-xs text-muted-foreground">Máximo {MAX_VIDEOS_JORNADA} videos por filmación.</p>}
     </div>
   );
 }
