@@ -27,18 +27,37 @@ import { callApi } from "@/lib/redes/api";
 
 type Uso = { uid: string; dias: number; entrada: number; salida: number; minutos: number };
 
-type DatosUso = { usos: Uso[]; desde: string | null; actividad: Uso[] };
+type DatosUso = { usos: Uso[]; desde: string | null; actividad: Uso[]; hechos: Record<string, Record<string, number>> };
 
 /** Promedios de uso de la app (últimos 30 días): hora de entrada, de salida y horas por día.
  *  Además, la jornada según el historial (primera y última acción de cada día), que ya tiene datos para atrás. */
-function useUsoEquipo() {
+function useUsoEquipo(mes: string) {
   const [datos, setDatos] = useState<DatosUso | null>(null);
   useEffect(() => {
-    callApi<DatosUso>("/api/db/uso", { solo_vista: true })
-      .then((d) => setDatos({ usos: d.usos ?? [], desde: d.desde ?? null, actividad: d.actividad ?? [] }))
-      .catch(() => setDatos({ usos: [], desde: null, actividad: [] }));
-  }, []);
+    let vivo = true;
+    callApi<DatosUso>("/api/db/uso", { solo_vista: true, mes })
+      .then((d) => vivo && setDatos({ usos: d.usos ?? [], desde: d.desde ?? null, actividad: d.actividad ?? [], hechos: d.hechos ?? {} }))
+      .catch(() => vivo && setDatos({ usos: [], desde: null, actividad: [], hechos: {} }));
+    return () => {
+      vivo = false;
+    };
+  }, [mes]);
   return datos;
+}
+
+/** Roles que aparecen en "Equipo". */
+const ROLES_EQUIPO = ["productor", "editor", "pauta", "diseno", "administracion"];
+
+/** "N videos en su cancha" o, en diseño, piezas. Administración no tiene cola. */
+function Cancha({ r }: { r: ReporteUsuario }) {
+  if (r.perfil.role === "administracion") return null;
+  const diseno = r.perfil.role === "diseno";
+  return (
+    <p>
+      <span className="text-lg font-bold text-foreground">{diseno ? r.piezasEnCancha.length : r.enSuCancha.length}</span>{" "}
+      {diseno ? "piezas" : "videos"} en su cancha
+    </p>
+  );
 }
 
 const hora = (min: number) => {
@@ -223,15 +242,15 @@ function KpiGrid({ r, grande = false }: { r: ReporteUsuario; grande?: boolean })
 
 export default function Reportes() {
   const navigate = useNavigate();
-  const { videos, rodajes, reuniones } = useRedes();
+  const { videos, rodajes, reuniones, piezas, clientes: proyectos } = useRedes();
   const { profiles } = useAppData();
   const [mes, setMes] = useState(mesActual());
-  const uso = useUsoEquipo();
+  const uso = useUsoEquipo(mes);
   const todos = useMemo(() => eventos(videos), [videos]);
 
   const equipo = profiles
-    .filter((p) => ["productor", "editor", "pauta"].includes(p.role ?? ""))
-    .map((p) => reporteUsuario(p, videos, rodajes, reuniones, mes, todos));
+    .filter((p) => ROLES_EQUIPO.includes(p.role ?? ""))
+    .map((p) => reporteUsuario(p, videos, rodajes, reuniones, mes, todos, { piezas, clientes: proyectos, hechos: uso?.hechos[p.id] }));
   const clientes = profiles
     .filter((p) => p.role === "cliente")
     .map((p) => reporteUsuario(p, videos, rodajes, reuniones, mes, todos));
@@ -267,9 +286,7 @@ export default function Reportes() {
                 <KpiGrid r={r} />
                 <div className="flex items-end justify-between gap-3">
                   <div className="text-xs text-muted-foreground">
-                    <p>
-                      <span className="text-lg font-bold text-foreground">{r.enSuCancha.length}</span> videos en su cancha
-                    </p>
+                    <Cancha r={r} />
                     <p>{r.acciones} acciones en el mes</p>
                   </div>
                   <div className="w-36">
@@ -331,13 +348,13 @@ export default function Reportes() {
 export function ReporteDetalle() {
   const { uid } = useParams();
   const navigate = useNavigate();
-  const { videos, rodajes, reuniones, clienteById } = useRedes();
+  const { videos, rodajes, reuniones, clienteById, piezas, clientes: proyectos } = useRedes();
   const { profiles } = useAppData();
   const { realUser } = useUserProfileContext();
   const { entrar } = useVerComo();
   const openVideo = useOpenVideo();
   const [mes, setMes] = useState(mesActual());
-  const uso = useUsoEquipo();
+  const uso = useUsoEquipo(mes);
   const perfil = profiles.find((p) => p.id === uid);
   if (!perfil) {
     return (
@@ -346,7 +363,8 @@ export function ReporteDetalle() {
       </PageShell>
     );
   }
-  const r = reporteUsuario(perfil, videos, rodajes, reuniones, mes);
+  const r = reporteUsuario(perfil, videos, rodajes, reuniones, mes, undefined, { piezas, clientes: proyectos, hechos: uso?.hechos[perfil.id] });
+  const esPieza = (id: string) => !videos.some((v) => v.id === id) && piezas.some((p) => p.id === id);
   const susClientes = videos
     .filter((v) => [v.productor_id, v.editor_id, v.pauta_id].includes(perfil.id))
     .map((v) => v.proyecto_id);
@@ -392,6 +410,27 @@ export function ReporteDetalle() {
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[1.3fr_1fr]">
         <div className="space-y-8">
+          {perfil.role === "diseno" ? (
+          <Section title="Lo que tiene que hacer ahora" description="Piezas pagadas o con cambios pedidos, de sus clientes.">
+            {r.piezasEnCancha.length === 0 ? (
+              <p className="rounded-xl border p-4 text-sm text-muted-foreground">Nada pendiente.</p>
+            ) : (
+              <ol className="divide-y rounded-xl border bg-card">
+                {r.piezasEnCancha.map((p) => (
+                  <li key={p.id}>
+                    <button type="button" onClick={() => navigate("/piezas")} className="w-full px-4 py-2.5 text-left hover:bg-muted/40">
+                      <p className="line-clamp-1 text-sm font-medium">{p.pedido}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {clienteById(p.proyecto_id)?.nombre} · {p.estado === "en_proceso" ? "diseñando" : "para hacer"}
+                        {p.fecha_deseada ? ` · para el ${p.fecha_deseada.split("-").reverse().slice(0, 2).join("/")}` : ""}
+                      </p>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </Section>
+          ) : perfil.role !== "administracion" && (
           <Section title="Lo que tiene que hacer ahora" description="Videos que están esperando a esta persona.">
             {r.enSuCancha.length === 0 ? (
               <p className="rounded-xl border p-4 text-sm text-muted-foreground">Nada pendiente.</p>
@@ -403,6 +442,7 @@ export function ReporteDetalle() {
               </div>
             )}
           </Section>
+          )}
           <Section title="Actividad por semana">
             <div className="rounded-xl border bg-card p-4">
               <Barras semanas={r.semanas} />
@@ -417,7 +457,7 @@ export function ReporteDetalle() {
             <ol className="divide-y rounded-xl border bg-card">
               {r.recientes.map((e, i) => (
                 <li key={i}>
-                  <button type="button" onClick={() => openVideo(e.videoId)} className="w-full px-4 py-2.5 text-left hover:bg-muted/40">
+                  <button type="button" onClick={() => (esPieza(e.videoId) ? navigate("/piezas") : openVideo(e.videoId))} className="w-full px-4 py-2.5 text-left hover:bg-muted/40">
                     <p className="text-sm font-medium">{e.accion}</p>
                     <p className="text-xs text-muted-foreground">
                       {e.titulo} · {clienteById(e.proyectoId)?.nombre} · {fechaHora(e.at)}

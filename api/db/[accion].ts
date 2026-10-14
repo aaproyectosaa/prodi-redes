@@ -267,7 +267,28 @@ async function usoEquipo(req: VercelRequest) {
             avg(extract(epoch from hasta - desde) / 60)::float as minutos
        from dias where n >= 3 group by uid`
   );
-  return { usos: r.rows, desde: primero.rows[0]?.f ?? null, actividad: h.rows };
+  // Lo que cargó cada uno en el mes (para administración: facturas, cobros, gastos…) y los mensajes que mandó.
+  const { mes } = body<{ mes?: string }>(req);
+  const hechos: Record<string, Record<string, number>> = {};
+  if (typeof mes === "string" && /^\d{4}-\d{2}$/.test(mes)) {
+    const [y, m] = mes.split("-").map(Number);
+    const fin = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+    const q = await pool.query(
+      `select uid, col, count(*)::int as n from (
+         select coalesce(data->>'created_by', data->>'creado_por', data->>'creada_por', data->>'actualizado_por') as uid, coleccion as col,
+                coalesce(data->>'created_at', data->>'creada_at', data->>'creado_at', to_char(actualizado, 'YYYY-MM-DD"T"HH24:MI:SS')) as f
+           from documentos where coleccion not like '%/%'
+       ) x where uid is not null and f >= $1 and f < $2 group by 1, 2
+       union all
+       select data->>'by', 'mensajes', count(*)::int from documentos
+        where coleccion like 'chats/%/mensajes' and data->>'at' >= $1 and data->>'at' < $2
+          and coalesce(data->>'tipo', 'texto') <> 'sistema' and data->>'by' is not null
+        group by 1`,
+      [mes, fin]
+    );
+    for (const row of q.rows as { uid: string; col: string; n: number }[]) (hechos[row.uid] ??= {})[row.col] = row.n;
+  }
+  return { usos: r.rows, desde: primero.rows[0]?.f ?? null, actividad: h.rows, hechos };
 }
 
 async function calcularCambios(desde: number | null) {

@@ -1,5 +1,7 @@
 import type { Profile } from "@/integrations/firebase/types";
-import type { Reunion, Rodaje, Video } from "./types";
+import type { PiezaIA, Reunion, Rodaje, Video } from "./types";
+import type { Project } from "@/integrations/firebase/types";
+import { trabajaEnCliente } from "@/lib/roles";
 import { etapaInfo } from "./etapas";
 import { mesAR } from "@/lib/fecha";
 
@@ -70,6 +72,8 @@ export interface ReporteUsuario {
   semanas: { label: string; n: number }[];
   /** Videos que hoy le tocan a esta persona. */
   enSuCancha: Video[];
+  /** Diseño: piezas que tiene para hacer o corregir. */
+  piezasEnCancha: PiezaIA[];
   recientes: Evento[];
 }
 
@@ -82,10 +86,20 @@ export function reporteUsuario(
   rodajes: Rodaje[],
   reuniones: Reunion[],
   mes: string,
-  todos: Evento[] = eventos(videos)
+  todos: Evento[] = eventos(videos),
+  extra: { piezas?: PiezaIA[]; clientes?: Project[]; hechos?: Record<string, number> } = {}
 ): ReporteUsuario {
   const uid = perfil.id;
-  const mios = todos.filter((e) => e.by === uid);
+  const piezas = extra.piezas ?? [];
+  // Lo que hizo en videos y en piezas gráficas.
+  const mios = [
+    ...todos.filter((e) => e.by === uid),
+    ...piezas.flatMap((p) =>
+      (p.historial ?? [])
+        .filter((h) => h.by === uid)
+        .map((h) => ({ videoId: p.id, proyectoId: p.proyecto_id, titulo: p.pedido.slice(0, 60), at: h.at, by: h.by, accion: h.accion, nota: h.nota }))
+    ),
+  ].sort((a, b) => b.at.localeCompare(a.at));
   const delMes = mios.filter((e) => mesAR(e.at) === mes);
   const cuenta = (f: (a: string) => boolean) => delMes.filter((e) => f(e.accion)).length;
   const kpis: Kpi[] = [];
@@ -152,6 +166,70 @@ export function reporteUsuario(
       );
       break;
     }
+    case "diseno": {
+      // Entregó = mandó a revisión interna o al cliente (la cuenta de "(3)" son 3 piezas).
+      const ENTREGA_PIEZA = (a: string) => /enviad/i.test(a) && !a.startsWith("Aprobada por producción");
+      const cuantas = (a: string) => Number(a.match(/\((\d+)\)/)?.[1] ?? 1);
+      const entregas = delMes.filter((e) => ENTREGA_PIEZA(e.accion));
+      const total = entregas.reduce((n, e) => n + cuantas(e.accion), 0);
+      const correcciones = entregas.filter((e) => e.accion.startsWith("Corrección")).length;
+      // Desde que se pidió (o le pidieron cambios) hasta que la mandó.
+      const demoras: number[] = [];
+      const suyas: PiezaIA[] = [];
+      for (const p of piezas) {
+        const h = [...(p.historial ?? [])].sort((a, b) => a.at.localeCompare(b.at));
+        let tocada = false;
+        h.forEach((e, i) => {
+          if (e.by !== uid || !ENTREGA_PIEZA(e.accion) || mesAR(e.at) !== mes) return;
+          tocada = true;
+          let desde = p.created_at;
+          for (let j = i - 1; j >= 0; j--) {
+            if (/^(Pedida|Pagada|Producción pidió cambios|El cliente pidió cambios)/.test(h[j].accion)) {
+              desde = h[j].at;
+              break;
+            }
+          }
+          if (desde) demoras.push(horas(desde, e.at));
+        });
+        if (tocada) suyas.push(p);
+      }
+      const dem = prom(demoras);
+      const aprobadas = suyas.filter((p) => p.estado === "entregada");
+      const sinCambios = aprobadas.filter((p) => (p.rondas ?? 0) === 0).length;
+      kpis.push(
+        { label: "Piezas entregadas", valor: String(total), ayuda: `${correcciones} fueron correcciones` },
+        { label: "Tarda en entregar", valor: fh(dem), tono: dem !== null && dem > 48 ? "alerta" : "bien" },
+        { label: "Aprobadas sin cambios", valor: pct(sinCambios, aprobadas.length), tono: aprobadas.length && sinCambios / aprobadas.length < 0.6 ? "alerta" : "bien" },
+        { label: "Aprobadas por el cliente", valor: String(aprobadas.length), ayuda: `de ${suyas.length} que trabajó` }
+      );
+      break;
+    }
+    case "administracion": {
+      // Lo que cargó en el sistema este mes (lo cuenta el servidor) y los mensajes que mandó.
+      const h = extra.hechos ?? {};
+      const ETIQUETAS: Record<string, string> = {
+        facturas: "Facturas",
+        cobros: "Cobros",
+        gastos: "Gastos cargados",
+        obligaciones: "Vencimientos",
+        equipo_pagos: "Pagos al equipo",
+        equipo_liquidaciones: "Liquidaciones",
+        deudas_clientes: "Deudas de clientes",
+        historico_facturas: "Facturas (histórico)",
+        reuniones: "Reuniones",
+        tasks: "Tareas",
+      };
+      const cargas = Object.entries(ETIQUETAS)
+        .map(([col, label]) => ({ label, n: h[col] ?? 0 }))
+        .sort((a, b) => b.n - a.n);
+      const totalCargas = cargas.reduce((n, c) => n + c.n, 0);
+      kpis.push(
+        { label: "Cosas cargadas", valor: String(totalCargas), ayuda: "facturas, cobros, gastos, pagos…" },
+        { label: "Mensajes enviados", valor: String(h.mensajes ?? 0) },
+        ...cargas.slice(0, 2).map((c) => ({ label: c.label, valor: String(c.n) }))
+      );
+      break;
+    }
     default:
       kpis.push({ label: "Acciones del mes", valor: String(delMes.length) });
   }
@@ -179,9 +257,20 @@ export function reporteUsuario(
     return false;
   });
 
+  // Diseño: piezas de sus clientes que esperan que las haga o corrija.
+  const piezasEnCancha =
+    perfil.role === "diseno"
+      ? piezas.filter((p) => {
+          if (!["pagada", "en_proceso"].includes(p.estado)) return false;
+          const c = extra.clientes?.find((x) => x.id === p.proyecto_id);
+          return !!c && trabajaEnCliente(perfil.role, uid, c);
+        })
+      : [];
+
   return {
     perfil,
-    acciones: delMes.length,
+    acciones: perfil.role === "administracion" ? Object.values(extra.hechos ?? {}).reduce((a, b) => a + b, 0) : delMes.length,
+    piezasEnCancha,
     ultimaActividad: perfil.ultimo_acceso && (!mios[0] || perfil.ultimo_acceso > mios[0].at) ? perfil.ultimo_acceso : mios[0]?.at ?? null,
     kpis,
     semanas,
