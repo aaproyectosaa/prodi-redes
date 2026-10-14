@@ -33,6 +33,7 @@ import { DATOS_COBRO_DEFAULT, type DatosCobro, type PlanRedes } from "@/lib/rede
 import { comisionPct, montoDebito } from "@/lib/redes/facturacion";
 import { ENFOQUE_PRODI_DEFAULT } from "../../../api/_lib/plan-mes";
 import { ViaticosAjustes } from "@/components/redes/ViaticosAjustes";
+import { promoJornada } from "../../../api/_lib/jornada";
 
 export default function Ajustes() {
   const { planes, settings } = useRedes();
@@ -184,11 +185,12 @@ export default function Ajustes() {
           >
             <ViaticosAjustes
               actual={settings.viaticos}
-              onGuardar={async (v) => {
+              promo={promoJornada(settings)}
+              onGuardar={async (v, promo) => {
                 try {
                   assertEditable();
                   // Se reemplaza entero (si se borra el precio de una localidad, que no quede el viejo).
-                  await updateDoc(doc(db, "app_settings", "redes"), { viaticos: v });
+                  await updateDoc(doc(db, "app_settings", "redes"), { viaticos: v, promo_jornada_pct: promo });
                   toast.success("Viáticos guardados");
                 } catch (err) {
                   toast.error(err instanceof Error ? err.message : "No se pudo guardar");

@@ -349,7 +349,7 @@ export interface PiezaIA {
   _viejo?: import("@/components/redes/DelSistemaAnterior").DatosViejos | null;
 }
 
-export type TipoCobro = "pieza_ia" | "video_extra" | "abono" | "viatico";
+export type TipoCobro = "pieza_ia" | "video_extra" | "abono" | "viatico" | "jornada";
 export type EstadoCobro =
   | "pendiente"
   | "aprobado"
@@ -420,6 +420,8 @@ export interface RedesSettings {
   cobro?: DatosCobro;
   /** Viáticos de filmación fuera de Reconquista: monto fijo por zona (ver api/_lib/viaticos.ts). */
   viaticos?: import("../../../api/_lib/viaticos").MontosViatico;
+  /** Promo (%) desde el 2º video extra pedido para la misma filmación (ver api/_lib/jornada.ts). */
+  promo_jornada_pct?: number;
   /** Días en una etapa a partir de los cuales un video se marca como trabado. */
   dias_alerta: number;
   /** Envío automático del informe mensual el día 1. */

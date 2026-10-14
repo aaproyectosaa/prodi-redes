@@ -48,6 +48,7 @@ import {
 import { hoyAR, mesAR, sumarMeses } from "../_lib/fecha";
 import { autorizarFactura, estadoArca } from "../_lib/arca";
 import { viajeYaPago, viaticoDe, type ViaticoVideo } from "../_lib/viaticos";
+import { cuentaJornada, MAX_VIDEOS_JORNADA, promoJornada } from "../_lib/jornada";
 
 export const config = { maxDuration: 30 };
 
@@ -702,6 +703,8 @@ async function pedirVideo(req: VercelRequest) {
     plataforma?: string;
     /** Filmación nueva: en qué localidad se filma (viáticos). */
     localidad?: string;
+    /** Más videos para filmar en la misma jornada (un solo viaje, promo desde el 2º extra). */
+    otros?: { titulo?: unknown; idea?: unknown }[];
   }>(req);
   // Con fecha, el mes sale de la fecha (no puede ser pasada). Con o sin fecha, el mes tiene que ser
   // este o uno de los 3 siguientes (hora de Argentina): si no, cada mes viejo o lejano daría su cupo gratis.
@@ -777,6 +780,94 @@ async function pedirVideo(req: VercelRequest) {
   incluidos = incluidos || 0;
   const team = (proj.team_roles ?? {}) as Record<string, string[]>;
   const base = appUrl(req);
+
+  // Varios videos en la misma filmación: un solo viaje y promo desde el 2º video extra.
+  const otros = (Array.isArray(b.otros) ? b.otros : [])
+    .slice(0, MAX_VIDEOS_JORNADA - 1)
+    .map((o) => ({ titulo: String(o?.titulo ?? "").trim().slice(0, 120), idea: String(o?.idea ?? "").trim().slice(0, 2000) || null }))
+    .filter((o) => o.titulo.length >= 3);
+  if (otros.length) {
+    if (material_base?.tipo !== "nueva" || filma) throw new HttpError(400, "Varios videos juntos son para una filmación nueva");
+    const pid = b.proyecto_id;
+    const pedidos: PedidoVideo[] = [pedido, ...otros.map((o) => ({ ...pedido, titulo: o.titulo, idea: o.idea }))];
+    // El viaje lo lleva el 1º; los demás van en la misma jornada.
+    const viajeDe = (i: number): ViaticoVideo | null =>
+      !viatico || i === 0 || viatico.estado === "sin_cargo" || viatico.estado === "cotizar" ? viatico : { ...viatico, monto: 0, estado: "cubierto" };
+    const st = (await db.collection("app_settings").doc("redes").get()).data() ?? {};
+    const viaje = viatico?.estado === "pendiente" ? Number(viatico.monto) || 0 : 0;
+    const qMes = db.collection("videos").where("proyecto_id", "==", pid).where("mes", "==", mes);
+    const usados = (await qMes.get()).docs.filter((d) => d.data().extra !== true).length;
+    const cupo = incluidos + Number(proj.creditos_extra?.[mes] ?? 0);
+    const cuenta = cuentaJornada({ cantidad: pedidos.length, disponibles: cupo - usados, precioExtra: precioVideo, promoPct: promoJornada(st), viaje });
+    if (cuenta.extras > 0 && !(precioVideo > 0)) throw new HttpError(409, "Tu plan no tiene precio de video extra. Escribinos y lo vemos.");
+    const titulos = pedidos.map((p) => p.titulo).join(", ");
+
+    if (cuenta.total === 0) {
+      // Todo entra en el plan y no hay viaje que pagar: se crean ya (con lock, como uno solo).
+      const refs = pedidos.map(() => db.collection("videos").doc());
+      const ok = await enTransaccion(async (cli) => {
+        await cli.query("select pg_advisory_xact_lock(hashtext($1))", [`video:${pid}:${mes}`]);
+        const p = (await leerDoc(cli, "projects", pid)) ?? {};
+        const ya = (await ejecutarConsulta(cli, qMes.consulta)).filter((f) => f.data.extra !== true).length;
+        if (ya + pedidos.length > incluidos + Number(p.creditos_extra?.[mes] ?? 0)) return false;
+        for (const [i, r] of refs.entries()) {
+          await aplicarEscritura(cli, {
+            tipo: "create",
+            coleccion: r.coleccion,
+            id: r.id,
+            data: videoDesdePedido(pid, team, mes, { ...pedidos[i], viatico: viajeDe(i) }, `Pedido por el cliente (filmación de ${pedidos.length} videos)`),
+          });
+        }
+        return true;
+      });
+      if (!ok) throw new HttpError(409, "Justo cambió lo que te queda del plan. Volvé a intentar.");
+      await enviarAviso(
+        {
+          destinatarios: team.productor ?? [],
+          titulo: `El cliente pidió ${pedidos.length} videos para filmar juntos`,
+          cuerpo: `${proj.nombre ?? "Cliente"} · ${titulos}${textoMaterial(pedido)}`.slice(0, 300),
+          link: `/videos?video=${refs[0].id}`,
+          clave: `pedido_jornada:${refs[0].id}`,
+          proyectoId: pid,
+          videoId: refs[0].id,
+        },
+        base
+      );
+      await avisarCupo(pid, mes, incluidos, Number(proj.creditos_extra?.[mes] ?? 0), team.cliente ?? [], base).catch((e) => console.error("aviso de cupo", e));
+      return { estado: "creado", video_id: refs[0].id, video_ids: refs.map((r) => r.id) };
+    }
+
+    // Hay algo para pagar (extras y/o viaje): un solo pago; los videos se crean cuando se acredita.
+    const [y, m] = mes.split("-").map(Number);
+    const concepto = `Filmación de ${pedidos.length} videos · ${MESES[m - 1]} ${y}${viaje ? ` + viaje a ${viatico!.localidad}` : ""}: ${titulos}`.slice(0, 120);
+    const cobroRef = db.collection("cobros").doc();
+    await cobroRef.set({
+      proyecto_id: pid,
+      tipo: "jornada",
+      concepto,
+      ref_id: mes,
+      cantidad: 1,
+      extras_n: cuenta.extras,
+      monto: cuenta.total,
+      moneda: "ARS",
+      estado: "pendiente",
+      pedidos: pedidos.map((p, i) => ({ ...p, viatico: i === 0 && viaje > 0 ? { ...viatico!, estado: "pagado" } : viajeDe(i) })),
+      detalle: cuenta,
+      created_by: caller.uid,
+      created_at: new Date().toISOString(),
+    });
+    const pref = await crearPreferencia({
+      titulo: `Prodi · ${concepto}`,
+      monto: cuenta.total,
+      cantidad: 1,
+      externalReference: cobroRef.id,
+      notificationUrl: `${base}/api/pagos/webhook`,
+      backUrl: `${base}/cliente?cobro=${cobroRef.id}`,
+      email: caller.email,
+    });
+    await cobroRef.update({ mp_preference_id: pref.id, mp_init_point: pref.init_point });
+    return { estado: "pago", init_point: pref.init_point, cobro_id: cobroRef.id, monto: cuenta.total };
+  }
 
   // Entra en el plan: se crea directo y producción recibe el aviso. Se cuenta y se crea con lock
   // por cliente y mes, así dos pedidos a la vez no se pasan del cupo.

@@ -52,6 +52,7 @@ import { SubirMaterial } from "@/components/redes/cliente/SubirMaterial";
 import { cn } from "@/lib/utils";
 import { LOCALIDAD_BASE, viajeYaPago, viaticoDe } from "../../../../api/_lib/viaticos";
 import { ElegirLocalidad } from "./ElegirLocalidad";
+import { cuentaJornada, MAX_VIDEOS_JORNADA, promoJornada } from "../../../../api/_lib/jornada";
 
 const TIPOS: { label: string; titulo: string; icon: ElementType; placeholder: string }[] = [
   { label: "Promo", titulo: "Promo", icon: BadgePercent, placeholder: "Qué producto, qué precio o descuento, hasta cuándo…" },
@@ -131,6 +132,9 @@ export function PedirVideoDialog({
   const [preferencia, setPreferencia] = useState<string | null>(null);
   // Filmación nueva: dónde se filma (fuera de Reconquista se suman viáticos).
   const [localidad, setLocalidad] = useState(LOCALIDAD_BASE);
+  // Más videos para filmar el mismo día (una sola salida, un solo viaje).
+  const [otros, setOtros] = useState<string[]>([]);
+  const [otro, setOtro] = useState("");
   const [cuando, setCuando] = useState<Cuando | null>(null);
   const [fecha, setFecha] = useState<string | null>(null);
   const [mesFinal, setMesFinal] = useState<string | null>(null);
@@ -194,6 +198,8 @@ export function PedirVideoDialog({
     setEligiendo(false);
     setPreferencia(null);
     setLocalidad(LOCALIDAD_BASE);
+    setOtros([]);
+    setOtro("");
     setCuando(null);
     setFecha(null);
     setMesFinal(null);
@@ -229,6 +235,9 @@ export function PedirVideoDialog({
     return v.estado === "pendiente" && viajeYaPago(videos, cliente.id, v.localidad) ? { ...v, monto: 0, estado: "cubierto" as const } : v;
   }, [materialFinal, settings.viaticos, localidad, videos, cliente.id]);
   const montoViaje = viatico?.estado === "pendiente" ? Number(viatico.monto) : 0;
+  // Varios videos en la misma filmación: misma cuenta que el servidor (api/_lib/jornada.ts).
+  const varios = materialFinal === "nueva" && otros.length > 0;
+  const promoPct = promoJornada(settings);
   const hoy = hoyISO();
   const limite = new Date(`${sumarMeses(hoy, 3)}T12:00:00`);
   // "Esta semana": hasta el domingo.
@@ -337,6 +346,7 @@ export function PedirVideoDialog({
           ...(materialFinal === "nueva" && preferencia ? { preferencia } : {}),
         },
         ...(materialFinal === "nueva" ? { localidad } : {}),
+        ...(varios ? { otros: otros.map((t) => ({ titulo: t })) } : {}),
       });
       setMesFinal(m);
       setVideoId(r.video_id ?? null);
@@ -744,7 +754,24 @@ export function PedirVideoDialog({
                             </li>
                           </ul>
                         </div>
-                        {viatico && viatico.estado !== "sin_cargo" && (
+                        {materialFinal === "nueva" && (
+                          <VideosDeLaFilmacion
+                            principal={titulo}
+                            otros={otros}
+                            otro={otro}
+                            setOtro={setOtro}
+                            onAgregar={() => {
+                              const t = otro.trim();
+                              if (t.length < 3) return setAviso("Escribí de qué se trata el otro video.");
+                              setOtros((xs) => [...xs, t.slice(0, 120)]);
+                              setOtro("");
+                              setAviso(null);
+                            }}
+                            onQuitar={(i) => setOtros((xs) => xs.filter((_, j) => j !== i))}
+                            promoPct={promoPct}
+                          />
+                        )}
+                        {viatico && viatico.estado !== "sin_cargo" && !varios && (
                           <div className="flex items-start gap-3 rounded-2xl border bg-card p-4">
                             <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
                             <div className="text-sm">
@@ -762,7 +789,15 @@ export function PedirVideoDialog({
                             </div>
                           </div>
                         )}
-                        {entra ? (
+                        {varios ? (
+                          <CuentaDeLaFilmacion
+                            titulos={[titulo, ...otros]}
+                            cuenta={cuentaJornada({ cantidad: 1 + otros.length, disponibles: uso.disponibles, precioExtra, promoPct, viaje: montoViaje })}
+                            precioExtra={precioExtra}
+                            promoPct={promoPct}
+                            viatico={viatico}
+                          />
+                        ) : entra ? (
                           <div className="flex items-start gap-3 rounded-2xl border border-success/40 bg-success/[0.08] p-4">
                             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" />
                             <div>
@@ -866,7 +901,13 @@ export function PedirVideoDialog({
                     disabled={enviando || (!!cuando && !entra && !(precioExtra > 0))}
                   >
                     {enviando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {!cuando ? "Pedir video" : entra ? (montoViaje > 0 ? `Pedir y pagar viáticos ${formatARS(montoViaje)}` : "Pedir video") : `Pagar ${formatARS(precioExtra + montoViaje)}`}
+                    {(() => {
+                      if (varios && cuando) {
+                        const c = cuentaJornada({ cantidad: 1 + otros.length, disponibles: uso.disponibles, precioExtra, promoPct, viaje: montoViaje });
+                        return c.total > 0 ? `Pagar ${formatARS(c.total)}` : `Pedir los ${1 + otros.length} videos`;
+                      }
+                      return !cuando ? "Pedir video" : entra ? (montoViaje > 0 ? `Pedir y pagar viáticos ${formatARS(montoViaje)}` : "Pedir video") : `Pagar ${formatARS(precioExtra + montoViaje)}`;
+                    })()}
                   </Button>
                 )}
               </div>
@@ -997,6 +1038,128 @@ function Listo({
             </Button>
           )
         ))}
+    </div>
+  );
+}
+
+/** Los videos que se filman en esta salida: el principal y los que se suman. */
+function VideosDeLaFilmacion({
+  principal,
+  otros,
+  otro,
+  setOtro,
+  onAgregar,
+  onQuitar,
+  promoPct,
+}: {
+  principal: string;
+  otros: string[];
+  otro: string;
+  setOtro: (v: string) => void;
+  onAgregar: () => void;
+  onQuitar: (i: number) => void;
+  promoPct: number;
+}) {
+  const lleno = 1 + otros.length >= MAX_VIDEOS_JORNADA;
+  return (
+    <div className="space-y-2.5 rounded-2xl border bg-card p-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold">Videos de esta filmación</p>
+        {promoPct > 0 && (
+          <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+            Desde el 2º, {promoPct}% menos
+          </span>
+        )}
+      </div>
+      <ol className="space-y-1.5">
+        {[principal, ...otros].map((t, i) => (
+          <li key={`${i}-${t}`} className="flex items-center gap-2 rounded-xl bg-muted/40 px-3 py-2 text-sm">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-bold text-primary">{i + 1}</span>
+            <span className="min-w-0 flex-1 truncate">{t}</span>
+            {i > 0 && (
+              <button type="button" onClick={() => onQuitar(i - 1)} className="rounded-full p-1 text-muted-foreground hover:bg-muted" aria-label="Quitar">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </li>
+        ))}
+      </ol>
+      {!lleno && (
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onAgregar();
+          }}
+        >
+          <Input value={otro} onChange={(e) => setOtro(e.target.value)} placeholder="Otro video para filmar el mismo día" className="h-10" />
+          <Button type="submit" variant="outline" className="h-10 shrink-0" disabled={otro.trim().length < 3}>
+            <Plus className="h-4 w-4 sm:mr-1.5" />
+            <span className="hidden sm:inline">Sumar</span>
+          </Button>
+        </form>
+      )}
+      <p className="text-[11px] text-muted-foreground">Se filman todos en la misma salida: el viaje se paga una sola vez.</p>
+    </div>
+  );
+}
+
+/** El total de la filmación: qué entra en el plan, qué es extra (con la promo) y el viaje. */
+function CuentaDeLaFilmacion({
+  titulos,
+  cuenta,
+  precioExtra,
+  promoPct,
+  viatico,
+}: {
+  titulos: string[];
+  cuenta: ReturnType<typeof cuentaJornada>;
+  precioExtra: number;
+  promoPct: number;
+  viatico: ReturnType<typeof viaticoDe> | null;
+}) {
+  return (
+    <div className="space-y-2 rounded-2xl border border-primary/40 bg-primary/[0.06] p-4 text-sm">
+      {cuenta.items.map((it, i) => (
+        <div key={i} className="flex items-baseline justify-between gap-3">
+          <span className="min-w-0 truncate">
+            {i + 1}. {titulos[i]}
+          </span>
+          <span className="shrink-0 tabular-nums">
+            {it.plan ? (
+              <span className="font-medium text-emerald-600 dark:text-emerald-400">En tu plan</span>
+            ) : it.promo ? (
+              <>
+                <span className="mr-1.5 text-xs text-muted-foreground line-through">{formatARS(precioExtra)}</span>
+                <span className="font-semibold">{formatARS(it.precio)}</span>
+              </>
+            ) : (
+              <span className="font-semibold">{formatARS(it.precio)}</span>
+            )}
+          </span>
+        </div>
+      ))}
+      {viatico && viatico.estado !== "sin_cargo" && (
+        <div className="flex items-baseline justify-between gap-3 border-t pt-2">
+          <span className="min-w-0 truncate">
+            Viaje a {viatico.localidad}
+            {viatico.km != null ? ` (${viatico.km} km)` : ""} · una vez
+          </span>
+          <span className="shrink-0 font-semibold tabular-nums">
+            {viatico.estado === "pendiente" ? formatARS(cuenta.viaje) : viatico.estado === "cubierto" ? "Ya pago" : "A coordinar"}
+          </span>
+        </div>
+      )}
+      <div className="flex items-baseline justify-between gap-3 border-t pt-2 text-base">
+        <span className="font-semibold">Total</span>
+        <span className="font-bold tabular-nums">{cuenta.total > 0 ? formatARS(cuenta.total) : "Sin costo"}</span>
+      </div>
+      {cuenta.ahorro > 0 && (
+        <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+          Te ahorrás {formatARS(cuenta.ahorro)} por filmarlos juntos ({promoPct}% menos desde el 2º video).
+        </p>
+      )}
+      {cuenta.total > 0 && <p className="text-xs text-muted-foreground">Un solo pago con Mercado Pago; los videos quedan pedidos cuando se acredita.</p>}
     </div>
   );
 }

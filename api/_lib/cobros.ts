@@ -69,6 +69,18 @@ export async function aplicarPago(pago: PagoMP, baseUrl: string): Promise<string
       } else if (c.tipo === "viatico") {
         // Viaje a una filmación fuera de Reconquista (video del plan): queda pago en el video.
         tx.update(db.collection("videos").doc(c.ref_id), { "viatico.estado": "pagado", updated_at: new Date().toISOString() });
+      } else if (c.tipo === "jornada") {
+        // Varios videos en una filmación: se crean todos con el pago (los extra suman crédito del mes).
+        const pRef = db.collection("projects").doc(c.proyecto_id);
+        const team = (((await tx.get(pRef)).data()?.team_roles ?? {}) as Record<string, string[]>);
+        if (Number(c.extras_n) > 0) tx.update(pRef, { [`creditos_extra.${c.ref_id}`]: FieldValue.increment(Number(c.extras_n)) });
+        const pedidos = (Array.isArray(c.pedidos) ? c.pedidos : []) as PedidoVideo[];
+        pedidos.forEach((p, i) =>
+          tx.set(
+            db.collection("videos").doc(`pedido_${cobroId}_${i}`),
+            videoDesdePedido(c.proyecto_id, team, c.ref_id, p, `Pedido y pagado por el cliente (filmación de ${pedidos.length} videos)`)
+          )
+        );
       } else if (c.tipo === "video_extra") {
         const pRef = db.collection("projects").doc(c.proyecto_id);
         // Pedido del cliente: el video se crea recién con el pago acreditado.
@@ -88,14 +100,20 @@ export async function aplicarPago(pago: PagoMP, baseUrl: string): Promise<string
         proyecto_id: c.proyecto_id,
         concepto: c.concepto,
         cantidad: c.cantidad,
-        pedido: c.pedido
-          ? `${(c.pedido as PedidoVideo).titulo}${textoMaterial(c.pedido as PedidoVideo)}`
-          : undefined,
+        pedido:
+          c.tipo === "jornada" && Array.isArray(c.pedidos)
+            ? `${c.pedidos.length} videos para filmar juntos: ${(c.pedidos as PedidoVideo[]).map((p) => p.titulo).join(", ")}${textoMaterial(c.pedidos[0] as PedidoVideo)}`
+            : c.pedido
+              ? `${(c.pedido as PedidoVideo).titulo}${textoMaterial(c.pedido as PedidoVideo)}`
+              : undefined,
       };
     }
 
     // Reembolso o contracargo de algo ya entregado: se deshace lo que dio el pago.
     if (nuevo === "reembolsado" && c.estado === "aprobado") {
+      if (c.tipo === "jornada" && Number(c.extras_n) > 0) {
+        tx.update(db.collection("projects").doc(c.proyecto_id), { [`creditos_extra.${c.ref_id}`]: FieldValue.increment(-Number(c.extras_n)) });
+      }
       if (c.tipo === "video_extra") {
         tx.update(db.collection("projects").doc(c.proyecto_id), {
           [`creditos_extra.${c.ref_id}`]: FieldValue.increment(-(Number(c.cantidad) || 1)),
@@ -144,7 +162,16 @@ export async function aplicarPago(pago: PagoMP, baseUrl: string): Promise<string
     await enviarAviso(
       {
         destinatarios,
-        titulo: e.tipo === "pieza_ia" ? "Nueva pieza gráfica pagada" : e.tipo === "viatico" ? "El cliente pagó los viáticos" : e.pedido ? "El cliente pidió (y pagó) un video" : "Compraron videos extra",
+        titulo:
+          e.tipo === "pieza_ia"
+            ? "Nueva pieza gráfica pagada"
+            : e.tipo === "viatico"
+              ? "El cliente pagó los viáticos"
+              : e.tipo === "jornada"
+                ? "El cliente pidió (y pagó) una filmación con varios videos"
+                : e.pedido
+                  ? "El cliente pidió (y pagó) un video"
+                  : "Compraron videos extra",
         cuerpo: `${proj.nombre ?? "Cliente"} · ${e.pedido ?? e.concepto}`,
         link: e.tipo === "pieza_ia" ? "/piezas" : `/clientes/${e.proyecto_id}`,
         clave: `cobro:${cobroId}`,

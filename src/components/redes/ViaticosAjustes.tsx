@@ -18,7 +18,18 @@ const norm = (s: string) =>
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase();
 
-export function ViaticosAjustes({ actual, onGuardar }: { actual: MontosViatico | undefined; onGuardar: (v: MontosViatico) => Promise<void> }) {
+export function ViaticosAjustes({
+  actual,
+  promo,
+  onGuardar,
+}: {
+  actual: MontosViatico | undefined;
+  /** Promo (%) desde el 2º video extra de la misma filmación. */
+  promo: number;
+  onGuardar: (v: MontosViatico, promo: number) => Promise<void>;
+}) {
+  const [promoTxt, setPromoTxt] = useState(String(promo));
+  useEffect(() => setPromoTxt(String(promo)), [promo]);
   const [salida, setSalida] = useState("");
   const [porKm, setPorKm] = useState("");
   const [propios, setPropios] = useState<Record<string, string>>({});
@@ -44,7 +55,7 @@ export function ViaticosAjustes({ actual, onGuardar }: { actual: MontosViatico |
           .map(([k, v]) => [k, Number(v) || 0] as const)
           .filter(([, v]) => v > 0)
       );
-      await onGuardar({ salida: Number(salida) || 0, por_km: Number(porKm) || 0, por_localidad });
+      await onGuardar({ salida: Number(salida) || 0, por_km: Number(porKm) || 0, por_localidad }, Math.min(50, Number(promoTxt) || 0));
     } finally {
       setGuardando(false);
     }
@@ -131,6 +142,20 @@ export function ViaticosAjustes({ actual, onGuardar }: { actual: MontosViatico |
           En gris, lo que sale por la cuenta; escribí un número para ponerle otro precio. Reconquista siempre sin cargo. Las de Corrientes y las de más de
           100 km se coordinan por chat (salvo que les pongas precio). Distancias en línea recta (Georef).
         </p>
+      </div>
+
+      {/* Varios videos juntos */}
+      <div className="space-y-1.5 rounded-xl border bg-muted/30 p-3">
+        <Label>Varios videos en la misma filmación</Label>
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Desde el 2º video extra,</span>
+          <div className="relative w-20">
+            <Input inputMode="numeric" className="pr-6 text-right tabular-nums" value={promoTxt} onChange={(e) => setPromoTxt(soloNumero(e.target.value).slice(0, 2))} aria-label="Promo %" />
+            <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
+          </div>
+          <span className="text-muted-foreground">menos</span>
+        </div>
+        <p className="text-[11px] text-muted-foreground">El cliente pide varios videos para filmar el mismo día: paga un solo viaje y los extra desde el 2º tienen este descuento (0 = sin promo).</p>
       </div>
 
       <Button className="w-full" onClick={() => void guardar()} disabled={guardando}>
