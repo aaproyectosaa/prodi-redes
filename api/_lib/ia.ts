@@ -223,10 +223,10 @@ export async function generarImagen(
 }
 
 /** Mensaje de voz a texto: Gemini (Claude no recibe audio). */
-export async function transcribir(data: Buffer, mime: string): Promise<string> {
+export async function transcribir(data: Buffer, mime: string, pista?: string): Promise<string> {
   if (!hayGemini()) throw new Error("Para entender audios falta la clave de Gemini (GEMINI_API_KEY) en Vercel.");
   try {
-    return await gemini.transcribirAudio(data, mime);
+    return await gemini.transcribirAudio(data, mime, pista);
   } catch (err) {
     const m = err instanceof Error ? err.message : String(err);
     throw new Error(/API key|PERMISSION_DENIED/i.test(m) ? "Para entender audios: la clave de Gemini (GEMINI_API_KEY) no es válida. Hay que cargar una nueva en Vercel." : m);

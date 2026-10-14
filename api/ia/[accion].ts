@@ -523,7 +523,7 @@ async function llamadaTexto(req: VercelRequest) {
   );
   if (reciente.rowCount) return { ok: true, texto: "" };
   const mime = /^[a-z]+\/[a-z0-9.+-]+/i.exec(String(b.mime ?? ""))?.[0] ?? "audio/webm";
-  const texto = (await transcribir(audio, mime)).trim().slice(0, 4000);
+  const texto = (await transcribir(audio, mime, await pistaLlamada(String(b.chat_id)))).trim().slice(0, 4000);
   if (texto) {
     const at = typeof b.desde === "string" && !Number.isNaN(Date.parse(b.desde)) ? new Date(b.desde).toISOString() : new Date().toISOString();
     await getPool().query("insert into chat_llamada_textos (chat_id, inicio, uid, nombre, at, texto) values ($1, $2, $3, $4, $5, $6)", [
@@ -536,6 +536,32 @@ async function llamadaTexto(req: VercelRequest) {
     ]);
   }
   return { ok: true, texto };
+}
+
+/**
+ * Para que la transcripción de las llamadas escriba bien los nombres: la gente del chat, los clientes y las palabras
+ * que usamos siempre. Y que tome solo la voz de quien habla al micrófono (no lo que suena por el parlante).
+ */
+async function pistaLlamada(chatId: string): Promise<string> {
+  const chat = (await adminDb().collection("chats").doc(chatId).get()).data() ?? {};
+  const personas = Object.values((chat.nombres ?? {}) as Record<string, string>).map((n) => String(n).split(" ")[0]);
+  const clientes = (await adminDb().collection("projects").get()).docs
+    .filter((d) => d.data().enabled !== false)
+    .map((d) => String(d.data().nombre ?? ""))
+    .filter(Boolean)
+    .slice(0, 80);
+  const palabras = [
+    "Prodi", "Prodi Redes", "Prodi Software", "Mercado Pago", "webhook", "Vercel", "Drive", "Gemini", "Claude", "Meta", "Instagram",
+    "Reels", "pauta", "rodaje", "minuta", "API", "deploy", "commit", "ERP", "facturación", "ARCA", "CUIT",
+    ...personas,
+    ...clientes,
+    String(chat.nombre ?? ""),
+  ].filter(Boolean);
+  return [
+    `Nombres y palabras que se usan en esta empresa (escribilos así si suenan parecido): ${[...new Set(palabras)].join(", ")}.`,
+    "Transcribí solo la voz principal (la de quien habla cerca del micrófono); ignorá lo que se escucha de fondo o por el parlante (otras personas de la llamada, música, videos).",
+    "Sin muletillas repetidas (eh, mmm) ni malas palabras de relleno.",
+  ].join("\n");
 }
 
 /** Minuta de la llamada que terminó (respaldo: normalmente la arma el servidor solo al cortar). Llega como PDF. */

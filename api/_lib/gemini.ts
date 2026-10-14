@@ -230,25 +230,29 @@ export function comoVideo(mime: string): string {
   return /webm/.test(mime) ? "video/webm" : /mp4|m4a|quicktime|aac/.test(mime) ? "video/mp4" : mime;
 }
 
-export async function transcribirAudio(data: Buffer, mime: string): Promise<string> {
+export async function transcribirAudio(data: Buffer, mime: string, pista?: string): Promise<string> {
   const base = (mime.split(";")[0] || "audio/webm").toLowerCase();
   try {
-    return await transcribirCon(data, base);
+    return await transcribirCon(data, base, pista);
   } catch (err) {
     // Si Gemini no aceptó el formato como audio, se prueba como video (mismo archivo).
     const alt = comoVideo(base);
     if (alt === base) throw err;
-    return transcribirCon(data, alt);
+    return transcribirCon(data, alt, pista);
   }
 }
 
-async function transcribirCon(data: Buffer, mime: string): Promise<string> {
+async function transcribirCon(data: Buffer, mime: string, pista?: string): Promise<string> {
   const json = await call(TEXT_MODEL(), {
     contents: [
       {
         role: "user",
         parts: [
-          { text: "Transcribí este mensaje de voz en español (Argentina) tal cual lo dice, sin agregar nada. Si no se entiende, devolvé vacío." },
+          {
+            text:
+              "Transcribí este mensaje de voz en español (Argentina) tal cual lo dice, sin agregar nada. Si no se entiende, devolvé vacío." +
+              (pista ? `\n${pista}` : ""),
+          },
           { inline_data: { mime_type: mime, data: data.toString("base64") } },
         ],
       },
