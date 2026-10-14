@@ -411,5 +411,64 @@ export async function recordatoriosRevisionInterna(base: string, o: { todoElDia?
     }
     enviados++;
   }
+  // Piezas gráficas: mismo circuito que los videos (diseño entrega → producción revisa).
+  const vencePieza = (v: Data) => {
+    if (v.estado !== "revision_interna") return false;
+    const desde = String(v.revision_desde ?? "");
+    if (!desde || desde > limite) return false;
+    const ultimo = String(v.recordatorio_interno_at ?? "");
+    return !ultimo || ultimo < desde || ultimo <= limite;
+  };
+  const piezas = await db.collection("piezas_ia").where("estado", "==", "revision_interna").get();
+  for (const d of piezas.docs) {
+    if (!vencePieza(d.data())) continue;
+    const v = await db.runTransaction(async (tx) => {
+      const x = (await tx.get(d.ref)).data();
+      if (!x || !vencePieza(x)) return null;
+      const ultimo = String(x.recordatorio_interno_at ?? "");
+      const n = !ultimo || ultimo < String(x.revision_desde ?? "") ? 1 : Number(x.recordatorios_interno ?? 0) + 1;
+      tx.update(d.ref, { recordatorios_interno: n, recordatorio_interno_at: new Date().toISOString() });
+      return { ...(x as Data), n } as Data & { n: number };
+    });
+    if (!v) continue;
+    const pid = String(v.proyecto_id ?? "");
+    if (!proyectos.has(pid)) proyectos.set(pid, (await db.collection("projects").doc(pid).get()).data() ?? {});
+    const p = proyectos.get(pid)!;
+    if (p.enabled === false) continue;
+    const productores = ((p.team_roles ?? {}) as Record<string, string[]>).productor ?? [];
+    const horas = Math.max(2, Math.round((Date.now() - new Date(String(v.revision_desde)).getTime()) / 3600_000));
+    const cliente = String(p.nombre ?? "Cliente");
+    const que = String(v.producto || v.pedido || "pieza").slice(0, 80);
+    await enviarAviso(
+      {
+        destinatarios: productores,
+        titulo: v.n === 1 ? "Tenés una pieza para aprobar 🎨" : `⏰ La pieza sigue esperando tu OK (hace ${horas} h)`,
+        cuerpo: `${cliente} · “${que}”. Mirala y aprobala (o pedí cambios) para que le llegue al cliente.`,
+        link: `/piezas?pieza=${d.id}`,
+        clave: `pieza_revision_rec:${d.id}:${v.revision_desde}:${v.n}`,
+        proyectoId: pid,
+        mail: v.n === 1,
+      },
+      base
+    );
+    if (v.n >= INTERNO_ESCALAR) {
+      admins ??= (await db.collection("profiles").where("role", "==", "admin").get()).docs.filter((x) => x.data().activo !== false).map((x) => x.id);
+      const avisar = admins.filter((a) => !productores.includes(a));
+      if (avisar.length)
+        await enviarAviso(
+          {
+            destinatarios: avisar,
+            titulo: `${cliente}: pieza sin aprobar hace ${horas} h`,
+            cuerpo: `“${que}” está en revisión interna y producción no la aprobó (${v.n} avisos).`,
+            link: `/piezas?pieza=${d.id}`,
+            clave: `pieza_revision_admin:${d.id}:${v.revision_desde}:${v.n}`,
+            proyectoId: pid,
+            mail: v.n === INTERNO_ESCALAR,
+          },
+          base
+        );
+    }
+    enviados++;
+  }
   return enviados;
 }

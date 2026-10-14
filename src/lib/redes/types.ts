@@ -264,8 +264,9 @@ export type FormatoPieza =
 export type EstadoPieza =
   | "pendiente_pago" // El cliente la pidió y tiene que pagar
   | "pagada" // Pagada o incluida en el plan: diseño la tiene que hacer
-  | "en_proceso" // Diseño la está armando (o corrigiendo lo que pidió el cliente)
-  | "para_aprobar" // Diseño le mandó una versión al cliente
+  | "en_proceso" // Diseño la está armando (o corrigiendo lo que pidió el cliente o producción)
+  | "revision_interna" // Diseño la entregó: producción la revisa antes de mandarla al cliente (como los videos)
+  | "para_aprobar" // Producción se la mandó al cliente
   | "entregada" // El cliente la aprobó: lista para descargar
   | "rechazada" // El equipo no la puede hacer (se reembolsa)
   | "cancelada";
@@ -332,6 +333,10 @@ export interface PiezaIA {
   /** Cuándo se publicó en las redes (sale de "Entregadas" y pasa al historial). */
   publicada_at?: string | null;
   feedback_cliente?: string | null;
+  /** Lo que pidió cambiar producción en la revisión interna. */
+  feedback_interno?: string | null;
+  /** Desde cuándo está en revisión interna (para los avisos seguidos a producción). */
+  revision_desde?: string | null;
   rondas?: number;
   historial?: HistorialVideo[];
   nota_equipo: string | null;

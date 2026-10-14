@@ -5,6 +5,7 @@ import {
   Check,
   CheckSquare,
   Download,
+  ShieldCheck,
   Flag,
   Image as ImageIcon,
   ImagePlus,
@@ -50,6 +51,9 @@ import {
   marcarPublicada,
   borrarVersiones,
   mandarAlCliente,
+  mandarARevision,
+  pasaPorRevision,
+  pedirCambiosInternoPieza,
   moverPieza,
   rechazarPieza,
   versionesDe,
@@ -82,7 +86,8 @@ interface Columna {
 const COLUMNAS: Columna[] = [
   { id: "hacer", titulo: "Para hacer", ayuda: "Pedidos nuevos: armalos.", tuya: true, dot: "bg-sky-500", filtro: (p) => p.estado === "pagada" },
   { id: "disenando", titulo: "Diseñando", ayuda: "En proceso o con cambios del cliente.", tuya: true, dot: "bg-primary", filtro: (p) => p.estado === "en_proceso" },
-  { id: "cliente", titulo: "Esperando al cliente", ayuda: "Se las mandaste para aprobar.", tuya: false, dot: "bg-orange-500", filtro: (p) => p.estado === "para_aprobar" },
+  { id: "revision", titulo: "Revisión interna", ayuda: "Producción la revisa antes de que le llegue al cliente.", tuya: false, dot: "bg-violet-500", filtro: (p) => p.estado === "revision_interna" },
+  { id: "cliente", titulo: "Esperando al cliente", ayuda: "Producción se la mandó para aprobar.", tuya: false, dot: "bg-orange-500", filtro: (p) => p.estado === "para_aprobar" },
   {
     id: "listas",
     titulo: "Entregadas",
@@ -162,6 +167,8 @@ export default function Piezas() {
   // Arrastrar tarjetas entre columnas (admin, diseño y productora). "Entregadas" solo el admin.
   const { user } = useUserProfileContext();
   const arrastra = !!user && ["admin", "diseno", "productor"].includes(role ?? "");
+  // Revisa (y le manda al cliente) producción o el admin.
+  const revisa = role === "admin" || tieneRol("productor");
   const [arrastrando, setArrastrando] = useState<string | null>(null);
   const [sobre, setSobre] = useState<string | null>(null);
   const soltar = async (destino: Columna["id"], id: string) => {
@@ -175,9 +182,12 @@ export default function Piezas() {
       toast.error("Las da por entregadas el cliente al aprobarlas (o el admin).");
       return;
     }
+    const cli = clienteById(p.proyecto_id);
+    // Como en los videos: diseño entrega a revisión; al cliente la manda producción.
+    const final = destino === "cliente" && !revisa && pasaPorRevision(cli) ? "revision" : destino;
     try {
-      await moverPieza(p, destino as "hacer" | "disenando" | "cliente" | "listas", clienteById(p.proyecto_id), user.uid);
-      toast.success(destino === "cliente" ? "Le llegó al cliente para aprobar" : "Movida");
+      await moverPieza(p, final as "hacer" | "disenando" | "revision" | "cliente" | "listas", cli, user.uid);
+      toast.success(final === "cliente" ? "Le llegó al cliente para aprobar" : final === "revision" ? "Pasó a revisión interna: producción la revisa" : "Movida");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo mover");
     }
@@ -255,9 +265,9 @@ export default function Piezas() {
       piezas.flatMap((p): EventoCal[] => {
         const titulo = `${formatoInfo(p.formato).label}: ${p.producto || p.pedido}`;
         const cliente = clienteById(p.proyecto_id)?.nombre ?? "";
-        if (["pagada", "en_proceso", "para_aprobar"].includes(p.estado)) {
+        if (["pagada", "en_proceso", "revision_interna", "para_aprobar"].includes(p.estado)) {
           const fecha = p.fecha_deseada ?? hoyISO(new Date(new Date(p.created_at).getTime() + 5 * 86_400_000));
-          const estado = p.estado === "para_aprobar" ? "esperando al cliente" : p.estado === "en_proceso" ? "diseñando" : "para hacer";
+          const estado = p.estado === "para_aprobar" ? "esperando al cliente" : p.estado === "revision_interna" ? "en revisión interna" : p.estado === "en_proceso" ? "diseñando" : "para hacer";
           return [{ key: `${p.id}-e`, fecha, tipo: "entregar", orden: 0, titulo, detalle: `${cliente} · ${estado}${p.fecha_deseada ? "" : " · sin fecha, estimada"}`, onClick: () => setAbierta(p.id) }];
         }
         if (p.estado === "entregada") {
@@ -270,7 +280,7 @@ export default function Piezas() {
   );
 
   const sinPagar = piezas.filter((p) => p.estado === "pendiente_pago");
-  const activas = piezas.filter((p) => ["pagada", "en_proceso", "para_aprobar"].includes(p.estado)).length;
+  const activas = piezas.filter((p) => ["pagada", "en_proceso", "revision_interna", "para_aprobar"].includes(p.estado)).length;
   // Historial: publicadas o entregadas hace más de 30 días.
   const enHistorial = useMemo(() => {
     const corte = new Date(Date.now() - 30 * 86_400_000).toISOString();
@@ -312,7 +322,7 @@ export default function Piezas() {
             <div className="flex min-w-max gap-3">
               {COLUMNAS.map((col) => {
                 const items = piezas.filter(col.filtro).sort((a, b) => a.updated_at.localeCompare(b.updated_at));
-                const activa = col.tuya && items.length > 0;
+                const activa = (col.tuya || (col.id === "revision" && revisa)) && items.length > 0;
                 return (
                   <div
                     key={col.id}
@@ -541,7 +551,10 @@ function PiezaCard({ pieza: p, cliente, onClick, i }: { pieza: PiezaIA; cliente?
 
 function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () => void }) {
   const { clienteById } = useRedes();
-  const { user } = useUserProfileContext();
+  const { user, role, tieneRol } = useUserProfileContext();
+  const revisa = role === "admin" || tieneRol("productor");
+  const [cambiosInterno, setCambiosInterno] = useState(false);
+  const [aprobando, setAprobando] = useState(false);
   const { connection } = useDriveConnection();
   const [ajustes, setAjustes] = useState("");
   const [generando, setGenerando] = useState(false);
@@ -622,7 +635,10 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
 
   if (!pieza) return null;
   const info = formatoInfo(pieza.formato);
-  const puedeTrabajar = pieza.estado === "pagada" || pieza.estado === "en_proceso" || pieza.estado === "para_aprobar";
+  const puedeTrabajar = ["pagada", "en_proceso", "revision_interna", "para_aprobar"].includes(pieza.estado);
+  // Diseño entrega a revisión interna; producción (o si el cliente no tiene productora) manda directo al cliente.
+  const directo = revisa || !pasaPorRevision(cliente);
+  const enRevision = pieza.estado === "revision_interna";
   const fotosMaterial = (pieza.attachments_crudo ?? []).filter((f) => !f.mime_type || f.mime_type.startsWith("image/"));
   const hayFotos = fotosMaterial.length > 0;
   const productos = (memoria?.comercial?.productos ?? []).filter((p) => p.destacado).slice(0, 5);
@@ -670,11 +686,25 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
       toast.error(err instanceof Error ? err.message : "No se pudo subir");
     }
   };
+  const aprobarRevision = async () => {
+    const ids = pieza.versiones_enviadas?.length ? pieza.versiones_enviadas : pieza.version_enviada_id ? [pieza.version_enviada_id] : [];
+    if (!ids.length) return toast.error("No hay versión entregada: elegí una y mandala.");
+    setAprobando(true);
+    try {
+      await mandarAlCliente(pieza, ids.length > 1 ? ids : ids[0], cliente, user?.uid ?? "");
+      toast.success(ids.length > 1 ? `Aprobadas: le llegaron las ${ids.length} al cliente` : "Aprobada: le llegó al cliente para aprobar");
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo mandar");
+    } finally {
+      setAprobando(false);
+    }
+  };
   const volverADisenando = async () => {
     setVolviendo(true);
     try {
       await moverPieza(pieza, "disenando", cliente, user?.uid ?? "");
-      toast.success("Volvió a Diseñando: el cliente ya no la ve para aprobar");
+      toast.success(enRevision ? "Volvió a Diseñando" : "Volvió a Diseñando: el cliente ya no la ve para aprobar");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo");
     } finally {
@@ -686,8 +716,13 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
     if (!ids.length) return;
     setMandando(true);
     try {
-      await mandarAlCliente(pieza, ids.length > 1 ? ids : ids[0], cliente, user?.uid ?? "");
-      toast.success(ids.length > 1 ? `Le llegaron las ${ids.length} al cliente para aprobar` : "Le llegó al cliente para aprobar");
+      if (directo) {
+        await mandarAlCliente(pieza, ids.length > 1 ? ids : ids[0], cliente, user?.uid ?? "");
+        toast.success(ids.length > 1 ? `Le llegaron las ${ids.length} al cliente para aprobar` : "Le llegó al cliente para aprobar");
+      } else {
+        await mandarARevision(pieza, ids.length > 1 ? ids : ids[0], cliente, user?.uid ?? "");
+        toast.success("Entregada: producción la revisa y se la manda al cliente");
+      }
       onClose();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo mandar");
@@ -720,8 +755,8 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
   const pasos = [
     { n: 1, t: "Leé el pedido", listo: true },
     { n: 2, t: "Creá la pieza", listo: versiones.length > 0 },
-    { n: 3, t: "Elegí una versión", listo: !!elegida || pieza.estado === "para_aprobar" || pieza.estado === "entregada" },
-    { n: 4, t: "Entregá al cliente", listo: pieza.estado === "para_aprobar" || pieza.estado === "entregada" },
+    { n: 3, t: "Elegí una versión", listo: !!elegida || ["revision_interna", "para_aprobar", "entregada"].includes(pieza.estado) },
+    { n: 4, t: directo ? "Entregá al cliente" : "Entregá a revisión", listo: ["revision_interna", "para_aprobar", "entregada"].includes(pieza.estado) },
   ];
 
   return (
@@ -766,6 +801,14 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
           {/* 1. Lo que pidió el cliente */}
           <div className="space-y-3 border-b p-4 text-sm md:max-h-[calc(94dvh-150px)] md:overflow-y-auto md:border-b-0 md:border-r">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">1 · Lo que pidió</p>
+            {pieza.feedback_interno && pieza.estado === "en_proceso" && (
+              <div className="rounded-xl border border-violet-500/40 bg-violet-500/[0.08] p-3">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-violet-700 dark:text-violet-300">
+                  <MessageSquareWarning className="h-3.5 w-3.5" /> Producción pidió cambios
+                </p>
+                <p className="mt-1 whitespace-pre-wrap">{pieza.feedback_interno}</p>
+              </div>
+            )}
             {(pieza.rondas ?? 0) > 0 && pieza.feedback_cliente && pieza.estado !== "entregada" && (
               <div className="rounded-xl border border-orange-500/40 bg-orange-500/[0.08] p-3">
                 <p className="flex items-center gap-1.5 text-xs font-semibold text-orange-700 dark:text-orange-300">
@@ -1157,13 +1200,48 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                   )}
                 </div>
               )}
+              {enRevision && (
+                <div className="rounded-2xl border border-violet-500/30 bg-violet-500/[0.06] p-3 text-sm">
+                  <b>Revisión interna.</b>{" "}
+                  {revisa
+                    ? `Diseño entregó ${(pieza.versiones_enviadas?.length ?? 0) > 1 ? `${pieza.versiones_enviadas!.length} versiones` : `la v${enviadaN || "?"}`} ${hace(pieza.revision_desde ?? pieza.updated_at)}. Revisala: si va, le llega al cliente; si no, pedí cambios.`
+                    : `Entregaste ${(pieza.versiones_enviadas?.length ?? 0) > 1 ? `${pieza.versiones_enviadas!.length} versiones` : `la v${enviadaN || "?"}`} ${hace(pieza.revision_desde ?? pieza.updated_at)}. Producción la revisa y se la manda al cliente.`}
+                  {revisa && (
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <Button variant="outline" className="h-10" onClick={() => setCambiosInterno(true)}>
+                        <MessageSquareWarning className="mr-1.5 h-4 w-4" /> Pedir cambios
+                      </Button>
+                      <Button className="h-10 bg-emerald-600 hover:bg-emerald-600/90" disabled={aprobando} onClick={() => void aprobarRevision()}>
+                        {aprobando ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-1.5 h-4 w-4" />}
+                        Aprobar y mandar al cliente
+                      </Button>
+                    </div>
+                  )}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {versiones.length > 1 && !varias && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 bg-background/60 text-xs"
+                        onClick={() => setVarias([...(pieza.versiones_enviadas ?? (pieza.version_enviada_id ? [pieza.version_enviada_id] : []))])}
+                      >
+                        <CheckSquare className="mr-1.5 h-3.5 w-3.5" /> Elegir otras
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" className="h-8 text-xs" disabled={volviendo} onClick={() => void volverADisenando()}>
+                      {volviendo ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Undo2 className="mr-1.5 h-3.5 w-3.5" />}
+                      Volver a Diseñando
+                    </Button>
+                  </div>
+                </div>
+              )}
               {pieza.estado === "para_aprobar" && (
                 <div className="rounded-2xl border border-orange-500/30 bg-orange-500/[0.06] p-3 text-sm">
                   <b>Esperando al cliente.</b>{" "}
                   {(pieza.versiones_enviadas?.length ?? 0) > 1
                     ? `Le mandaste ${pieza.versiones_enviadas!.length} versiones ${hace(pieza.updated_at)} (respondió ${Object.keys(pieza.respuestas_cliente ?? {}).length}).`
                     : `Le mandaste la v${enviadaN || "?"} ${hace(pieza.updated_at)}.`}{" "}
-                  Podés seguir editando y volver a mandar: lo nuevo reemplaza lo que tiene.
+                  {directo ? "Podés seguir editando y volver a mandar: lo nuevo reemplaza lo que tiene." : "Si hace falta corregir, editá y volvé a entregar a revisión."}
                   <div className="mt-2 flex flex-wrap gap-2">
                     {versiones.length > 1 && !varias && (
                       <Button
@@ -1182,20 +1260,24 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                   </div>
                 </div>
               )}
-              {pieza.estado !== "entregada" && puedeTrabajar && (pieza.estado !== "para_aprobar" || !!varias || !!sel) && (
+              {pieza.estado !== "entregada" && puedeTrabajar && ((pieza.estado !== "para_aprobar" && !enRevision) || !!varias || (!!sel && !(enRevision && revisa))) && (
                   <Button className="h-12 w-full text-base" onClick={() => void mandar()} disabled={(varias ? !varias.length : !sel) || mandando}>
                     {mandando ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Send className="mr-2 h-5 w-5" />}
-                    {varias
-                      ? varias.length > 1
-                        ? `${pieza.estado === "para_aprobar" ? "Volver a mandar" : "Mandar"} las ${varias.length} al cliente`
-                        : varias.length === 1
-                          ? `${pieza.estado === "para_aprobar" ? "Volver a mandar" : "Mandar"} 1 al cliente`
-                          : "Tocá las versiones que van"
-                      : sel
-                        ? `${pieza.estado === "para_aprobar" ? "Volver a mandar" : "Mandar"} la v${nElegida} al cliente para aprobar`
-                        : versiones.length
-                          ? "Elegí una versión para mandarla"
-                          : "Primero creá una versión"}
+                    {(() => {
+                      const verbo = pieza.estado === "para_aprobar" || enRevision ? (directo ? "Volver a mandar" : "Volver a entregar") : directo ? "Mandar" : "Entregar";
+                      const destino = directo ? "al cliente" : "a revisión";
+                      return varias
+                        ? varias.length > 1
+                          ? `${verbo} las ${varias.length} ${destino}`
+                          : varias.length === 1
+                            ? `${verbo} 1 ${destino}`
+                            : "Tocá las versiones que van"
+                        : sel
+                          ? `${verbo} la v${nElegida} ${destino}${directo ? " para aprobar" : ""}`
+                          : versiones.length
+                            ? "Elegí una versión para mandarla"
+                            : "Primero creá una versión";
+                    })()}
                   </Button>
               )}
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1230,6 +1312,19 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
           onConfirm={async (nota) => {
             await rechazarPieza(pieza, nota);
             toast.success("Listo, le avisamos al cliente");
+            onClose();
+          }}
+        />
+        <NotaDialog
+          open={cambiosInterno}
+          onOpenChange={setCambiosInterno}
+          title="Pedir cambios a diseño"
+          description="Vuelve a «Diseñando» con tu nota. El cliente todavía no la vio."
+          placeholder="Ej.: el precio tiene que verse más grande y sacá el fondo rojo."
+          confirmLabel="Pedir cambios"
+          onConfirm={async (nota) => {
+            await pedirCambiosInternoPieza(pieza, cliente, user?.uid ?? "", nota);
+            toast.success("Listo, le avisamos a diseño");
             onClose();
           }}
         />

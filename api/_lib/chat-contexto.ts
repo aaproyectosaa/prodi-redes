@@ -46,7 +46,7 @@ export async function contextoSistema(opts: {
     db.collection("profiles").get(),
     db.collection("videos").where("etapa", "!=", "publicado").get(),
     db.collection("tareas").where("hecha", "==", false).get(),
-    db.collection("piezas_ia").where("estado", "in", ["pagada", "en_proceso", "para_aprobar"]).get(),
+    db.collection("piezas_ia").where("estado", "in", ["pagada", "en_proceso", "revision_interna", "para_aprobar"]).get(),
   ]);
   const proyectos = pSnap.docs
     .map((d) => ({ id: d.id, ...(d.data() ?? {}) }) as Proyecto)
@@ -102,7 +102,7 @@ export async function contextoSistema(opts: {
       return `- ${deProyecto.get(String(v.proyecto_id))} · "${String(v.titulo ?? "").slice(0, 80)}" · ${ETAPA[String(v.etapa)] ?? v.etapa} hace ${dias(v.etapa_desde)} días${v.entrega_edicion ? ` · entrega ${v.entrega_edicion}` : ""}${resp ? ` · ${resp}` : ""} [link /videos?video=${v.id}]`;
     });
 
-  const ESTADO_PIEZA: Record<string, string> = { pagada: "para hacer", en_proceso: "diseñando", para_aprobar: "esperando al cliente" };
+  const ESTADO_PIEZA: Record<string, string> = { pagada: "para hacer", en_proceso: "diseñando", revision_interna: "en revisión interna", para_aprobar: "esperando al cliente" };
   const piezas = pzSnap.docs
     .map((d) => ({ id: d.id, ...(d.data() ?? {}) }) as Data & { id: string })
     .filter((x) => deProyecto.has(String(x.proyecto_id)))

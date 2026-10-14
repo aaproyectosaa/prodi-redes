@@ -396,6 +396,13 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
         if (antes!.estado === "cancelada" && despues!.estado !== "cancelada") return false;
         if (despues!.estado === "cancelada" && antes!.estado !== "cancelada" && Number(antes!.precio) > 0 && antes!.incluida !== true) return false;
         // "Entregada" la pone el cliente al aprobar (servidor) o el equipo (si la aprobó por otro medio, ej. WhatsApp).
+        // Como en los videos: al cliente la manda producción (diseño la entrega a revisión interna), salvo que el
+        // cliente no tenga productora asignada.
+        if (despues!.estado === "para_aprobar" && antes!.estado !== "para_aprobar" && !produceEn(c, antes!.proyecto_id)) {
+          const proy = await leerDoc(c.ex, "projects", String(antes!.proyecto_id));
+          const productoras = (proy?.team_roles as Record<string, unknown> | undefined)?.productor;
+          if (Array.isArray(productoras) && productoras.length > 0) return false;
+        }
       }
       return (
         (esDiseno(c) && equipoDe(c, antes!.proyecto_id) && equipoDe(c, despues!.proyecto_id)) ||

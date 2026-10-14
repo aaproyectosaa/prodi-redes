@@ -81,6 +81,7 @@ const ESTADO_TONE: Record<PiezaIA["estado"], string> = {
   pendiente_pago: "bg-warning/15 text-warning border-warning/30",
   pagada: "bg-sky-500/12 text-sky-600 dark:text-sky-300 border-sky-500/25",
   en_proceso: "bg-primary/12 text-primary border-primary/30",
+  revision_interna: "bg-violet-500/12 text-violet-600 dark:text-violet-300 border-violet-500/30",
   para_aprobar: "bg-orange-500/12 text-orange-600 dark:text-orange-300 border-orange-500/30",
   entregada: "bg-success/12 text-success border-success/30",
   rechazada: "bg-destructive/10 text-destructive border-destructive/30",

@@ -178,7 +178,7 @@ async function piezaCompartir(req: VercelRequest) {
       tipo: "pieza",
       id: pieza_id,
       titulo: [fmt.label, pz.producto, p.nombre].filter(Boolean).join(" · "),
-      detalle: pz.estado === "entregada" ? "Entregada" : pz.estado === "para_aprobar" ? "Esperando al cliente" : "En diseño",
+      detalle: pz.estado === "entregada" ? "Entregada" : pz.estado === "para_aprobar" ? "Esperando al cliente" : pz.estado === "revision_interna" ? "En revisión interna" : "En diseño",
       correccion: null,
     },
   });

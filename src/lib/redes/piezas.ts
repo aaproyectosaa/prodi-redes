@@ -51,6 +51,7 @@ export const ESTADO_PIEZA_LABEL: Record<PiezaIA["estado"], string> = {
   pendiente_pago: "Falta el pago",
   pagada: "Para hacer",
   en_proceso: "Diseñando",
+  revision_interna: "Revisión interna",
   para_aprobar: "Esperando al cliente",
   entregada: "Entregada",
   rechazada: "Rechazada (reembolsada)",
@@ -62,6 +63,7 @@ export const ESTADO_PIEZA_CLIENTE: Record<PiezaIA["estado"], string> = {
   pendiente_pago: "Falta el pago",
   pagada: "En diseño",
   en_proceso: "En diseño",
+  revision_interna: "En diseño",
   para_aprobar: "Para aprobar",
   entregada: "Lista",
   rechazada: "No se pudo hacer",
@@ -233,19 +235,85 @@ export async function empezarPieza(pieza: PiezaIA) {
   await updateDoc(doc(db, PIEZAS, pieza.id), { estado: "en_proceso", updated_at: now() });
 }
 
-/** Diseño le manda una versión (o varias juntas) al cliente para que las apruebe. */
+/**
+ * Igual que los videos: diseño entrega → producción revisa → recién ahí le llega al cliente.
+ * Si el cliente no tiene productora asignada, no hay quién revise: va directo al cliente.
+ */
+export const pasaPorRevision = (project: Project | undefined) => equipoDe(project, "productor").length > 0;
+
+/** Diseño entrega una versión (o varias juntas) para que producción la revise. */
+export async function mandarARevision(pieza: PiezaIA, versionId: string | string[], project: Project | undefined, by: string) {
+  assertEditable();
+  const ids = Array.isArray(versionId) ? versionId : [versionId];
+  const varias = ids.length > 1;
+  const reentrega = (pieza.rondas ?? 0) > 0;
+  await updateDoc(doc(db, PIEZAS, pieza.id), {
+    estado: "revision_interna",
+    version_enviada_id: ids[0],
+    versiones_enviadas: varias ? ids : null,
+    respuestas_cliente: null,
+    revision_desde: now(),
+    updated_at: now(),
+    historial: arrayUnion(evento(by, varias ? `Enviadas a revisión interna (${ids.length})` : reentrega ? "Corrección enviada a revisión interna" : "Enviada a revisión interna")),
+  });
+  void avisar({
+    destinatarios: equipoDe(project, "productor").filter((id) => id !== by),
+    titulo: reentrega ? "Corrección de pieza lista para revisar" : "Pieza lista para revisar",
+    cuerpo: `${project?.nombre ?? "Cliente"} · ${formatoInfo(pieza.formato).label}: ${(pieza.producto || pieza.pedido).slice(0, 80)}`,
+    link: `/piezas?pieza=${pieza.id}`,
+    clave: `pieza_revision:${pieza.id}`,
+    proyectoId: pieza.proyecto_id,
+  });
+}
+
+/** Producción pide cambios en la revisión interna: vuelve a diseño con la nota. */
+export async function pedirCambiosInternoPieza(pieza: PiezaIA, project: Project | undefined, by: string, nota: string) {
+  assertEditable();
+  await updateDoc(doc(db, PIEZAS, pieza.id), {
+    estado: "en_proceso",
+    feedback_interno: nota.trim(),
+    feedback_cliente: null,
+    revision_desde: null,
+    rondas: (pieza.rondas ?? 0) + 1,
+    updated_at: now(),
+    historial: arrayUnion(evento(by, "Producción pidió cambios", nota.trim())),
+  });
+  const quienEntrego = [...(pieza.historial ?? [])].reverse().find((h) => h.accion.includes("revisión interna"))?.by;
+  void avisar({
+    destinatarios: quienEntrego && quienEntrego !== by ? [quienEntrego] : [DISENO],
+    titulo: "Producción pidió cambios en una pieza",
+    cuerpo: `${project?.nombre ?? "Cliente"}: ${nota.trim().slice(0, 160)}`,
+    link: `/piezas?pieza=${pieza.id}`,
+    clave: `pieza_cambios_interno:${pieza.id}`,
+    proyectoId: pieza.proyecto_id,
+  });
+}
+
+/** Producción (o el admin) le manda una versión (o varias juntas) al cliente para que las apruebe. */
 export async function mandarAlCliente(pieza: PiezaIA, versionId: string | string[], project: Project | undefined, by: string) {
   assertEditable();
   const ids = Array.isArray(versionId) ? versionId : [versionId];
   const varias = ids.length > 1;
+  const deRevision = pieza.estado === "revision_interna";
   await updateDoc(doc(db, PIEZAS, pieza.id), {
     estado: "para_aprobar",
     version_enviada_id: ids[0],
     versiones_enviadas: varias ? ids : null,
     respuestas_cliente: null,
+    feedback_interno: null,
+    revision_desde: null,
     updated_at: now(),
     historial: arrayUnion(
-      evento(by, varias ? `Enviadas al cliente para aprobar (${ids.length})` : (pieza.rondas ?? 0) > 0 ? "Corrección enviada al cliente" : "Enviada al cliente para aprobar")
+      evento(
+        by,
+        deRevision
+          ? `Aprobada por producción, enviada al cliente${varias ? ` (${ids.length})` : ""}`
+          : varias
+            ? `Enviadas al cliente para aprobar (${ids.length})`
+            : (pieza.rondas ?? 0) > 0
+              ? "Corrección enviada al cliente"
+              : "Enviada al cliente para aprobar"
+      )
     ),
   });
   void avisar({
@@ -298,12 +366,18 @@ export function pedirPiezaEquipo(proyectoId: string, datos: DatosPedidoPieza, fu
  * Arrastrar una pieza a otra columna del tablero. "cliente" la manda con la última versión (tiene que haber
  * una); "listas" la da por entregada (lo hace el admin, por ejemplo si el cliente la aprobó por WhatsApp).
  */
-export async function moverPieza(pieza: PiezaIA, destino: "hacer" | "disenando" | "cliente" | "listas", project: Project | undefined, by: string) {
+export async function moverPieza(
+  pieza: PiezaIA,
+  destino: "hacer" | "disenando" | "revision" | "cliente" | "listas",
+  project: Project | undefined,
+  by: string
+) {
   assertEditable();
   const ultima = versionesDe(pieza).at(-1);
-  if (destino === "cliente") {
-    if (!ultima) throw new Error("Primero generá o subí una versión: no hay nada para mandarle al cliente.");
-    return mandarAlCliente(pieza, pieza.version_enviada_id ?? ultima.id, project, by);
+  if (destino === "cliente" || destino === "revision") {
+    if (!ultima) throw new Error("Primero generá o subí una versión: no hay nada para revisar.");
+    const ids = pieza.versiones_enviadas?.length ? pieza.versiones_enviadas : pieza.version_enviada_id ?? ultima.id;
+    return destino === "revision" ? mandarARevision(pieza, ids, project, by) : mandarAlCliente(pieza, ids, project, by);
   }
   const estado = destino === "hacer" ? "pagada" : destino === "disenando" ? "en_proceso" : "entregada";
   if (estado === pieza.estado) return;

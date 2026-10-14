@@ -40,8 +40,10 @@ function enCamino(uid: string, role: string, videos: Video[], piezas: PiezaIA[],
     return { cantidad: n, texto: `${n} ${n === 1 ? "video para publicar" : "videos para publicar"}` };
   }
   if (role === "diseno") {
-    const n = piezas.filter((p) => p.estado === "para_aprobar" && (p.historial ?? []).some((h) => h.by === uid && h.accion.startsWith("Enviada al cliente"))).length;
-    return { cantidad: n, texto: `${n} ${n === 1 ? "pieza esperando el OK del cliente" : "piezas esperando el OK del cliente"}` };
+    const n = piezas.filter(
+      (p) => ["revision_interna", "para_aprobar"].includes(p.estado) && (p.historial ?? []).some((h) => h.by === uid && (h.accion.startsWith("Enviada al cliente") || h.accion.includes("revisión interna")))
+    ).length;
+    return { cantidad: n, texto: `${n} ${n === 1 ? "pieza esperando el OK" : "piezas esperando el OK"}` };
   }
   return { cantidad: 0, texto: "" };
 }
