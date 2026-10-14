@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ArrowUpRight, Eye, MessageCircle } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Clock, Eye, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -23,6 +23,43 @@ import { eventos, reporteUsuario, type ReporteUsuario } from "@/lib/redes/report
 import { fechaHora, hace, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import { getRoleInfo } from "@/lib/roles";
 import { cn } from "@/lib/utils";
+import { callApi } from "@/lib/redes/api";
+
+type Uso = { uid: string; dias: number; entrada: number; salida: number; minutos: number };
+
+/** Promedios de uso de la app (últimos 30 días): hora de entrada, de salida y horas por día. */
+function useUsoEquipo() {
+  const [datos, setDatos] = useState<{ usos: Uso[]; desde: string | null } | null>(null);
+  useEffect(() => {
+    callApi<{ usos: Uso[]; desde: string | null }>("/api/db/uso", { solo_vista: true })
+      .then(setDatos)
+      .catch(() => setDatos({ usos: [], desde: null }));
+  }, []);
+  return datos;
+}
+
+const hora = (min: number) => {
+  const m = Math.round(min);
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
+};
+const horas = (min: number) => (min < 60 ? `${Math.round(min)} min` : `${(min / 60).toFixed(1).replace(".", ",")} h`);
+
+function UsoLinea({ uso, midiendo }: { uso?: Uso; midiendo: boolean }) {
+  return (
+    <div className="flex items-center gap-2 rounded-lg border bg-background/40 px-2.5 py-2 text-xs">
+      <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      {uso ? (
+        <p className="min-w-0 flex-1 truncate">
+          Entra <b className="tabular-nums">{hora(uso.entrada)}</b> · sale <b className="tabular-nums">{hora(uso.salida)}</b> · usa{" "}
+          <b className="tabular-nums">{horas(uso.minutos)}/día</b>
+          <span className="text-muted-foreground"> ({uso.dias} {uso.dias === 1 ? "día" : "días"})</span>
+        </p>
+      ) : (
+        <p className="text-muted-foreground">{midiendo ? "Uso de la app: todavía sin días medidos" : "Uso de la app: cargando…"}</p>
+      )}
+    </div>
+  );
+}
 
 function MesSelect({ mes, setMes }: { mes: string; setMes: (m: string) => void }) {
   return (
@@ -90,6 +127,7 @@ export default function Reportes() {
   const { videos, rodajes, reuniones } = useRedes();
   const { profiles } = useAppData();
   const [mes, setMes] = useState(mesActual());
+  const uso = useUsoEquipo();
   const todos = useMemo(() => eventos(videos), [videos]);
 
   const equipo = profiles
@@ -101,7 +139,10 @@ export default function Reportes() {
 
   return (
     <PageShell title="Reportes" subtitle="Qué hizo cada persona y cómo viene rindiendo." actions={<MesSelect mes={mes} setMes={setMes} />}>
-      <Section title="Equipo">
+      <Section
+        title="Equipo"
+        description={`Uso de la app: promedio de los últimos 30 días, en hora de Argentina${uso?.desde ? ` (se mide desde el ${uso.desde.split("-").reverse().join("/")})` : ""}. Cuenta el tiempo que la tiene abierta y la está usando.`}
+      >
         {equipo.length === 0 ? (
           <EmptyState title="No hay personas con rol de equipo" />
         ) : (
@@ -123,6 +164,7 @@ export default function Reportes() {
                   </div>
                   <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
                 </div>
+                <UsoLinea uso={uso?.usos.find((u) => u.uid === r.perfil.id)} midiendo={!!uso} />
                 <KpiGrid r={r} />
                 <div className="flex items-end justify-between gap-3">
                   <div className="text-xs text-muted-foreground">

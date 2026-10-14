@@ -381,6 +381,8 @@ async function sondear() {
     const r = await api<{ rev: number; colecciones: string[]; escribiendo?: Escribe[]; voz?: EnVoz[] }>("cambios", {
       desde: rev,
       ...(interesEscribiendo > 0 ? { escribiendo: true } : {}),
+      // La está usando de verdad (para los promedios de uso del equipo).
+      ...(document.visibilityState === "visible" && Date.now() - ultimoUso < 2 * 60_000 ? { uso: true } : {}),
     });
     const primera = rev === null;
     rev = r.rev;

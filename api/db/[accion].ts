@@ -17,7 +17,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { aplicarEscritura, ejecutarConsulta, enTransaccion, getPool, leerDoc, partirRuta, type Consulta, type OpEscritura } from "../_lib/db";
 import { claveProhibida } from "../_lib/docs";
 import { contexto, paraLaApp, partirColeccion, puedeEscribir, puedeLeer } from "../_lib/reglas";
-import { appUrl, body, HttpError, olvidarPerfil, requireCaller, sendError } from "../_lib/http";
+import { appUrl, body, HttpError, olvidarPerfil, requireCaller, sendError, tieneRol } from "../_lib/http";
 import { sincronizarCalendario } from "../_lib/calendario";
 import { publicarEnChat } from "../_lib/chat-server";
 import { waitUntil } from "@vercel/functions";
@@ -166,7 +166,8 @@ async function cambios(req: VercelRequest) {
   const quien = await requireCaller(req);
   // Sin rol todavía: no hay nada en vivo que mirar.
   if (quien.role === "pending" || !quien.role) return { rev: 0, colecciones: [] as string[] };
-  const { desde, escribiendo: conEscribiendo } = body<{ desde?: number | null; escribiendo?: boolean }>(req);
+  const { desde, escribiendo: conEscribiendo, uso } = body<{ desde?: number | null; escribiendo?: boolean; uso?: boolean }>(req);
+  if (uso) anotarUso(quien.uid);
   const clave = desde == null || !Number.isFinite(Number(desde)) ? "inicio" : String(Number(desde));
   // Con el chat abierto, también quién está escribiendo (es de cada persona: no va en la respuesta compartida).
   waitUntil(cerrarLlamadasTerminadas().catch(() => undefined));
@@ -187,6 +188,62 @@ async function cambios(req: VercelRequest) {
     r.catch(() => respuestas.delete(clave));
   }
   return escriben ? { ...(await r), escribiendo: await escriben, voz: await enVoz } : r;
+}
+
+// Uso de la app por persona y día (hora argentina): primera y última vez que la usó y cuántos minutos.
+// El navegador avisa "uso" solo si la está tocando (visible y con actividad hace menos de 2 min);
+// se anota a lo sumo un minuto por minuto, así no suma de más ni pega a la base en cada consulta.
+const ZONA = "America/Argentina/Buenos_Aires";
+let tablaUso: Promise<unknown> | null = null;
+const usoAnotado = new Map<string, number>();
+function anotarUso(uid: string) {
+  const ahora = Date.now();
+  if (ahora - (usoAnotado.get(uid) ?? 0) < 60_000) return;
+  if (usoAnotado.size > 1000) usoAnotado.clear();
+  usoAnotado.set(uid, ahora);
+  const pool = getPool();
+  tablaUso ??= pool
+    .query("create table if not exists uso_diario (uid text not null, fecha date not null, desde timestamptz not null, hasta timestamptz not null, minutos int not null default 1, primary key (uid, fecha))")
+    .catch((e) => {
+      tablaUso = null;
+      throw e;
+    });
+  waitUntil(
+    tablaUso
+      .then(() =>
+        pool.query(
+          `insert into uso_diario (uid, fecha, desde, hasta) values ($1, (now() at time zone '${ZONA}')::date, now(), now())
+           on conflict (uid, fecha) do update set minutos = uso_diario.minutos + 1, hasta = now()
+           where uso_diario.hasta < now() - interval '55 seconds'`,
+          [uid]
+        )
+      )
+      .catch((e) => console.warn("[uso]", e))
+  );
+}
+
+/** Promedios de uso del equipo en los últimos 30 días (solo admin): a qué hora entran, salen y cuántas horas la usan. */
+async function usoEquipo(req: VercelRequest) {
+  const caller = await requireCaller(req);
+  if (!tieneRol(caller, "admin")) throw new HttpError(403, "Solo el admin");
+  const pool = getPool();
+  const r = await pool
+    .query(
+      `select uid, count(*)::int as dias,
+              avg(extract(epoch from (desde at time zone '${ZONA}')::time) / 60)::float as entrada,
+              avg(extract(epoch from (hasta at time zone '${ZONA}')::time) / 60)::float as salida,
+              avg(minutos)::float as minutos
+         from uso_diario
+        where fecha >= (now() at time zone '${ZONA}')::date - 30 and minutos >= 5
+        group by uid`
+    )
+    .catch((e) => {
+      // Todavía no se anotó nada (la tabla se crea con el primer uso).
+      if ((e as { code?: string }).code === "42P01") return { rows: [] };
+      throw e;
+    });
+  const primero = await pool.query("select min(fecha)::text as f from uso_diario").catch(() => ({ rows: [{ f: null }] }));
+  return { usos: r.rows, desde: primero.rows[0]?.f ?? null };
 }
 
 async function calcularCambios(desde: number | null) {
@@ -512,6 +569,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "senal") res.status(200).json(await senal(req));
     else if (accion === "senales") res.status(200).json(await senales(req));
     else if (accion === "sin-leer") res.status(200).json(await sinLeer(req));
+    else if (accion === "uso") res.status(200).json(await usoEquipo(req));
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {
     const status = (err as { code?: number }).code;
