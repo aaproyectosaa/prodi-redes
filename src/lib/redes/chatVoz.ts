@@ -63,6 +63,8 @@ export interface Llamada {
   puedeCompartir: boolean;
   /** Pantallas que están compartiendo los demás. */
   pantallas: { uid: string; nombre: string; stream: MediaStream }[];
+  /** Lo que estoy compartiendo yo (para verlo en una ventanita y saber que anda). */
+  miPantalla: MediaStream | null;
 }
 
 // ---- Estado de la llamada (uno solo a la vez) ----
@@ -104,6 +106,7 @@ function avisar() {
         personas: [...actual.pares.values()].map((p) => ({ uid: p.uid, nombre: p.nombre, estado: p.estado, hablando: p.hablando })),
         grabando: !!actual.tramo,
         compartiendo: !!actual.pantalla,
+        miPantalla: actual.pantalla ?? null,
         puedeCompartir: typeof navigator !== "undefined" && !!navigator.mediaDevices?.getDisplayMedia,
         pantallas: [...actual.pares.values()]
           .filter((p) => p.compartiendo && p.pantalla)
