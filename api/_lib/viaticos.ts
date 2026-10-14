@@ -6,9 +6,9 @@
 // - Más lejos, del otro lado del río (Corrientes) o una localidad que no está en la lista: se coordina aparte.
 // Se cobra por jornada: si ya está pago el viaje a esa localidad para un video que todavía no se filmó, no se vuelve a cobrar.
 
-import { LOCALIDADES, type LocalidadViatico } from "./localidades";
+import { LOCALIDADES, RECONQUISTA, type LocalidadViatico } from "./localidades";
 
-export { LOCALIDADES, type LocalidadViatico };
+export { LOCALIDADES, RECONQUISTA, type LocalidadViatico };
 
 export const SIN_CARGO_KM = 15;
 export const LOCALIDAD_BASE = "Reconquista";

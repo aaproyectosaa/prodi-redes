@@ -43,8 +43,8 @@ import type { Video } from "@/lib/redes/types";
 import { useOpenVideo } from "@/components/redes/VideoCard";
 import { SubirMaterial } from "@/components/redes/cliente/SubirMaterial";
 import { cn } from "@/lib/utils";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { LOCALIDAD_BASE, LOCALIDADES, viajeYaPago, viaticoDe, zonaDe, ZONA_TEXTO, type ZonaViatico } from "../../../../api/_lib/viaticos";
+import { LOCALIDAD_BASE, viajeYaPago, viaticoDe } from "../../../../api/_lib/viaticos";
+import { ElegirLocalidad } from "./ElegirLocalidad";
 
 const TIPOS: { label: string; titulo: string; icon: ElementType; placeholder: string }[] = [
   { label: "Promo", titulo: "Promo", icon: BadgePercent, placeholder: "Qué producto, qué precio o descuento, hasta cuándo…" },
@@ -587,25 +587,7 @@ export function PedirVideoDialog({
                                 ))}
                               </div>
                               <p className="pt-2 text-xs font-medium text-muted-foreground">¿Dónde se filma?</p>
-                              <Select value={localidad} onValueChange={setLocalidad}>
-                                <SelectTrigger className="h-11 rounded-xl bg-background">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="max-h-80">
-                                  {(["sin_cargo", "hasta_80", "hasta_100", "cotizar"] as ZonaViatico[]).map((z) => (
-                                    <SelectGroup key={z}>
-                                      <SelectLabel>{ZONA_TEXTO[z]}</SelectLabel>
-                                      {LOCALIDADES.filter((l) => zonaDe(l) === z).map((l) => (
-                                        <SelectItem key={`${l.p}-${l.n}`} value={l.n}>
-                                          {l.n}
-                                          {l.p !== "Santa Fe" ? ` (${l.p})` : ""} · {l.km} km
-                                        </SelectItem>
-                                      ))}
-                                      {z === "cotizar" && <SelectItem value="Otra localidad">Otra localidad (más lejos)</SelectItem>}
-                                    </SelectGroup>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <ElegirLocalidad valor={localidad} onCambiar={setLocalidad} montos={settings.viaticos} />
                               {viatico && viatico.estado !== "sin_cargo" && (
                                 <p className="text-xs text-muted-foreground">
                                   {viatico.estado === "pendiente"
