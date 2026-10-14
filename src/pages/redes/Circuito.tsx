@@ -28,6 +28,7 @@ import { SelectorVista, VistaCalendario, useVista } from "@/components/redes/Vis
 import { BotonArmarMes, PlanesAviso } from "@/components/redes/PlanesAviso";
 import { ordenEntrega } from "@/lib/redes/entrega";
 import { useBorrarVideos } from "@/components/redes/BorrarVideos";
+import { FiltrosTablero, porFecha, useFiltrosTablero } from "@/components/redes/FiltrosTablero";
 
 /** Kanban: el equipo ve su tablero; el admin, todo el recorrido. */
 export default function Circuito() {
@@ -41,7 +42,8 @@ function TableroEquipo({ tablero }: { tablero: TableroRol }) {
   const { videos, clientes } = useRedes();
   const { role, user, tieneRol, roles } = useUserProfileContext();
   const uid = user?.uid ?? "";
-  const [cliente, setCliente] = useState("todos");
+  const filtros = useFiltrosTablero(`equipo-${role}`);
+  const { cliente, orden } = filtros;
   const [planificar, setPlanificar] = useState<false | ModoPlanificar>(false);
   const [rodaje, setRodaje] = useState(false);
   const esProd = tieneRol("productor");
@@ -60,21 +62,7 @@ function TableroEquipo({ tablero }: { tablero: TableroRol }) {
       className="max-w-none"
       actions={
         <>
-          {clientes.length > 1 && (
-            <Select value={cliente} onValueChange={setCliente}>
-              <SelectTrigger className="w-full sm:w-52">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos mis clientes</SelectItem>
-                {clientes.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.nombre}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          <FiltrosTablero {...filtros} clientes={clientes} conOrden={vista === "kanban"} />
           {esProd && (
             <>
               <BotonArmarMes clienteId={cliente === "todos" ? null : cliente} />
@@ -106,8 +94,14 @@ function TableroEquipo({ tablero }: { tablero: TableroRol }) {
           {tablero.columnas.map((col) => {
             const items = mios
               .filter((v) => tablero.columnaDe(v) === col.id)
-              // En edición, lo que hay que entregar antes va arriba.
-              .sort((a, b) => (a.etapa === "edicion" && b.etapa === "edicion" ? ordenEntrega(a, b) : 0) || a.etapa_desde.localeCompare(b.etapa_desde));
+              // Más urgente: lo que hay que entregar (o publicar) antes va arriba. Si no, por orden de llegada.
+              .sort((a, b) =>
+                orden === "urgente"
+                  ? (a.etapa === "edicion" && b.etapa === "edicion" ? ordenEntrega(a, b) : 0) ||
+                    porFecha(a.entrega_edicion ?? a.fecha_deseada, b.entrega_edicion ?? b.fecha_deseada) ||
+                    a.etapa_desde.localeCompare(b.etapa_desde)
+                  : a.etapa_desde.localeCompare(b.etapa_desde)
+              );
             const activa = col.tuya && items.length > 0;
             return (
               <div

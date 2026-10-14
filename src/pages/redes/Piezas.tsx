@@ -69,6 +69,7 @@ import { EditorPieza } from "@/components/redes/EditorPieza";
 import { CompositorFoto } from "@/components/redes/CompositorFoto";
 import { NuevaPiezaEquipo } from "@/components/redes/NuevaPiezaEquipo";
 import { CompartirPorChat } from "@/components/redes/CompartirChat";
+import { FiltrosTablero, porFecha, useFiltrosTablero } from "@/components/redes/FiltrosTablero";
 
 const TIPOS_CAL: Record<string, TipoCal> = {
   entregar: { label: "Para entregar", icon: Flag, chip: "bg-amber-500/12 text-amber-700 dark:text-amber-300 border-amber-500/30", dot: "bg-amber-500" },
@@ -143,8 +144,12 @@ function FechaPublicacion({ pieza }: { pieza: PiezaIA }) {
 
 /** Kanban de diseño (Karen): qué hacer, qué está esperando al cliente y qué se entregó. */
 export default function Piezas() {
-  const { piezas, clienteById } = useRedes();
+  const { piezas: todas, clienteById, clientes } = useRedes();
   const { role, tieneRol } = useUserProfileContext();
+  // Mismos filtros que el tablero de edición: por empresa y por urgencia.
+  const filtros = useFiltrosTablero(`piezas-${role}`);
+  const { cliente: filtroCliente, orden } = filtros;
+  const piezas = useMemo(() => (filtroCliente === "todos" ? todas : todas.filter((p) => p.proyecto_id === filtroCliente)), [todas, filtroCliente]);
   const [params, setParams] = useSearchParams();
   const [abierta, setAbierta] = useState<string | null>(null);
   // "Nueva pieza" la cargan vos y la productora (con las fotos para usar).
@@ -295,7 +300,8 @@ export default function Piezas() {
       className="max-w-none"
       actions={
         <>
-          {piezas.length > 0 && <SelectorVista vista={vista} onChange={setVista} />}
+          <FiltrosTablero {...filtros} clientes={clientes} conOrden={vista === "kanban"} />
+          {todas.length > 0 && <SelectorVista vista={vista} onChange={setVista} />}
           {enHistorial.length > 0 && (
             <Button variant="outline" onClick={() => setHistorial(true)}>
               <History className="mr-2 h-4 w-4" /> Historial ({enHistorial.length})
@@ -309,7 +315,7 @@ export default function Piezas() {
         </>
       }
     >
-      {piezas.length === 0 ? (
+      {todas.length === 0 ? (
         <EmptyState
           icon={Sparkles}
           title="Todavía no hay pedidos"
@@ -322,7 +328,9 @@ export default function Piezas() {
           <div ref={tablero} className={cn("-mx-4 scroll-px-4 overflow-x-auto px-4 pb-4 md:-mx-8 md:snap-none md:px-8", !fantasma && "snap-x snap-mandatory")}>
             <div className="flex min-w-max gap-3">
               {COLUMNAS.map((col) => {
-                const items = piezas.filter(col.filtro).sort((a, b) => a.updated_at.localeCompare(b.updated_at));
+                const items = piezas
+                  .filter(col.filtro)
+                  .sort((a, b) => (orden === "urgente" ? porFecha(a.fecha_deseada, b.fecha_deseada) : 0) || a.updated_at.localeCompare(b.updated_at));
                 const activa = (col.tuya || (col.id === "revision" && revisa)) && items.length > 0;
                 return (
                   <div
