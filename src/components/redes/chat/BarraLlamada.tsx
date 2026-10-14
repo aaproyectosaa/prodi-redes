@@ -2,9 +2,10 @@
 // Late cuando alguien habla; al tocarla se abre la tarjeta con quién está, silenciar y colgar.
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Headphones, Loader2, Mic, MicOff, PhoneOff } from "lucide-react";
+import { ChevronDown, Headphones, Loader2, Maximize2, Mic, MicOff, Minimize2, MonitorUp, MonitorX, PhoneOff } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { salirDelChatDeVoz, silenciar, useLlamada } from "@/lib/redes/chatVoz";
+import { compartirPantalla, dejarDeCompartir, salirDelChatDeVoz, silenciar, useLlamada } from "@/lib/redes/chatVoz";
 import { cn } from "@/lib/utils";
 
 export function BarraLlamada() {
@@ -22,6 +23,8 @@ export function BarraLlamada() {
   const alguienHabla = ll.yoHablando || ll.personas.some((p) => p.hablando);
 
   return (
+    <>
+    {ll.pantallas.length > 0 && <PantallaCompartida pantallas={ll.pantallas} />}
     <div className="pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+9.5rem)] right-3 z-[100] flex flex-col items-end gap-2 md:bottom-6 md:right-6">
       {abierta && (
         <div className="pointer-events-auto w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl border bg-card/95 p-3 shadow-2xl backdrop-blur animate-in fade-in slide-in-from-bottom-2">
@@ -83,6 +86,24 @@ export function BarraLlamada() {
               Salir
             </Button>
           </div>
+          {ll.puedeCompartir && (
+            <Button
+              variant={ll.compartiendo ? "secondary" : "outline"}
+              className={cn("mt-2 h-10 w-full rounded-full", ll.compartiendo && "text-primary")}
+              onClick={() => {
+                if (ll.compartiendo) dejarDeCompartir();
+                else
+                  void compartirPantalla().catch((err) => {
+                    // Cancelar en el selector del navegador no es un error.
+                    if (err instanceof DOMException && err.name === "NotAllowedError") return;
+                    toast.error("No se pudo compartir la pantalla");
+                  });
+              }}
+            >
+              {ll.compartiendo ? <MonitorX className="mr-1.5 h-4 w-4" /> : <MonitorUp className="mr-1.5 h-4 w-4" />}
+              {ll.compartiendo ? "Dejar de compartir" : "Compartir pantalla"}
+            </Button>
+          )}
         </div>
       )}
 
@@ -104,6 +125,70 @@ export function BarraLlamada() {
           </span>
         )}
       </button>
+    </div>
+    </>
+  );
+}
+
+/** La pantalla que comparte alguien de la llamada: ventana flotante que se agranda a pantalla completa. */
+function PantallaCompartida({ pantallas }: { pantallas: { uid: string; nombre: string; stream: MediaStream }[] }) {
+  const [elegida, setElegida] = useState<string | null>(null);
+  const [grande, setGrande] = useState(false);
+  const [oculta, setOculta] = useState(false);
+  const p = pantallas.find((x) => x.uid === elegida) ?? pantallas[0];
+  const video = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const v = video.current;
+    if (!v) return;
+    if (v.srcObject !== p.stream) v.srcObject = p.stream;
+    void v.play().catch(() => undefined);
+  }, [p.stream, oculta]);
+  // Cuando alguien empieza a compartir, se muestra (aunque antes se haya ocultado otra).
+  useEffect(() => setOculta(false), [p.uid]);
+  const nombre = (p.nombre || "Alguien").split(" ")[0];
+
+  if (oculta) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOculta(false)}
+        className="fixed left-1/2 top-[calc(env(safe-area-inset-top)+0.75rem)] z-[101] flex -translate-x-1/2 items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-xl animate-in fade-in slide-in-from-top-2"
+      >
+        <MonitorUp className="h-4 w-4" /> Ver la pantalla de {nombre}
+      </button>
+    );
+  }
+  return (
+    <div
+      className={cn(
+        "fixed z-[101] flex flex-col overflow-hidden border bg-black shadow-2xl animate-in fade-in zoom-in-95",
+        grande
+          ? "inset-0 rounded-none"
+          : "left-3 right-3 top-[calc(env(safe-area-inset-top)+0.75rem)] rounded-2xl md:left-auto md:right-6 md:top-6 md:w-[min(46rem,calc(100vw-20rem))]"
+      )}
+    >
+      <div className="flex items-center gap-2 bg-black/80 px-3 py-2 text-white">
+        <MonitorUp className="h-4 w-4 shrink-0 text-primary" />
+        <p className="min-w-0 flex-1 truncate text-sm font-medium">Pantalla de {nombre}</p>
+        {pantallas.length > 1 &&
+          pantallas.map((x) => (
+            <button
+              key={x.uid}
+              type="button"
+              onClick={() => setElegida(x.uid)}
+              className={cn("rounded-full px-2 py-0.5 text-[11px]", x.uid === p.uid ? "bg-white text-black" : "bg-white/15 hover:bg-white/25")}
+            >
+              {(x.nombre || "?").split(" ")[0]}
+            </button>
+          ))}
+        <button type="button" onClick={() => setGrande((g) => !g)} className="rounded-full p-1.5 hover:bg-white/15" aria-label={grande ? "Achicar" : "Agrandar"} title={grande ? "Achicar" : "Agrandar"}>
+          {grande ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </button>
+        <button type="button" onClick={() => setOculta(true)} className="rounded-full p-1.5 hover:bg-white/15" aria-label="Ocultar" title="Ocultar">
+          <ChevronDown className="h-4 w-4" />
+        </button>
+      </div>
+      <video ref={video} autoPlay playsInline muted className={cn("w-full bg-black object-contain", grande ? "min-h-0 flex-1" : "aspect-video")} />
     </div>
   );
 }

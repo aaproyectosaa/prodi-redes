@@ -511,7 +511,7 @@ export async function avisarVoz(
 }
 
 /** Señales para conectar la llamada (WebRTC) con otra persona del chat. */
-export type Senal = { chat_id: string; de: string; de_nombre: string; tipo: "oferta" | "respuesta" | "chau"; data: { sdp?: string; type?: string } };
+export type Senal = { chat_id: string; de: string; de_nombre: string; tipo: "oferta" | "respuesta" | "chau" | "pantalla"; data: { sdp?: string; type?: string } };
 export async function enviarSenal(chatId: string, para: string, tipo: Senal["tipo"], data: unknown = {}): Promise<void> {
   await api("senal", { chatId, para, tipo, data });
 }

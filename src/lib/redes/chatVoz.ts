@@ -42,6 +42,11 @@ interface Par {
   medir?: () => void;
   /** Sesión de la otra persona (cambia cada vez que entra): las señales viejas no tocan la conexión nueva. */
   sesionRemota?: string;
+  /** Canal de video reservado al conectar: por ahí va la pantalla compartida (sin volver a negociar). */
+  video?: RTCRtpTransceiver;
+  /** Lo que llega por ese canal, y si la otra persona avisó que está compartiendo. */
+  pantalla?: MediaStream | null;
+  compartiendo?: boolean;
 }
 
 export interface Llamada {
@@ -52,6 +57,12 @@ export interface Llamada {
   personas: { uid: string; nombre: string; estado: EstadoPar; hablando: boolean }[];
   /** Esta persona graba la llamada para la minuta (la que la abrió). */
   grabando: boolean;
+  /** Estoy compartiendo mi pantalla. */
+  compartiendo: boolean;
+  /** El navegador deja compartir pantalla (en celulares, no). */
+  puedeCompartir: boolean;
+  /** Pantallas que están compartiendo los demás. */
+  pantallas: { uid: string; nombre: string; stream: MediaStream }[];
 }
 
 // ---- Estado de la llamada (uno solo a la vez) ----
@@ -77,6 +88,8 @@ let actual: {
   /** Tramo de mi voz que se está grabando para transcribir. */
   tramo?: { rec: MediaRecorder; desde: string; hablo: boolean; listo: Promise<void> };
   tramoTimer?: number;
+  /** Mi pantalla compartida (o null). */
+  pantalla?: MediaStream | null;
 } | null = null;
 let foto: Llamada | null = null;
 const oyentes = new Set<() => void>();
@@ -90,6 +103,11 @@ function avisar() {
         yoHablando: actual.yoHablando,
         personas: [...actual.pares.values()].map((p) => ({ uid: p.uid, nombre: p.nombre, estado: p.estado, hablando: p.hablando })),
         grabando: !!actual.tramo,
+        compartiendo: !!actual.pantalla,
+        puedeCompartir: typeof navigator !== "undefined" && !!navigator.mediaDevices?.getDisplayMedia,
+        pantallas: [...actual.pares.values()]
+          .filter((p) => p.compartiendo && p.pantalla)
+          .map((p) => ({ uid: p.uid, nombre: p.nombre, stream: p.pantalla! })),
       }
     : null;
   oyentes.forEach((f) => f());
@@ -133,7 +151,7 @@ function esperarIce(pc: RTCPeerConnection): Promise<void> {
   });
 }
 
-function crearPar(uid: string, nombre: string, sesionRemota?: string): Par {
+function crearPar(uid: string, nombre: string, sesionRemota?: string, ofertante = false): Par {
   const a = actual!;
   // Si ya había una conexión con esa persona, se cierra del todo (que no queden dos sonando).
   const vieja = a.pares.get(uid);
@@ -148,7 +166,18 @@ function crearPar(uid: string, nombre: string, sesionRemota?: string): Par {
   audio.autoplay = true;
   audio.setAttribute("playsinline", "");
   const par: Par = { uid, nombre, pc, audio, estado: "conectando", hablando: false, desde: Date.now(), sesionRemota };
+  // Quien llama reserva el canal de video (quien atiende lo toma de la oferta, en atender()).
+  if (ofertante) {
+    par.video = pc.addTransceiver("video", { direction: "sendrecv" });
+    const mia = a.pantalla?.getVideoTracks()[0];
+    if (mia) void par.video.sender.replaceTrack(mia).catch(() => undefined);
+  }
   pc.ontrack = (e) => {
+    if (e.track.kind === "video") {
+      par.pantalla = new MediaStream([e.track]);
+      avisar();
+      return;
+    }
     const stream = e.streams[0] ?? new MediaStream([e.track]);
     audio.srcObject = stream;
     void audio.play().catch(() => undefined);
@@ -156,6 +185,8 @@ function crearPar(uid: string, nombre: string, sesionRemota?: string): Par {
   pc.onconnectionstatechange = () => {
     const s = pc.connectionState;
     par.estado = s === "connected" ? "conectado" : s === "failed" || s === "disconnected" ? "sin-conexion" : "conectando";
+    // Si entra alguien mientras comparto, que sepa que tiene que mostrar mi pantalla.
+    if (s === "connected" && a.pantalla && actual === a) void enviarSenal(a.chatId, uid, "pantalla", { on: true, sesion: a.sesion }).catch(() => undefined);
     avisar();
   };
   a.pares.set(uid, par);
@@ -177,7 +208,7 @@ function cerrarPar(uid: string) {
 async function llamarA(uid: string, nombre: string) {
   const a = actual;
   if (!a) return;
-  const par = crearPar(uid, nombre);
+  const par = crearPar(uid, nombre, undefined, true);
   const oferta = await par.pc.createOffer();
   await par.pc.setLocalDescription(oferta);
   await esperarIce(par.pc);
@@ -189,6 +220,14 @@ async function atender(s: Senal) {
   const a = actual;
   if (!a || s.chat_id !== a.chatId) return;
   const d = s.data as { sdp?: string; sesion?: string; para_sesion?: string };
+  if (s.tipo === "pantalla") {
+    const p = a.pares.get(s.de);
+    if (p && (!d.sesion || !p.sesionRemota || p.sesionRemota === d.sesion)) {
+      p.compartiendo = !!(s.data as { on?: boolean }).on;
+      avisar();
+    }
+    return;
+  }
   if (s.tipo === "chau") {
     // Solo si es de la conexión actual con esa persona (un "chau" viejo no corta la nueva).
     const p = a.pares.get(s.de);
@@ -201,6 +240,14 @@ async function atender(s: Senal) {
     if (mia && mia.pc.signalingState === "have-local-offer" && a.uid < s.de) return;
     const par = crearPar(s.de, s.de_nombre || "Alguien", d.sesion);
     await par.pc.setRemoteDescription({ type: "offer", sdp: s.data.sdp });
+    // El canal de video que reservó quien llama: se usa para mandar (y recibir) pantalla.
+    const tv = par.pc.getTransceivers().find((t) => t.receiver.track?.kind === "video");
+    if (tv) {
+      tv.direction = "sendrecv";
+      par.video = tv;
+      const mia = a.pantalla?.getVideoTracks()[0];
+      if (mia) await tv.sender.replaceTrack(mia).catch(() => undefined);
+    }
     const resp = await par.pc.createAnswer();
     await par.pc.setLocalDescription(resp);
     await esperarIce(par.pc);
@@ -330,6 +377,7 @@ export async function salirDelChatDeVoz() {
   sesionDeLlamada(false);
   controlesDelSistema(null);
   a.mic.getTracks().forEach((t) => t.stop());
+  a.pantalla?.getTracks().forEach((t) => t.stop());
   void a.ctx?.close().catch(() => undefined);
   avisar();
   const r = await avisarVoz(a.chatId, "salir").catch(() => null);
@@ -469,6 +517,41 @@ function controlesDelSistema(a: NonNullable<typeof actual> | null) {
   } catch {
     /* sin controles del sistema */
   }
+}
+
+/** Comparte mi pantalla con todos los de la llamada (en compu; los celulares no lo permiten). */
+export async function compartirPantalla() {
+  const a = actual;
+  if (!a || a.pantalla) return;
+  const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 15, max: 30 } }, audio: false });
+  if (actual !== a) {
+    stream.getTracks().forEach((t) => t.stop());
+    return;
+  }
+  const track = stream.getVideoTracks()[0];
+  if (!track) return;
+  // Texto y planillas nítidos antes que movimiento suave.
+  track.contentHint = "detail";
+  // Si se corta desde el navegador ("Dejar de compartir"), también se avisa.
+  track.onended = () => dejarDeCompartir();
+  a.pantalla = stream;
+  for (const p of a.pares.values()) {
+    if (p.video) await p.video.sender.replaceTrack(track).catch(() => undefined);
+    void enviarSenal(a.chatId, p.uid, "pantalla", { on: true, sesion: a.sesion }).catch(() => undefined);
+  }
+  avisar();
+}
+
+export function dejarDeCompartir() {
+  const a = actual;
+  if (!a?.pantalla) return;
+  a.pantalla.getTracks().forEach((t) => t.stop());
+  a.pantalla = null;
+  for (const p of a.pares.values()) {
+    if (p.video) void p.video.sender.replaceTrack(null).catch(() => undefined);
+    void enviarSenal(a.chatId, p.uid, "pantalla", { on: false, sesion: a.sesion }).catch(() => undefined);
+  }
+  avisar();
 }
 
 export function silenciar(si?: boolean) {

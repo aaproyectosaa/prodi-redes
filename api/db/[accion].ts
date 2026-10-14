@@ -6,7 +6,7 @@
 //                                                  y, con el chat abierto, quién está escribiendo
 // POST /api/db/escribiendo { chatId, estado: "escribiendo" | "grabando" | null }
 // POST /api/db/voz         { chatId, accion: "entrar" | "latido" | "salir" }  (chat de voz de los grupos)
-// POST /api/db/senal       { chatId, para, tipo: "oferta" | "respuesta" | "chau", data }  (para conectar la llamada)
+// POST /api/db/senal       { chatId, para, tipo: "oferta" | "respuesta" | "chau" | "pantalla", data }  (para conectar la llamada)
 // POST /api/db/senales     {}  → las señales que me mandaron (se entregan una vez)
 // POST /api/db/sin-leer    {}  → cuántos mensajes sin leer tiene cada chat mío { conteos: { chatId: n } }
 //
@@ -507,7 +507,7 @@ async function senal(req: VercelRequest) {
   const caller = await requireCaller(req);
   const { chatId, para, tipo, data } = body<{ chatId?: string; para?: string; tipo?: string; data?: unknown }>(req);
   if (typeof chatId !== "string" || !ID_OK.test(chatId) || typeof para !== "string" || !ID_OK.test(para)) throw new HttpError(400, "Señal inválida");
-  if (!["oferta", "respuesta", "chau"].includes(String(tipo))) throw new HttpError(400, "Señal inválida");
+  if (!["oferta", "respuesta", "chau", "pantalla"].includes(String(tipo))) throw new HttpError(400, "Señal inválida");
   const texto = JSON.stringify(data ?? {});
   if (texto.length > 60_000) throw new HttpError(400, "Señal demasiado grande");
   // Los dos tienen que ser del chat.
