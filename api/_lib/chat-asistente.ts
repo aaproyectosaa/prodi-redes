@@ -10,6 +10,7 @@ import { adminDb, FieldValue, type Data } from "./db";
 import { HttpError, trabajaEn, type Caller, type Rol } from "./http";
 import { generarJSON, transcribir, type Imagen } from "./ia";
 import { descargarDrive } from "./drive-stream";
+import { uploadBufferToDrive } from "./drive-server";
 import { enviarAviso } from "./notify";
 import { fechaAR, mesAR, partesAR, sumarDias } from "./fecha";
 import { chatDeMiembro, mensajeProdi, PRODI_ID, publicarEnChat } from "./chat-server";
@@ -64,7 +65,7 @@ const ESQUEMA = {
       items: {
         type: "OBJECT",
         properties: {
-          tipo: { type: "STRING", enum: ["crear_reunion", "crear_tarea", "crear_video", "editar_video", "borrar_video", "recordar", "mandar_logo", "responder", "preguntar"] },
+          tipo: { type: "STRING", enum: ["crear_reunion", "crear_tarea", "crear_video", "editar_video", "borrar_video", "recordar", "mandar_logo", "guardar_logo", "responder", "preguntar"] },
           titulo: { type: "STRING" },
           fecha: { type: "STRING" },
           hora: { type: "STRING" },
@@ -233,6 +234,89 @@ export async function atenderMencion(caller: Caller, chatId: unknown, mensajeId:
   return { ok: true };
 }
 
+/** Quiénes pueden cargar la marca de un cliente desde el chat (igual que en su ficha). El cliente, solo en su grupo. */
+const CARGAN_MARCA = ["admin", "productor", "diseno"];
+
+/**
+ * "Te mando el logo para que lo tengas": la última foto que mandó quien pide queda en la marca del cliente
+ * (Drive: Cliente/Marca). Si no tiene logo, es el principal; si ya tiene, se suma como otra versión
+ * (o pasa a ser el principal si lo dice, y el anterior queda como versión).
+ */
+async function guardarLogoDesdeChat(
+  caller: Caller,
+  chat: Data,
+  proj: Data | null,
+  proyectos: Proyecto[] | null,
+  pedido: string,
+  version: string,
+  foto: Data | null
+): Promise<Resultado> {
+  const delChat = chat.tipo === "cliente" && typeof chat.proyecto_id === "string" && proj ? ({ id: chat.proyecto_id, ...proj } as Proyecto) : null;
+  const puede = caller.roles.some((r) => CARGAN_MARCA.includes(r)) || (caller.role === "cliente" && !!delChat);
+  if (!puede) return { texto: "El logo lo carga producción o diseño (en la ficha del cliente → Configuración → Marca)." };
+  const candidatos = chat.tipo === "cliente" || !proyectos ? (delChat ? [delChat] : []) : proyectos;
+  const encontrados = pedido ? clientesNombrados(pedido, candidatos) : delChat ? [delChat] : [];
+  if (encontrados.length !== 1) {
+    return {
+      texto: encontrados.length > 1 ? `¿De cuál cliente es el logo: ${lista(encontrados.slice(0, 5).map((x) => x.nombre))}?` : "¿De qué cliente es el logo?",
+    };
+  }
+  const cli = encontrados[0];
+  const a = (foto?.archivo ?? null) as Data | null;
+  if (!a?.drive_file_id) return { texto: `Mandame la imagen del logo de ${cli.nombre} y lo guardo.` };
+  let data: Buffer;
+  try {
+    data = (await descargarDrive(String(a.drive_file_id), 3 * 1024 * 1024)).data;
+  } catch {
+    return { texto: "No pude abrir la imagen (¿pesa más de 3 MB?). Subila en la ficha del cliente → Configuración → Marca." };
+  }
+  // Que de verdad sea una imagen (por la firma del archivo), como al subirla desde la ficha.
+  const esPng = data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  const esJpg = data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff;
+  const esWebp = data.subarray(0, 4).toString() === "RIFF" && data.subarray(8, 12).toString() === "WEBP";
+  if (!(esPng || esJpg || esWebp)) return { texto: "El logo tiene que ser una imagen PNG, JPG o WEBP." };
+  const mime = esPng ? "image/png" : esJpg ? "image/jpeg" : "image/webp";
+  const ext = esPng ? "png" : esJpg ? "jpg" : "webp";
+
+  const db = adminDb();
+  const ref = db.collection("projects").doc(cli.id);
+  const actual = ((await ref.get()).data()?.marca_archivos ?? {}) as { logo?: Data; variantes?: Data[] };
+  const principal = !actual.logo || /principal|nuevo logo|logo nuevo/i.test(version);
+  const etiqueta = principal ? "" : version.replace(/s+/g, " ").trim().slice(0, 60) || "Otra versión";
+  const slugV = normalizar(etiqueta).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+  const up = await uploadBufferToDrive({
+    path: [String(cli.nombre ?? "Cliente"), "Marca"],
+    name: principal ? `logo.${ext}` : `logo-${slugV || Date.now()}.${ext}`,
+    mime,
+    data,
+  });
+  const att = {
+    ...up,
+    ...(principal ? {} : { etiqueta }),
+    size: data.length,
+    uploaded_at: new Date().toISOString(),
+    uploaded_by: caller.uid,
+    folder_path: `Progreso/${cli.nombre ?? "Cliente"}/Marca`,
+  };
+  await db.runTransaction(async (tx) => {
+    const ma = ((await tx.get(ref)).data()?.marca_archivos ?? {}) as { logo?: Data; variantes?: Data[] };
+    const variantes = [...(ma.variantes ?? [])];
+    if (principal) {
+      // El que estaba queda como versión (no se pierde).
+      if (ma.logo) variantes.push({ ...ma.logo, etiqueta: "Logo anterior" });
+      tx.update(ref, { "marca_archivos.logo": att, "marca_archivos.variantes": variantes.slice(-30) });
+    } else {
+      if (variantes.length >= 30) throw new HttpError(409, "Ya hay 30 versiones del logo. Quitá alguna en la ficha.");
+      tx.update(ref, { "marca_archivos.variantes": [...variantes, att] });
+    }
+  });
+  return {
+    texto: principal
+      ? `Listo, guardé el logo de ${cli.nombre}${actual.logo ? " como principal (el anterior quedó como otra versión)" : ""}. Ya lo puedo mandar cuando lo pidan y la IA lo usa en las piezas.`
+      : `Listo, guardé esta versión del logo de ${cli.nombre} (${etiqueta}).`,
+  };
+}
+
 async function interpretarYHacer(
   caller: Caller,
   chat: Data & { miembros: string[] },
@@ -330,6 +414,7 @@ Devolvé las acciones (máximo ${MAX_ACCIONES}; una por cada cosa: si pide 5 vid
 - editar_video: cuando pide corregir o completar un video que ya está cargado (ponerle la idea/guion, cambiarle el nombre). titulo: el nombre ACTUAL del video tal cual está en el sistema; cliente; texto: la idea/guion completo nuevo (si lo cambia); nuevo_titulo: si le cambia el nombre; fecha YYYY-MM-DD: si cambia para cuándo se publica o de qué mes es ("pasalo a noviembre" → el 1 de noviembre; "publicalo el 15" → esa fecha), eso lo mueve al plan de ese mes; vence YYYY-MM-DD: si cambia la fecha de entrega de la edición (para cuándo lo tiene que entregar el editor). Para varios videos, un editar_video por cada uno.
 - borrar_video: cuando pide borrar o sacar un video cargado (ej. "borrá los que no estaban", "sacá ese"). titulo: el nombre actual tal cual; cliente. Solo se pueden borrar los que todavía no tienen material subido.
 - mandar_logo: cuando pide el logo (o los logos) de un cliente para mandarlo al chat. cliente: el nombre del cliente tal cual la lista.
+- guardar_logo: cuando ${yo.nombre} manda una foto que es el logo de un cliente para que lo guardes, lo tengas o lo cargues (también si te lo manda justo después de que dijiste que ese cliente no tiene el logo cargado). cliente: el nombre del cliente tal cual la lista; titulo: "principal" si es el logo principal o lo dice; si es otra versión, cuál (ej. "Blanco", "Horizontal", "Isotipo"); vacío si no se sabe. Solo si hay una foto adjunta: si no, preguntá que te la mande. No digas que no podés guardar logos: sí podés.
 - recordar: solo cuando pide que te acuerdes de algo de un cliente ("acordate que…", "tené en cuenta que…", "guardalo en el contexto de…"). texto: el dato en UNA oración corta (máx. 250 caracteres), en tercera persona sobre el cliente; si son varios datos, un recordar por cada uno. cliente: el nombre del cliente si no es el del grupo.
 - responder: si es una pregunta o un saludo. Contestá con lo que hay en el chat${ctx ? " y en los DATOS DEL SISTEMA (clientes, equipo, videos, tareas, marcas: colores, tipografías, tono)" : ""}. Corto y ordenado: si la respuesta tiene varias partes, separalas en bloques con un título en negrita (**Equipo**, **Videos**…), una línea en blanco entre bloques y los datos como lista con "- " (sublistas con dos espacios y "- "). Nada de párrafos largos. No inventes datos.
 - No podés borrar ni modificar tareas ni clientes: eso se hace a mano en el sistema. Videos sí (editar_video: nombre, idea, guion, fecha de publicación/mes del plan y fecha de entrega; borrar_video), solo admin y productora.
@@ -408,6 +493,11 @@ Español rioplatense con voseo.`;
         });
       }
       out.push({ texto: `Ahí van ${archivos.length === 1 ? "el logo" : `los ${archivos.length} logos`} de ${cli.nombre}.` });
+      continue;
+    }
+
+    if (tipo === "guardar_logo") {
+      out.push(await guardarLogoDesdeChat(caller, chat, proj, ctx?.proyectos ?? null, String(a.cliente ?? "").trim(), String(a.titulo ?? "").trim(), fotos.at(-1) ?? null));
       continue;
     }
 
