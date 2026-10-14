@@ -5,10 +5,11 @@ import { EtapaBadge } from "./EtapaBadge";
 import { ClienteTag } from "./ClienteTag";
 import { useRedes } from "@/contexts/redes-data-context";
 import { diasEnEtapa, estaTrabado } from "@/lib/redes/etapas";
-import { fechaCorta } from "@/lib/redes/format";
+import { fechaCorta, hoyISO } from "@/lib/redes/format";
 import type { Video } from "@/lib/redes/types";
 import { driveThumb } from "./PiezaDialogs";
 import { EntregaChip } from "./EntregaEdicion";
+import { CLASE_ATRASADO, diasAtrasoVideo } from "@/lib/redes/atraso";
 
 export function useOpenVideo() {
   const [params, setParams] = useSearchParams();
@@ -41,6 +42,8 @@ export function VideoCard({
   const rodaje = video.rodaje_id ? rodajes.find((r) => r.id === video.rodaje_id) : undefined;
   const dias = diasEnEtapa(video);
   const trabado = vista === "equipo" && estaTrabado(video, settings.dias_alerta);
+  // Ya pasó su fecha (publicación o entrega de edición): rojo y titilando.
+  const atraso = vista === "equipo" ? diasAtrasoVideo(video) : 0;
   const final = video.attachments_finalizado?.[0];
   const mostrarThumb = vista === "cliente" && !!final && video.etapa !== "planificado";
   const conCambios =
@@ -53,6 +56,7 @@ export function VideoCard({
       className={cn(
         "group w-full rounded-xl border bg-card p-3 text-left transition-all hover:-translate-y-px hover:border-primary/50 hover:shadow-[0_8px_24px_-12px_hsl(var(--primary)/0.45)]",
         trabado && "border-warning/50",
+        atraso > 0 && CLASE_ATRASADO,
         className
       )}
     >
@@ -72,6 +76,11 @@ export function VideoCard({
         {showEtapa && <EtapaBadge etapa={video.etapa} vista={vista} />}
       </div>
       <p className="mt-1.5 line-clamp-2 text-sm font-semibold leading-snug">{video.titulo}</p>
+      {atraso > 0 && (
+        <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+          <AlertTriangle className="h-3 w-3" /> Atrasado {atraso} d
+        </span>
+      )}
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
         {rodaje && video.etapa === "agendado" && (
           <span className="inline-flex items-center gap-1">
@@ -104,7 +113,7 @@ export function VideoCard({
         )}
         {vista === "equipo" && <EntregaChip video={video} className="px-1.5 text-[10px]" />}
         {video.fecha_deseada && video.etapa !== "publicado" && (
-          <span className="inline-flex items-center gap-1 font-medium text-foreground">
+          <span className={cn("inline-flex items-center gap-1 font-medium text-foreground", atraso > 0 && vista === "equipo" && video.fecha_deseada < hoyISO() && "text-red-500")}>
             <CalendarDays className="h-3 w-3" /> para el {fechaCorta(video.fecha_deseada)}
           </span>
         )}

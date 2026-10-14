@@ -4,6 +4,7 @@ import {
   CalendarDays,
   Check,
   CheckSquare,
+  AlertTriangle,
   Download,
   ShieldCheck,
   Flag,
@@ -70,6 +71,7 @@ import { CompositorFoto } from "@/components/redes/CompositorFoto";
 import { NuevaPiezaEquipo } from "@/components/redes/NuevaPiezaEquipo";
 import { CompartirPorChat } from "@/components/redes/CompartirChat";
 import { FiltrosTablero, porFecha, useFiltrosTablero } from "@/components/redes/FiltrosTablero";
+import { CLASE_ATRASADO, diasAtrasoPieza } from "@/lib/redes/atraso";
 
 const TIPOS_CAL: Record<string, TipoCal> = {
   entregar: { label: "Para entregar", icon: Flag, chip: "bg-amber-500/12 text-amber-700 dark:text-amber-300 border-amber-500/30", dot: "bg-amber-500" },
@@ -522,14 +524,18 @@ function PiezaCard({ pieza: p, cliente, onClick, i }: { pieza: PiezaIA; cliente?
   const conCambios = p.estado === "en_proceso" && (p.rondas ?? 0) > 0;
   // Cliente sin diseñadora en su ficha: lo ven todas las de diseño hasta que el admin asigne una.
   const sinAsignar = !!clienteById(p.proyecto_id) && sinDisenadora(clienteById(p.proyecto_id)) && p.estado !== "entregada";
+  // Ya pasó la fecha de publicación y no está entregada: rojo y titilando.
+  const atraso = diasAtrasoPieza(p);
   return (
     <button
       type="button"
       onClick={onClick}
       style={{ animationDelay: `${i * 40}ms` }}
       className={cn(
-        "flex w-full min-w-0 gap-3 rounded-xl border bg-card p-2.5 text-left transition-all animate-in fade-in slide-in-from-bottom-1 fill-mode-both hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-sm motion-reduce:animate-none",
-        conCambios && "border-orange-500/50"
+        "flex w-full min-w-0 gap-3 rounded-xl border bg-card p-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-sm motion-reduce:animate-none",
+        // La entrada animada y el titileo usan la misma animación: la atrasada solo titila.
+        atraso > 0 ? CLASE_ATRASADO : "animate-in fade-in slide-in-from-bottom-1 fill-mode-both",
+        conCambios && !atraso && "border-orange-500/50"
       )}
       title={cliente}
     >
@@ -539,6 +545,11 @@ function PiezaCard({ pieza: p, cliente, onClick, i }: { pieza: PiezaIA; cliente?
       <span className="min-w-0 flex-1 space-y-1">
         <ClienteTag cliente={clienteById(p.proyecto_id)} />
         <span className="block truncate text-sm font-medium">{p.producto || p.pedido}</span>
+        {atraso > 0 && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+            <AlertTriangle className="h-3 w-3" /> Atrasada {atraso} d
+          </span>
+        )}
         <span className="flex flex-wrap items-center gap-1">
           <span className="text-[11px] text-muted-foreground">{info.label}</span>
           <EnfoqueBadge enfoque={p.enfoque} />

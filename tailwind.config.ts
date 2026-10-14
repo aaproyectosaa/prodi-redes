@@ -85,6 +85,11 @@ export default {
           "0%, 100%": { transform: "translateY(0)" },
           "50%": { transform: "translateY(-3px)" },
         },
+        // Tarjeta atrasada: el borde rojo titila.
+        titilar: {
+          "0%, 100%": { borderColor: "rgb(239 68 68 / 0.85)", boxShadow: "0 0 0 0 rgb(239 68 68 / 0)" },
+          "50%": { borderColor: "rgb(239 68 68 / 0.25)", boxShadow: "0 0 0 3px rgb(239 68 68 / 0.35)" },
+        },
         "accordion-down": {
           from: {
             height: "0",
@@ -105,6 +110,7 @@ export default {
       animation: {
         barrido: "barrido 4s ease-in-out infinite",
         flotar: "flotar 3s ease-in-out infinite",
+        titilar: "titilar 1.1s ease-in-out infinite",
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
       },
