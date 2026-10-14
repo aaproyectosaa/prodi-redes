@@ -6,3 +6,4 @@ public/trabajo
 hyperframes/renders
 .venv-tts
 sfx
+motion/*/assets/*.mp4

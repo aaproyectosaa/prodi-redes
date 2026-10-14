@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="es" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root { --violeta: #6f40fc; --lila: #b9a4ff; --celeste: #0ea5e9; --blanco: #f5f4fa; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+      #root { position: relative; width: 100%; height: 100%; font-family: Inter, sans-serif; color: var(--blanco); }
+      .toma { position: absolute; inset: 0; width: 1080px; height: 1920px; object-fit: cover; }
+
+      /* subtítulos estilo comercial: chicos, limpios, dentro de la zona segura */
+      #subs { position: absolute; left: 90px; right: 150px; top: 1360px; height: 140px; display: flex; align-items: center; justify-content: center; text-align: center; }
+      .sub { position: absolute; left: 0; right: 0; font-size: 46px; font-weight: 600; line-height: 1.2; letter-spacing: -0.01em; color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,0.85), 0 0 22px rgba(0,0,0,0.6); opacity: 0; }
+
+      /* bloque de marca */
+      #marca { position: absolute; inset: 0; background: radial-gradient(90% 60% at 50% 42%, #2a1670 0%, #120a35 48%, #050409 88%); }
+      #lista { position: absolute; left: 0; right: 0; top: 520px; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+      .item { font-size: 92px; font-weight: 900; letter-spacing: -0.04em; text-transform: uppercase; color: #fff; text-shadow: 0 0 26px rgba(139,92,246,0.9), 0 0 60px rgba(111,64,252,0.6); opacity: 0; }
+      #todo { position: absolute; left: 0; right: 0; top: 1240px; text-align: center; font-size: 60px; font-weight: 800; color: var(--lila); opacity: 0; }
+      #marca-logo { position: absolute; left: 0; right: 0; top: 760px; display: flex; flex-direction: column; align-items: center; opacity: 0; }
+      #marca-logo img { width: 640px; filter: drop-shadow(0 0 30px rgba(139,92,246,0.8)); }
+      #marca-logo .pill { margin-top: 26px; padding: 12px 38px; border-radius: 999px; background: var(--celeste); color: #04121a; font-size: 42px; font-weight: 900; letter-spacing: 0.22em; }
+      #erp { margin-top: 70px; font-size: 66px; font-weight: 800; letter-spacing: -0.02em; color: #fff; opacity: 0; }
+      #erp em { font-style: normal; color: var(--lila); }
+
+      /* placa final */
+      #placa { position: absolute; inset: 0; background: #050409; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+      #placa img { width: 600px; }
+      #cierre { margin-top: 60px; font-size: 96px; font-weight: 900; letter-spacing: -0.045em; text-align: center; line-height: 1; }
+      #cierre em { font-style: normal; color: var(--lila); }
+      #web { margin-top: 40px; font-size: 40px; font-weight: 700; color: rgba(245,244,250,0.6); }
+      #fundido { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="44" data-width="1080" data-height="1920">
+      <audio id="mezcla" src="assets/mezcla.m4a" data-start="0" data-duration="44" data-track-index="9"></audio>
+
+      <video id="c1" class="toma clip" src="assets/c1.mp4" muted data-start="0" data-duration="8" data-track-index="0"></video>
+      <video id="c2" class="toma clip" src="assets/c2.mp4" muted data-start="8" data-duration="8" data-track-index="0"></video>
+      <video id="c3" class="toma clip" src="assets/c3.mp4" muted data-start="16" data-duration="6.5" data-track-index="0"></video>
+
+      <div id="marca" class="clip" data-start="22.5" data-duration="10.4" data-track-index="0" data-layout-ignore>
+        <div id="lista">
+          <div class="item">Facturación</div><div class="item">Stock</div><div class="item">Cheques</div>
+          <div class="item" style="font-size: 80px">Cuentas corrientes</div><div class="item">Impuestos</div>
+        </div>
+        <div id="todo">Todo en un solo sistema.</div>
+        <div id="marca-logo"><img src="assets/logo-horizontal-blanco.png" /><div class="pill">SOFTWARE</div><div id="erp">Especialistas en <em>ERP</em></div></div>
+      </div>
+
+      <video id="c4" class="toma clip" src="assets/c4.mp4" muted data-start="32.9" data-duration="8" data-track-index="0"></video>
+
+      <div id="placa" class="clip" data-start="40.9" data-duration="3.1" data-track-index="0">
+        <img src="assets/logo-horizontal-blanco.png" />
+        <div id="cierre">Para que<br /><em>te cierre.</em></div>
+        <div id="web">somosprodi.com</div>
+      </div>
+
+      <div id="subs" class="clip" data-start="0" data-duration="44" data-track-index="1" data-layout-ignore></div>
+      <div id="fundido" class="clip" data-start="0" data-duration="44" data-track-index="2" data-layout-ignore></div>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      const $ = (s) => document.querySelector(s);
+      const $$ = (s) => [...document.querySelectorAll(s)];
+
+      // subtítulos [desde, hasta, texto]
+      const SUBS = [
+        [0.06, 2.3, "El cheque de Gómez vence el 15…"],
+        [2.36, 4.2, "El de Peralta…"],
+        [4.25, 5.9, "Lo dejé en el saco gris…"],
+        [6.0, 7.7, "Raúl…"],
+        [8.06, 9.0, "¿Y el IVA?"],
+        [9.0, 10.8, "¿El IVA lo pagamos?"],
+        [11.0, 13.6, "Raúl, son las 3 de la mañana."],
+        [14.0, 15.95, "Es que no me cierra."],
+        [32.92, 34.6, "¿Estás bien?"],
+        [34.8, 36.7, "Me cierra todo."],
+      ];
+      $("#subs").innerHTML = SUBS.map(([, , t]) => `<div class="sub">${t}</div>`).join("");
+      $$(".sub").forEach((el, i) => {
+        const [a, b] = SUBS[i];
+        tl.to(el, { opacity: 1, duration: 0.12 }, a).to(el, { opacity: 0, duration: 0.12 }, b - 0.12);
+      });
+
+      // bloque de marca sincronizado con la voz (empieza en 22.6)
+      const items = $$(".item");
+      [22.71, 23.81, 24.44, 25.15, 26.5].forEach((t, i) => {
+        tl.fromTo(items[i], { opacity: 0, y: 60, scale: 1.25, filter: "blur(10px)" }, { opacity: 1, y: 0, scale: 1, filter: "blur(0px)", duration: 0.3, ease: "expo.out" }, t);
+        if (i > 0) tl.to(items[i - 1], { opacity: 0.35, duration: 0.25 }, t);
+      });
+      tl.to(items[4], { opacity: 0.35, duration: 0.25 }, 27.41)
+        .fromTo("#todo", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.35, ease: "expo.out" }, 27.41)
+        .to("#lista, #todo", { opacity: 0, y: -60, duration: 0.3, ease: "power2.in" }, 28.95)
+        .fromTo("#marca-logo", { opacity: 0, scale: 1.4, filter: "blur(16px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 0.5, ease: "expo.out" }, 29.24)
+        .fromTo("#erp", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.4, ease: "expo.out" }, 30.58)
+        .fromTo("#marca", { scale: 1 }, { scale: 1.05, duration: 10.4, ease: "none" }, 22.5);
+
+      // movimiento de cámara sutil en las tomas (empuje lento, cinematográfico)
+      ["#c1", "#c2", "#c3", "#c4"].forEach((id) => {
+        const el = $(id); const a = +el.dataset.start, d = +el.dataset.duration;
+        tl.fromTo(el, { scale: 1.0 }, { scale: 1.06, duration: d, ease: "none" }, a);
+      });
+
+      // placa
+      tl.fromTo("#placa img", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5, ease: "expo.out" }, 40.95)
+        .fromTo("#cierre", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.45, ease: "expo.out" }, 41.5)
+        .fromTo("#web", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 42.3)
+        .to("#fundido", { opacity: 1, duration: 0.5 }, 43.5);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
