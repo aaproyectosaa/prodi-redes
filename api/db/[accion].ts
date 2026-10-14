@@ -243,7 +243,31 @@ async function usoEquipo(req: VercelRequest) {
       throw e;
     });
   const primero = await pool.query("select min(fecha)::text as f from uso_diario").catch(() => ({ rows: [{ f: null }] }));
-  return { usos: r.rows, desde: primero.rows[0]?.f ?? null };
+  // Para atrás (antes de medir): primera y última acción de cada día que quedó registrada
+  // (historial de videos y piezas, y mensajes de chat). Es la jornada de trabajo aproximada, no el tiempo con la app abierta.
+  const h = await pool.query(
+    `with acc as (
+       select e->>'by' as uid, (e->>'at')::timestamptz as at
+         from documentos d, jsonb_array_elements(case when jsonb_typeof(d.data->'historial') = 'array' then d.data->'historial' else '[]'::jsonb end) e
+        where d.coleccion in ('videos', 'piezas_ia') and d.actualizado > now() - interval '31 days'
+          and e->>'at' >= to_char(now() - interval '30 days', 'YYYY-MM-DD')
+       union all
+       select data->>'by', (data->>'at')::timestamptz
+         from documentos
+        where coleccion like 'chats/%/mensajes' and data->>'at' >= to_char(now() - interval '30 days', 'YYYY-MM-DD')
+          and coalesce(data->>'tipo', 'texto') <> 'sistema'
+     ), dias as (
+       select uid, (at at time zone '${ZONA}')::date as fecha,
+              min(at at time zone '${ZONA}')::time as desde, max(at at time zone '${ZONA}')::time as hasta, count(*) as n
+         from acc where uid is not null group by 1, 2
+     )
+     select uid, count(*)::int as dias,
+            avg(extract(epoch from desde) / 60)::float as entrada,
+            avg(extract(epoch from hasta) / 60)::float as salida,
+            avg(extract(epoch from hasta - desde) / 60)::float as minutos
+       from dias where n >= 3 group by uid`
+  );
+  return { usos: r.rows, desde: primero.rows[0]?.f ?? null, actividad: h.rows };
 }
 
 async function calcularCambios(desde: number | null) {

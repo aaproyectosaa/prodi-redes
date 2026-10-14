@@ -27,13 +27,16 @@ import { callApi } from "@/lib/redes/api";
 
 type Uso = { uid: string; dias: number; entrada: number; salida: number; minutos: number };
 
-/** Promedios de uso de la app (últimos 30 días): hora de entrada, de salida y horas por día. */
+type DatosUso = { usos: Uso[]; desde: string | null; actividad: Uso[] };
+
+/** Promedios de uso de la app (últimos 30 días): hora de entrada, de salida y horas por día.
+ *  Además, la jornada según el historial (primera y última acción de cada día), que ya tiene datos para atrás. */
 function useUsoEquipo() {
-  const [datos, setDatos] = useState<{ usos: Uso[]; desde: string | null } | null>(null);
+  const [datos, setDatos] = useState<DatosUso | null>(null);
   useEffect(() => {
-    callApi<{ usos: Uso[]; desde: string | null }>("/api/db/uso", { solo_vista: true })
-      .then(setDatos)
-      .catch(() => setDatos({ usos: [], desde: null }));
+    callApi<DatosUso>("/api/db/uso", { solo_vista: true })
+      .then((d) => setDatos({ usos: d.usos ?? [], desde: d.desde ?? null, actividad: d.actividad ?? [] }))
+      .catch(() => setDatos({ usos: [], desde: null, actividad: [] }));
   }, []);
   return datos;
 }
@@ -44,19 +47,30 @@ const hora = (min: number) => {
 };
 const horas = (min: number) => (min < 60 ? `${Math.round(min)} min` : `${(min / 60).toFixed(1).replace(".", ",")} h`);
 
-function UsoLinea({ uso, midiendo }: { uso?: Uso; midiendo: boolean }) {
+function UsoLinea({ datos, uid, grande = false }: { datos: DatosUso | null; uid: string; grande?: boolean }) {
+  const uso = datos?.usos.find((u) => u.uid === uid);
+  const act = datos?.actividad.find((u) => u.uid === uid);
+  const fila = (titulo: string, u: Uso, verbo: string) => (
+    <p className="min-w-0">
+      <span className="text-muted-foreground">{titulo}: </span>
+      empieza <b className="tabular-nums">{hora(u.entrada)}</b> · termina <b className="tabular-nums">{hora(u.salida)}</b> · {verbo}{" "}
+      <b className="tabular-nums">{horas(u.minutos)}/día</b>
+      <span className="text-muted-foreground"> ({u.dias} {u.dias === 1 ? "día" : "días"})</span>
+    </p>
+  );
   return (
-    <div className="flex items-center gap-2 rounded-lg border bg-background/40 px-2.5 py-2 text-xs">
-      <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      {uso ? (
-        <p className="min-w-0 flex-1 truncate">
-          Entra <b className="tabular-nums">{hora(uso.entrada)}</b> · sale <b className="tabular-nums">{hora(uso.salida)}</b> · usa{" "}
-          <b className="tabular-nums">{horas(uso.minutos)}/día</b>
-          <span className="text-muted-foreground"> ({uso.dias} {uso.dias === 1 ? "día" : "días"})</span>
-        </p>
-      ) : (
-        <p className="text-muted-foreground">{midiendo ? "Uso de la app: todavía sin días medidos" : "Uso de la app: cargando…"}</p>
-      )}
+    <div className={cn("flex gap-2 rounded-lg border bg-background/40 px-2.5 py-2", grande ? "p-4 text-sm" : "text-xs")}>
+      <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1 space-y-0.5">
+        {!datos ? (
+          <p className="text-muted-foreground">Horarios: cargando…</p>
+        ) : (
+          <>
+            {act ? fila("Jornada", act, "trabaja") : <p className="text-muted-foreground">Jornada: sin acciones suficientes en 30 días</p>}
+            {uso ? fila("App abierta", uso, "la usa") : <p className="text-muted-foreground">App abierta: se mide desde hoy</p>}
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -141,7 +155,7 @@ export default function Reportes() {
     <PageShell title="Reportes" subtitle="Qué hizo cada persona y cómo viene rindiendo." actions={<MesSelect mes={mes} setMes={setMes} />}>
       <Section
         title="Equipo"
-        description={`Uso de la app: promedio de los últimos 30 días, en hora de Argentina${uso?.desde ? ` (se mide desde el ${uso.desde.split("-").reverse().join("/")})` : ""}. Cuenta el tiempo que la tiene abierta y la está usando.`}
+        description={`Horarios: promedio de los últimos 30 días, hora de Argentina. "Jornada" sale de la primera y última acción de cada día (videos, piezas y chats); "App abierta" es el tiempo real usándola${uso?.desde ? ` (se mide desde el ${uso.desde.split("-").reverse().join("/")})` : ""}.`}
       >
         {equipo.length === 0 ? (
           <EmptyState title="No hay personas con rol de equipo" />
@@ -164,7 +178,7 @@ export default function Reportes() {
                   </div>
                   <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
                 </div>
-                <UsoLinea uso={uso?.usos.find((u) => u.uid === r.perfil.id)} midiendo={!!uso} />
+                <UsoLinea datos={uso} uid={r.perfil.id} />
                 <KpiGrid r={r} />
                 <div className="flex items-end justify-between gap-3">
                   <div className="text-xs text-muted-foreground">
@@ -238,6 +252,7 @@ export function ReporteDetalle() {
   const { entrar } = useVerComo();
   const openVideo = useOpenVideo();
   const [mes, setMes] = useState(mesActual());
+  const uso = useUsoEquipo();
   const perfil = profiles.find((p) => p.id === uid);
   if (!perfil) {
     return (
@@ -284,6 +299,11 @@ export function ReporteDetalle() {
       }
     >
       <KpiGrid r={r} grande />
+      {realUser && perfil.role !== "cliente" && (
+        <div className="mt-3">
+          <UsoLinea datos={uso} uid={perfil.id} grande />
+        </div>
+      )}
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[1.3fr_1fr]">
         <div className="space-y-8">
