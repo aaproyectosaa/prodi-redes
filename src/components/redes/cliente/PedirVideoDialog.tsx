@@ -24,6 +24,13 @@ import {
   X,
   Zap,
   MapPin,
+  ArrowRight,
+  MessageCircle,
+  Pencil,
+  Plus,
+  ShoppingBag,
+  Sparkles,
+  Store,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -58,7 +65,12 @@ const TIPOS: { label: string; titulo: string; icon: ElementType; placeholder: st
 
 /** Frases que se suman a la idea con un toque. */
 const EJEMPLOS = ["Que se vea el producto de cerca", "Que hable alguien del equipo", "Con el precio en pantalla", "Música alegre"];
-const OBJETIVOS = ["Que me escriban", "Que vengan al local", "Que me conozcan más", "Vender algo puntual"];
+const OBJETIVOS: { label: string; icon: ElementType }[] = [
+  { label: "Que me escriban", icon: MessageCircle },
+  { label: "Que vengan al local", icon: Store },
+  { label: "Que me conozcan más", icon: Sparkles },
+  { label: "Vender algo puntual", icon: ShoppingBag },
+];
 /** Igual que api/_lib/pedidos.ts (preferenciaRodaje). */
 const PREFERENCIAS = ["Mañanas", "Tardes", "Fines de semana"];
 /** El editado se le muestra al cliente recién cuando le llega para aprobar (igual que en MaterialCliente). */
@@ -360,6 +372,14 @@ export function PedirVideoDialog({
     material: eligiendo ? "Elegí el material" : "¿Con qué material?",
     cuando: "¿Para cuándo?",
   };
+  const bajadas: Record<Paso, string> = {
+    que: "Elegí el tipo de video y seguimos.",
+    idea: "Con un nombre alcanza. Si querés, sumá detalles con un toque.",
+    material: eligiendo ? "Tocá las fotos y videos que querés usar." : "Cómo conseguimos las tomas.",
+    cuando: "Te mostramos si entra en tu plan.",
+  };
+  const etiquetas: Record<Paso, string> = { que: "Tipo", idea: "Idea", material: "Material", cuando: "Fecha" };
+  const avance = listo ? 100 : ((i + 1) / pasos.length) * 100;
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -377,35 +397,48 @@ export function PedirVideoDialog({
           )}
         >
           {/* Encabezado fijo: cerrar, título y progreso. */}
-          <div className="shrink-0 border-b px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-4">
-            <div className="flex items-center gap-3">
-              <DialogPrimitive.Title className="flex flex-1 items-center gap-2 text-base font-semibold">
-                <Clapperboard className="h-5 w-5 text-primary" /> Pedir un video
-              </DialogPrimitive.Title>
+          <div className="shrink-0 px-3 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-4 sm:pt-4">
+            <div className="flex items-center gap-2">
+              {!listo && (i > 0 || eligiendo) ? (
+                <button
+                  type="button"
+                  onClick={volver}
+                  disabled={enviando}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/70 text-foreground transition-colors hover:bg-muted"
+                  aria-label="Atrás"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </button>
+              ) : (
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Clapperboard className="h-5 w-5" />
+                </span>
+              )}
+              <div className="min-w-0 flex-1 text-center">
+                <DialogPrimitive.Title className="text-sm font-semibold">Pedir un video</DialogPrimitive.Title>
+                {!listo && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Paso {i + 1} de {pasos.length} · {etiquetas[paso]}
+                  </p>
+                )}
+              </div>
               <DialogPrimitive.Close
-                className="-mr-1.5 flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/70 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 aria-label="Cerrar"
               >
                 <X className="h-5 w-5" />
               </DialogPrimitive.Close>
             </div>
-            {!listo && (
-              <div className="mt-2.5 flex items-center gap-1.5" aria-label={`Paso ${i + 1} de ${pasos.length}`}>
-                {pasos.map((p, n) => (
-                  <span
-                    key={p}
-                    className={cn("h-1.5 flex-1 rounded-full transition-colors duration-300", n <= i ? "bg-primary" : "bg-muted")}
-                  />
-                ))}
-                <span className="ml-1.5 shrink-0 text-xs tabular-nums text-muted-foreground">
-                  {i + 1}/{pasos.length}
-                </span>
-              </div>
-            )}
+            <div className="mx-1 mt-3 h-1 overflow-hidden rounded-full bg-muted" aria-label={`Paso ${i + 1} de ${pasos.length}`}>
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-primary to-fuchsia-500 transition-[width] duration-500 ease-out"
+                style={{ width: `${avance}%` }}
+              />
+            </div>
           </div>
 
           {/* Cuerpo: lo único que scrollea. */}
-          <div ref={cuerpoRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5">
+          <div ref={cuerpoRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6 pt-4 sm:px-5">
             {listo ? (
               <Listo
                 titulo={titulo}
@@ -429,7 +462,10 @@ export function PedirVideoDialog({
                   atras ? "slide-in-from-left-6" : "slide-in-from-right-6"
                 )}
               >
-                <h2 className="text-2xl font-bold leading-tight tracking-tight">{titulos[paso]}</h2>
+                <div className="space-y-1">
+                  <h2 className="text-[26px] font-bold leading-tight tracking-tight">{titulos[paso]}</h2>
+                  <p className="text-sm text-muted-foreground">{bajadas[paso]}</p>
+                </div>
 
                 {paso === "que" && (
                   <div className="grid grid-cols-2 gap-2.5">
@@ -440,14 +476,14 @@ export function PedirVideoDialog({
                         onClick={() => elegirTipo(t)}
                         className={cn(
                           "flex min-h-[5.5rem] flex-col items-start justify-between gap-2 rounded-2xl border-2 p-3.5 text-left transition-all active:scale-[0.97]",
-                          tipo === t.label ? "border-primary bg-primary/10" : "border-border bg-card hover:border-primary/50",
+                          tipo === t.label ? "border-primary bg-primary/10" : "border-transparent bg-muted/60 hover:bg-muted",
                           t.label === "Otro" && "col-span-2 min-h-0 flex-row items-center justify-start"
                         )}
                       >
                         <span
                           className={cn(
                             "flex h-10 w-10 items-center justify-center rounded-xl",
-                            tipo === t.label ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
+                            tipo === t.label ? "bg-primary text-primary-foreground" : "bg-background text-primary shadow-sm"
                           )}
                         >
                           <t.icon className="h-5 w-5" />
@@ -460,70 +496,101 @@ export function PedirVideoDialog({
 
                 {paso === "idea" && (
                   <>
-                    <div className="space-y-1.5">
-                      <label htmlFor="pv-titulo" className="text-sm font-medium text-muted-foreground">
+                    {/* El nombre: grande, como el título del video. */}
+                    <div className="space-y-2">
+                      <label htmlFor="pv-titulo" className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                         {tipo === "Otro" ? "¿Qué querés mostrar?" : "Nombre del video"}
                       </label>
-                      <Input
-                        id="pv-titulo"
-                        ref={tituloRef}
-                        value={titulo}
-                        onFocus={alFoco}
-                        onChange={(e) => {
-                          setTitulo(e.target.value);
-                          if (aviso) setAviso(null);
-                        }}
-                        maxLength={120}
-                        enterKeyHint="next"
-                        className="h-12 text-base"
-                        placeholder={tipo === "Otro" ? "Ej: Inauguración del local nuevo" : "Ej: Promo del Día del Padre"}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label htmlFor="pv-idea" className="text-sm font-medium text-muted-foreground">
-                        La idea <span className="font-normal">(opcional)</span>
-                      </label>
-                      <Textarea
-                        id="pv-idea"
-                        rows={4}
-                        value={idea}
-                        onFocus={alFoco}
-                        onChange={(e) => setIdea(e.target.value)}
-                        maxLength={2000}
-                        className="text-base"
-                        placeholder={tipoInfo?.placeholder ?? "Qué querés que se vea, qué decir…"}
-                      />
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        {EJEMPLOS.filter((e) => !idea.includes(e)).map((e) => (
-                          <button
-                            key={e}
-                            type="button"
-                            onClick={() => sumarEjemplo(e)}
-                            className="rounded-full border border-dashed px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-                          >
-                            + {e}
-                          </button>
-                        ))}
+                      <div className="group relative">
+                        {tipoInfo && (
+                          <tipoInfo.icon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-primary" />
+                        )}
+                        <Input
+                          id="pv-titulo"
+                          ref={tituloRef}
+                          value={titulo}
+                          onFocus={alFoco}
+                          onChange={(e) => {
+                            setTitulo(e.target.value);
+                            if (aviso) setAviso(null);
+                          }}
+                          maxLength={120}
+                          enterKeyHint="next"
+                          className={cn(
+                            "h-14 rounded-2xl border-transparent bg-muted/60 pr-11 text-[17px] font-semibold shadow-none transition-colors focus-visible:border-primary focus-visible:bg-background focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:ring-offset-0",
+                            tipoInfo ? "pl-12" : "pl-4"
+                          )}
+                          placeholder={tipo === "Otro" ? "Ej: Inauguración del local nuevo" : "Ej: Promo del Día del Padre"}
+                        />
+                        <Pencil className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60 transition-opacity group-focus-within:opacity-0" />
                       </div>
                     </div>
-                    <div className="space-y-1.5">
-                      <p className="text-sm font-medium text-muted-foreground">
-                        ¿Para qué? <span className="font-normal">(opcional)</span>
+
+                    {/* La idea: una tarjeta con las sugerencias adentro. */}
+                    <div className="space-y-2">
+                      <label htmlFor="pv-idea" className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        La idea <span className="font-normal normal-case tracking-normal">· opcional</span>
+                      </label>
+                      <div className="overflow-hidden rounded-2xl border border-transparent bg-muted/60 transition-colors focus-within:border-primary focus-within:bg-background focus-within:ring-4 focus-within:ring-primary/15">
+                        <Textarea
+                          id="pv-idea"
+                          rows={3}
+                          value={idea}
+                          onFocus={alFoco}
+                          onChange={(e) => setIdea(e.target.value)}
+                          maxLength={2000}
+                          className="min-h-[96px] resize-none border-0 bg-transparent px-4 pt-3.5 text-base shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                          placeholder={tipoInfo?.placeholder ?? "Qué querés que se vea, qué decir…"}
+                        />
+                        {EJEMPLOS.some((e) => !idea.includes(e)) && (
+                          <div className="flex gap-1.5 overflow-x-auto px-3 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                            {EJEMPLOS.filter((e) => !idea.includes(e)).map((e) => (
+                              <button
+                                key={e}
+                                type="button"
+                                onClick={() => sumarEjemplo(e)}
+                                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-background px-3 py-1.5 text-xs font-medium text-foreground/80 shadow-sm ring-1 ring-border transition-all hover:text-primary hover:ring-primary/40 active:scale-95"
+                              >
+                                <Plus className="h-3 w-3 text-primary" /> {e}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Para qué: cuatro opciones con ícono. */}
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        ¿Para qué? <span className="font-normal normal-case tracking-normal">· opcional</span>
                       </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {OBJETIVOS.map((o) => (
-                          <button
-                            key={o}
-                            type="button"
-                            onClick={() => setObjetivo(objetivo === o ? "" : o)}
-                            className={cn(
-                              "rounded-full border px-3 py-2 text-sm transition-colors",
-                              objetivo === o ? "border-primary bg-primary text-primary-foreground" : "hover:border-primary/50"
-                            )}
-                          >
-                            {o}
-                          </button>
-                        ))}
+                      <div className="grid grid-cols-2 gap-2">
+                        {OBJETIVOS.map((o) => {
+                          const sel = objetivo === o.label;
+                          return (
+                            <button
+                              key={o.label}
+                              type="button"
+                              onClick={() => setObjetivo(sel ? "" : o.label)}
+                              aria-pressed={sel}
+                              className={cn(
+                                "relative flex items-center gap-2.5 rounded-2xl border-2 p-3 pr-6 text-left text-sm font-medium leading-tight transition-all active:scale-[0.97]",
+                                sel ? "border-primary bg-primary/10" : "border-transparent bg-muted/60 hover:bg-muted"
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors",
+                                  sel ? "bg-primary text-primary-foreground" : "bg-background text-primary"
+                                )}
+                              >
+                                <o.icon className="h-4 w-4" />
+                              </span>
+                              <span className="min-w-0">{o.label}</span>
+                              {sel && <Check className="absolute right-2 top-2 h-3.5 w-3.5 text-primary" />}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   </>
@@ -541,7 +608,7 @@ export function PedirVideoDialog({
                       }[o];
                       const sel = material === o;
                       return (
-                        <div key={o} className={cn("rounded-2xl border-2 transition-colors", sel ? "border-primary bg-primary/[0.07]" : "border-border bg-card")}>
+                        <div key={o} className={cn("rounded-2xl border-2 transition-colors", sel ? "border-primary bg-primary/[0.07]" : "border-transparent bg-muted/60")}>
                           <button
                             type="button"
                             onClick={() => elegirMaterial(o)}
@@ -550,7 +617,7 @@ export function PedirVideoDialog({
                             <span
                               className={cn(
                                 "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl",
-                                sel ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
+                                sel ? "bg-primary text-primary-foreground" : "bg-background text-primary shadow-sm"
                               )}
                             >
                               <info.icon className="h-6 w-6" />
@@ -628,7 +695,7 @@ export function PedirVideoDialog({
                           }}
                           className={cn(
                             "flex items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left transition-colors active:scale-[0.99]",
-                            cuando === o.v ? "border-primary bg-primary/[0.07]" : "border-border bg-card hover:border-primary/50"
+                            cuando === o.v ? "border-primary bg-primary/[0.07]" : "border-transparent bg-muted/60 hover:bg-muted"
                           )}
                         >
                           <o.icon className={cn("h-5 w-5 shrink-0", cuando === o.v ? "text-primary" : "text-muted-foreground")} />
@@ -762,22 +829,17 @@ export function PedirVideoDialog({
           </div>
 
           {/* Barra de botones fija abajo (arriba del teclado y de la barra de inicio del iPhone). */}
-          <div className="shrink-0 border-t bg-background px-4 pt-3 pb-[max(0.75rem,var(--abajo-seguro))] sm:pb-4">
-            {aviso && <p className="mb-2 text-sm font-medium text-destructive animate-in fade-in">{aviso}</p>}
+          <div className="shrink-0 bg-background/95 px-4 pt-3 pb-[max(0.75rem,var(--abajo-seguro))] shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.15)] backdrop-blur sm:px-5 sm:pb-5">
+            {aviso && <p className="mb-2 text-center text-sm font-medium text-destructive animate-in fade-in">{aviso}</p>}
             {listo ? (
-              <Button className="h-12 w-full text-base" variant={filmaCliente ? "outline" : "default"} onClick={() => onOpenChange(false)}>
+              <Button className="h-14 w-full rounded-2xl text-base font-semibold" variant={filmaCliente ? "outline" : "default"} onClick={() => onOpenChange(false)}>
                 {filmaCliente ? "Más tarde" : "Listo"}
               </Button>
             ) : (
-              <div className="flex items-center gap-2">
-                {(i > 0 || eligiendo) && (
-                  <Button variant="ghost" className="h-12 px-4 text-base" onClick={volver} disabled={enviando}>
-                    <ArrowLeft className="mr-1.5 h-4 w-4" /> Atrás
-                  </Button>
-                )}
+              <div className="flex items-center gap-2 [&>button]:h-14 [&>button]:rounded-2xl [&>button]:text-base [&>button]:font-semibold [&>button]:shadow-lg [&>button]:shadow-primary/25">
                 {eligiendo ? (
                   <Button
-                    className="h-12 flex-1 text-base"
+                    className="flex-1"
                     onClick={() => {
                       if (!archivos.length) {
                         setAviso("Elegí al menos un archivo.");
@@ -790,12 +852,12 @@ export function PedirVideoDialog({
                     {archivos.length ? `Usar ${archivos.length} archivo${archivos.length === 1 ? "" : "s"}` : "Elegí archivos"}
                   </Button>
                 ) : paso !== "cuando" ? (
-                  <Button className="h-12 flex-1 text-base" onClick={siguientePaso}>
-                    Siguiente
+                  <Button className="group flex-1" onClick={siguientePaso}>
+                    Siguiente <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-0.5" />
                   </Button>
                 ) : (
                   <Button
-                    className="h-12 flex-1 text-base"
+                    className="flex-1"
                     onClick={() => {
                       const err = validar();
                       if (err) setAviso(err);
@@ -828,7 +890,6 @@ function ElegirMaterial({
 }) {
   return (
     <div className="space-y-5">
-      <p className="-mt-3 text-sm text-muted-foreground">Tocá las fotos y videos que querés usar.</p>
       {grupos.map((g) => (
         <section key={g.id} className="space-y-2">
           <p className="truncate text-sm font-semibold">
