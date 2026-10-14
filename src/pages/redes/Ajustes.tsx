@@ -32,7 +32,7 @@ import { cn } from "@/lib/utils";
 import { DATOS_COBRO_DEFAULT, type DatosCobro, type PlanRedes } from "@/lib/redes/types";
 import { comisionPct, montoDebito } from "@/lib/redes/facturacion";
 import { ENFOQUE_PRODI_DEFAULT } from "../../../api/_lib/plan-mes";
-import { LOCALIDADES, SIN_CARGO_KM, ZONA_TEXTO, zonaDe } from "../../../api/_lib/viaticos";
+import { ViaticosAjustes } from "@/components/redes/ViaticosAjustes";
 
 export default function Ajustes() {
   const { planes, settings } = useRedes();
@@ -50,16 +50,12 @@ export default function Ajustes() {
   const [comisionMp, setComisionMp] = useState(String(settings.comision_mp_pct ?? 0));
   const [cobro, setCobro] = useState<DatosCobro>({ ...DATOS_COBRO_DEFAULT, ...(settings.cobro ?? {}) });
   const [saving, setSaving] = useState<string | null>(null);
-  const [viatico80, setViatico80] = useState(String(settings.viaticos?.hasta_80 || ""));
-  const [viatico100, setViatico100] = useState(String(settings.viaticos?.hasta_100 || ""));
 
   useEffect(() => {
     setPrecioPieza(String(settings.precio_pieza_ia));
     setPrecioImpresion(String(settings.precio_pieza_impresion ?? 0));
     setFormatos(formatosDe(settings));
     setDias(String(settings.dias_alerta));
-    setViatico80(String(settings.viaticos?.hasta_80 || ""));
-    setViatico100(String(settings.viaticos?.hasta_100 || ""));
     setAuto(settings.informe_automatico);
     setEnfoque(settings.ia_enfoque ?? ENFOQUE_PRODI_DEFAULT);
     setDiaVto(String(settings.dia_vencimiento ?? 5));
@@ -184,49 +180,21 @@ export default function Ajustes() {
 
           <Section
             title="Viáticos de filmación"
-            description="Cuando el cliente pide una filmación fuera de Reconquista se suma el viaje, por zona y una vez por jornada (si ya pagó el viaje a ese lugar para un video que todavía no se filmó, no se cobra de nuevo). En un video extra va en el mismo pago; en uno del plan se paga aparte con Mercado Pago."
+            description="Cuando el cliente pide una filmación fuera de Reconquista se suma el viaje, una vez por jornada (si ya pagó el viaje a ese lugar para un video que todavía no se filmó, no se cobra de nuevo). En un video extra va en el mismo pago; en uno del plan se paga aparte con Mercado Pago."
           >
-            <div className="space-y-3 rounded-xl border bg-card p-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Hasta 80 km</Label>
-                  <Input inputMode="numeric" placeholder="$" value={viatico80} onChange={(e) => setViatico80(e.target.value.replace(/\D/g, ""))} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Hasta 100 km</Label>
-                  <Input inputMode="numeric" placeholder="$" value={viatico100} onChange={(e) => setViatico100(e.target.value.replace(/\D/g, ""))} />
-                </div>
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                Reconquista, Avellaneda y Puerto Reconquista (hasta {SIN_CARGO_KM} km): sin cargo. Más de 100 km, cruzando el río (Corrientes) o
-                una localidad que no está en la lista: se coordina por chat. Si dejás una zona vacía, esa zona también se coordina por chat.
-              </p>
-              <details className="rounded-lg border bg-muted/30 px-3 py-2 text-xs">
-                <summary className="cursor-pointer font-medium">Ver las {LOCALIDADES.length} localidades y su zona</summary>
-                <div className="mt-2 grid gap-x-4 gap-y-0.5 sm:grid-cols-2">
-                  {LOCALIDADES.map((l) => (
-                    <p key={`${l.p}-${l.n}`} className="flex justify-between gap-2">
-                      <span className="truncate">
-                        {l.n}
-                        {l.p !== "Santa Fe" ? ` (${l.p})` : ""}
-                      </span>
-                      <span className="shrink-0 tabular-nums text-muted-foreground">
-                        {l.km} km · {ZONA_TEXTO[zonaDe(l)]}
-                      </span>
-                    </p>
-                  ))}
-                </div>
-                <p className="mt-2 text-[10px] text-muted-foreground">Distancia en línea recta desde Reconquista (datos oficiales de Georef).</p>
-              </details>
-              <Button
-                className="w-full"
-                onClick={() => void guardar("viaticos", { viaticos: { hasta_80: Number(viatico80) || null, hasta_100: Number(viatico100) || null } })}
-                disabled={saving === "viaticos"}
-              >
-                {saving === "viaticos" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Guardar
-              </Button>
-            </div>
+            <ViaticosAjustes
+              actual={settings.viaticos}
+              onGuardar={async (v) => {
+                try {
+                  assertEditable();
+                  // Se reemplaza entero (si se borra el precio de una localidad, que no quede el viejo).
+                  await updateDoc(doc(db, "app_settings", "redes"), { viaticos: v });
+                  toast.success("Viáticos guardados");
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "No se pudo guardar");
+                }
+              }}
+            />
           </Section>
 
           <Section

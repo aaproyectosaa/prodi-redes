@@ -54,10 +54,9 @@ export function ElegirLocalidad({
   const elegida = LOCALIDADES.find((l) => l.n === valor) ?? null;
   const v = viaticoDe(montos, valor);
 
-  const precio = (z: ZonaViatico) => {
-    if (z === "sin_cargo") return "Sin cargo";
-    const m = z === "hasta_80" ? montos?.hasta_80 : z === "hasta_100" ? montos?.hasta_100 : null;
-    return m && m > 0 ? formatARS(m) : "A coordinar";
+  const precio = (n: string) => {
+    const x = viaticoDe(montos, n);
+    return x.estado === "sin_cargo" ? "Sin cargo" : x.monto ? formatARS(x.monto) : "A coordinar";
   };
   const textoZona = (l: LocalidadViatico) =>
     l.p !== "Santa Fe" ? "Cruzando el río" : { sin_cargo: "Sin viaje", hasta_80: "Hasta 80 km", hasta_100: "Hasta 100 km", cotizar: "Más lejos" }[zonaDe(l)];
@@ -140,7 +139,7 @@ export function ElegirLocalidad({
                     {l.km} km · {textoZona(l)}
                   </span>
                 </span>
-                <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold", COLOR[z].pill)}>{precio(z)}</span>
+                <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold", COLOR[z].pill)}>{precio(l.n)}</span>
                 {sel && <Check className="h-4 w-4 shrink-0 text-primary" />}
               </button>
             );

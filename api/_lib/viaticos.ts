@@ -2,7 +2,8 @@
 // Lo usan el servidor (cobra) y las pantallas (muestran el total antes de pagar): la cuenta es la misma.
 //
 // - Reconquista y alrededores (hasta 15 km: Avellaneda, Puerto Reconquista): sin cargo.
-// - Hasta 80 km y hasta 100 km: el monto de cada zona sale de Ajustes (app_settings/redes.viaticos).
+// - Hasta 100 km (Santa Fe): cada localidad tiene su precio = salida + $ por km (redondeado a $500), o el que se le
+//   ponga a mano en Ajustes (app_settings/redes.viaticos). Sin nada cargado, se usa el sugerido.
 // - Más lejos, del otro lado del río (Corrientes) o una localidad que no está en la lista: se coordina aparte.
 // Se cobra por jornada: si ya está pago el viaje a esa localidad para un video que todavía no se filmó, no se vuelve a cobrar.
 
@@ -22,10 +23,24 @@ export const ZONA_TEXTO: Record<ZonaViatico, string> = {
   cotizar: "Más lejos o cruzando el río",
 };
 
-/** Montos por zona (Ajustes). 0 o vacío = todavía no se puso: se coordina aparte. */
+/** Cómo se cobra el viaje (Ajustes → Viáticos). */
 export interface MontosViatico {
-  hasta_80?: number | null;
-  hasta_100?: number | null;
+  /** Lo fijo por salir a filmar fuera de Reconquista. */
+  salida?: number | null;
+  /** Lo que se suma por cada km de distancia (cubre ida y vuelta y el tiempo del equipo). */
+  por_km?: number | null;
+  /** Precio puesto a mano para una localidad (pisa la cuenta). */
+  por_localidad?: Record<string, number> | null;
+}
+
+/** Sugerido de arranque (Prodi, oct. 2026): salida $10.000 + $600 por km. Se cambia en Ajustes. */
+export const VIATICO_SUGERIDO = { salida: 10_000, por_km: 600 };
+
+/** Precio por distancia: salida + $ por km, redondeado a $500. */
+export function precioPorDistancia(montos: MontosViatico | null | undefined, km: number): number {
+  const salida = Number(montos?.salida ?? VIATICO_SUGERIDO.salida) || 0;
+  const porKm = Number(montos?.por_km ?? VIATICO_SUGERIDO.por_km) || 0;
+  return Math.max(0, Math.round((salida + porKm * km) / 500) * 500);
 }
 
 /** Cómo queda el viático de un video. */
@@ -86,8 +101,12 @@ export function viaticoDe(montos: MontosViatico | null | undefined, localidad: s
   const l = buscarLocalidad(nombre);
   const zona = zonaDe(l);
   const base = { localidad: l?.n ?? nombre, km: l?.km ?? null, zona };
+  if (!l || l.n === LOCALIDAD_BASE) return l ? { ...base, monto: 0, estado: "sin_cargo" } : { ...base, monto: null, estado: "cotizar" };
+  // Precio puesto a mano para esa localidad: manda (también en los alrededores o cruzando el río).
+  const propio = Number(montos?.por_localidad?.[l.n]);
+  if (propio > 0) return { ...base, monto: Math.round(propio), estado: "pendiente" };
   if (zona === "sin_cargo") return { ...base, monto: 0, estado: "sin_cargo" };
-  const monto = zona === "hasta_80" ? Number(montos?.hasta_80) : zona === "hasta_100" ? Number(montos?.hasta_100) : NaN;
-  if (!(monto > 0)) return { ...base, monto: null, estado: "cotizar" };
-  return { ...base, monto: Math.round(monto), estado: "pendiente" };
+  if (zona === "cotizar") return { ...base, monto: null, estado: "cotizar" };
+  const monto = precioPorDistancia(montos, l.km);
+  return monto > 0 ? { ...base, monto, estado: "pendiente" } : { ...base, monto: null, estado: "cotizar" };
 }
