@@ -8,7 +8,7 @@ import { getPool } from "./db";
 import { trabajaEn, type Caller } from "./http";
 
 const TTL_SEG = 60 * 60;
-/** Ven los archivos de todos los clientes (igual que assertProjectAccess). Diseño: los de sus clientes y los sin diseñadora. */
+/** Ven los archivos de todos los clientes (igual que assertProjectAccess). El resto del equipo, los de sus clientes. */
 const GLOBALES = ["admin", "administracion"];
 const ASIGNABLES = ["productor", "editor", "pauta", "diseno", "cliente"];
 
@@ -106,7 +106,7 @@ export async function puedeVerArchivo(caller: Caller, fileId: string): Promise<b
     [[...proyectos]]
   );
   return (p.rows as { team: unknown }[]).some(({ team }) => {
-    // El equipo, en cualquier rol del proyecto (y diseño, también sin diseñadora asignada): como assertProjectAccess.
+    // El equipo, en cualquier rol del proyecto: como assertProjectAccess.
     if (caller.role !== "cliente") return trabajaEn(caller.roles, caller.uid, team);
     if (!team || typeof team !== "object" || Array.isArray(team)) return false;
     // El cliente, solo como cliente.

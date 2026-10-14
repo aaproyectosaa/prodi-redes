@@ -8,7 +8,7 @@ import type { Project, UserRole } from "@/integrations/firebase/types";
  *                hace la revisión interna antes del cliente.
  * - editor     → edita los videos.
  * - pauta      → sube los videos aprobados a las redes y maneja la pauta.
- * - diseno     → diseño gráfico: arma las piezas de sus clientes (los asignados en la ficha y los sin diseñadora).
+ * - diseno     → diseño gráfico: arma las piezas de sus clientes (los asignados en la ficha).
  * - administracion → facturación, cobros, pagos al equipo y gastos.
  * - cliente    → aprueba videos, ve resultados y pide piezas con IA.
  */
@@ -145,22 +145,20 @@ export const defaultRouteForRole = (role: UserRole | undefined): string => {
   }
 };
 
-/** El cliente todavía no tiene diseñadora asignada en su ficha: lo ven todas las de diseño (igual que api/_lib/http.ts). */
+/** El cliente todavía no tiene diseñadora asignada en su ficha: sus piezas quedan para el admin (igual que api/_lib/http.ts). */
 export const sinDisenadora = (p: Pick<Project, "team_roles"> | undefined | null): boolean => !p?.team_roles?.diseno?.length;
 
 /**
- * ¿Trabaja en este cliente? En cualquier rol de su equipo; diseño, también en los clientes sin diseñadora
- * (igual que trabajaEn en api/_lib/http.ts y las reglas del servidor).
+ * ¿Trabaja en este cliente? En cualquier rol de su equipo (igual que trabajaEn en api/_lib/http.ts y las reglas del
+ * servidor). Los clientes sin diseñadora asignada quedan para el admin.
  */
 export function trabajaEnCliente(
-  role: UserRole | string | undefined | null | (UserRole | string)[],
+  _role: UserRole | string | undefined | null | (UserRole | string)[],
   uid: string | undefined | null,
   p: Pick<Project, "team_roles">
 ): boolean {
   if (!uid) return false;
-  if (Object.values(p.team_roles ?? {}).some((ids) => Array.isArray(ids) && ids.includes(uid))) return true;
-  const roles = Array.isArray(role) ? role : [role];
-  return roles.includes("diseno") && sinDisenadora(p);
+  return Object.values(p.team_roles ?? {}).some((ids) => Array.isArray(ids) && ids.includes(uid));
 }
 
 /** Roles que se le pueden sumar a una persona del equipo además del principal (igual que en el servidor). */

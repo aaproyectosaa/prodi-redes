@@ -60,7 +60,7 @@ export interface Persona {
 /**
  * Con quién puede hablar (privado o en grupo), igual que lo que valida el servidor:
  * - cliente: la gente con la que ya comparte un chat;
- * - equipo: todo el equipo y los usuarios de los clientes donde trabaja (super admin: todos; diseño: también los sin diseñadora).
+ * - equipo: todo el equipo y los usuarios de los clientes donde trabaja (super admin: todos).
  */
 export function useContactos(): Persona[] {
   const { chats } = useRedes();

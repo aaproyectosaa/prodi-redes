@@ -124,13 +124,14 @@ export async function destinatariosDe(proyectoId: string, roles: string[], inclu
 
 /**
  * Diseñadoras de un cliente (activas): las asignadas en su ficha (team_roles.diseno).
- * Si el cliente todavía no tiene ninguna asignada, todas las de diseño (como antes).
+ * Si el cliente todavía no tiene ninguna asignada, el aviso le llega al admin (para que asigne a alguien): las
+ * diseñadoras ven solo sus clientes.
  */
 export async function disenadorasDe(proyectoId: string | null | undefined): Promise<string[]> {
-  const todas = await usuariosConRol(["diseno"]);
-  if (!proyectoId) return todas;
+  if (!proyectoId) return usuariosConRol(["admin"]);
   const team = (await adminDb().collection("projects").doc(proyectoId).get()).data()?.team_roles;
-  if (sinDisenadora(team)) return todas;
+  if (sinDisenadora(team)) return usuariosConRol(["admin"]);
+  const todas = await usuariosConRol(["diseno"]);
   const asignadas = (team as Record<string, unknown>).diseno as unknown[];
   return todas.filter((id) => asignadas.includes(id));
 }

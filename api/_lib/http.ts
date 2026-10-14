@@ -60,21 +60,19 @@ export async function requireCaller(req: VercelRequest, roles?: Rol[]): Promise<
   return { ...user, role, roles: todos, nombre: (propio("nombre") as string) ?? "" };
 }
 
-/** El cliente todavía no tiene diseñadora asignada (team_roles.diseno vacío): lo ven todas las de diseño. */
+/** El cliente todavía no tiene diseñadora asignada (team_roles.diseno vacío): sus piezas quedan para el admin. */
 export const sinDisenadora = (team: unknown): boolean => {
   const d = team && typeof team === "object" && !Array.isArray(team) ? (team as Record<string, unknown>).diseno : undefined;
   return !Array.isArray(d) || d.length === 0;
 };
 
 /**
- * ¿Trabaja en este cliente? Equipo: en cualquier rol de team_roles. Diseño: además, los clientes
- * sin diseñadora asignada (transición: así no se pierde ningún pedido hasta que el admin las asigne).
+ * ¿Trabaja en este cliente? En cualquier rol de su team_roles. (Antes diseño veía además los clientes sin diseñadora
+ * asignada; ahora cada diseñadora ve solo los suyos y los sin asignar quedan para el admin.)
  */
-export function trabajaEn(role: Rol | Rol[], uid: string, team: unknown): boolean {
-  const lista = Array.isArray(role) ? role : [role];
+export function trabajaEn(_role: Rol | Rol[], uid: string, team: unknown): boolean {
   const t = team && typeof team === "object" && !Array.isArray(team) ? (team as Record<string, unknown>) : {};
-  if (Object.values(t).some((ids) => Array.isArray(ids) && ids.includes(uid))) return true;
-  return lista.includes("diseno") && sinDisenadora(t);
+  return Object.values(t).some((ids) => Array.isArray(ids) && ids.includes(uid));
 }
 
 /** ¿El usuario está asignado a ese cliente (o es admin)? */

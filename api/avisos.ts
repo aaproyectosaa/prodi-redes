@@ -150,7 +150,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const p = await adminDb().collection("projects").doc(b.proyectoId).get();
       const team = (p.data()?.team_roles ?? {}) as Record<string, string[]>;
       const miembros = new Set(Object.values(team).flat());
-      // Diseño: también los clientes sin diseñadora asignada.
       if (!trabajaEn(caller.roles, caller.uid, team) && !caller.roles.includes("administracion")) throw new HttpError(403, "Sin acceso a este cliente");
       const globales = await adminDb().collection("profiles").where("role", "in", ["admin", "administracion"]).get();
       globales.docs.forEach((d) => miembros.add(d.id));

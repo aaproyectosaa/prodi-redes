@@ -16,7 +16,7 @@ export interface Contexto {
   roles: string[];
   /** Clientes donde el usuario es "cliente" (se calcula una vez por pedido). */
   misClientes: Set<string>;
-  /** Clientes asignados a productor / editor / pauta / diseño (en cualquier rol de team_roles; diseño, también los sin diseñadora). */
+  /** Clientes asignados a productor / editor / pauta / diseño (en cualquier rol de team_roles). */
   misProyectos: Set<string>;
   /** Chats leídos en este pedido (para saber si es miembro). */
   chats: Map<string, Data | null>;
@@ -40,9 +40,9 @@ const esTeam = (c: Contexto) => c.roles.some((r) => TEAM.includes(r));
 const esDiseno = (c: Contexto) => tiene(c, "diseno");
 const esFinanzas = (c: Contexto) => tiene(c, "admin") || tiene(c, "administracion");
 
-/** Roles del equipo que solo ven los clientes donde están asignados (como assertProjectAccess). Diseño ve además los clientes sin diseñadora asignada. */
+/** Roles del equipo que solo ven los clientes donde están asignados (como assertProjectAccess). */
 const ASIGNADOS = ["productor", "editor", "pauta", "diseno"];
-/** ¿Trabaja en este cliente? Admin ve todos; el resto, solo si está en team_roles (diseño: también los sin diseñadora). */
+/** ¿Trabaja en este cliente? Admin ve todos; el resto, solo si está en team_roles. */
 const equipoDe = (c: Contexto, pid: unknown) =>
   esAdmin(c) || (c.roles.some((r) => ASIGNADOS.includes(r)) && typeof pid === "string" && c.misProyectos.has(pid));
 /** Admin, o productor asignado a ese cliente. */
@@ -551,20 +551,17 @@ export async function contexto(ex: Pick<PoolClient, "query">, uid: string, role:
     r.rows.forEach((x: { id: string }) => misClientes.add(x.id));
   }
   if (roles.some((r) => ASIGNADOS.includes(r))) {
-    // En cualquier rol del cliente (igual que assertProjectAccess / trabajaEn). Diseño: también los clientes
-    // sin diseñadora asignada (team_roles.diseno vacío), así no se pierde nada hasta que el admin las asigne.
+    // En cualquier rol del cliente (igual que assertProjectAccess / trabajaEn). Los clientes sin diseñadora asignada
+    // ya no los ve todo diseño: quedan para el admin.
     const r = await ex.query(
       `select d.id from documentos d
         where d.coleccion = 'projects'
-          and (
-            exists (
-              select 1
-                from jsonb_each(case when jsonb_typeof(d.data->'team_roles') = 'object' then d.data->'team_roles' else '{}'::jsonb end) t
-               where jsonb_typeof(t.value) = 'array' and t.value @> jsonb_build_array($1::text)
-            )
-            or ($2::boolean and coalesce(jsonb_array_length(case when jsonb_typeof(d.data->'team_roles'->'diseno') = 'array' then d.data->'team_roles'->'diseno' end), 0) = 0)
+          and exists (
+            select 1
+              from jsonb_each(case when jsonb_typeof(d.data->'team_roles') = 'object' then d.data->'team_roles' else '{}'::jsonb end) t
+             where jsonb_typeof(t.value) = 'array' and t.value @> jsonb_build_array($1::text)
           )`,
-      [uid, roles.includes("diseno")]
+      [uid]
     );
     r.rows.forEach((x: { id: string }) => misProyectos.add(x.id));
   }
