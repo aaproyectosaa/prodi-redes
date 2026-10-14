@@ -52,6 +52,7 @@ import {
   borrarVersiones,
   mandarAlCliente,
   mandarARevision,
+  deshacerAprobacionPieza,
   pasaPorRevision,
   pedirCambiosInternoPieza,
   moverPieza,
@@ -569,6 +570,7 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
   // "Elegir varias": se mandan juntas al cliente (en el orden en que se tocaron).
   const [varias, setVarias] = useState<string[] | null>(null);
   const [volviendo, setVolviendo] = useState(false);
+  const [deshaciendo, setDeshaciendo] = useState(false);
   const [borrando, setBorrando] = useState(false);
   // "Mandar por chat": a una persona, un grupo o el chat del cliente.
   const [compartir, setCompartir] = useState(false);
@@ -698,6 +700,18 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
       toast.error(err instanceof Error ? err.message : "No se pudo mandar");
     } finally {
       setAprobando(false);
+    }
+  };
+  const deshacerAprobacion = async () => {
+    if (!window.confirm("¿Deshacer la aprobación? Vuelve a revisión interna y el cliente deja de verla para aprobar.")) return;
+    setDeshaciendo(true);
+    try {
+      await deshacerAprobacionPieza(pieza, user?.uid ?? "");
+      toast.success("Volvió a revisión interna: el cliente ya no la ve");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo");
+    } finally {
+      setDeshaciendo(false);
     }
   };
   const volverADisenando = async () => {
@@ -1251,6 +1265,12 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                         onClick={() => setVarias([...(pieza.versiones_enviadas ?? (pieza.version_enviada_id ? [pieza.version_enviada_id] : []))])}
                       >
                         <CheckSquare className="mr-1.5 h-3.5 w-3.5" /> Elegir varias para mandar
+                      </Button>
+                    )}
+                    {revisa && pasaPorRevision(cliente) && !Object.keys(pieza.respuestas_cliente ?? {}).length && (
+                      <Button size="sm" variant="outline" className="h-8 bg-background/60 text-xs" disabled={deshaciendo} onClick={() => void deshacerAprobacion()}>
+                        {deshaciendo ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Undo2 className="mr-1.5 h-3.5 w-3.5" />}
+                        Deshacer aprobación
                       </Button>
                     )}
                     <Button size="sm" variant="ghost" className="h-8 text-xs" disabled={volviendo} onClick={() => void volverADisenando()}>

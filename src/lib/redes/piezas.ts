@@ -289,6 +289,22 @@ export async function pedirCambiosInternoPieza(pieza: PiezaIA, project: Project 
   });
 }
 
+/** Producción se equivocó al aprobar: vuelve a revisión interna y el cliente deja de verla para aprobar (como en los videos). */
+export async function deshacerAprobacionPieza(pieza: PiezaIA, by: string) {
+  assertEditable();
+  if (pieza.estado !== "para_aprobar" || Object.keys(pieza.respuestas_cliente ?? {}).length > 0)
+    throw new Error("El cliente ya respondió: no se puede deshacer.");
+  await updateDoc(doc(db, PIEZAS, pieza.id), {
+    estado: "revision_interna",
+    respuestas_cliente: null,
+    revision_desde: now(),
+    recordatorios_interno: 0,
+    recordatorio_interno_at: null,
+    updated_at: now(),
+    historial: arrayUnion(evento(by, "Producción deshizo la aprobación (el cliente ya no la ve)")),
+  });
+}
+
 /** Producción (o el admin) le manda una versión (o varias juntas) al cliente para que las apruebe. */
 export async function mandarAlCliente(pieza: PiezaIA, versionId: string | string[], project: Project | undefined, by: string) {
   assertEditable();

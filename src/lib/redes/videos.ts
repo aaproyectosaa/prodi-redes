@@ -383,6 +383,16 @@ export async function aprobarInterno(video: Video, project: Project | undefined,
   });
 }
 
+/** Producción se equivocó al aprobar: vuelve a revisión interna y el cliente deja de verlo para aprobar. */
+export async function deshacerAprobacionInterna(video: Video, by: string) {
+  if (video.etapa !== "revision_cliente") throw new Error("El cliente ya respondió: no se puede deshacer.");
+  await moverA(video, "revision_interna", by, "Producción deshizo la aprobación (el cliente ya no lo ve)", {
+    // Vuelve a contar de cero los avisos de revisión interna.
+    recordatorios_interno: 0,
+    recordatorio_interno_at: null,
+  });
+}
+
 export async function pedirCambiosInterno(
   video: Video,
   project: Project | undefined,

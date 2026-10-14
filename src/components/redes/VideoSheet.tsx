@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
+  Undo2,
   AlertTriangle,
   BellRing,
   CalendarDays,
@@ -60,6 +61,7 @@ import {
   actualizarVideo,
   aprobarCliente,
   aprobarInterno,
+  deshacerAprobacionInterna,
   eliminarVideo,
   entregarEdicion,
   cambiarEntrega,
@@ -534,6 +536,20 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
               Aprobar y mandar al cliente
             </Button>
           </>
+        )}
+
+        {isProd && video.etapa === "revision_cliente" && (
+          <Button
+            variant="outline"
+            disabled={busy === "deshacer"}
+            onClick={() => {
+              if (!window.confirm("¿Deshacer la aprobación? Vuelve a revisión interna y el cliente deja de verlo para aprobar.")) return;
+              void run("deshacer", () => deshacerAprobacionInterna(video, uid), "Volvió a revisión interna: el cliente ya no lo ve");
+            }}
+          >
+            {busy === "deshacer" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Undo2 className="mr-2 h-4 w-4" />}
+            Deshacer aprobación
+          </Button>
         )}
 
         {isProd && video.etapa === "revision_cliente" && (
