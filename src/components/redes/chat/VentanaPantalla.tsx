@@ -16,6 +16,7 @@ export function VentanaPantalla({
   posicion,
   acciones,
   borde,
+  autoAparte = false,
 }: {
   stream: MediaStream;
   titulo: ReactNode;
@@ -28,6 +29,8 @@ export function VentanaPantalla({
   acciones?: ReactNode;
   /** Borde de color (la mía va en rojo, como "al aire"). */
   borde?: string;
+  /** Al irte a otra pestaña, se abre sola en una ventana aparte (como YouTube). */
+  autoAparte?: boolean;
 }) {
   const video = useRef<HTMLVideoElement>(null);
   const [ancho, setAncho] = useState(() => Math.min(anchoInicial, window.innerWidth - 24));
@@ -39,6 +42,35 @@ export function VentanaPantalla({
   const [oculta, setOculta] = useState(false);
   const [pip, setPip] = useState(false);
   const puedePip = typeof document !== "undefined" && "pictureInPictureEnabled" in document && document.pictureInPictureEnabled;
+
+  // Imagen en imagen automática: Chrome la abre solo al cambiar de pestaña en una llamada con micrófono
+  // (acción "enterpictureinpicture" de Media Session). En otros navegadores queda el botón.
+  useEffect(() => {
+    if (!autoAparte || !puedePip || !("mediaSession" in navigator)) return;
+    const ms = navigator.mediaSession as MediaSession & { setActionHandler(a: string, h: (() => void) | null): void };
+    try {
+      ms.setActionHandler("enterpictureinpicture", () => {
+        const v = video.current;
+        if (!v || document.pictureInPictureElement === v) return;
+        void v
+          .requestPictureInPicture()
+          .then(() => {
+            setPip(true);
+            v.addEventListener("leavepictureinpicture", () => setPip(false), { once: true });
+          })
+          .catch(() => undefined);
+      });
+    } catch {
+      return;
+    }
+    return () => {
+      try {
+        ms.setActionHandler("enterpictureinpicture", null);
+      } catch {
+        /* nada */
+      }
+    };
+  }, [autoAparte, puedePip]);
 
   useEffect(() => {
     const v = video.current;

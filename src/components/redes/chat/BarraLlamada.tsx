@@ -37,6 +37,7 @@ export function BarraLlamada() {
         chip="Compartiendo tu pantalla"
         anchoInicial={320}
         posicion="centro"
+        autoAparte={ll.pantallas.length === 0}
         borde="border-red-500/80"
         acciones={
           <button type="button" onClick={() => dejarDeCompartir()} className="rounded-full bg-red-600 px-2.5 py-1 text-[11px] font-semibold hover:bg-red-500">
@@ -163,6 +164,7 @@ function PantallaCompartida({ pantallas }: { pantallas: { uid: string; nombre: s
       chip={`Ver la pantalla de ${nombre}`}
       anchoInicial={640}
       posicion="derecha"
+      autoAparte
       acciones={
         pantallas.length > 1 &&
         pantallas.map((x) => (
