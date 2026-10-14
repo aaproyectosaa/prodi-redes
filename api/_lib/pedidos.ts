@@ -3,6 +3,7 @@
 
 import { HttpError } from "./auth";
 import { adminDb, type Data } from "./db";
+import type { ViaticoVideo } from "./viaticos";
 
 /** De dónde sale el material del video que pide el cliente. */
 export type TipoMaterial = "existente" | "nueva" | "cliente";
@@ -39,6 +40,8 @@ export interface PedidoVideo {
   filma_cliente?: boolean;
   /** Con qué material se hace: ya cargado (va directo a edición), filmación nueva o lo manda el cliente. */
   material_base?: MaterialBase | null;
+  /** Filmación nueva: dónde se filma y el viático (ver viaticos.ts). */
+  viatico?: ViaticoVideo | null;
 }
 
 export type QuienFilma = "prodi" | "cliente" | "ambos";
@@ -122,8 +125,15 @@ export function textoMaterial(p: PedidoVideo): string {
   const m = p.material_base;
   if (m?.tipo === "existente") return ` · con material ya cargado (${m.archivos?.length ?? 0} archivo${m.archivos?.length === 1 ? "" : "s"})`;
   if (p.filma_cliente) return " · lo filma el cliente y nos manda el material";
-  if (m?.tipo === "nueva") return ` · filmación nueva${m.preferencia ? ` (prefiere ${m.preferencia.toLowerCase()})` : ""}`;
+  if (m?.tipo === "nueva") return ` · filmación nueva${m.preferencia ? ` (prefiere ${m.preferencia.toLowerCase()})` : ""}${textoViatico(p.viatico)}`;
   return "";
+}
+
+/** " · se filma en Malabrigo (39 km) · viáticos pagos". */
+export function textoViatico(v: ViaticoVideo | null | undefined): string {
+  if (!v || v.estado === "sin_cargo") return "";
+  const estado = { cubierto: "viaje ya pago, misma jornada", pendiente: "viáticos sin pagar", pagado: "viáticos pagos", cotizar: "viáticos a coordinar" }[v.estado];
+  return ` · se filma en ${v.localidad}${v.km != null ? ` (${v.km} km)` : ""} · ${estado}`;
 }
 
 /** Documento del video nuevo, igual que lo crea producción al planificar. */
@@ -162,6 +172,7 @@ export function videoDesdePedido(proyectoId: string, team: Record<string, string
     fecha_deseada: p.fecha_deseada ?? null,
     filma_cliente: filma,
     material_base: p.material_base ?? null,
+    viatico: p.viatico ?? null,
     historial: [
       {
         at: ts,

@@ -23,6 +23,7 @@ import {
   Upload,
   X,
   Zap,
+  MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,8 @@ import type { Video } from "@/lib/redes/types";
 import { useOpenVideo } from "@/components/redes/VideoCard";
 import { SubirMaterial } from "@/components/redes/cliente/SubirMaterial";
 import { cn } from "@/lib/utils";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { LOCALIDAD_BASE, LOCALIDADES, viajeYaPago, viaticoDe, zonaDe, ZONA_TEXTO, type ZonaViatico } from "../../../../api/_lib/viaticos";
 
 const TIPOS: { label: string; titulo: string; icon: ElementType; placeholder: string }[] = [
   { label: "Promo", titulo: "Promo", icon: BadgePercent, placeholder: "Qué producto, qué precio o descuento, hasta cuándo…" },
@@ -103,7 +106,7 @@ export function PedirVideoDialog({
   /** Viene de "Solo edición": arranca con "Yo mando el material" elegido. */
   soloEdicion?: boolean;
 }) {
-  const { planes, videos } = useRedes();
+  const { planes, videos, settings } = useRedes();
   const [paso, setPaso] = useState<Paso>("que");
   const [atras, setAtras] = useState(false);
   const [tipo, setTipo] = useState<string | null>(null);
@@ -114,6 +117,8 @@ export function PedirVideoDialog({
   const [archivos, setArchivos] = useState<string[]>([]);
   const [eligiendo, setEligiendo] = useState(false);
   const [preferencia, setPreferencia] = useState<string | null>(null);
+  // Filmación nueva: dónde se filma (fuera de Reconquista se suman viáticos).
+  const [localidad, setLocalidad] = useState(LOCALIDAD_BASE);
   const [cuando, setCuando] = useState<Cuando | null>(null);
   const [fecha, setFecha] = useState<string | null>(null);
   const [mesFinal, setMesFinal] = useState<string | null>(null);
@@ -176,6 +181,7 @@ export function PedirVideoDialog({
     setArchivos([]);
     setEligiendo(false);
     setPreferencia(null);
+    setLocalidad(LOCALIDAD_BASE);
     setCuando(null);
     setFecha(null);
     setMesFinal(null);
@@ -204,6 +210,13 @@ export function PedirVideoDialog({
   // Solo edición (manda las tomas o elige material ya cargado): 30% menos.
   const soloEdicion = materialFinal !== "nueva";
   const precioExtra = soloEdicion ? precioSoloEdicion(plan.precioExtra[plataforma]) : plan.precioExtra[plataforma];
+  // Viáticos (misma cuenta que el servidor): solo filmación nueva hecha por nosotros.
+  const viatico = useMemo(() => {
+    if (materialFinal !== "nueva") return null;
+    const v = viaticoDe(settings.viaticos, localidad);
+    return v.estado === "pendiente" && viajeYaPago(videos, cliente.id, v.localidad) ? { ...v, monto: 0, estado: "cubierto" as const } : v;
+  }, [materialFinal, settings.viaticos, localidad, videos, cliente.id]);
+  const montoViaje = viatico?.estado === "pendiente" ? Number(viatico.monto) : 0;
   const hoy = hoyISO();
   const limite = new Date(`${sumarMeses(hoy, 3)}T12:00:00`);
   // "Esta semana": hasta el domingo.
@@ -296,7 +309,7 @@ export function PedirVideoDialog({
   const pedir = async (m: string) => {
     setEnviando(true);
     try {
-      const r = await callApi<{ estado: "creado" | "pago"; init_point?: string; video_id?: string }>("/api/pagos/pedir-video", {
+      const r = await callApi<{ estado: "creado" | "pago"; init_point?: string; video_id?: string; viatico?: { init_point: string } }>("/api/pagos/pedir-video", {
         proyecto_id: cliente.id,
         mes: m,
         fecha_deseada: m === mes ? fechaElegida : null,
@@ -311,12 +324,20 @@ export function PedirVideoDialog({
           ...(materialFinal === "existente" ? { archivos } : {}),
           ...(materialFinal === "nueva" && preferencia ? { preferencia } : {}),
         },
+        ...(materialFinal === "nueva" ? { localidad } : {}),
       });
       setMesFinal(m);
       setVideoId(r.video_id ?? null);
       if (r.estado === "pago" && r.init_point) {
         onOpenChange(false);
         window.location.href = r.init_point;
+        return;
+      }
+      // Entra en el plan pero se filma lejos: el video ya quedó pedido; ahora el viaje.
+      if (r.viatico?.init_point) {
+        toast.success("Video pedido. Ahora pagás los viáticos.");
+        onOpenChange(false);
+        window.location.href = r.viatico.init_point;
         return;
       }
       setListo(true);
@@ -565,6 +586,35 @@ export function PedirVideoDialog({
                                   </button>
                                 ))}
                               </div>
+                              <p className="pt-2 text-xs font-medium text-muted-foreground">¿Dónde se filma?</p>
+                              <Select value={localidad} onValueChange={setLocalidad}>
+                                <SelectTrigger className="h-11 rounded-xl bg-background">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-80">
+                                  {(["sin_cargo", "hasta_80", "hasta_100", "cotizar"] as ZonaViatico[]).map((z) => (
+                                    <SelectGroup key={z}>
+                                      <SelectLabel>{ZONA_TEXTO[z]}</SelectLabel>
+                                      {LOCALIDADES.filter((l) => zonaDe(l) === z).map((l) => (
+                                        <SelectItem key={`${l.p}-${l.n}`} value={l.n}>
+                                          {l.n}
+                                          {l.p !== "Santa Fe" ? ` (${l.p})` : ""} · {l.km} km
+                                        </SelectItem>
+                                      ))}
+                                      {z === "cotizar" && <SelectItem value="Otra localidad">Otra localidad (más lejos)</SelectItem>}
+                                    </SelectGroup>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {viatico && viatico.estado !== "sin_cargo" && (
+                                <p className="text-xs text-muted-foreground">
+                                  {viatico.estado === "pendiente"
+                                    ? `Se suman viáticos: ${formatARS(Number(viatico.monto))} (una vez por jornada de filmación).`
+                                    : viatico.estado === "cubierto"
+                                      ? "Ya pagaste el viaje a ese lugar para otro video que todavía no filmamos: va en la misma jornada, sin cargo."
+                                      : "Los viáticos te los pasamos por el chat antes de filmar."}
+                                </p>
+                              )}
                             </div>
                           )}
                         </div>
@@ -645,6 +695,24 @@ export function PedirVideoDialog({
                             </li>
                           </ul>
                         </div>
+                        {viatico && viatico.estado !== "sin_cargo" && (
+                          <div className="flex items-start gap-3 rounded-2xl border bg-card p-4">
+                            <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                            <div className="text-sm">
+                              <p className="font-semibold">
+                                Filmación en {viatico.localidad}
+                                {viatico.km != null ? ` (${viatico.km} km)` : ""}
+                              </p>
+                              <p className="text-muted-foreground">
+                                {viatico.estado === "pendiente"
+                                  ? `Viáticos: ${formatARS(montoViaje)}${entra ? ". El video entra en tu plan; el viaje lo pagás ahora con Mercado Pago." : ", van en el mismo pago."}`
+                                  : viatico.estado === "cubierto"
+                                    ? "Viaje ya pago: se filma en la misma jornada que otro video."
+                                    : "Los viáticos te los pasamos por el chat antes de filmar."}
+                              </p>
+                            </div>
+                          </div>
+                        )}
                         {entra ? (
                           <div className="flex items-start gap-3 rounded-2xl border border-success/40 bg-success/[0.08] p-4">
                             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" />
@@ -661,6 +729,7 @@ export function PedirVideoDialog({
                               <CreditCard className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
                               <div>
                                 <p className="font-semibold">Este video es extra: {formatARS(precioExtra)}{plan.duracionExtra[plataforma] ? ` · ${textoDuracion(plan.duracionExtra[plataforma])}` : ""}</p>
+                                {montoViaje > 0 && <p className="text-sm font-medium">+ viáticos {formatARS(montoViaje)} = {formatARS(precioExtra + montoViaje)}</p>}
                                 <p className="text-sm text-muted-foreground">
                                   Ya usaste los {uso.cupo} videos de {nombreMes(mes)}. Lo pagás con Mercado Pago.
                                   {soloEdicion && <span className="mt-1 block font-medium text-emerald-600 dark:text-emerald-400">Solo edición (vos mandás las tomas): 30% menos.</span>}
@@ -753,7 +822,7 @@ export function PedirVideoDialog({
                     disabled={enviando || (!!cuando && !entra && !(precioExtra > 0))}
                   >
                     {enviando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {!cuando || entra ? "Pedir video" : `Pagar ${formatARS(precioExtra)}`}
+                    {!cuando ? "Pedir video" : entra ? (montoViaje > 0 ? `Pedir y pagar viáticos ${formatARS(montoViaje)}` : "Pedir video") : `Pagar ${formatARS(precioExtra + montoViaje)}`}
                   </Button>
                 )}
               </div>

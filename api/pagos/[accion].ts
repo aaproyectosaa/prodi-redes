@@ -1,11 +1,13 @@
 // Pagos con Mercado Pago (Checkout Pro).
-// POST /api/pagos/crear       { tipo: "pieza_ia", pieza_id } | { tipo: "video_extra", proyecto_id, mes, cantidad }
+// POST /api/pagos/crear       { tipo: "pieza_ia", pieza_id } | { tipo: "video_extra", proyecto_id, mes, cantidad } | { tipo: "viatico", video_id }
 // POST /api/pagos/webhook     (lo llama Mercado Pago)
 // POST /api/pagos/verificar   { cobro_id }  (al volver del checkout)
 // POST /api/pagos/reembolsar  { pieza_id, nota }  (el equipo rechaza una pieza)
 // POST /api/pagos/suscribir   { proyecto_id, email }  (cliente o admin) → débito automático del abono
 // POST /api/pagos/suscripcion { proyecto_id, accion: "cancelar" | "actualizar_monto" }  (admin)
-// POST /api/pagos/pedir-video { proyecto_id, mes, titulo, idea?, objetivo?, filma_cliente? }  (cliente)
+// POST /api/pagos/pedir-video { proyecto_id, mes, titulo, idea?, objetivo?, filma_cliente?, localidad? }  (cliente)
+//      Filmación nueva fuera de Reconquista: viáticos por zona (ver _lib/viaticos.ts). Si es extra van en el mismo pago;
+//      si entra en el plan, el video se crea y vuelve el link para pagar el viaje.
 //      → si entra en el plan se crea; si no, se cobra como video extra y se crea al pagar.
 //        Si lo filma el cliente ("Yo mando el material", o la ficha dice que filma él) arranca esperando su material.
 // POST /api/pagos/arca-autorizar { factura_id, reintentar? }  (admin/administración) → CAE de ARCA para una boleta emitida
@@ -45,6 +47,7 @@ import {
 } from "../_lib/pedidos";
 import { hoyAR, mesAR, sumarMeses } from "../_lib/fecha";
 import { autorizarFactura, estadoArca } from "../_lib/arca";
+import { viajeYaPago, viaticoDe, type ViaticoVideo } from "../_lib/viaticos";
 
 export const config = { maxDuration: 30 };
 
@@ -69,7 +72,7 @@ async function precioExtra(proj: Data, plataforma: Plataforma): Promise<number> 
 
 async function crear(req: VercelRequest) {
   const caller = await requireCaller(req, ["cliente", "admin", "productor"]);
-  const b = body<{ tipo?: string; pieza_id?: string; proyecto_id?: string; mes?: string; cantidad?: number; plataforma?: string }>(req);
+  const b = body<{ tipo?: string; pieza_id?: string; proyecto_id?: string; mes?: string; cantidad?: number; plataforma?: string; video_id?: string }>(req);
   const db = adminDb();
   const base = appUrl(req);
   const settings = (await db.collection("app_settings").doc("redes").get()).data() ?? {};
@@ -115,6 +118,23 @@ async function crear(req: VercelRequest) {
     concepto = `${cantidad} video${cantidad === 1 ? "" : "s"} extra${plataforma === "meta" ? "" : ` para ${PLATAFORMA_NOMBRE[plataforma]}`} · ${MESES[m - 1]} ${y}`;
     refId = String(b.mes);
     tab = "plan";
+  } else if (b.tipo === "viatico") {
+    // Viáticos que quedaron sin pagar (video del plan que se filma fuera de Reconquista).
+    if (!b.video_id) throw new HttpError(400, "Falta video_id");
+    const v = (await db.collection("videos").doc(b.video_id).get()).data();
+    if (!v) throw new HttpError(404, "Video no encontrado");
+    await assertProjectAccess(caller, v.proyecto_id);
+    const vi = v.viatico as ViaticoVideo | null;
+    if (vi?.estado !== "pendiente" || !(Number(vi.monto) > 0)) throw new HttpError(409, "Este video no tiene viáticos para pagar");
+    const prev = (await db.collection("cobros").where("tipo", "==", "viatico").where("ref_id", "==", b.video_id).get()).docs.find(
+      (d) => d.data().estado === "pendiente" && d.data().mp_init_point
+    );
+    if (prev) return { init_point: prev.data().mp_init_point as string, cobro_id: prev.id };
+    proyectoId = v.proyecto_id;
+    monto = Number(vi.monto);
+    concepto = `Viáticos de filmación en ${vi.localidad} · ${String(v.titulo ?? "").slice(0, 60)}`;
+    refId = b.video_id;
+    tab = "videos";
   } else {
     throw new HttpError(400, "Tipo de cobro inválido");
   }
@@ -669,6 +689,8 @@ async function pedirVideo(req: VercelRequest) {
     material?: { tipo?: unknown; archivos?: unknown; preferencia?: unknown };
     /** Si es extra: para dónde es (meta | tiktok | youtube), cambia el precio. */
     plataforma?: string;
+    /** Filmación nueva: en qué localidad se filma (viáticos). */
+    localidad?: string;
   }>(req);
   // Con fecha, el mes sale de la fecha (no puede ser pasada). Con o sin fecha, el mes tiene que ser
   // este o uno de los 3 siguientes (hora de Argentina): si no, cada mes viejo o lejano daría su cupo gratis.
@@ -710,6 +732,16 @@ async function pedirVideo(req: VercelRequest) {
       : tipoMaterial === "cliente" || filmaElCliente(proj, tipoMaterial ? false : b.filma_cliente === true);
   // Si filma siempre el cliente, una "filmación nueva" también la hace él.
   if (filma && material_base?.tipo === "nueva") material_base = { tipo: "cliente" };
+  // Filmación nueva: dónde se filma. Fuera de Reconquista se cobran viáticos por zona, una vez por jornada.
+  let viatico: ViaticoVideo | null = null;
+  if (material_base?.tipo === "nueva" && !filma) {
+    const st = (await db.collection("app_settings").doc("redes").get()).data() ?? {};
+    viatico = viaticoDe(st.viaticos, b.localidad);
+    if (viatico.estado === "pendiente") {
+      const suyos = (await db.collection("videos").where("proyecto_id", "==", b.proyecto_id).get()).docs.map((d) => d.data());
+      if (viajeYaPago(suyos, b.proyecto_id, viatico.localidad)) viatico = { ...viatico, monto: 0, estado: "cubierto" };
+    }
+  }
   const pedido: PedidoVideo = {
     titulo,
     idea: String(b.idea ?? "").trim().slice(0, 2000) || null,
@@ -718,6 +750,7 @@ async function pedirVideo(req: VercelRequest) {
     pedido_por: caller.uid,
     filma_cliente: filma,
     material_base,
+    viatico,
   };
   let incluidos = Number(proj.plan_redes_override?.videos_mes ?? NaN);
   if (proj.plan_redes_id && isNaN(incluidos)) {
@@ -767,13 +800,45 @@ async function pedirVideo(req: VercelRequest) {
       base
     );
     await avisarCupo(b.proyecto_id, mes, incluidos, Number(proj.creditos_extra?.[mes] ?? 0), team.cliente ?? [], base).catch((e) => console.error("aviso de cupo", e));
+    // Entra en el plan pero se filma lejos: el video ya está; el viaje se paga aparte (vuelve el link).
+    if (viatico?.estado === "pendiente" && Number(viatico.monto) > 0) {
+      const vRef = db.collection("cobros").doc();
+      const conc = `Viáticos de filmación en ${viatico.localidad} · ${titulo}`.slice(0, 120);
+      await vRef.set({
+        proyecto_id: b.proyecto_id,
+        tipo: "viatico",
+        concepto: conc,
+        ref_id: ref.id,
+        cantidad: 1,
+        monto: viatico.monto,
+        moneda: "ARS",
+        estado: "pendiente",
+        created_by: caller.uid,
+        created_at: new Date().toISOString(),
+      });
+      const pv = await crearPreferencia({
+        titulo: `Prodi · ${conc}`,
+        monto: Number(viatico.monto),
+        cantidad: 1,
+        externalReference: vRef.id,
+        notificationUrl: `${base}/api/pagos/webhook`,
+        backUrl: `${base}/cliente?cobro=${vRef.id}`,
+        email: caller.email,
+      });
+      await vRef.update({ mp_preference_id: pv.id, mp_init_point: pv.init_point });
+      return { estado: "creado", video_id: ref.id, viatico: { init_point: pv.init_point, monto: viatico.monto, cobro_id: vRef.id } };
+    }
     return { estado: "creado", video_id: ref.id };
   }
 
   // Se pasa del plan: se cobra como video extra.
   if (!(precioVideo > 0)) throw new HttpError(409, "Tu plan no tiene precio de video extra. Escribinos y lo vemos.");
   const [y, m] = mes.split("-").map(Number);
-  const concepto = `Video extra${soloEdicion ? " solo edición" : ""}${plataforma === "meta" ? "" : ` (${PLATAFORMA_NOMBRE[plataforma]})`} · ${MESES[m - 1]} ${y}: ${titulo}`.slice(0, 120);
+  // Extra con viaje: el viático va en el mismo pago (el video se crea al acreditarse, ya con el viaje pago).
+  const conViaje = viatico?.estado === "pendiente" && Number(viatico.monto) > 0;
+  if (conViaje) pedido.viatico = { ...viatico!, estado: "pagado" };
+  const total = precioVideo + (conViaje ? Number(viatico!.monto) : 0);
+  const concepto = `Video extra${soloEdicion ? " solo edición" : ""}${plataforma === "meta" ? "" : ` (${PLATAFORMA_NOMBRE[plataforma]})`} · ${MESES[m - 1]} ${y}: ${titulo}${conViaje ? ` + viáticos a ${viatico!.localidad}` : ""}`.slice(0, 120);
   const cobroRef = db.collection("cobros").doc();
   await cobroRef.set({
     proyecto_id: b.proyecto_id,
@@ -781,7 +846,7 @@ async function pedirVideo(req: VercelRequest) {
     concepto,
     ref_id: mes,
     cantidad: 1,
-    monto: precioVideo,
+    monto: total,
     moneda: "ARS",
     estado: "pendiente",
     pedido,
@@ -790,7 +855,7 @@ async function pedirVideo(req: VercelRequest) {
   });
   const pref = await crearPreferencia({
     titulo: `Prodi · ${concepto}`,
-    monto: precioVideo,
+    monto: total,
     cantidad: 1,
     externalReference: cobroRef.id,
     notificationUrl: `${base}/api/pagos/webhook`,
@@ -798,7 +863,7 @@ async function pedirVideo(req: VercelRequest) {
     email: caller.email,
   });
   await cobroRef.update({ mp_preference_id: pref.id, mp_init_point: pref.init_point });
-  return { estado: "pago", init_point: pref.init_point, cobro_id: cobroRef.id, monto: precioVideo };
+  return { estado: "pago", init_point: pref.init_point, cobro_id: cobroRef.id, monto: total };
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

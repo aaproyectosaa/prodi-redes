@@ -75,6 +75,7 @@ import {
   pasarAMaterialCliente,
 } from "@/lib/redes/videos";
 import { callApi } from "@/lib/redes/api";
+import { ViaticoInfo } from "@/components/redes/ViaticoInfo";
 import type { EtapaVideo, Video } from "@/lib/redes/types";
 import { EtapaBadge } from "./EtapaBadge";
 import { VideoMesFecha } from "./VideoMesFecha";
@@ -278,6 +279,10 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
             <CalendarDays className="mt-px h-3.5 w-3.5 shrink-0 text-primary" />
             Para filmar, al cliente le quedan mejor: {video.material_base.preferencia.toLowerCase()}.
           </p>
+        )}
+
+        {video.viatico && (["planificado", "agendado"].includes(video.etapa) || video.viatico.estado === "pendiente") && (
+          <ViaticoInfo video={video} esCliente={isCliente} />
         )}
 
         {isCliente ? (

@@ -1,0 +1,93 @@
+// Viáticos de filmación: si se filma fuera de Reconquista, se cobra el viaje por zona (precio fijo).
+// Lo usan el servidor (cobra) y las pantallas (muestran el total antes de pagar): la cuenta es la misma.
+//
+// - Reconquista y alrededores (hasta 15 km: Avellaneda, Puerto Reconquista): sin cargo.
+// - Hasta 80 km y hasta 100 km: el monto de cada zona sale de Ajustes (app_settings/redes.viaticos).
+// - Más lejos, del otro lado del río (Corrientes) o una localidad que no está en la lista: se coordina aparte.
+// Se cobra por jornada: si ya está pago el viaje a esa localidad para un video que todavía no se filmó, no se vuelve a cobrar.
+
+import { LOCALIDADES, type LocalidadViatico } from "./localidades";
+
+export { LOCALIDADES, type LocalidadViatico };
+
+export const SIN_CARGO_KM = 15;
+export const LOCALIDAD_BASE = "Reconquista";
+
+export type ZonaViatico = "sin_cargo" | "hasta_80" | "hasta_100" | "cotizar";
+
+export const ZONA_TEXTO: Record<ZonaViatico, string> = {
+  sin_cargo: "Reconquista y alrededores",
+  hasta_80: "Hasta 80 km",
+  hasta_100: "Hasta 100 km",
+  cotizar: "Más lejos o cruzando el río",
+};
+
+/** Montos por zona (Ajustes). 0 o vacío = todavía no se puso: se coordina aparte. */
+export interface MontosViatico {
+  hasta_80?: number | null;
+  hasta_100?: number | null;
+}
+
+/** Cómo queda el viático de un video. */
+export interface ViaticoVideo {
+  localidad: string;
+  km: number | null;
+  zona: ZonaViatico;
+  /** Lo que se cobra (0 sin cargo; null = se coordina aparte). */
+  monto: number | null;
+  /**
+   * sin_cargo · cubierto (ya está pago el viaje a esa localidad para la misma jornada) · pendiente (falta pagarlo) ·
+   * pagado · cotizar (lo arregla producción con el cliente).
+   */
+  estado: "sin_cargo" | "cubierto" | "pendiente" | "pagado" | "cotizar";
+}
+
+const norm = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+export function buscarLocalidad(nombre: string | null | undefined): LocalidadViatico | null {
+  const q = norm(String(nombre ?? ""));
+  if (!q) return null;
+  return LOCALIDADES.find((l) => norm(l.n) === q) ?? null;
+}
+
+export function zonaDe(l: LocalidadViatico | null): ZonaViatico {
+  if (!l || l.p !== "Santa Fe") return "cotizar";
+  if (l.km <= SIN_CARGO_KM) return "sin_cargo";
+  if (l.km <= 80) return "hasta_80";
+  if (l.km <= 100) return "hasta_100";
+  return "cotizar";
+}
+
+/** Videos (de este cliente) con el viaje a esa localidad ya pago y todavía sin filmar: van en la misma jornada. */
+export function viajeYaPago(
+  videos: { proyecto_id?: unknown; etapa?: unknown; viatico?: { localidad?: unknown; estado?: unknown } | null }[],
+  proyectoId: string,
+  localidad: string
+): boolean {
+  const q = norm(localidad);
+  return videos.some(
+    (v) =>
+      v.proyecto_id === proyectoId &&
+      (v.etapa === "planificado" || v.etapa === "agendado") &&
+      v.viatico?.estado === "pagado" &&
+      norm(String(v.viatico.localidad ?? "")) === q
+  );
+}
+
+/** El viático de filmar en esa localidad (sin contar si ya está pago). */
+export function viaticoDe(montos: MontosViatico | null | undefined, localidad: string | null | undefined): ViaticoVideo {
+  const nombre = String(localidad ?? "").trim().slice(0, 80) || LOCALIDAD_BASE;
+  const l = buscarLocalidad(nombre);
+  const zona = zonaDe(l);
+  const base = { localidad: l?.n ?? nombre, km: l?.km ?? null, zona };
+  if (zona === "sin_cargo") return { ...base, monto: 0, estado: "sin_cargo" };
+  const monto = zona === "hasta_80" ? Number(montos?.hasta_80) : zona === "hasta_100" ? Number(montos?.hasta_100) : NaN;
+  if (!(monto > 0)) return { ...base, monto: null, estado: "cotizar" };
+  return { ...base, monto: Math.round(monto), estado: "pendiente" };
+}

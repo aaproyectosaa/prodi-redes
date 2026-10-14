@@ -66,6 +66,9 @@ export async function aplicarPago(pago: PagoMP, baseUrl: string): Promise<string
           revisar = { proyecto_id: c.proyecto_id, concepto: c.concepto };
           return "aprobado";
         }
+      } else if (c.tipo === "viatico") {
+        // Viaje a una filmación fuera de Reconquista (video del plan): queda pago en el video.
+        tx.update(db.collection("videos").doc(c.ref_id), { "viatico.estado": "pagado", updated_at: new Date().toISOString() });
       } else if (c.tipo === "video_extra") {
         const pRef = db.collection("projects").doc(c.proyecto_id);
         // Pedido del cliente: el video se crea recién con el pago acreditado.
@@ -97,6 +100,8 @@ export async function aplicarPago(pago: PagoMP, baseUrl: string): Promise<string
         tx.update(db.collection("projects").doc(c.proyecto_id), {
           [`creditos_extra.${c.ref_id}`]: FieldValue.increment(-(Number(c.cantidad) || 1)),
         });
+      } else if (c.tipo === "viatico") {
+        tx.update(db.collection("videos").doc(c.ref_id), { "viatico.estado": "pendiente", updated_at: new Date().toISOString() });
       } else if (c.tipo === "pieza_ia") {
         const pRef = db.collection("piezas_ia").doc(c.ref_id);
         const pSnap = await tx.get(pRef);
@@ -139,7 +144,7 @@ export async function aplicarPago(pago: PagoMP, baseUrl: string): Promise<string
     await enviarAviso(
       {
         destinatarios,
-        titulo: e.tipo === "pieza_ia" ? "Nueva pieza gráfica pagada" : e.pedido ? "El cliente pidió (y pagó) un video" : "Compraron videos extra",
+        titulo: e.tipo === "pieza_ia" ? "Nueva pieza gráfica pagada" : e.tipo === "viatico" ? "El cliente pagó los viáticos" : e.pedido ? "El cliente pidió (y pagó) un video" : "Compraron videos extra",
         cuerpo: `${proj.nombre ?? "Cliente"} · ${e.pedido ?? e.concepto}`,
         link: e.tipo === "pieza_ia" ? "/piezas" : `/clientes/${e.proyecto_id}`,
         clave: `cobro:${cobroId}`,

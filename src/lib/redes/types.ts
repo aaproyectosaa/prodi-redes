@@ -142,6 +142,8 @@ export interface Video {
   filma_cliente?: boolean;
   /** Con qué material lo pidió el cliente (lo escribe el servidor; igual que api/_lib/pedidos.ts). */
   material_base?: MaterialBase | null;
+  /** Filmación nueva pedida por el cliente: dónde se filma y los viáticos (lo escribe el servidor; ver api/_lib/viaticos.ts). */
+  viatico?: import("../../../api/_lib/viaticos").ViaticoVideo | null;
   /** Última vez que el cliente avisó "Listo, ya subí todo" (lo escribe el servidor). */
   material_cliente_avisado_at?: string | null;
   historial: HistorialVideo[];
@@ -347,7 +349,7 @@ export interface PiezaIA {
   _viejo?: import("@/components/redes/DelSistemaAnterior").DatosViejos | null;
 }
 
-export type TipoCobro = "pieza_ia" | "video_extra" | "abono";
+export type TipoCobro = "pieza_ia" | "video_extra" | "abono" | "viatico";
 export type EstadoCobro =
   | "pendiente"
   | "aprobado"
@@ -416,6 +418,8 @@ export interface RedesSettings {
   iva_pct?: number;
   /** Datos que salen en la boleta para transferir. */
   cobro?: DatosCobro;
+  /** Viáticos de filmación fuera de Reconquista: monto fijo por zona (ver api/_lib/viaticos.ts). */
+  viaticos?: import("../../../api/_lib/viaticos").MontosViatico;
   /** Días en una etapa a partir de los cuales un video se marca como trabado. */
   dias_alerta: number;
   /** Envío automático del informe mensual el día 1. */
