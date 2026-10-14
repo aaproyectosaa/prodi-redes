@@ -18,7 +18,7 @@ import { hoyISO, mesActual, mesLabel } from "@/lib/redes/format";
 import { sumarDias } from "@/lib/fecha";
 import { callApi } from "@/lib/redes/api";
 import { cn } from "@/lib/utils";
-import type { Rodaje } from "@/lib/redes/types";
+import type { Rodaje, Video } from "@/lib/redes/types";
 import { EtapaBadge } from "./EtapaBadge";
 
 const HORAS = ["09:00", "10:00", "11:00", "14:00", "16:00", "18:00"];
@@ -145,11 +145,30 @@ export function RodajeDialog({
       toast.error("Poné la fecha del rodaje");
       return;
     }
-    if (sinLlegar.some(([id]) => sel.has(id))) {
-      toast.error("Un segundo: se está guardando el video nuevo");
-      return;
+    setSaving(true);
+    // Lo que quedó escrito en "Nuevo video" sin tocar Agregar, también va.
+    const ids = new Set(sel);
+    const recien: Record<string, string> = { ...pendientes };
+    if (puedeCrear && nuevo.trim().length >= 3) {
+      try {
+        const [id] = await crearVideos(cliente, [{ titulo: nuevo.trim() }], mesActual(), user.uid);
+        ids.add(id);
+        recien[id] = nuevo.trim();
+        setPendientes(recien);
+        setSel(new Set(ids));
+        setNuevo("");
+      } catch (err) {
+        setSaving(false);
+        toast.error(err instanceof Error ? err.message : "No se pudo crear el video");
+        return;
+      }
     }
-    const elegidos = videos.filter((v) => sel.has(v.id));
+    const elegidos = videos.filter((v) => ids.has(v.id));
+    // Recién creados que todavía no llegaron de la base: alcanza con el id (están planificados).
+    const ts = new Date().toISOString();
+    for (const id of Object.keys(recien)) {
+      if (ids.has(id) && !elegidos.some((v) => v.id === id)) elegidos.push({ id, etapa: "planificado", etapa_desde: ts } as Video);
+    }
     // Los videos del rodaje que ya avanzaron (se filmaron) se mantienen.
     if (rodaje) {
       for (const v of videos) {
@@ -157,10 +176,10 @@ export function RodajeDialog({
       }
     }
     if (elegidos.length === 0) {
-      toast.error("Elegí al menos un video para filmar");
+      setSaving(false);
+      toast.error("Elegí o cargá al menos un video para filmar");
       return;
     }
-    setSaving(true);
     try {
       const datos = { fecha, hora: hora || null, lugar: lugar || null, notas: notas || null, preparar: preparar.trim() || null };
       if (rodaje) {
@@ -428,9 +447,9 @@ export function RodajeDialog({
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button onClick={save} disabled={saving || !cliente || sel.size === 0}>
+            <Button onClick={save} disabled={saving || !cliente || (sel.size === 0 && !(puedeCrear && nuevo.trim().length >= 3))}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {rodaje ? "Guardar cambios" : sel.size ? `Agendar ${sel.size} video${sel.size === 1 ? "" : "s"}` : "Elegí los videos"}
+              {rodaje ? "Guardar cambios" : "Agendar rodaje"}
             </Button>
           </div>
         </div>
