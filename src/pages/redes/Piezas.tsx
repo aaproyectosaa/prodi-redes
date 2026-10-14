@@ -555,6 +555,7 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
   const [aBorrar, setABorrar] = useState<Set<string> | null>(null);
   // "Elegir varias": se mandan juntas al cliente (en el orden en que se tocaron).
   const [varias, setVarias] = useState<string[] | null>(null);
+  const [volviendo, setVolviendo] = useState(false);
   const [borrando, setBorrando] = useState(false);
   // "Mandar por chat": a una persona, un grupo o el chat del cliente.
   const [compartir, setCompartir] = useState(false);
@@ -621,7 +622,7 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
 
   if (!pieza) return null;
   const info = formatoInfo(pieza.formato);
-  const puedeTrabajar = pieza.estado === "pagada" || pieza.estado === "en_proceso";
+  const puedeTrabajar = pieza.estado === "pagada" || pieza.estado === "en_proceso" || pieza.estado === "para_aprobar";
   const fotosMaterial = (pieza.attachments_crudo ?? []).filter((f) => !f.mime_type || f.mime_type.startsWith("image/"));
   const hayFotos = fotosMaterial.length > 0;
   const productos = (memoria?.comercial?.productos ?? []).filter((p) => p.destacado).slice(0, 5);
@@ -667,6 +668,17 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
       await upload(files);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo subir");
+    }
+  };
+  const volverADisenando = async () => {
+    setVolviendo(true);
+    try {
+      await moverPieza(pieza, "disenando", cliente, user?.uid ?? "");
+      toast.success("Volvió a Diseñando: el cliente ya no la ve para aprobar");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo");
+    } finally {
+      setVolviendo(false);
     }
   };
   const mandar = async () => {
@@ -992,7 +1004,7 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                     <div className="flex items-center gap-2">
                       <p className="hidden text-[11px] text-muted-foreground sm:block">Tocá para elegir · «Ver» para abrirla grande</p>
                       {puedeTrabajar && versiones.length > 1 && (
-                        <button type="button" onClick={() => setVarias(sel ? [sel] : [])} className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline">
+                        <button type="button" onClick={() => setVarias(sel ? [sel] : [...(pieza.versiones_enviadas ?? (pieza.version_enviada_id ? [pieza.version_enviada_id] : []))])} className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline">
                           <CheckSquare className="h-3.5 w-3.5" /> Elegir varias
                         </button>
                       )}
@@ -1145,30 +1157,46 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                   )}
                 </div>
               )}
-              {pieza.estado === "entregada" ? null : pieza.estado === "para_aprobar" ? (
+              {pieza.estado === "para_aprobar" && (
                 <div className="rounded-2xl border border-orange-500/30 bg-orange-500/[0.06] p-3 text-sm">
                   <b>Esperando al cliente.</b>{" "}
                   {(pieza.versiones_enviadas?.length ?? 0) > 1
-                    ? `Le mandaste ${pieza.versiones_enviadas!.length} versiones ${hace(pieza.updated_at)} (respondió ${Object.keys(pieza.respuestas_cliente ?? {}).length}). Cuando responda todas te llega el aviso.`
-                    : `Le mandaste la v${enviadaN || "?"} ${hace(pieza.updated_at)}. Cuando la apruebe o pida cambios te llega el aviso.`}
+                    ? `Le mandaste ${pieza.versiones_enviadas!.length} versiones ${hace(pieza.updated_at)} (respondió ${Object.keys(pieza.respuestas_cliente ?? {}).length}).`
+                    : `Le mandaste la v${enviadaN || "?"} ${hace(pieza.updated_at)}.`}{" "}
+                  Podés seguir editando y volver a mandar: lo nuevo reemplaza lo que tiene.
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {versiones.length > 1 && !varias && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 bg-background/60 text-xs"
+                        onClick={() => setVarias([...(pieza.versiones_enviadas ?? (pieza.version_enviada_id ? [pieza.version_enviada_id] : []))])}
+                      >
+                        <CheckSquare className="mr-1.5 h-3.5 w-3.5" /> Elegir varias para mandar
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" className="h-8 text-xs" disabled={volviendo} onClick={() => void volverADisenando()}>
+                      {volviendo ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Undo2 className="mr-1.5 h-3.5 w-3.5" />}
+                      Volver a Diseñando
+                    </Button>
+                  </div>
                 </div>
-              ) : (
-                puedeTrabajar && (
+              )}
+              {pieza.estado !== "entregada" && puedeTrabajar && (pieza.estado !== "para_aprobar" || !!varias || !!sel) && (
                   <Button className="h-12 w-full text-base" onClick={() => void mandar()} disabled={(varias ? !varias.length : !sel) || mandando}>
                     {mandando ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Send className="mr-2 h-5 w-5" />}
                     {varias
                       ? varias.length > 1
-                        ? `Mandar las ${varias.length} al cliente para aprobar`
+                        ? `${pieza.estado === "para_aprobar" ? "Volver a mandar" : "Mandar"} las ${varias.length} al cliente`
                         : varias.length === 1
-                          ? "Mandar 1 al cliente para aprobar"
+                          ? `${pieza.estado === "para_aprobar" ? "Volver a mandar" : "Mandar"} 1 al cliente`
                           : "Tocá las versiones que van"
                       : sel
-                        ? `Mandar la v${nElegida} al cliente para aprobar`
+                        ? `${pieza.estado === "para_aprobar" ? "Volver a mandar" : "Mandar"} la v${nElegida} al cliente para aprobar`
                         : versiones.length
                           ? "Elegí una versión para mandarla"
                           : "Primero creá una versión"}
                   </Button>
-                )
               )}
               <div className="flex flex-wrap items-center justify-between gap-2">
                 {versiones.length > 0 ? (

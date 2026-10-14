@@ -96,7 +96,7 @@ export function versionesDe(p: PiezaIA): VersionVista[] {
     created_at: a.uploaded_at ?? p.updated_at,
     origen: "subida" as const,
   }));
-  return [...ia, ...subidas].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  return [...ia, ...subidas].sort((a, b) => String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")));
 }
 
 export const versionEnviada = (p: PiezaIA) => versionesDe(p).find((v) => v.id === p.version_enviada_id) ?? null;
