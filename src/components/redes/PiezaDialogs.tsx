@@ -24,7 +24,7 @@ import {
   ThumbsUp,
 } from "lucide-react";
 import { toast } from "sonner";
-import { getDriveMediaPlayUrl } from "@/utils/drive/driveMediaUrl";
+import { descargarArchivo, getDriveMediaPlayUrl } from "@/utils/drive/driveMediaUrl";
 import { callApi } from "@/lib/redes/api";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -66,6 +66,35 @@ export function driveThumb(fileId: string, size = 800) {
   if (fileId.startsWith("blob:")) return fileId.slice(5);
   return `https://drive.google.com/thumbnail?id=${fileId}&sz=w${size}`;
 }
+/** Botón "Descargar" de una pieza: por el servidor de Prodi (le anda al cliente en el celular). */
+export function BotonDescargarPieza({ fileId, nombre, className, variant = "secondary" }: { fileId: string; nombre: string; className?: string; variant?: "secondary" | "default" | "outline" }) {
+  const [bajando, setBajando] = useState(false);
+  const local = fileId.startsWith("demo/") || fileId.startsWith("blob:");
+  if (local)
+    return (
+      <Button asChild variant={variant} className={className}>
+        <a href={driveDownload(fileId)} download={nombre}>
+          <Download className="mr-2 h-4 w-4" /> Descargar
+        </a>
+      </Button>
+    );
+  return (
+    <Button
+      variant={variant}
+      className={className}
+      disabled={bajando}
+      onClick={() => {
+        setBajando(true);
+        void descargarArchivo(fileId, nombre)
+          .catch((err) => toast.error(err instanceof Error ? err.message : "No se pudo descargar"))
+          .finally(() => setTimeout(() => setBajando(false), 1500));
+      }}
+    >
+      {bajando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />} Descargar
+    </Button>
+  );
+}
+
 export function driveDownload(fileId: string) {
   if (fileId.startsWith("demo/")) return asset(fileId);
   if (fileId.startsWith("blob:")) return fileId.slice(5);
@@ -221,11 +250,7 @@ export function PiezaClienteCard({ pieza, onAbrir }: { pieza: PiezaIA; onAbrir?:
           </Button>
         )}
         {pieza.estado === "entregada" && final && (
-          <Button asChild className="w-full" size="sm" variant="secondary">
-            <a href={driveDownload(final.drive_file_id)} target="_blank" rel="noreferrer" download>
-              <Download className="mr-2 h-4 w-4" /> Descargar
-            </a>
-          </Button>
+          <BotonDescargarPieza fileId={final.drive_file_id} nombre={final.name} className="h-9 w-full" />
         )}
         {carpetaDrive && (
           <Button asChild className="w-full" size="sm" variant="secondary">
@@ -328,11 +353,7 @@ export function PiezaAprobarDialog({ pieza, onClose }: { pieza: PiezaIA | null; 
           )
         ) : (
           v && (
-            <Button asChild variant="secondary">
-              <a href={driveDownload(v.drive_file_id)} target="_blank" rel="noreferrer" download>
-                <Download className="mr-2 h-4 w-4" /> Descargar
-              </a>
-            </Button>
+            <BotonDescargarPieza fileId={v.drive_file_id} nombre={v.name} />
           )
         )}
       </DialogContent>
@@ -411,11 +432,7 @@ function VariasDialog({
                 </div>
                 <div className="space-y-2 p-3">
                   {!puede ? (
-                    <Button asChild variant="secondary" className="w-full">
-                      <a href={driveDownload(x.drive_file_id)} target="_blank" rel="noreferrer" download>
-                        <Download className="mr-2 h-4 w-4" /> Descargar
-                      </a>
-                    </Button>
+                    <BotonDescargarPieza fileId={x.drive_file_id} nombre={x.name} className="w-full" />
                   ) : r ? (
                     r.nota && <p className="text-xs text-muted-foreground">Tu pedido: {r.nota}</p>
                   ) : cambiosDe === x.id ? (

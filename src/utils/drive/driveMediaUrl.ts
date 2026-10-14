@@ -49,3 +49,15 @@ export async function getDriveDownloadUrl(fileId: string): Promise<string> {
 export function urlDescargaDrive(fileId: string): string {
   return `https://drive.usercontent.google.com/download?id=${encodeURIComponent(fileId)}&export=download&confirm=t`;
 }
+
+/**
+ * Descarga un archivo al celular o a la compu a través del servidor de Prodi (con el permiso corto de media-token).
+ * No depende de que el archivo esté compartido por link en Drive: así le anda también a los clientes y contactos
+ * (antes, con un archivo no compartido, les aparecía la pantalla de Google). Navega a la descarga en la misma
+ * ventana: el navegador la baja sin salir de la página (en el iPhone, se abre para guardar o compartir).
+ */
+export async function descargarArchivo(fileId: string, nombre: string): Promise<void> {
+  const url = await getDriveMediaPlayUrl(fileId);
+  const sep = url.includes("?") ? "&" : "?";
+  window.location.assign(`${url}${sep}descarga=1&nombre=${encodeURIComponent(nombre || "archivo")}`);
+}

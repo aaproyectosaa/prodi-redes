@@ -1,4 +1,6 @@
-// GET /api/drive/media?fileId=...&token=<permiso de /api/drive/media-token>
+// GET /api/drive/media?fileId=...&token=<permiso de /api/drive/media-token>[&descarga=1&nombre=foto.jpg]
+// Con descarga=1 se baja como archivo (con su nombre): así se descarga en el celular sin depender de que el archivo
+// esté compartido por link en Drive (los del chat no lo están).
 // Proxy hacia Drive con soporte Range para reproducción en <video>.
 // El token no es la sesión: es un permiso firmado, de 1 hora y solo para ese archivo.
 
@@ -13,7 +15,8 @@ import {
 import { fileIdValido, validarTokenMedia } from "../media-token";
 
 export const config = {
-  maxDuration: 60,
+  // Bajar un video largo desde el celular puede tardar.
+  maxDuration: 300,
 };
 
 const FORWARD_HEADERS = new Set([
@@ -80,6 +83,12 @@ export default async function handler(
     } else {
       res.setHeader("Content-Type", "application/octet-stream");
       res.setHeader("Content-Disposition", "attachment");
+    }
+    if (req.query.descarga === "1") {
+      // El nombre, sin nada que rompa el encabezado.
+      const nombre = String(req.query.nombre ?? "archivo").replace(/[\r\n"\\/]/g, "").slice(0, 150) || "archivo";
+      const ascii = nombre.normalize("NFD").replace(/[^\x20-\x7e]/g, "") || "archivo";
+      res.setHeader("Content-Disposition", `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(nombre)}`);
     }
 
     if (!driveRes.body) {

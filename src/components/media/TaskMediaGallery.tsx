@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { DriveVideoPlayer } from "@/components/DriveVideoPlayer";
-import { getDriveDownloadUrl, urlDescargaDrive } from "@/utils/drive/driveMediaUrl";
+import { descargarArchivo } from "@/utils/drive/driveMediaUrl";
 import { AttachmentPreviewThumb } from "@/components/tasks/TaskPreviewThumb";
 import type { DriveAttachmentRef, Task } from "@/integrations/firebase/types";
 
@@ -320,17 +320,15 @@ export function TaskMediaGallery({
               </span>
             )}
             {!current.drive_file_id.startsWith("demo/") && (
-              // Link de verdad: el celular baja el archivo directo con el toque (fotos y videos de cualquier tamaño).
-              <a
-                href={urlDescargaDrive(current.drive_file_id)}
-                download={current.name}
-                rel="noopener"
-                onClick={() => void getDriveDownloadUrl(current.drive_file_id).catch(() => undefined)}
+              // Por el servidor de Prodi: no depende de que el archivo esté compartido por link en Drive.
+              <button
+                type="button"
+                onClick={() => void descargarArchivo(current.drive_file_id, current.name).catch(() => undefined)}
                 className="flex shrink-0 items-center gap-1 font-medium text-primary hover:underline"
               >
                 <Download className="h-3 w-3" />
                 Descargar
-              </a>
+              </button>
             )}
             {current.web_view_link && (
               <a

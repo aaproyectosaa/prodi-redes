@@ -8,7 +8,7 @@ import { EtapaBadge } from "@/components/redes/EtapaBadge";
 import { useOpenVideo } from "@/components/redes/VideoCard";
 import { aceptaMaterialCliente } from "@/lib/redes/etapas";
 import { useDriveConnection } from "@/hooks/use-drive-connection";
-import { getDriveDownloadUrl, getDriveMediaPlayUrl, urlDescargaDrive } from "@/utils/drive/driveMediaUrl";
+import { descargarArchivo, getDriveMediaPlayUrl } from "@/utils/drive/driveMediaUrl";
 import { asset } from "@/lib/asset";
 import { mesLabel } from "@/lib/redes/format";
 import { versionFinal } from "@/lib/redes/piezas";
@@ -300,11 +300,10 @@ function SeccionArchivos({
  * ni la sesión ni el acceso a Drive viajan en la URL.
  */
 async function descargar(a: DriveAttachmentRef) {
-  // Directo de Drive y en el mismo toque (si se espera al servidor, el celular bloquea la descarga sin avisar).
-  if (!a.drive_file_id.startsWith("demo/")) void getDriveDownloadUrl(a.drive_file_id).catch(() => undefined);
-  const url = a.drive_file_id.startsWith("demo/") ? asset(a.drive_file_id) : urlDescargaDrive(a.drive_file_id);
+  if (!a.drive_file_id.startsWith("demo/")) return descargarArchivo(a.drive_file_id, a.name);
+  // Datos de ejemplo: el archivo está en la app.
   const link = document.createElement("a");
-  link.href = url;
+  link.href = asset(a.drive_file_id);
   link.download = a.name;
   link.rel = "noopener";
   link.style.display = "none";

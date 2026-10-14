@@ -3,6 +3,7 @@ import { asset } from "@/lib/asset";
 import {
   ChevronLeft,
   ChevronRight,
+  Download,
   Image as ImageIcon,
   Play,
   Video as VideoIcon,
@@ -16,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { DriveVideoPlayer } from "@/components/DriveVideoPlayer";
 import { cn } from "@/lib/utils";
+import { descargarArchivo } from "@/utils/drive/driveMediaUrl";
 import type { DriveAttachmentRef } from "@/integrations/firebase/types";
 
 function isImage(mime: string) {
@@ -214,6 +216,20 @@ export function ClientMediaCarousel({
           </div>
         )}
       </div>
+
+      {!current.drive_file_id.startsWith("demo/") && (
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 rounded-full text-xs"
+            onClick={() => void descargarArchivo(current.drive_file_id, current.name).catch(() => undefined)}
+          >
+            <Download className="h-3.5 w-3.5" /> Descargar {isVideo(current.mime_type) ? "video" : isImage(current.mime_type) ? "foto" : "archivo"}
+          </Button>
+        </div>
+      )}
 
       {attachments.length > 1 && (
         <div className="flex items-center gap-2">

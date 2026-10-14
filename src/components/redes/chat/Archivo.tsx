@@ -3,7 +3,7 @@ import { AlertCircle, Download, File as FileIcon, FileText, Loader2, Play, Rotat
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { DriveVideoPlayer } from "@/components/DriveVideoPlayer";
-import { getDriveDownloadUrl, getDriveMediaPlayUrl, urlDescargaDrive } from "@/utils/drive/driveMediaUrl";
+import { descargarArchivo, getDriveMediaPlayUrl } from "@/utils/drive/driveMediaUrl";
 import { cancelarSubida, reintentarSubida, type SubidaChat } from "@/lib/redes/chatArchivos";
 import { cn } from "@/lib/utils";
 import type { ArchivoChat } from "@/lib/redes/types";
@@ -24,17 +24,9 @@ async function urlArchivo(fileId: string): Promise<string> {
   return url;
 }
 
+/** Baja el archivo por el servidor de Prodi: le anda a todos los del chat (clientes y contactos incluidos). */
 async function descargar(a: ArchivoChat) {
-  const link = document.createElement("a");
-  // Directo de Drive y en el mismo toque (si se espera al servidor, el celular bloquea la descarga sin avisar).
-  void getDriveDownloadUrl(a.drive_file_id).catch(() => undefined);
-  link.href = urlDescargaDrive(a.drive_file_id);
-  link.download = a.name;
-  link.rel = "noopener";
-  link.style.display = "none";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
+  await descargarArchivo(a.drive_file_id, a.name);
 }
 
 // Los formatos que el navegador muestra y el servidor deja ver en línea (sin HEIC ni SVG).
@@ -99,14 +91,30 @@ function Imagen({ archivo, mio }: { archivo: ArchivoChat; mio: boolean }) {
 function VideoChat({ archivo }: { archivo: ArchivoChat }) {
   // El video se prepara recién al tocar play (en un chat con muchos videos no se cargan todos).
   const [ver, setVer] = useState(false);
+  const [bajando, setBajando] = useState(false);
+  const bajar = () => {
+    setBajando(true);
+    void descargar(archivo)
+      .catch((err) => toast.error(err instanceof Error ? err.message : "No se pudo descargar"))
+      .finally(() => setTimeout(() => setBajando(false), 1500));
+  };
+  const botonBajar = (
+    <button type="button" onClick={bajar} disabled={bajando} className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium opacity-80 hover:opacity-100">
+      {bajando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Descargar video
+    </button>
+  );
   if (ver) {
     return (
-      <div className="-mx-1.5 -mt-0.5 overflow-hidden rounded-xl bg-black">
-        <DriveVideoPlayer fileId={archivo.drive_file_id} mimeType={archivo.mime_type} autoPlay className="max-h-80 w-full min-h-[180px] min-w-[220px]" />
+      <div>
+        <div className="-mx-1.5 -mt-0.5 overflow-hidden rounded-xl bg-black">
+          <DriveVideoPlayer fileId={archivo.drive_file_id} mimeType={archivo.mime_type} autoPlay className="max-h-80 w-full min-h-[180px] min-w-[220px]" />
+        </div>
+        {botonBajar}
       </div>
     );
   }
   return (
+    <div>
     <button
       type="button"
       onClick={() => setVer(true)}
@@ -120,6 +128,8 @@ function VideoChat({ archivo }: { archivo: ArchivoChat }) {
         {archivo.name} · {peso(archivo.size)}
       </span>
     </button>
+    {botonBajar}
+    </div>
   );
 }
 
