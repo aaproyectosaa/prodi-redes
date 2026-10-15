@@ -73,6 +73,29 @@ const FILTROS = [
 
 const esPendiente = (p: Profile) => !p.role || p.role === "pending" || LEGACY_ROLES.includes(p.role);
 
+/** Campos suaves (mismo estilo que Reuniones y Pedir video). */
+const SUAVE =
+  "rounded-2xl border-transparent bg-muted/60 shadow-none transition-colors focus-visible:border-primary focus-visible:bg-background focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:ring-offset-0 focus:ring-4 focus:ring-primary/15 focus:ring-offset-0";
+const ETIQUETA = "text-[11px] font-semibold uppercase tracking-wider text-muted-foreground";
+
+/** Color de cada rol para las etiquetas (solo visual). */
+const COLOR_ROL: Record<string, string> = {
+  admin: "bg-primary/12 text-primary",
+  productor: "bg-sky-500/12 text-sky-600 dark:text-sky-400",
+  editor: "bg-fuchsia-500/12 text-fuchsia-600 dark:text-fuchsia-400",
+  pauta: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400",
+  diseno: "bg-pink-500/12 text-pink-600 dark:text-pink-400",
+  administracion: "bg-amber-500/12 text-amber-600 dark:text-amber-400",
+  programador: "bg-cyan-500/12 text-cyan-600 dark:text-cyan-400",
+  cliente: "bg-violet-500/12 text-violet-600 dark:text-violet-400",
+  contacto: "bg-slate-500/12 text-slate-600 dark:text-slate-300",
+  pending: "bg-warning/20 text-warning",
+};
+const colorRol = (r: string | undefined) => COLOR_ROL[r ?? "pending"] ?? "bg-muted text-muted-foreground";
+/** Orden de los grupos de la lista: primero los que esperan rol, después el equipo y al final clientes y contactos. */
+const ORDEN_GRUPOS = ["pending", ...ROLES.map((r) => r.value as string), "contacto"];
+const grupoDe = (p: Profile): string => (esPendiente(p) ? "pending" : (p.role as string));
+
 export default function Equipo() {
   const navigate = useNavigate();
   const { profiles } = useAppData();
@@ -97,6 +120,12 @@ export default function Equipo() {
     })
     .sort((a, b) => Number(esPendiente(b)) - Number(esPendiente(a)) || (a.nombre ?? "").localeCompare(b.nombre ?? ""));
 
+  // Agrupa lo filtrado por rol principal (mismo orden adentro de cada grupo).
+  const grupos = ORDEN_GRUPOS.concat(filtrados.map(grupoDe).filter((g) => !ORDEN_GRUPOS.includes(g)))
+    .filter((g, i, a) => a.indexOf(g) === i)
+    .map((g) => [g, filtrados.filter((p) => grupoDe(p) === g)] as const)
+    .filter(([, gente]) => gente.length > 0);
+
   const clientesDe = (p: Profile) =>
     clientes.filter((c) => Object.values(c.team_roles ?? {}).some((ids) => (ids ?? []).includes(p.id)));
 
@@ -114,28 +143,30 @@ export default function Equipo() {
 
   return (
     <PageShell
-      title="Equipo y usuarios"
+      title={<span className="text-[26px] font-bold tracking-tight">Equipo y usuarios</span>}
       subtitle="Altas, bajas, roles y a qué clientes tiene acceso cada persona."
       actions={
-        <Button onClick={() => setEditar("nuevo")}>
+        <Button onClick={() => setEditar("nuevo")} className="h-11 rounded-2xl px-5 font-semibold shadow-lg shadow-primary/25">
           <Plus className="mr-2 h-4 w-4" /> Nuevo usuario
         </Button>
       }
     >
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative w-full sm:max-w-xs">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre o mail" className="pl-9" />
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre o mail" className={cn(SUAVE, "h-12 pl-11 text-[15px]")} />
         </div>
-        <div className="flex gap-1 overflow-x-auto">
+        <div className="-mx-4 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:w-fit sm:rounded-2xl sm:bg-muted/60 sm:p-1 sm:px-1">
           {FILTROS.map((f) => (
             <button
               key={f.v}
               type="button"
               onClick={() => setFiltro(f.v)}
               className={cn(
-                "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                filtro === f.v ? "border-primary bg-primary text-primary-foreground" : "hover:border-primary/50"
+                "inline-flex shrink-0 items-center rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors",
+                filtro === f.v
+                  ? "bg-primary text-primary-foreground shadow-sm shadow-primary/25 sm:bg-background sm:text-foreground sm:shadow-sm"
+                  : "bg-muted/60 text-muted-foreground hover:text-foreground sm:bg-transparent"
               )}
             >
               {f.l}
@@ -148,58 +179,71 @@ export default function Equipo() {
       </div>
 
       <Section title={`${filtrados.length} usuario${filtrados.length === 1 ? "" : "s"}`}>
-        <div className="divide-y rounded-xl border bg-card">
-          {filtrados.map((p) => {
+        {filtrados.length === 0 && (
+          <div className="flex flex-col items-center justify-center rounded-2xl bg-muted/60 px-6 py-12 text-center">
+            <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-background text-muted-foreground shadow-sm">
+              <Search className="h-5 w-5" />
+            </span>
+            <p className="text-sm font-semibold">No hay usuarios con ese filtro.</p>
+          </div>
+        )}
+        <div className="space-y-6">
+          {grupos.map(([grupo, gente]) => (
+            <section key={grupo} className="space-y-2.5">
+              <div className="flex items-center gap-2">
+                <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider", colorRol(grupo))}>
+                  {grupo === "pending" ? "Sin rol" : getRoleInfo(grupo as Profile["role"]).label}
+                </span>
+                <span className="text-xs tabular-nums text-muted-foreground">{gente.length}</span>
+              </div>
+              <div className="divide-y overflow-hidden rounded-2xl border bg-card">
+                {gente.map((p) => {
             const pendiente = esPendiente(p);
             const inactivo = p.activo === false;
             const cls = clientesDe(p);
             const yo = p.id === realUser?.uid;
             return (
-              <div key={p.id} className={cn("flex items-center gap-3 px-4 py-3", inactivo && "opacity-60")}>
-                <UserAvatar profile={p} size="md" />
+              <div key={p.id} className={cn("flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-muted/40 sm:gap-4", inactivo && "opacity-60")}>
+                <UserAvatar profile={p} size="md" className={cn(yo && "ring-2 ring-primary/40 ring-offset-2 ring-offset-card")} />
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <p className="truncate font-medium">{p.nombre}</p>
-                    <span
-                      className={cn(
-                        "rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                        pendiente ? "bg-warning/20 text-warning" : "bg-primary/12 text-primary"
-                      )}
-                    >
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <p className="truncate font-semibold">{p.nombre}</p>
+                    {yo && <span className="text-[11px] font-medium text-muted-foreground">(vos)</span>}
+                    <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", colorRol(pendiente ? "pending" : p.role))}>
                       {pendiente ? (LEGACY_ROLES.includes(p.role ?? "pending") ? getRoleInfo(p.role).label : "Sin rol") : getRoleInfo(p.role).label}
                     </span>
                     {!pendiente &&
                       rolesDe(p.role, p.roles_extra)
                         .slice(1)
                         .map((r) => (
-                          <span key={r} className="rounded-full border border-primary/30 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                          <span key={r} className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold opacity-80", colorRol(r))}>
                             + {getRoleInfo(r).label}
                           </span>
                         ))}
-                    {inactivo && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold">Desactivado</span>}
-                    {yo && <span className="text-[10px] text-muted-foreground">(vos)</span>}
+                    {inactivo && <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">Desactivado</span>}
                   </div>
-                  <p className="truncate text-xs text-muted-foreground">
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
                     {p.email}
                     {cls.length > 0 && ` · ${cls.map((c) => c.nombre).join(", ")}`}
                     {cls.length === 0 && p.role === "diseno" && " · Sin clientes asignados (ve los sin diseñadora)"}
                   </p>
-                  <p className="text-[11px] text-muted-foreground/80">
+                  <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground/80">
+                    <span className={cn("h-1.5 w-1.5 rounded-full", p.ultimo_acceso ? "bg-success" : "bg-muted-foreground/40")} />
                     {p.ultimo_acceso ? `Entró ${hace(p.ultimo_acceso)}` : "Nunca entró al sistema nuevo"}
                   </p>
                 </div>
                 {pendiente && (
-                  <Button size="sm" variant="outline" className="hidden sm:inline-flex" onClick={() => setEditar(p)}>
+                  <Button size="sm" variant="outline" className="hidden h-9 rounded-xl font-semibold sm:inline-flex" onClick={() => setEditar(p)}>
                     Asignar rol
                   </Button>
                 )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button size="icon" variant="ghost" aria-label={`Acciones para ${p.nombre}`}>
+                    <Button size="icon" variant="ghost" className="shrink-0 rounded-xl" aria-label={`Acciones para ${p.nombre}`}>
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuContent align="end" className="w-56 rounded-xl">
                     <DropdownMenuItem onClick={() => setEditar(p)}>
                       <Pencil className="mr-2 h-4 w-4" /> Editar rol y clientes
                     </DropdownMenuItem>
@@ -249,8 +293,10 @@ export default function Equipo() {
                 </DropdownMenu>
               </div>
             );
-          })}
-          {filtrados.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No hay usuarios con ese filtro.</p>}
+                })}
+              </div>
+            </section>
+          ))}
         </div>
       </Section>
 
@@ -261,19 +307,19 @@ export default function Equipo() {
       />
 
       <AlertDialog open={!!borrar} onOpenChange={(o) => !o && setBorrar(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent className="sm:rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar a {borrar?.nombre}?</AlertDialogTitle>
+            <AlertDialogTitle className="text-xl font-bold tracking-tight">¿Eliminar a {borrar?.nombre}?</AlertDialogTitle>
             <AlertDialogDescription>
               Se borra su cuenta y se lo saca de todos los clientes y chats. Los videos y el historial quedan. Si solo querés
               que no entre más, mejor desactivalo.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel className="h-11 rounded-2xl font-semibold">Cancelar</AlertDialogCancel>
             <AlertDialogAction
               disabled={busy}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="h-11 rounded-2xl bg-destructive font-semibold text-destructive-foreground shadow-lg shadow-destructive/25 hover:bg-destructive/90"
               onClick={() => {
                 const p = borrar;
                 setBorrar(null);
@@ -287,14 +333,18 @@ export default function Equipo() {
       </AlertDialog>
 
       <Dialog open={!!credenciales} onOpenChange={(o) => !o && setCredenciales(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{credenciales?.titulo}</DialogTitle>
+        <DialogContent className="max-w-md sm:rounded-2xl">
+          <DialogHeader className="space-y-3 text-left">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <KeyRound className="h-5 w-5" />
+            </span>
+            <DialogTitle className="text-xl font-bold tracking-tight">{credenciales?.titulo}</DialogTitle>
             <DialogDescription>Pasáselo por un medio privado. No lo vas a poder ver de nuevo.</DialogDescription>
           </DialogHeader>
-          <pre className="whitespace-pre-wrap break-all rounded-lg border bg-muted/40 p-3 text-sm">{credenciales?.texto}</pre>
+          <pre className="whitespace-pre-wrap break-all rounded-2xl bg-muted/60 p-4 font-mono text-sm">{credenciales?.texto}</pre>
           <DialogFooter>
             <Button
+              className="h-12 rounded-2xl px-6 font-semibold shadow-lg shadow-primary/25"
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(credenciales?.texto ?? "");
@@ -389,31 +439,34 @@ function UsuarioDialog({
 
   return (
     <Dialog open={!!persona} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-h-[92dvh] max-w-lg overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{nuevo ? "Nuevo usuario" : `Editar a ${p?.nombre}`}</DialogTitle>
+      <DialogContent className="max-w-lg overflow-y-auto sm:max-h-[92dvh] sm:rounded-2xl">
+        <DialogHeader className="space-y-3 text-left">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            {nuevo ? <Plus className="h-5 w-5" /> : <Pencil className="h-5 w-5" />}
+          </span>
+          <DialogTitle className="text-[22px] font-bold tracking-tight">{nuevo ? "Nuevo usuario" : `Editar a ${p?.nombre}`}</DialogTitle>
           <DialogDescription>
             {nuevo ? "Se crea la cuenta con una contraseña temporal para pasarle." : "Los cambios aplican al instante."}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="u-nombre">Nombre</Label>
-              <Input id="u-nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} />
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="u-nombre" className={ETIQUETA}>Nombre</Label>
+              <Input id="u-nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} className={cn(SUAVE, "h-12 text-[15px] font-medium")} />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="u-mail">Mail</Label>
-              <Input id="u-mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <div className="space-y-2">
+              <Label htmlFor="u-mail" className={ETIQUETA}>Mail</Label>
+              <Input id="u-mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={cn(SUAVE, "h-12")} />
             </div>
           </div>
-          <div className="space-y-1.5">
-            <Label>Rol</Label>
+          <div className="space-y-2">
+            <Label className={ETIQUETA}>Rol</Label>
             <Select value={rol} onValueChange={setRol}>
-              <SelectTrigger>
+              <SelectTrigger className={cn(SUAVE, "h-12")}>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="rounded-xl">
                 {ROLES.map((r) => (
                   <SelectItem key={r.value} value={r.value}>
                     {r.label} · <span className="text-muted-foreground">{r.description.split(".")[0]}</span>
@@ -427,21 +480,21 @@ function UsuarioDialog({
             </Select>
           </div>
           {rol === "contacto" && (
-            <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+            <p className="rounded-2xl bg-muted/60 p-3.5 text-xs leading-relaxed text-muted-foreground">
               Usa solo Prodi Chat: no ve clientes, videos ni nada del sistema. Entra únicamente a los grupos donde lo sumes
               (en el chat: abrí el grupo → Sumar) y puede escribirle por privado a la gente de esos grupos.
             </p>
           )}
           {sumaRoles && rol !== "admin" && (
-            <div className="space-y-1.5">
-              <Label>También hace</Label>
-              <div className="flex flex-wrap gap-1.5">
+            <div className="space-y-2">
+              <Label className={ETIQUETA}>También hace</Label>
+              <div className="flex flex-wrap gap-2">
                 {ROLES_ADICIONALES.filter((r) => r !== rol).map((r) => (
                   <label
                     key={r}
                     className={cn(
-                      "flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
-                      extras.has(r) ? "border-primary bg-primary/10" : "hover:border-primary/50"
+                      "flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-colors",
+                      extras.has(r) ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary/40" : "bg-muted/60 hover:bg-muted"
                     )}
                   >
                     <Checkbox
@@ -465,19 +518,28 @@ function UsuarioDialog({
             </div>
           )}
           {usaClientes && (
-            <div className="space-y-1.5">
-              <Label>{rol === "cliente" ? "Marca a la que pertenece" : "Clientes en los que trabaja"}</Label>
+            <div className="space-y-2">
+              <Label className={ETIQUETA}>
+                {rol === "cliente" ? "Marca a la que pertenece" : "Clientes en los que trabaja"}
+                {sel.size > 0 && <span className="font-normal normal-case tracking-normal"> · {sel.size}</span>}
+              </Label>
               {rol === "diseno" && (
                 <p className="text-xs text-muted-foreground">
                   Ve solo estos clientes y los que todavía no tienen diseñadora asignada (esos los ven todas).
                 </p>
               )}
-              <div className="space-y-1 rounded-lg border p-2 sm:max-h-56 sm:overflow-y-auto">
+              <div className="space-y-0.5 rounded-2xl bg-muted/60 p-1.5 sm:max-h-56 sm:overflow-y-auto">
                 {clientes.length === 0 && (
                   <p className="px-2 py-1.5 text-xs text-muted-foreground">Todavía no hay clientes. Cuando des de alta uno, lo asignás desde acá o desde la ficha del cliente.</p>
                 )}
                 {clientes.map((c) => (
-                  <label key={c.id} className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/60">
+                  <label
+                    key={c.id}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-3 rounded-xl px-2.5 py-2 transition-colors",
+                      sel.has(c.id) ? "bg-background shadow-sm" : "hover:bg-background/60"
+                    )}
+                  >
                     <Checkbox
                       checked={sel.has(c.id)}
                       onCheckedChange={() =>
@@ -489,19 +551,19 @@ function UsuarioDialog({
                         })
                       }
                     />
-                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: c.color }} />
-                    <span className="text-sm">{c.nombre}</span>
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: c.color }} />
+                    <span className="truncate text-sm font-medium">{c.nombre}</span>
                   </label>
                 ))}
               </div>
             </div>
           )}
         </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button variant="ghost" onClick={onClose} className="h-12 rounded-2xl font-semibold">
             Cancelar
           </Button>
-          <Button onClick={save} disabled={saving || !nombre.trim() || !email.trim()}>
+          <Button onClick={save} disabled={saving || !nombre.trim() || !email.trim()} className="h-12 rounded-2xl px-6 font-semibold shadow-lg shadow-primary/25">
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {nuevo ? "Crear usuario" : "Guardar"}
           </Button>
