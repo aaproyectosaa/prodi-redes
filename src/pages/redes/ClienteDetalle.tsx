@@ -49,6 +49,7 @@ import { DebitoAdmin } from "@/components/redes/Debito";
 import { cn } from "@/lib/utils";
 import { assertEditable } from "@/lib/redes/vistaComo";
 import { chatClienteId } from "@/lib/redes/chat";
+import { CobrosConReparto } from "@/components/redes/admin/RepartoCobros";
 import { abrirEnDock } from "@/lib/redes/chatDock";
 
 export default function ClienteDetalle() {
@@ -200,27 +201,8 @@ export default function ClienteDetalle() {
                 comision={settings.comision_mp_pct}
               />
             </Section>
-            <Section title="Cobros">
-              {misCobros.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Sin cobros por Mercado Pago.</p>
-              ) : (
-                <div className="divide-y rounded-xl border bg-card">
-                  {misCobros.map((c) => (
-                    <div key={c.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                      <div>
-                        <p className="font-medium">{c.concepto}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {fechaCorta(c.created_at)} {c.mp_payment_id ? `· MP #${c.mp_payment_id}` : ""}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold tabular-nums">{formatARS(c.monto)}</p>
-                        <p className={cn("text-[11px] capitalize", c.estado === "aprobado" ? "text-success" : "text-muted-foreground")}>{c.estado}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+            <Section title="Cobros" description="Lo que pagó por Mercado Pago. Tocá un extra para ver cuánto entró, viáticos, lo del equipo y la ganancia.">
+              <CobrosConReparto cobros={misCobros} />
             </Section>
             <HistorialFacturas proyectoId={cliente.id} />
           </TabsContent>

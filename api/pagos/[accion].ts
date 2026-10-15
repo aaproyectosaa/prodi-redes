@@ -20,6 +20,7 @@ import {
   actualizarSuscripcion,
   buscarPagos,
   crearPreferencia,
+  detalleDePago,
   crearSuscripcion,
   faltaSecretoWebhook,
   firmaValida,
@@ -252,6 +253,8 @@ async function procesarWebhook(req: VercelRequest) {
     return { ok: true, estado: await registrarAbono(datosAbono(pago.external_reference.slice(6), pago), base) };
   }
   const estado = await aplicarPago(pago, base);
+  // Cuánto entra de verdad (sin la comisión) y cuándo se libera: para repartir el cobro.
+  if (estado === "aprobado" && pago.external_reference) await guardarDetalleMp(pago.external_reference, pago).catch(() => undefined);
   return { ok: true, estado };
 }
 
@@ -356,7 +359,57 @@ async function verificar(req: VercelRequest) {
   const pagos = await buscarPagos(cobro_id);
   const aprobado = pagos.find((p) => p.status === "approved") ?? pagos[0];
   if (!aprobado) return { estado: "pendiente" };
-  return { estado: await aplicarPago(aprobado, appUrl(req)) };
+  const estado = await aplicarPago(aprobado, appUrl(req));
+  if (estado === "aprobado") await guardarDetalleMp(cobro_id, aprobado).catch(() => undefined);
+  return { estado };
+}
+
+/** Guarda en el cobro lo que se quedó Mercado Pago, lo neto y cuándo se libera la plata. */
+async function guardarDetalleMp(cobroId: string, pago: PagoMP) {
+  const db = adminDb();
+  const ref = db.collection("cobros").doc(cobroId);
+  const c = (await ref.get()).data();
+  if (!c) return;
+  const det = detalleDePago(pago);
+  await ref.update({ ...det, mp_payment_id: String(pago.id) });
+  // Los trabajos que pagó este extra: se marcan para que no cuenten en el pago del mes del equipo (se pagan aparte,
+  // cuando se libera la plata) y para que cada uno vea cuándo se le libera.
+  const marca = { cobro_extra_id: cobroId, extra_libera_at: det.mp_libera_at };
+  const docs =
+    c.tipo === "pieza_ia"
+      ? [db.collection("piezas_ia").doc(String(c.ref_id))]
+      : c.tipo === "video_extra"
+        ? [db.collection("videos").doc(`pedido_${cobroId}`)]
+        : c.tipo === "jornada"
+          ? ((c.detalle?.items ?? []) as { plan: boolean }[]).flatMap((it, i) => (it.plan ? [] : [db.collection("videos").doc(`pedido_${cobroId}_${i}`)]))
+          : [];
+  for (const d of docs) if ((await d.get()).exists) await d.update(marca);
+}
+
+/**
+ * Para repartir lo cobrado (Cobros → detalle): trae de Mercado Pago la comisión, lo neto y la fecha de liberación
+ * de los cobros aprobados que todavía no lo tienen (o que no se liberaron). Solo administración.
+ */
+async function mpDetalle(req: VercelRequest) {
+  await requireCaller(req, ["admin", "administracion"]);
+  const { cobro_ids } = body<{ cobro_ids?: string[] }>(req);
+  const ids = (Array.isArray(cobro_ids) ? cobro_ids : []).filter((x) => typeof x === "string").slice(0, 30);
+  const db = adminDb();
+  const out: Record<string, ReturnType<typeof detalleDePago>> = {};
+  for (const id of ids) {
+    const c = (await db.collection("cobros").doc(id).get()).data();
+    if (!c || c.estado !== "aprobado") continue;
+    if (c.mp_neto != null && c.mp_liberado) continue;
+    try {
+      const pago = c.mp_payment_id ? await obtenerPago(String(c.mp_payment_id)) : (await buscarPagos(id)).find((x) => x.status === "approved");
+      if (!pago) continue;
+      await guardarDetalleMp(id, pago);
+      out[id] = detalleDePago(pago);
+    } catch (err) {
+      console.warn("[pagos] detalle de MP", id, err instanceof Error ? err.message : err);
+    }
+  }
+  return { ok: true, detalles: out };
 }
 
 async function reembolsarPieza(req: VercelRequest) {
@@ -992,6 +1045,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "emitir") res.status(200).json(await emitir(req));
     else if (accion === "arca-autorizar") res.status(200).json(await arcaAutorizar(req));
     else if (accion === "arca-estado") res.status(200).json(await arcaEstado(req));
+    else if (accion === "mp-detalle") res.status(200).json(await mpDetalle(req));
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {
     // Si falla el webhook respondemos error: Mercado Pago lo reintenta solo.

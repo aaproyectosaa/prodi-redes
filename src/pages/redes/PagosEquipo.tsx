@@ -88,6 +88,7 @@ import { DATOS_COBRO_DEFAULT, type DatosCobro } from "@/lib/redes/types";
 import { cn } from "@/lib/utils";
 
 import { MesNav } from "@/components/redes/admin/FacturaPartes";
+import { ExtrasEquipo } from "@/components/redes/admin/RepartoCobros";
 
 const err = (e: unknown) => toast.error(e instanceof Error ? e.message : "Algo salió mal");
 
@@ -150,6 +151,7 @@ function PagosEquipo({ mes }: { mes: string }) {
           Cargá cómo le pagás a cada uno (fijo, por trabajo o las dos cosas) y el sistema calcula solo lo del mes con lo que hizo cada uno.
         </p>
       )}
+      <ExtrasEquipo mes={mes} />
       <div className="grid gap-3 lg:grid-cols-2">
         {filas.map((f) => (
           <PersonaPago

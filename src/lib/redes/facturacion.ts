@@ -410,6 +410,9 @@ export const UNIDAD_POR_ROL: Record<string, { label: string; plural: string }> =
   diseno: { label: "pieza entregada", plural: "piezas entregadas" },
 };
 
+/** Desde qué mes los extras se pagan aparte (no en el pago del mes). */
+export const DESDE_EXTRAS_APARTE = "2026-10";
+
 /** Un trabajo que cuenta para el pago del mes: un video o una pieza, con cuándo se hizo. */
 export interface TrabajoDelMes {
   id: string;
@@ -425,6 +428,12 @@ export interface TrabajoDelMes {
  */
 export function trabajosDelMes(uid: string, role: string, mes: string, videos: Video[], piezas: PiezaIA[]): TrabajoDelMes[] {
   const en = (at: string) => mesAR(at) === mes;
+  // Desde octubre 2026 los extras (videos y piezas que el cliente pagó aparte) se pagan por separado, cuando
+  // Mercado Pago libera la plata (ver reparto.ts): no cuentan acá. Los meses de antes quedan como se pagaron.
+  if (mes >= DESDE_EXTRAS_APARTE) {
+    videos = videos.filter((v) => !(v as { cobro_extra_id?: string | null }).cobro_extra_id);
+    piezas = piezas.filter((p) => !(p as { cobro_extra_id?: string | null }).cobro_extra_id && !(p.cobro_id && p.incluida === false));
+  }
   if (role === "diseno") {
     return piezas.flatMap((p) => {
       const aprobada = (p.historial ?? []).find((h) => h.accion === "Aprobada por el cliente" && en(h.at));

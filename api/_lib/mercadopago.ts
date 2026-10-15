@@ -68,6 +68,24 @@ export interface PagoMP {
   external_reference: string | null;
   transaction_amount: number;
   date_approved?: string | null;
+  /** Lo que se quedó Mercado Pago (comisión, impuestos, financiación). */
+  fee_details?: { type?: string; amount?: number; fee_payer?: string }[];
+  transaction_details?: { net_received_amount?: number | null };
+  /** Cuándo queda disponible la plata (y si ya se liberó). */
+  money_release_date?: string | null;
+  money_release_status?: string | null;
+}
+
+/** Lo que importa del pago para saber cuánto entra de verdad y cuándo. */
+export function detalleDePago(p: PagoMP): { mp_neto: number | null; mp_comision: number; mp_libera_at: string | null; mp_liberado: boolean } {
+  const comision = (p.fee_details ?? []).filter((f) => f.fee_payer !== "payer").reduce((a, f) => a + (Number(f.amount) || 0), 0);
+  const neto = p.transaction_details?.net_received_amount;
+  return {
+    mp_neto: neto != null && Number.isFinite(Number(neto)) ? Number(neto) : Number(p.transaction_amount) - comision || null,
+    mp_comision: Math.round(comision * 100) / 100,
+    mp_libera_at: p.money_release_date ?? null,
+    mp_liberado: p.money_release_status === "released" || (!!p.money_release_date && new Date(p.money_release_date).getTime() <= Date.now()),
+  };
 }
 
 export async function obtenerPago(id: string): Promise<PagoMP> {
