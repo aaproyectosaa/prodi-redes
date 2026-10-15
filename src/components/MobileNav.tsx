@@ -23,6 +23,7 @@ import { BotonInstalar } from "@/components/InstalarApp";
 import { BotonInstalarChat } from "@/components/InstalarChat";
 import { BotonOcultarMontos } from "@/components/OcultarMontos";
 import { useRedes } from "@/contexts/redes-data-context";
+import { ROLES_DOCK } from "@/lib/redes/chatDock";
 import { AnilloPerfilMenu } from "@/components/redes/cliente/PerfilCompleto";
 import type { Profile, UserRole } from "@/integrations/firebase/types";
 import { TituloSeccion, useSeccionesPlegables } from "@/components/SeccionNav";
@@ -254,11 +255,15 @@ export const MobileTabBar = ({ role }: { role?: UserRole }) => {
   const location = useLocation();
   const pendientes = usePendientes();
   const { empresa: empresaBarra } = useEmpresa();
-  const { roles: rolesBarra } = useUserProfileContext();
+  const { roles: rolesBarra, viewingAs } = useUserProfileContext();
+  const { chats } = useRedes();
   const todos = navForRoles(role, empresaBarra === "software" ? rolesBarra : [], empresaBarra).flatMap((s) => s.items);
-  const base = todos.filter((i) => i.mobile);
+  // Si está la burbuja flotante del chat, "Chat" no se repite en la barra: ese lugar queda para otra cosa.
+  const conBurbuja = !viewingAs && ROLES_DOCK.includes(role ?? "") && chats.length > 0;
+  const base = todos.filter((i) => i.mobile && !(conBurbuja && i.path === "/chat"));
+  // "Pedidos" entra en la barra si hay lugar o si hay pedidos nuevos (en el 2º lugar).
   const pedidos = todos.find((i) => i.path === "/pedidos");
-  const items = (pendientes["/pedidos"] && pedidos && !base.includes(pedidos) ? [base[0], pedidos, ...base.slice(1)] : base).filter(Boolean).slice(0, 4);
+  const items = (pedidos && !base.includes(pedidos) && (pendientes["/pedidos"] || base.length < 4) ? [base[0], pedidos, ...base.slice(1)] : base).filter(Boolean).slice(0, 4);
   if (items.length === 0 || teclado) return null;
   return (
     <nav className="safe-area-pb seguro-costados fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 backdrop-blur md:hidden">
