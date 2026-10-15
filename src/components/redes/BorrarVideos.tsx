@@ -57,7 +57,11 @@ export function useBorrarVideos(videos: Video[]) {
   };
 
   const boton = (
-    <Button variant={modo ? "default" : "outline"} size="sm" className="h-10" onClick={() => (modo ? salir() : setModo(true))}>
+    <Button
+      variant={modo ? "destructive" : "ghost"}
+      className={cn("h-11 rounded-2xl px-4 font-medium", !modo && "bg-muted/60 text-muted-foreground hover:bg-destructive/10 hover:text-destructive")}
+      onClick={() => (modo ? salir() : setModo(true))}
+    >
       {modo ? <X className="mr-1.5 h-4 w-4" /> : <Trash2 className="mr-1.5 h-4 w-4" />}
       {modo ? "Cancelar" : "Borrar"}
     </Button>

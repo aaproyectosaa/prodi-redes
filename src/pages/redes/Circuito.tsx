@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { AccionTile, GrillaAcciones } from "@/components/redes/AccionesTablero";
-import { AlertTriangle, CalendarPlus, Clapperboard, Plus, Search } from "lucide-react";
+import { AlertTriangle, Building2, CalendarPlus, CalendarRange, Clapperboard, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -30,7 +30,7 @@ import { SelectorVista, VistaCalendario, useVista } from "@/components/redes/Vis
 import { BotonArmarMes, PlanesAviso } from "@/components/redes/PlanesAviso";
 import { ordenEntrega } from "@/lib/redes/entrega";
 import { useBorrarVideos } from "@/components/redes/BorrarVideos";
-import { FiltrosTablero, porFecha, useFiltrosTablero } from "@/components/redes/FiltrosTablero";
+import { CLASE_FILTRO, FiltrosTablero, porFecha, useFiltrosTablero } from "@/components/redes/FiltrosTablero";
 
 /** Kanban: el equipo ve su tablero; el admin, todo el recorrido. */
 export default function Circuito() {
@@ -248,11 +248,17 @@ function CircuitoCompleto() {
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <SelectorVista vista={vista} onChange={setVista} />
         <div className="relative w-full sm:w-64">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar video" className="pl-9" />
+          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar video"
+            className="h-11 rounded-2xl border-transparent bg-muted/60 pl-10 shadow-none focus-visible:border-primary focus-visible:bg-background focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:ring-offset-0"
+          />
         </div>
         <Select value={cliente} onValueChange={setCliente}>
-          <SelectTrigger className="w-full sm:w-52">
+          <SelectTrigger className={cn(CLASE_FILTRO, "w-full gap-2 sm:w-56 [&>span]:truncate")}>
+            <Building2 className="h-4 w-4 shrink-0 text-primary" />
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -266,7 +272,8 @@ function CircuitoCompleto() {
         </Select>
         {vista === "kanban" && (
         <Select value={mes} onValueChange={setMes}>
-          <SelectTrigger className="w-full sm:w-48">
+          <SelectTrigger className={cn(CLASE_FILTRO, "w-full gap-2 sm:w-48 [&>span]:truncate")}>
+            <CalendarRange className="h-4 w-4 shrink-0 text-primary" />
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -280,15 +287,21 @@ function CircuitoCompleto() {
         </Select>
         )}
         {vista === "kanban" && (
-        <Button
-          variant={soloTrabados ? "default" : "outline"}
-          size="sm"
-          className="h-10"
+        <button
+          type="button"
           onClick={() => setSoloTrabados((v) => !v)}
+          aria-pressed={soloTrabados}
+          className={cn(
+            "inline-flex h-11 items-center gap-2 rounded-2xl px-4 text-sm font-semibold transition-colors",
+            soloTrabados ? "bg-amber-500 text-white shadow-md shadow-amber-500/25" : "bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-400"
+          )}
         >
-          <AlertTriangle className="mr-1.5 h-4 w-4" />
-          Trabados {trabados > 0 && `(${trabados})`}
-        </Button>
+          <AlertTriangle className="h-4 w-4" />
+          Trabados
+          {trabados > 0 && (
+            <span className={cn("rounded-full px-2 py-0.5 text-xs tabular-nums", soloTrabados ? "bg-white/25" : "bg-amber-500/20")}>{trabados}</span>
+          )}
+        </button>
         )}
         {vista === "kanban" && puedeBorrar && borrar.boton}
       </div>

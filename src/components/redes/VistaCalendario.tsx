@@ -41,7 +41,7 @@ export function SelectorVista({ vista, onChange }: { vista: Vista; onChange: (v:
     { v: "calendario", label: "Calendario", icon: CalendarDays },
   ];
   return (
-    <div className="inline-flex rounded-xl border bg-muted/40 p-1" role="tablist" aria-label="Vista">
+    <div className="inline-flex h-11 items-center rounded-2xl bg-muted/60 p-1" role="tablist" aria-label="Vista">
       {ops.map((o) => (
         <button
           key={o.v}
@@ -50,8 +50,8 @@ export function SelectorVista({ vista, onChange }: { vista: Vista; onChange: (v:
           aria-selected={vista === o.v}
           onClick={() => onChange(o.v)}
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all",
-            vista === o.v ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            "inline-flex h-9 items-center gap-1.5 rounded-xl px-3.5 text-sm font-medium transition-all",
+            vista === o.v ? "bg-background text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
           )}
         >
           <o.icon className="h-4 w-4" /> {o.label}
