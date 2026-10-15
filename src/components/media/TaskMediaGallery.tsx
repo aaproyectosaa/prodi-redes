@@ -43,6 +43,8 @@ export interface TaskMediaGalleryProps {
   className?: string;
   /** Si viene, aparece "Sacar" (el que se está viendo, o varios marcados con "Elegir varios"). */
   onQuitar?: (atts: DriveAttachmentRef[]) => Promise<void> | void;
+  /** En cuál arranca (al abrirlo desde una galería de miniaturas). */
+  inicial?: number;
 }
 
 /** Misma reproducción de media que usa el panel PM (ahí el video se ve bien). */
@@ -53,11 +55,12 @@ export function TaskMediaGallery({
   audience = "team",
   className,
   onQuitar,
+  inicial = 0,
 }: TaskMediaGalleryProps) {
   const [quitando, setQuitando] = useState(false);
   // Modo "elegir varios" para sacarlos juntos.
   const [marcados, setMarcados] = useState<Set<string> | null>(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(inicial);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const isClient = audience === "client";
 

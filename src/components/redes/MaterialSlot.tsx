@@ -12,6 +12,7 @@ import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { pickCaptureMedia, pickMediaFiles } from "@/utils/pickMediaFiles";
 import { downloadAttachmentsSequential } from "@/utils/drive/downloadDriveFile";
 import { TaskMediaGallery } from "@/components/media/TaskMediaGallery";
+import { GaleriaMaterial } from "@/components/media/GaleriaMaterial";
 import { ClientMediaCarousel } from "@/components/media/ClientMediaCarousel";
 import { UploadProgressTile } from "@/components/UploadProgressTile";
 import type { DriveAttachmentRef } from "@/integrations/firebase/types";
@@ -222,6 +223,9 @@ export function MaterialSlot({
       {attachments.length > 0 ? (
         audience === "client" ? (
           <ClientMediaCarousel attachments={attachments} driveAvailable={driveAvailable} />
+        ) : slot === "crudo" ? (
+          // El crudo, como galería de miniaturas (al tocar se ve en grande).
+          <GaleriaMaterial attachments={attachments} driveAvailable={driveAvailable} onQuitar={canUpload ? quitar : undefined} />
         ) : (
           <div className="overflow-hidden rounded-xl border bg-black/90">
             <TaskMediaGallery attachments={attachments} driveAvailable={driveAvailable} onQuitar={canUpload ? quitar : undefined} />
@@ -238,7 +242,7 @@ export function MaterialSlot({
 
       {carpetaVieja}
 
-      {audience === "team" && delCliente.length > 0 && (
+      {audience === "team" && slot !== "crudo" && delCliente.length > 0 && (
         <ul className="divide-y rounded-xl border text-xs">
           {delCliente.map((a) => (
             <li key={a.drive_file_id} className="flex items-center gap-2 px-3 py-1.5">
