@@ -9,8 +9,8 @@ import { cn } from "@/lib/utils";
 // Reproductor del mensaje de voz
 // ---------------------------------------------------------------------------
 
-/** Barras "de onda" fijas por audio (siempre las mismas para el mismo mensaje). */
-function barras(id: string, n = 32): number[] {
+/** Barras de reserva mientras no está la forma de onda real (siempre las mismas para el mismo mensaje). */
+function barras(id: string, n = 36): number[] {
   let h = 0;
   for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return Array.from({ length: n }, (_, i) => {
@@ -19,6 +19,34 @@ function barras(id: string, n = 32): number[] {
     return Math.min(1, base * (0.75 + 0.25 * Math.sin(i / 2.5)));
   });
 }
+
+/** Forma de onda real: picos del audio en `n` tramos (se calcula una vez por audio y se guarda en memoria). */
+const ondas = new Map<string, number[]>();
+async function formaDeOnda(id: string, url: string, n = 36): Promise<number[]> {
+  const ya = ondas.get(id);
+  if (ya) return ya;
+  const buf = await (await fetch(url)).arrayBuffer();
+  const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  const ctx = new Ctx();
+  try {
+    const audio = await ctx.decodeAudioData(buf);
+    const datos = audio.getChannelData(0);
+    const paso = Math.max(1, Math.floor(datos.length / n));
+    const picos = Array.from({ length: n }, (_, i) => {
+      let max = 0;
+      for (let j = i * paso; j < Math.min(datos.length, (i + 1) * paso); j += 16) max = Math.max(max, Math.abs(datos[j]));
+      return max;
+    });
+    const tope = Math.max(...picos, 0.01);
+    const forma = picos.map((p) => Math.max(0.12, Math.min(1, p / tope)));
+    ondas.set(id, forma);
+    return forma;
+  } finally {
+    void ctx.close();
+  }
+}
+
+const VELOCIDADES = [1, 1.5, 2];
 
 export function AudioMensaje({
   chatId,
@@ -30,13 +58,35 @@ export function AudioMensaje({
   mio: boolean;
 }) {
   const ref = useRef<HTMLAudioElement | null>(null);
+  const url = useRef<string | null>(null);
   const [cargando, setCargando] = useState(false);
   const [sonando, setSonando] = useState(false);
   const [t, setT] = useState(0);
-  const forma = barras(audio.id);
+  const [vel, setVel] = useState(1);
+  const [forma, setForma] = useState<number[]>(() => ondas.get(audio.id) ?? barras(audio.id));
   const progreso = audio.duracion ? Math.min(1, t / audio.duracion) : 0;
 
   useEffect(() => () => ref.current?.pause(), []);
+
+  const preparar = async () => {
+    if (ref.current) return ref.current;
+    if (!url.current) url.current = await urlAudio(chatId, audio.id);
+    const el = new Audio(url.current);
+    el.playbackRate = vel;
+    el.ontimeupdate = () => setT(el.currentTime);
+    el.onplay = () => setSonando(true);
+    el.onpause = () => setSonando(false);
+    el.onended = () => {
+      setSonando(false);
+      setT(0);
+    };
+    ref.current = el;
+    // La forma de onda real, sin trabar el play.
+    void formaDeOnda(audio.id, url.current)
+      .then(setForma)
+      .catch(() => undefined);
+    return el;
+  };
 
   const toggle = async () => {
     if (sonando) {
@@ -44,20 +94,9 @@ export function AudioMensaje({
       return;
     }
     try {
-      if (!ref.current) {
-        setCargando(true);
-        const url = await urlAudio(chatId, audio.id);
-        const el = new Audio(url);
-        el.ontimeupdate = () => setT(el.currentTime);
-        el.onplay = () => setSonando(true);
-        el.onpause = () => setSonando(false);
-        el.onended = () => {
-          setSonando(false);
-          setT(0);
-        };
-        ref.current = el;
-      }
-      await ref.current.play();
+      setCargando(true);
+      const el = await preparar();
+      await el.play();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo reproducir");
     } finally {
@@ -65,8 +104,28 @@ export function AudioMensaje({
     }
   };
 
+  // Tocar la onda: salta a ese momento (y arranca si estaba parado).
+  const saltar = async (e: React.MouseEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const p = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    try {
+      const el = await preparar();
+      el.currentTime = p * (audio.duracion || el.duration || 0);
+      setT(el.currentTime);
+      if (el.paused) await el.play();
+    } catch {
+      /* nada */
+    }
+  };
+
+  const cambiarVelocidad = () => {
+    const v = VELOCIDADES[(VELOCIDADES.indexOf(vel) + 1) % VELOCIDADES.length];
+    setVel(v);
+    if (ref.current) ref.current.playbackRate = v;
+  };
+
   return (
-    <div className="flex min-w-[210px] items-center gap-2.5 py-0.5">
+    <div className="flex min-w-[230px] items-center gap-2.5 py-0.5">
       <button
         type="button"
         onClick={toggle}
@@ -84,20 +143,14 @@ export function AudioMensaje({
           <Play className="ml-0.5 h-4 w-4" />
         )}
       </button>
-      <div className="flex-1">
-        <div className="flex h-7 items-center gap-[2px]" aria-hidden>
+      <div className="min-w-0 flex-1">
+        <div className="flex h-7 cursor-pointer items-center gap-[2px]" onClick={(e) => void saltar(e)} role="slider" aria-label="Posición del audio" aria-valuenow={Math.round(progreso * 100)}>
           {forma.map((v, i) => (
             <span
               key={i}
               className={cn(
-                "w-[3px] rounded-full transition-colors",
-                i / forma.length < progreso
-                  ? mio
-                    ? "bg-white"
-                    : "bg-primary"
-                  : mio
-                    ? "bg-white/40"
-                    : "bg-muted-foreground/35"
+                "w-[3px] shrink-0 rounded-full transition-colors",
+                i / forma.length < progreso ? (mio ? "bg-white" : "bg-primary") : mio ? "bg-white/40" : "bg-muted-foreground/35"
               )}
               style={{ height: `${Math.round(v * 100)}%` }}
             />
@@ -107,6 +160,19 @@ export function AudioMensaje({
           {duracionTexto(sonando || t > 0 ? t : audio.duracion)}
         </p>
       </div>
+      <button
+        type="button"
+        onClick={cambiarVelocidad}
+        className={cn(
+          "shrink-0 rounded-full px-2 py-1 text-[11px] font-bold tabular-nums transition-colors",
+          mio ? "bg-white/20 text-primary-foreground hover:bg-white/30" : "bg-muted text-foreground hover:bg-muted/70",
+          vel !== 1 && (mio ? "bg-white text-primary" : "bg-primary text-primary-foreground")
+        )}
+        aria-label={`Velocidad ${vel}x`}
+        title="Velocidad"
+      >
+        {vel === 1.5 ? "1,5" : vel}x
+      </button>
     </div>
   );
 }

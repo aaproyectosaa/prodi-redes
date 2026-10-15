@@ -485,6 +485,8 @@ export interface Chat {
   borrado?: boolean;
   /** Grupos automáticos: gente que el super admin sacó (no vuelve a entrar sola). */
   excluidos?: string[];
+  /** Mensajes fijados arriba del chat (hasta 3): el guion, el brief del mes… */
+  fijados?: { id: string; texto: string; by: string; at: string }[] | null;
   /** Equipo / grupo de cliente con nombre puesto a mano por el super admin (la sincronización no lo pisa). */
   nombre_propio?: boolean;
   id: string;
@@ -510,7 +512,7 @@ export interface Chat {
 }
 
 /** "archivo" y "bot" (respuestas de @prodi) solo los escribe el servidor. */
-export type TipoMensaje = "texto" | "llamada" | "minuta" | "sistema" | "audio" | "archivo" | "bot" | "sticker";
+export type TipoMensaje = "texto" | "llamada" | "minuta" | "sistema" | "audio" | "archivo" | "bot" | "sticker" | "encuesta";
 
 /** Archivo mandado por el chat (está en Drive; se ve con /api/drive/media-token si sos miembro del chat). */
 export interface ArchivoChat {
@@ -535,6 +537,13 @@ export interface Mensaje {
   audio?: { id: string; mime: string; duracion: number } | null;
   /** Sticker (tipo "sticker"): código del emoji animado, ej. "1f602". */
   sticker?: string | null;
+  /** Encuesta rápida: pregunta y opciones; votos = { uid: [índices] }. */
+  encuesta?: { pregunta: string; opciones: string[]; multiple?: boolean } | null;
+  votos?: Record<string, number[]> | null;
+  /** Vino reenviado de otro chat. */
+  reenviado?: boolean;
+  /** Lo mandó el servidor a la hora programada. */
+  programado?: boolean;
   archivo?: ArchivoChat | null;
   /** Texto que acompaña al archivo. */
   leyenda?: string | null;

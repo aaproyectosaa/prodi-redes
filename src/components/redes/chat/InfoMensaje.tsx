@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { CheckCheck, ChevronDown, Clock, Copy, ListTodo, Loader2, Pencil, Reply } from "lucide-react";
+import { CheckCheck, ChevronDown, Clock, Copy, CornerUpRight, ListTodo, Loader2, Pencil, Pin, Reply } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -82,6 +82,9 @@ export function InfoMensaje({
   onEditar,
   onResponder,
   onTarea,
+  onFijar,
+  onReenviar,
+  fijado,
   onReaccionar,
 }: {
   chat: ChatT;
@@ -93,6 +96,9 @@ export function InfoMensaje({
   onEditar?: () => void;
   onResponder?: () => void;
   onTarea?: () => void;
+  onFijar?: () => void;
+  onReenviar?: () => void;
+  fijado?: boolean;
   onReaccionar?: (emoji: string) => void;
 }) {
   const [verFaltan, setVerFaltan] = useState(false);
@@ -118,6 +124,8 @@ export function InfoMensaje({
     ...(onResponder ? [{ icono: <Reply className="h-5 w-5" />, label: "Responder", onClick: onResponder }] : []),
     ...(m?.texto ? [{ icono: <Copy className="h-5 w-5" />, label: "Copiar", onClick: () => void copiar() }] : []),
     ...(onTarea ? [{ icono: <ListTodo className="h-5 w-5" />, label: "Tarea", onClick: onTarea }] : []),
+    ...(onReenviar ? [{ icono: <CornerUpRight className="h-5 w-5" />, label: "Reenviar", onClick: onReenviar }] : []),
+    ...(onFijar ? [{ icono: <Pin className="h-5 w-5" />, label: fijado ? "Desfijar" : "Fijar", onClick: onFijar }] : []),
     ...(onEditar ? [{ icono: <Pencil className="h-5 w-5" />, label: "Editar", onClick: onEditar }] : []),
   ];
   const fila = (id: string, extra: ReactNode) => (
@@ -186,7 +194,7 @@ export function InfoMensaje({
 
             {/* Acciones con ícono. */}
             {acciones.length > 0 && (
-              <div className={cn("mt-3 grid gap-2", acciones.length >= 4 ? "grid-cols-4" : acciones.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
+              <div className={cn("mt-3 grid gap-2", acciones.length >= 5 || acciones.length === 3 ? "grid-cols-3" : acciones.length === 4 ? "grid-cols-4" : "grid-cols-2")}>
                 {acciones.map((a) => (
                   <button
                     key={a.label}

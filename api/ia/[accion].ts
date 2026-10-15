@@ -3,6 +3,7 @@
 // POST /api/ia/pieza  { pieza_id, ajustes? }    → genera una versión y la guarda en Drive
 // POST /api/ia/pieza-editar { pieza_id, version_id, instruccion, formato? } → edita esa versión con IA (queda como versión nueva)
 // POST /api/ia/pieza-compartir { pieza_id, version_id, chat_id, texto? } → manda esa versión a un chat (imagen + tarjeta)
+// POST /api/ia/reenviar { chat_id, mensaje_id, destinos: [chat_id] } → reenvía un mensaje (texto, archivo, audio o sticker) a otros chats
 // POST /api/ia/guion  { video_id }              → guion y lista de tomas del video
 // POST /api/ia/preparar { proyecto_id, video_ids } → qué tiene que tener listo el cliente para el rodaje
 // POST /api/ia/marca-subir  { proyecto_id, tipo: "logo"|"variante"|"manual"|"referencia", etiqueta?, nombre, mime, data(base64) }
@@ -30,7 +31,7 @@
 //      deja una sugerencia en el mensaje ("¿Crear tarea?"). Nunca crea la tarea: la confirma una persona.
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { FieldValue } from "../_lib/db";
+import { FieldValue, type Data } from "../_lib/db";
 import { adminDb, getPool } from "../_lib/db";
 import { appUrl, assertProjectAccess, body, HttpError, requireCaller, sendError } from "../_lib/http";
 import { sincronizarCalendario } from "../_lib/calendario";
@@ -184,6 +185,38 @@ async function piezaCompartir(req: VercelRequest) {
   });
   await avisarMensaje(String(chat_id), chat, caller.uid, nombre, resumen, appUrl(req)).catch((err) => console.warn("[pieza-compartir] aviso", err));
   return { ok: true, mensaje_id: id };
+}
+
+/** Reenviar un mensaje a otros chats (hasta 5). Tiene que ser miembro del de origen y de cada destino. */
+async function reenviar(req: VercelRequest) {
+  const caller = await requireCaller(req);
+  const b = body<{ chat_id?: string; mensaje_id?: string; destinos?: unknown }>(req);
+  await chatDeMiembro(b.chat_id, caller.uid);
+  if (typeof b.mensaje_id !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(b.mensaje_id)) throw new HttpError(400, "Mensaje inválido");
+  const destinos = [...new Set((Array.isArray(b.destinos) ? b.destinos : []).map(String))].slice(0, 5);
+  if (!destinos.length) throw new HttpError(400, "Elegí a qué chat");
+  const db = adminDb();
+  const m = (await db.collection(`chats/${b.chat_id}/mensajes`).doc(b.mensaje_id).get()).data();
+  if (!m || !["texto", "archivo", "audio", "sticker", "bot", "minuta"].includes(String(m.tipo ?? "texto"))) throw new HttpError(400, "Ese mensaje no se puede reenviar");
+  const nombre = caller.nombre ?? "";
+  // Audio: está aparte (chats/{id}/audios); se copia al chat de destino.
+  const audio = m.tipo === "audio" && m.audio ? (await db.collection(`chats/${b.chat_id}/audios`).doc(String((m.audio as Data).id)).get()).data() : null;
+  for (const destino of destinos) {
+    const chat = await chatDeMiembro(destino, caller.uid);
+    const at = new Date().toISOString();
+    const base = { by: caller.uid, by_nombre: nombre, at, link: null, reunion_id: null, reenviado: true };
+    let msg: Data;
+    if (m.tipo === "archivo" && m.archivo) msg = { ...base, tipo: "archivo", texto: m.texto ?? "", leyenda: m.leyenda ?? null, archivo: m.archivo };
+    else if (m.tipo === "audio" && audio) {
+      const aud = db.collection(`chats/${destino}/audios`).doc();
+      await aud.set({ ...audio, by: caller.uid });
+      msg = { ...base, tipo: "audio", texto: m.texto ?? "🎤 Audio", audio: { ...(m.audio as Data), id: aud.id } };
+    } else if (m.tipo === "sticker" && m.sticker) msg = { ...base, tipo: "sticker", texto: m.texto ?? "", sticker: m.sticker };
+    else msg = { ...base, tipo: "texto", texto: String(m.texto ?? "").slice(0, 4000) };
+    await publicarEnChat(destino, msg);
+    await avisarMensaje(destino, chat, caller.uid, nombre, `↪ ${String(msg.texto || "Mensaje reenviado").slice(0, 120)}`, appUrl(req)).catch(() => undefined);
+  }
+  return { ok: true };
 }
 
 /** Si la generación falla en cualquier paso, la pieza queda libre al toque para reintentar (y el error sigue). */
@@ -1254,6 +1287,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "pieza") res.status(200).json(await pieza(req).catch((e) => liberarTurnoPieza(req, e)));
     else if (accion === "pieza-editar") res.status(200).json(await piezaEditar(req).catch((e) => liberarTurnoPieza(req, e)));
     else if (accion === "pieza-compartir") res.status(200).json(await piezaCompartir(req));
+    else if (accion === "reenviar") res.status(200).json(await reenviar(req));
     else if (accion === "minuta") res.status(200).json(await minuta(req));
     else if (accion === "minuta-llamada") res.status(200).json(await minutaLlamada(req));
     else if (accion === "llamada-texto") res.status(200).json(await llamadaTexto(req));

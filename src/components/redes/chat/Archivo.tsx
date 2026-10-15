@@ -16,7 +16,7 @@ export function peso(bytes: number) {
 
 // El permiso para ver un archivo dura 1 hora: se reusa un rato para no pedirlo en cada render.
 const cacheUrls = new Map<string, { url: string; hasta: number }>();
-async function urlArchivo(fileId: string): Promise<string> {
+export async function urlArchivo(fileId: string): Promise<string> {
   const hit = cacheUrls.get(fileId);
   if (hit && hit.hasta > Date.now()) return hit.url;
   const url = await getDriveMediaPlayUrl(fileId);

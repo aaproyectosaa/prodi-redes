@@ -1,0 +1,711 @@
+// Herramientas del chat: buscar con salto al mensaje, galería (fotos, videos, archivos, links), mensajes fijados,
+// encuestas rápidas, reenviar y mensajes programados.
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  BarChart3,
+  CalendarClock,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Download,
+  File as FileIcon,
+  Images,
+  Link2,
+  Loader2,
+  Pin,
+  Play,
+  Plus,
+  Search,
+  Send,
+  Trash2,
+  X,
+} from "lucide-react";
+import { toast } from "sonner";
+import { collection, getDocs, limit, onSnapshot, orderBy, query, where } from "@/lib/db";
+import { db } from "@/integrations/firebase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
+import { ChatIcon } from "@/components/redes/chat/ChatIcon";
+import { peso, urlArchivo } from "@/components/redes/chat/Archivo";
+import { descargarArchivo } from "@/utils/drive/driveMediaUrl";
+import {
+  cancelarProgramado,
+  mandarEncuesta,
+  programarMensaje,
+  reenviarMensaje,
+  resumenMensaje,
+  tituloChat,
+  votarEncuesta,
+  type Programado,
+} from "@/lib/redes/chat";
+import { cn } from "@/lib/utils";
+import type { Profile } from "@/integrations/firebase/types";
+import type { Chat, Mensaje } from "@/lib/redes/types";
+
+const normal = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+
+/** Los últimos mensajes del chat (para buscar y para la galería; más de los que hay en pantalla). */
+async function historial(chatId: string, n = 1500): Promise<Mensaje[]> {
+  const s = await getDocs(query(collection(db, "chats", chatId, "mensajes"), orderBy("at", "desc"), limit(n)));
+  return s.docs.map((d) => ({ id: d.id, ...d.data() }) as Mensaje);
+}
+
+const hora = (iso: string) => new Date(iso).toLocaleString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+// ---------------------------------------------------------------------------
+// Buscar dentro del chat
+// ---------------------------------------------------------------------------
+
+export function BuscarEnChat({
+  chat,
+  nombreDe,
+  onIr,
+  onCerrar,
+}: {
+  chat: Chat;
+  nombreDe: (uid: string, porDefecto?: string) => string;
+  onIr: (id: string) => void;
+  onCerrar: () => void;
+}) {
+  const [q, setQ] = useState("");
+  const [todos, setTodos] = useState<Mensaje[] | null>(null);
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    void historial(chat.id).then(setTodos).catch(() => setTodos([]));
+  }, [chat.id]);
+  const res = useMemo(() => {
+    const b = normal(q.trim());
+    if (b.length < 2 || !todos) return [];
+    return todos.filter((m) => m.tipo !== "sistema" && normal(`${m.texto ?? ""} ${m.leyenda ?? ""} ${m.archivo?.name ?? ""}`).includes(b));
+  }, [q, todos]);
+  // El primer Enter va al primero; los siguientes, al próximo (Shift+Enter, al anterior).
+  const navegando = useRef(false);
+  useEffect(() => {
+    setI(0);
+    navegando.current = false;
+  }, [q]);
+  const ir = (k: number) => {
+    if (!res.length) return;
+    const n = (k + res.length) % res.length;
+    setI(n);
+    onIr(res[n].id);
+  };
+  return (
+    <div className="shrink-0 border-b bg-background/95 px-3 py-2 backdrop-blur animate-in fade-in slide-in-from-top-1">
+      <div className="flex items-center gap-2">
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            autoFocus
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                ir(!navegando.current ? i : e.shiftKey ? i - 1 : i + 1);
+                navegando.current = true;
+              }
+              if (e.key === "Escape") onCerrar();
+            }}
+            placeholder="Buscar en este chat…"
+            className="h-10 rounded-full bg-muted/60 pl-9"
+          />
+        </div>
+        <span className="w-14 shrink-0 text-center text-xs tabular-nums text-muted-foreground">
+          {todos === null ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : q.trim().length >= 2 ? (res.length ? `${i + 1} de ${res.length}` : "0") : ""}
+        </span>
+        <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0 rounded-full" disabled={!res.length} onClick={() => ir(i - 1)} aria-label="Anterior">
+          <ChevronUp className="h-4 w-4" />
+        </Button>
+        <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0 rounded-full" disabled={!res.length} onClick={() => ir(i + 1)} aria-label="Siguiente">
+          <ChevronDown className="h-4 w-4" />
+        </Button>
+        <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0 rounded-full" onClick={onCerrar} aria-label="Cerrar búsqueda">
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+      {res.length > 0 && (
+        <div className="mt-2 max-h-56 space-y-0.5 overflow-y-auto">
+          {res.slice(0, 50).map((m, k) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => {
+                setI(k);
+                onIr(m.id);
+              }}
+              className={cn("block w-full rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-muted", k === i && "bg-primary/10")}
+            >
+              <span className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                <span className="truncate font-medium">{nombreDe(m.by, m.by_nombre)}</span>
+                <span className="shrink-0">{hora(m.at)}</span>
+              </span>
+              <span className="line-clamp-1">{resumenMensaje(m)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Mensajes fijados
+// ---------------------------------------------------------------------------
+
+export function FijadosChat({ chat, onIr, onSacar }: { chat: Chat; onIr: (id: string) => void; onSacar: (id: string) => void }) {
+  const [k, setK] = useState(0);
+  const fijados = chat.fijados ?? [];
+  if (!fijados.length) return null;
+  const f = fijados[k % fijados.length];
+  return (
+    <div className="flex shrink-0 items-center gap-2 border-b bg-primary/[0.05] px-3 py-1.5">
+      {fijados.length > 1 && (
+        <span className="flex shrink-0 flex-col gap-0.5" aria-hidden>
+          {fijados.map((x, j) => (
+            <span key={x.id} className={cn("h-2.5 w-0.5 rounded-full", j === k % fijados.length ? "bg-primary" : "bg-primary/25")} />
+          ))}
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={() => {
+          onIr(f.id);
+          setK((x) => x + 1);
+        }}
+        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+      >
+        <Pin className="h-4 w-4 shrink-0 rotate-45 text-primary" />
+        <span className="min-w-0">
+          <span className="block text-[11px] font-semibold text-primary">Fijado{fijados.length > 1 ? ` · ${(k % fijados.length) + 1} de ${fijados.length}` : ""}</span>
+          <span className="block truncate text-sm">{f.texto}</span>
+        </span>
+      </button>
+      <button type="button" onClick={() => onSacar(f.id)} className="shrink-0 rounded-full p-1.5 text-muted-foreground hover:bg-muted" aria-label="Desfijar" title="Desfijar">
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Galería del chat
+// ---------------------------------------------------------------------------
+
+const LINK = /https?:\/\/[^\s<>"')\]]+/gi;
+type Pestaña = "fotos" | "videos" | "archivos" | "links";
+
+function Miniatura({ fileId, onClick, video }: { fileId: string; onClick: () => void; video?: boolean }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    if (!video) void urlArchivo(fileId).then((u) => vivo && setUrl(u)).catch(() => undefined);
+    return () => {
+      vivo = false;
+    };
+  }, [fileId, video]);
+  return (
+    <button type="button" onClick={onClick} className="relative aspect-square overflow-hidden rounded-lg bg-muted transition-opacity hover:opacity-85">
+      {url && <img src={url} alt="" loading="lazy" className="h-full w-full object-cover" />}
+      {!url && !video && <Loader2 className="absolute inset-0 m-auto h-4 w-4 animate-spin text-muted-foreground" />}
+      {video && (
+        <span className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-700 to-slate-900">
+          <Play className="h-7 w-7 fill-white text-white" />
+        </span>
+      )}
+    </button>
+  );
+}
+
+export function GaleriaChat({ chat, open, onOpenChange, onIr }: { chat: Chat; open: boolean; onOpenChange: (v: boolean) => void; onIr: (id: string) => void }) {
+  const [tab, setTab] = useState<Pestaña>("fotos");
+  const [msjs, setMsjs] = useState<Mensaje[] | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    setMsjs(null);
+    void historial(chat.id, 2000).then(setMsjs).catch(() => setMsjs([]));
+  }, [open, chat.id]);
+  const archivos = (msjs ?? []).filter((m) => m.tipo === "archivo" && m.archivo);
+  const fotos = archivos.filter((m) => /^image\//.test(m.archivo!.mime_type) && !m.archivo!.documento);
+  const videos = archivos.filter((m) => /^video\//.test(m.archivo!.mime_type));
+  const docs = archivos.filter((m) => !fotos.includes(m) && !videos.includes(m));
+  const links = (msjs ?? []).flatMap((m) => [...new Set((m.texto ?? "").match(LINK) ?? [])].map((url) => ({ m, url })));
+  const ir = (id: string) => {
+    onOpenChange(false);
+    setTimeout(() => onIr(id), 250);
+  };
+  const pestañas: { v: Pestaña; label: string; n: number }[] = [
+    { v: "fotos", label: "Fotos", n: fotos.length },
+    { v: "videos", label: "Videos", n: videos.length },
+    { v: "archivos", label: "Archivos", n: docs.length },
+    { v: "links", label: "Links", n: links.length },
+  ];
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
+        <SheetHeader className="border-b px-4 pb-3 pt-4 text-left">
+          <SheetTitle className="flex items-center gap-2">
+            <Images className="h-5 w-5 text-primary" /> Fotos, videos y archivos
+          </SheetTitle>
+          <div className="mt-2 grid grid-cols-4 gap-1 rounded-xl bg-muted p-1">
+            {pestañas.map((p) => (
+              <button
+                key={p.v}
+                type="button"
+                onClick={() => setTab(p.v)}
+                className={cn("rounded-lg px-1 py-1.5 text-xs font-medium transition-colors", tab === p.v ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}
+              >
+                {p.label} <span className="opacity-60">{msjs ? p.n : ""}</span>
+              </button>
+            ))}
+          </div>
+        </SheetHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          {msjs === null ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : tab === "fotos" || tab === "videos" ? (
+            (tab === "fotos" ? fotos : videos).length ? (
+              <div className="grid grid-cols-3 gap-1.5">
+                {(tab === "fotos" ? fotos : videos).map((m) => (
+                  <Miniatura key={m.id} fileId={m.archivo!.drive_file_id} video={tab === "videos"} onClick={() => ir(m.id)} />
+                ))}
+              </div>
+            ) : (
+              <p className="py-10 text-center text-sm text-muted-foreground">Todavía no hay {tab} en este chat.</p>
+            )
+          ) : tab === "archivos" ? (
+            docs.length ? (
+              <div className="space-y-1">
+                {docs.map((m) => (
+                  <div key={m.id} className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-muted/60">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <FileIcon className="h-5 w-5" />
+                    </span>
+                    <button type="button" onClick={() => ir(m.id)} className="min-w-0 flex-1 text-left">
+                      <span className="block truncate text-sm font-medium">{m.archivo!.name}</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {m.archivo!.size ? `${peso(m.archivo!.size)} · ` : ""}
+                        {hora(m.at)}
+                      </span>
+                    </button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-9 w-9 shrink-0 rounded-full"
+                      onClick={() => void descargarArchivo(m.archivo!.drive_file_id, m.archivo!.name).catch(() => toast.error("No se pudo bajar"))}
+                      aria-label="Descargar"
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="py-10 text-center text-sm text-muted-foreground">Todavía no hay archivos en este chat.</p>
+            )
+          ) : links.length ? (
+            <div className="space-y-1">
+              {links.map(({ m, url }, k) => (
+                <div key={`${m.id}-${k}`} className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-muted/60">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600">
+                    <Link2 className="h-5 w-5" />
+                  </span>
+                  <a href={url} target="_blank" rel="noreferrer" className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-primary">{url.replace(/^https?:\/\/(www\.)?/, "")}</span>
+                    <span className="text-[11px] text-muted-foreground">{hora(m.at)}</span>
+                  </a>
+                  <button type="button" onClick={() => ir(m.id)} className="shrink-0 rounded-full px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted">
+                    Ver en el chat
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="py-10 text-center text-sm text-muted-foreground">Todavía no hay links en este chat.</p>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Encuestas
+// ---------------------------------------------------------------------------
+
+export function EncuestaMensaje({ chat, m, uid, mio, nombreDe }: { chat: Chat; m: Mensaje; uid: string; mio: boolean; nombreDe: (uid: string) => string }) {
+  const e = m.encuesta!;
+  const votos = m.votos ?? {};
+  const total = Object.keys(votos).length;
+  const mios = votos[uid] ?? [];
+  const cuenta = e.opciones.map((_, i) => Object.values(votos).filter((v) => v.includes(i)).length);
+  const max = Math.max(1, ...cuenta);
+  const [verQuien, setVerQuien] = useState(false);
+  return (
+    <div className="min-w-[230px] space-y-2">
+      <p className="flex items-start gap-1.5 font-semibold">
+        <BarChart3 className="mt-0.5 h-4 w-4 shrink-0" /> {e.pregunta}
+      </p>
+      <p className={cn("text-[11px]", mio ? "text-primary-foreground/70" : "text-muted-foreground")}>{e.multiple ? "Podés elegir varias" : "Elegí una"}</p>
+      <div className="space-y-1.5">
+        {e.opciones.map((o, i) => {
+          const elegida = mios.includes(i);
+          const pct = total ? Math.round((cuenta[i] / total) * 100) : 0;
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => void votarEncuesta(chat, m, uid, i).catch((err) => toast.error(err instanceof Error ? err.message : "No se pudo votar"))}
+              className={cn(
+                "relative w-full overflow-hidden rounded-xl border px-3 py-2 text-left text-sm transition-colors",
+                mio ? "border-white/30 hover:bg-white/10" : "bg-background/60 hover:border-primary/50",
+                elegida && (mio ? "border-white bg-white/15" : "border-primary")
+              )}
+            >
+              <span
+                className={cn("absolute inset-y-0 left-0 transition-all duration-500", mio ? "bg-white/20" : "bg-primary/15", cuenta[i] === max && total > 0 && !mio && "bg-primary/25")}
+                style={{ width: `${pct}%` }}
+              />
+              <span className="relative flex items-center justify-between gap-2">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span
+                    className={cn(
+                      "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2",
+                      e.multiple && "rounded-md",
+                      elegida ? (mio ? "border-white bg-white" : "border-primary bg-primary") : mio ? "border-white/60" : "border-muted-foreground/40"
+                    )}
+                  />
+                  <span className="min-w-0 break-words">{o}</span>
+                </span>
+                <span className="shrink-0 text-xs font-semibold tabular-nums">{cuenta[i]}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <button type="button" onClick={() => setVerQuien((v) => !v)} className={cn("text-[11px] underline-offset-2 hover:underline", mio ? "text-primary-foreground/80" : "text-muted-foreground")}>
+        {total === 0 ? "Nadie votó todavía" : `${total} ${total === 1 ? "voto" : "votos"} · ${verQuien ? "ocultar" : "ver quién votó"}`}
+      </button>
+      {verQuien && total > 0 && (
+        <div className={cn("space-y-1 rounded-lg p-2 text-[11px]", mio ? "bg-white/10" : "bg-muted/60")}>
+          {e.opciones.map((o, i) => {
+            const quienes = Object.entries(votos)
+              .filter(([, v]) => v.includes(i))
+              .map(([u]) => (u === uid ? "Vos" : nombreDe(u).split(" ")[0]));
+            return quienes.length ? (
+              <p key={i}>
+                <b>{o}:</b> {quienes.join(", ")}
+              </p>
+            ) : null;
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function CrearEncuesta({ chat, uid, remitente, open, onOpenChange }: { chat: Chat; uid: string; remitente: string; open: boolean; onOpenChange: (v: boolean) => void }) {
+  const [pregunta, setPregunta] = useState("");
+  const [ops, setOps] = useState(["", ""]);
+  const [multiple, setMultiple] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    setPregunta("");
+    setOps(["", ""]);
+    setMultiple(false);
+  }, [open]);
+  const validas = ops.filter((o) => o.trim()).length;
+  const mandar = async () => {
+    setEnviando(true);
+    try {
+      await mandarEncuesta(chat, uid, remitente, pregunta, ops, multiple);
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo mandar");
+    } finally {
+      setEnviando(false);
+    }
+  };
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-primary" /> Encuesta rápida
+          </DialogTitle>
+          <DialogDescription>Ej.: “¿Qué portada va?” — cada uno vota y se ve el resultado al instante.</DialogDescription>
+        </DialogHeader>
+        <Input autoFocus value={pregunta} onChange={(e) => setPregunta(e.target.value)} placeholder="Pregunta" maxLength={200} className="h-11" />
+        <div className="space-y-2">
+          {ops.map((o, i) => (
+            <div key={i} className="flex gap-2">
+              <Input
+                value={o}
+                onChange={(e) => setOps((xs) => xs.map((x, j) => (j === i ? e.target.value : x)))}
+                placeholder={`Opción ${i + 1}`}
+                maxLength={100}
+              />
+              {ops.length > 2 && (
+                <Button size="icon" variant="ghost" className="shrink-0" onClick={() => setOps((xs) => xs.filter((_, j) => j !== i))} aria-label="Quitar opción">
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          ))}
+          {ops.length < 10 && (
+            <Button variant="outline" size="sm" className="w-full border-dashed" onClick={() => setOps((xs) => [...xs, ""])}>
+              <Plus className="mr-1.5 h-4 w-4" /> Agregar opción
+            </Button>
+          )}
+        </div>
+        <label className="flex items-center justify-between gap-3 text-sm">
+          Que se puedan elegir varias
+          <Switch checked={multiple} onCheckedChange={setMultiple} />
+        </label>
+        <Button onClick={() => void mandar()} disabled={enviando || !pregunta.trim() || validas < 2} className="w-full">
+          {enviando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+          Mandar encuesta
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Reenviar
+// ---------------------------------------------------------------------------
+
+export function ReenviarMensaje({
+  chat,
+  m,
+  chats,
+  uid,
+  profiles,
+  role,
+  onOpenChange,
+}: {
+  chat: Chat;
+  m: Mensaje | null;
+  chats: Chat[];
+  uid: string;
+  profiles: Profile[];
+  role?: string;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [elegidos, setElegidos] = useState<string[]>([]);
+  const [enviando, setEnviando] = useState(false);
+  useEffect(() => {
+    if (!m) return;
+    setQ("");
+    setElegidos([]);
+  }, [m]);
+  const lista = useMemo(
+    () =>
+      chats
+        .filter((c) => c.id !== chat.id && c.tipo !== "prodi" && c.miembros?.includes(uid))
+        .map((c) => ({ c, nombre: tituloChat(c, uid, profiles, role) }))
+        .filter((x) => !q.trim() || normal(x.nombre).includes(normal(q.trim())))
+        .sort((a, b) => (b.c.ultimo?.at ?? "").localeCompare(a.c.ultimo?.at ?? ""))
+        .slice(0, 40),
+    [chats, chat.id, uid, profiles, role, q]
+  );
+  const mandar = async () => {
+    if (!m) return;
+    setEnviando(true);
+    try {
+      await reenviarMensaje(chat, m, elegidos);
+      toast.success(elegidos.length === 1 ? "Reenviado" : `Reenviado a ${elegidos.length} chats`);
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo reenviar");
+    } finally {
+      setEnviando(false);
+    }
+  };
+  return (
+    <Dialog open={!!m} onOpenChange={(v) => !enviando && onOpenChange(v)}>
+      <DialogContent className="max-w-md gap-3">
+        <DialogHeader>
+          <DialogTitle>Reenviar a…</DialogTitle>
+          <DialogDescription className="line-clamp-2">{m ? resumenMensaje(m) : ""}</DialogDescription>
+        </DialogHeader>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar persona o grupo…" className="pl-9" />
+        </div>
+        <div className="max-h-80 space-y-1 overflow-y-auto pr-1">
+          {lista.map(({ c, nombre }) => {
+            const sel = elegidos.includes(c.id);
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setElegidos((xs) => (sel ? xs.filter((x) => x !== c.id) : xs.length >= 5 ? xs : [...xs, c.id]))}
+                className={cn("flex w-full items-center gap-3 rounded-xl border px-2.5 py-2 text-left transition-all", sel ? "border-primary bg-primary/10" : "border-transparent hover:bg-muted/60")}
+              >
+                <ChatIcon chat={c} profiles={profiles} uid={uid} className="h-9 w-9" />
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">{nombre}</span>
+                <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2", sel ? "border-primary bg-primary" : "border-muted-foreground/30")} />
+              </button>
+            );
+          })}
+          {lista.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">No hay chats con ese nombre.</p>}
+        </div>
+        <Button onClick={() => void mandar()} disabled={!elegidos.length || enviando} className="w-full">
+          {enviando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+          {elegidos.length > 1 ? `Reenviar a ${elegidos.length} chats` : "Reenviar"}
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Mensajes programados
+// ---------------------------------------------------------------------------
+
+/** Los míos programados para este chat (se ven arriba de la caja y se pueden cancelar). */
+export function useProgramados(chatId: string, uid: string): Programado[] {
+  const [lista, setLista] = useState<Programado[]>([]);
+  useEffect(
+    () =>
+      onSnapshot(
+        query(collection(db, "programados"), where("by", "==", uid)),
+        (s) =>
+          setLista(
+            s.docs
+              .map((d) => ({ id: d.id, ...d.data() }) as Programado)
+              .filter((p) => p.chat_id === chatId)
+              .sort((a, b) => a.enviar_at.localeCompare(b.enviar_at))
+          ),
+        () => setLista([])
+      ),
+    [chatId, uid]
+  );
+  return lista;
+}
+
+export function ProgramadosChat({ lista }: { lista: Programado[] }) {
+  const [abierto, setAbierto] = useState(false);
+  if (!lista.length) return null;
+  return (
+    <div className="shrink-0 border-t bg-amber-500/[0.06] px-3 py-1.5">
+      <button type="button" onClick={() => setAbierto((v) => !v)} className="flex w-full items-center gap-2 text-left text-xs font-medium text-amber-700 dark:text-amber-300">
+        <CalendarClock className="h-3.5 w-3.5" />
+        {lista.length === 1 ? "1 mensaje programado" : `${lista.length} mensajes programados`} · sale el {hora(lista[0].enviar_at)}
+        <ChevronDown className={cn("ml-auto h-3.5 w-3.5 transition-transform", abierto && "rotate-180")} />
+      </button>
+      {abierto && (
+        <div className="mt-1.5 space-y-1">
+          {lista.map((p) => (
+            <div key={p.id} className="flex items-center gap-2 rounded-lg bg-background px-2.5 py-1.5 text-sm">
+              <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <span className="shrink-0 text-[11px] text-muted-foreground">{hora(p.enviar_at)}</span>
+              <span className="min-w-0 flex-1 truncate">{p.texto}</span>
+              <button
+                type="button"
+                onClick={() => void cancelarProgramado(p.id).then(() => toast.success("Cancelado"))}
+                className="shrink-0 rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                aria-label="Cancelar"
+                title="Cancelar"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Elegir para cuándo: atajos (en 1 h, mañana 9 h, lunes 9 h) o fecha y hora a mano. */
+export function ProgramarMensaje({
+  chat,
+  uid,
+  remitente,
+  texto,
+  open,
+  onOpenChange,
+  onListo,
+}: {
+  chat: Chat;
+  uid: string;
+  remitente: string;
+  texto: string;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onListo: () => void;
+}) {
+  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const [dia, setDia] = useState(iso(new Date()));
+  const [hh, setHh] = useState("09:00");
+  const [guardando, setGuardando] = useState(false);
+  const atajos = useMemo(() => {
+    const ahora = new Date();
+    const enUnaHora = new Date(ahora.getTime() + 60 * 60_000);
+    const manana = new Date(ahora);
+    manana.setDate(manana.getDate() + 1);
+    manana.setHours(9, 0, 0, 0);
+    const lunes = new Date(ahora);
+    lunes.setDate(lunes.getDate() + (((8 - lunes.getDay()) % 7) || 7));
+    lunes.setHours(9, 0, 0, 0);
+    return [
+      { label: "En 1 hora", d: enUnaHora },
+      { label: "Mañana 9:00", d: manana },
+      { label: "Lunes 9:00", d: lunes },
+    ];
+  }, [open]);
+  const programar = async (d: Date) => {
+    setGuardando(true);
+    try {
+      await programarMensaje(chat, uid, remitente, texto, d);
+      toast.success(`Programado para el ${hora(d.toISOString())}`);
+      onListo();
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo programar");
+    } finally {
+      setGuardando(false);
+    }
+  };
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <CalendarClock className="h-5 w-5 text-primary" /> Programar mensaje
+          </DialogTitle>
+          <DialogDescription className="line-clamp-2">“{texto}”</DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-3 gap-2">
+          {atajos.map((a) => (
+            <Button key={a.label} variant="outline" className="h-auto flex-col py-2 text-xs" disabled={guardando} onClick={() => void programar(a.d)}>
+              <span className="font-semibold">{a.label}</span>
+            </Button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <Input type="date" value={dia} min={iso(new Date())} onChange={(e) => setDia(e.target.value)} />
+          <Input type="time" value={hh} onChange={(e) => setHh(e.target.value)} className="w-28" />
+        </div>
+        <Button onClick={() => void programar(new Date(`${dia}T${hh}:00`))} disabled={guardando || !dia || !hh} className="w-full">
+          {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Programar
+        </Button>
+        <p className="text-[11px] text-muted-foreground">Sale a esa hora a tu nombre. Lo podés cancelar antes desde arriba de la caja de texto.</p>
+      </DialogContent>
+    </Dialog>
+  );
+}

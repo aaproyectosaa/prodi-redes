@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { collection, limit, onSnapshot, orderBy, query } from "@/lib/db";
-import { ArrowLeft, Camera, Check, CheckCheck, FileText, Headphones, Image as ImageIcon, Info, Loader2, Paperclip, Reply, Send, Sparkles, Upload, Video, X } from "lucide-react";
+import { ArrowLeft, BarChart3, CalendarClock, Camera, Check, CheckCheck, CornerUpRight, FileText, Headphones, Image as ImageIcon, Images, Info, Loader2, Paperclip, Reply, Search, Send, Sparkles, Upload, Video, X } from "lucide-react";
 import { toast } from "sonner";
 import { db } from "@/integrations/firebase/client";
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,20 @@ import {
   puedeEditarMensaje,
   PRODI_ID,
   tituloChat,
+  fijarMensaje,
 } from "@/lib/redes/chat";
+import {
+  BuscarEnChat,
+  CrearEncuesta,
+  EncuestaMensaje,
+  FijadosChat,
+  GaleriaChat,
+  ProgramadosChat,
+  ProgramarMensaje,
+  ReenviarMensaje,
+  useProgramados,
+} from "@/components/redes/chat/ChatExtras";
+import { updateDoc, doc } from "@/lib/db";
 import { limpiarSubidasListas, subirArchivosChat, useSubidasChat, CHAT_MAX_MB } from "@/lib/redes/chatArchivos";
 import { TextoIA } from "@/components/redes/TextoIA";
 import { TarjetaReferencia } from "./TarjetaReferencia";
@@ -336,6 +349,16 @@ export function ChatConversacion({
   const privado = chat.tipo === "directo" || chat.tipo === "prodi";
   const [infoMsg, setInfoMsg] = useState<Mensaje | null>(null);
   const [editMsg, setEditMsg] = useState<Mensaje | null>(null);
+  // Buscar, galería, reenviar, encuesta y programar.
+  const [buscando, setBuscando] = useState(false);
+  const [galeria, setGaleria] = useState(false);
+  const [reenviarMsg, setReenviarMsg] = useState<Mensaje | null>(null);
+  const [encuesta, setEncuesta] = useState(false);
+  const [programar, setProgramar] = useState(false);
+  const programados = useProgramados(chat.id, uid);
+  // Cuántos mensajes se cargan (al saltar a uno viejo, se cargan más) y a cuál saltar cuando lleguen.
+  const [limite, setLimite] = useState(200);
+  const saltoPendiente = useRef<string | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const pegadoAbajo = useRef(true);
   const tMantener = useRef<ReturnType<typeof setTimeout>>();
@@ -413,7 +436,7 @@ export function ChatConversacion({
   useEffect(() => {
     setCargando(true);
     return onSnapshot(
-      query(collection(db, "chats", chat.id, "mensajes"), orderBy("at", "desc"), limit(200)),
+      query(collection(db, "chats", chat.id, "mensajes"), orderBy("at", "desc"), limit(limite)),
       (snap) => {
         setMensajes(
           snap.docs
@@ -427,6 +450,11 @@ export function ChatConversacion({
         setCargando(false);
       }
     );
+  }, [chat.id, limite]);
+  // Al cambiar de chat, vuelve a los últimos 200.
+  useEffect(() => {
+    setLimite(200);
+    setBuscando(false);
   }, [chat.id]);
 
   // Mientras se ve, sus avisos no muestran cartel ni suenan (ya estás leyendo).
@@ -494,13 +522,31 @@ export function ChatConversacion({
   const irAMensaje = (id: string) => {
     const el = document.getElementById(`msj-${id}`);
     if (!el) {
-      toast.info("Ese mensaje es más viejo: no está cargado en pantalla.");
+      if (limite < 3000) {
+        saltoPendiente.current = id;
+        setLimite(3000);
+      } else toast.info("Ese mensaje es muy viejo: no está cargado en pantalla.");
       return;
     }
+    saltoPendiente.current = null;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
     el.classList.add("bg-primary/15");
     setTimeout(() => el.classList.remove("bg-primary/15"), 1400);
   };
+
+  useEffect(() => {
+    const id = saltoPendiente.current;
+    if (!id || cargando) return;
+    const t = setTimeout(() => {
+      if (document.getElementById(`msj-${id}`)) irAMensaje(id);
+      else {
+        saltoPendiente.current = null;
+        toast.info("Ese mensaje es muy viejo: no está cargado en pantalla.");
+      }
+    }, 150);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mensajes, cargando]);
 
   // "Escribiendo…" / "grabando audio…" (como WhatsApp): lo que hago yo y lo que hacen los demás.
   const avisarEscribiendo = useAvisarEscribiendo(chat.id);
@@ -730,6 +776,26 @@ export function ChatConversacion({
             )}
           </span>
         </button>
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={() => setBuscando((v) => !v)}
+          className={cn("h-10 w-10 shrink-0 text-muted-foreground md:h-8 md:w-8", buscando && "bg-muted text-foreground")}
+          aria-label="Buscar en el chat"
+          title="Buscar en el chat"
+        >
+          <Search className="h-4 w-4" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={() => setGaleria(true)}
+          className="hidden h-8 w-8 shrink-0 text-muted-foreground min-[400px]:inline-flex"
+          aria-label="Fotos, videos y archivos"
+          title="Fotos, videos, archivos y links"
+        >
+          <Images className="h-4 w-4" />
+        </Button>
         {conVoz && !estoyEnVoz && (
           <Button
             size="icon"
@@ -765,6 +831,12 @@ export function ChatConversacion({
           ))}
         {acciones}
       </header>
+      {buscando && <BuscarEnChat chat={chat} nombreDe={nombreDe} onIr={irAMensaje} onCerrar={() => setBuscando(false)} />}
+      <FijadosChat
+        chat={chat}
+        onIr={irAMensaje}
+        onSacar={(id) => void updateDoc(doc(db, "chats", chat.id), { fijados: (chat.fijados ?? []).filter((f) => f.id !== id) }).catch(() => toast.error("No se pudo"))}
+      />
       {conVoz && !estoyEnVoz && otrosEnVoz.length > 0 && (
         <div className="flex shrink-0 items-center gap-2 border-b bg-primary/[0.07] px-3 py-2 text-sm">
           <span className="flex h-7 w-7 shrink-0 animate-pulse items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -922,8 +994,16 @@ export function ChatConversacion({
                           <span className={cn("line-clamp-2", mio ? "text-primary-foreground/80" : "text-muted-foreground")}>{m.responde_a.texto}</span>
                         </button>
                       )}
+                      {(m.reenviado || m.programado) && (
+                        <p className={cn("mb-0.5 flex items-center gap-1 text-[11px] italic", mio ? "text-primary-foreground/75" : "text-muted-foreground")}>
+                          {m.reenviado ? <CornerUpRight className="h-3 w-3" /> : <CalendarClock className="h-3 w-3" />}
+                          {m.reenviado ? "Reenviado" : "Programado"}
+                        </p>
+                      )}
                       {m.referencia && <TarjetaReferencia r={m.referencia} mio={mio} />}
-                      {m.tipo === "archivo" && m.archivo ? (
+                      {m.tipo === "encuesta" && m.encuesta ? (
+                        <EncuestaMensaje chat={chat} m={m} uid={uid} mio={mio} nombreDe={(u) => nombreDe(u)} />
+                      ) : m.tipo === "archivo" && m.archivo ? (
                         <div className="space-y-1">
                           <ArchivoMensaje archivo={m.archivo} mio={mio} />
                           {m.leyenda && <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] pt-0.5">{m.leyenda}</p>}
@@ -1126,6 +1206,7 @@ export function ChatConversacion({
         )}
       </div>
 
+      <ProgramadosChat lista={programados} />
       <footer
         // Abajo: aire + la barra del celular (o la barra de inicio del iPhone si la barra está escondida).
         className={cn(
@@ -1250,6 +1331,40 @@ export function ChatConversacion({
                 <span>
                   Documento
                   <span className="block text-xs text-muted-foreground">Archivo original, sin comprimir</span>
+                </span>
+              </DropdownMenuItem>
+              {chat.tipo !== "prodi" && (
+                <DropdownMenuItem onSelect={() => setEncuesta(true)}>
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  <span>
+                    Encuesta
+                    <span className="block text-xs text-muted-foreground">Ej.: “¿Qué portada va?”</span>
+                  </span>
+                </DropdownMenuItem>
+              )}
+              {chat.tipo !== "prodi" && (
+                <DropdownMenuItem
+                  onSelect={() => {
+                    if (!texto.trim()) {
+                      toast.info("Escribí el mensaje y después elegí “Programar”.");
+                      setTimeout(() => caja.current?.focus(), 50);
+                      return;
+                    }
+                    setProgramar(true);
+                  }}
+                >
+                  <CalendarClock className="mr-2 h-4 w-4" />
+                  <span>
+                    Programar mensaje
+                    <span className="block text-xs text-muted-foreground">Sale solo a la hora que elijas</span>
+                  </span>
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onSelect={() => setGaleria(true)}>
+                <Images className="mr-2 h-4 w-4" />
+                <span>
+                  Ver fotos, videos y archivos
+                  <span className="block text-xs text-muted-foreground">Todo lo mandado en este chat</span>
                 </span>
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -1434,6 +1549,26 @@ export function ChatConversacion({
               }
             : undefined
         }
+        fijado={!!infoMsg && (chat.fijados ?? []).some((f) => f.id === infoMsg.id)}
+        onFijar={
+          infoMsg && infoMsg.tipo !== "sistema"
+            ? () => {
+                const m = infoMsg;
+                setInfoMsg(null);
+                void fijarMensaje(chat, m, uid)
+                  .then((si) => toast.success(si ? "Fijado arriba del chat" : "Desfijado"))
+                  .catch((err) => toast.error(err instanceof Error ? err.message : "No se pudo"));
+              }
+            : undefined
+        }
+        onReenviar={
+          infoMsg && ["texto", "archivo", "audio", "sticker", "bot", "minuta"].includes(infoMsg.tipo ?? "texto")
+            ? () => {
+                setReenviarMsg(infoMsg);
+                setInfoMsg(null);
+              }
+            : undefined
+        }
         onTarea={
           infoMsg && (infoMsg.texto || infoMsg.leyenda)
             ? () => {
@@ -1449,6 +1584,18 @@ export function ChatConversacion({
         }}
       />
       <EditarMensajeDialog chat={chat} m={editMsg} onOpenChange={(v) => !v && setEditMsg(null)} />
+      <GaleriaChat chat={chat} open={galeria} onOpenChange={setGaleria} onIr={irAMensaje} />
+      <ReenviarMensaje chat={chat} m={reenviarMsg} chats={chats} uid={uid} profiles={profiles} role={role} onOpenChange={(v) => !v && setReenviarMsg(null)} />
+      <CrearEncuesta chat={chat} uid={uid} remitente={nombre} open={encuesta} onOpenChange={setEncuesta} />
+      <ProgramarMensaje
+        chat={chat}
+        uid={uid}
+        remitente={nombre}
+        texto={texto}
+        open={programar}
+        onOpenChange={setProgramar}
+        onListo={() => setTexto("")}
+      />
       <TareaMensajeDialog
         chat={chat}
         m={tareaMsg}

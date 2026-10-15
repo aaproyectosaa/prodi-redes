@@ -23,6 +23,7 @@ import { publicarEnChat } from "../_lib/chat-server";
 import { waitUntil } from "@vercel/functions";
 import { armarMinutaDeLlamada } from "../_lib/minuta-llamada";
 import { recordatoriosRevisionInterna } from "../_lib/diario";
+import { enviarProgramados } from "../_lib/chat-programados";
 import type { Data } from "../_lib/db";
 
 /** Colecciones con fecha que van a Google Calendar (se ponen al día después de guardar). */
@@ -159,6 +160,7 @@ async function escribir(req: VercelRequest) {
 // Varias pestañas preguntan lo mismo casi al mismo tiempo: la respuesta para una misma marca se reusa 2 s
 // en esta instancia (no dice nada privado: solo qué colecciones cambiaron).
 const CAMBIOS_TTL = 2_000;
+let ultimosProgramados = 0;
 const respuestas = new Map<string, { r: Promise<{ rev: number; colecciones: string[] }>; hasta: number }>();
 
 /** Qué colecciones cambiaron. `rev` es la marca para la próxima vez (con margen por si algo se estaba guardando). */
@@ -171,6 +173,11 @@ async function cambios(req: VercelRequest) {
   const clave = desde == null || !Number.isFinite(Number(desde)) ? "inicio" : String(Number(desde));
   // Con el chat abierto, también quién está escribiendo (es de cada persona: no va en la respuesta compartida).
   waitUntil(cerrarLlamadasTerminadas().catch(() => undefined));
+  // Mensajes programados del chat que ya tocan (a lo sumo una revisión por minuto).
+  if (Date.now() - ultimosProgramados > 60_000) {
+    ultimosProgramados = Date.now();
+    waitUntil(enviarProgramados(appUrl()).catch((e) => console.warn("[programados]", e)));
+  }
   // Videos en revisión interna sin aprobar: avisos seguidos a producción (a lo sumo una revisión cada 10 min).
   if (Date.now() - ultimaRevisionInterna > 10 * 60_000) {
     ultimaRevisionInterna = Date.now();

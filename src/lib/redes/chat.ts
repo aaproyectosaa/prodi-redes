@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   setDoc,
@@ -618,4 +619,84 @@ export function useConteoSinLeer(chats: Chat[], uid: string | undefined): Record
     };
   }, [clave, uid]);
   return conteos;
+}
+
+// ---------------------------------------------------------------------------
+// Fijados, encuestas, reenviar y mensajes programados
+// ---------------------------------------------------------------------------
+
+/** Texto corto para mostrar un mensaje fijado o en la galería. */
+export function resumenMensaje(m: Mensaje): string {
+  if (m.tipo === "archivo") return `📎 ${m.leyenda || m.archivo?.name || "Archivo"}`;
+  if (m.tipo === "audio") return "🎤 Audio";
+  if (m.tipo === "encuesta") return `📊 ${m.encuesta?.pregunta ?? "Encuesta"}`;
+  return (m.texto || "").replace(/\*\*/g, "").slice(0, 280);
+}
+
+/** Fija (o saca) un mensaje arriba del chat. Hasta 3: el más viejo sale. */
+export async function fijarMensaje(chat: Chat, m: Mensaje, uid: string) {
+  assertEditable();
+  const actuales = chat.fijados ?? [];
+  const ya = actuales.some((f) => f.id === m.id);
+  const fijados = ya ? actuales.filter((f) => f.id !== m.id) : [{ id: m.id, texto: resumenMensaje(m), by: uid, at: now() }, ...actuales].slice(0, 3);
+  await updateDoc(doc(db, CHATS, chat.id), { fijados });
+  return !ya;
+}
+
+/** Manda una encuesta al chat. */
+export async function mandarEncuesta(chat: Chat, by: string, remitente: string, pregunta: string, opciones: string[], multiple: boolean) {
+  assertEditable();
+  const ops = opciones.map((o) => o.trim()).filter(Boolean).slice(0, 10);
+  if (!pregunta.trim() || ops.length < 2) throw new Error("Poné la pregunta y al menos 2 opciones");
+  const at = now();
+  await addDoc(collection(db, CHATS, chat.id, "mensajes"), {
+    texto: `📊 ${pregunta.trim()}`,
+    by,
+    by_nombre: remitente,
+    at,
+    tipo: "encuesta",
+    link: null,
+    reunion_id: null,
+    encuesta: { pregunta: pregunta.trim().slice(0, 200), opciones: ops.map((o) => o.slice(0, 100)), multiple },
+    votos: {},
+  });
+  await updateDoc(doc(db, CHATS, chat.id), { ultimo: { texto: `📊 ${pregunta.trim()}`.slice(0, 140), by, at }, [`leido.${by}`]: at });
+}
+
+/** Votar (o sacar el voto) en una encuesta. */
+export async function votarEncuesta(chat: Chat, m: Mensaje, uid: string, opcion: number) {
+  assertEditable();
+  const mios = m.votos?.[uid] ?? [];
+  const nuevo = m.encuesta?.multiple ? (mios.includes(opcion) ? mios.filter((x) => x !== opcion) : [...mios, opcion]) : mios.includes(opcion) ? [] : [opcion];
+  const votos = { ...(m.votos ?? {}) };
+  if (nuevo.length) votos[uid] = nuevo;
+  else delete votos[uid];
+  await updateDoc(doc(db, CHATS, chat.id, "mensajes", m.id), { votos });
+}
+
+/** Reenvía un mensaje a otros chats (lo hace el servidor: archivos y audios se copian con su acceso). */
+export async function reenviarMensaje(chat: Chat, m: Mensaje, destinos: string[]) {
+  assertEditable();
+  await callApi("/api/ia/reenviar", { chat_id: chat.id, mensaje_id: m.id, destinos });
+}
+
+export interface Programado {
+  id: string;
+  chat_id: string;
+  texto: string;
+  enviar_at: string;
+  by: string;
+  by_nombre?: string;
+}
+
+/** Programa un mensaje: lo manda el servidor a esa hora. */
+export async function programarMensaje(chat: Chat, by: string, remitente: string, texto: string, enviarAt: Date) {
+  assertEditable();
+  if (enviarAt.getTime() < Date.now() + 30_000) throw new Error("Elegí una hora que no haya pasado");
+  await addDoc(collection(db, "programados"), { chat_id: chat.id, texto: texto.trim().slice(0, 4000), enviar_at: enviarAt.toISOString(), by, by_nombre: remitente, created_at: now() });
+}
+
+export async function cancelarProgramado(id: string) {
+  assertEditable();
+  await deleteDoc(doc(db, "programados", id));
 }

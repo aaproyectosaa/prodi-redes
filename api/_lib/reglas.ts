@@ -99,7 +99,54 @@ async function companeros(c: Contexto): Promise<Set<string>> {
 /** Un link que se puede abrir sin riesgo: solo https (nada de javascript: ni data:). */
 const linkOk = (v: unknown) => v == null || v === "" || (typeof v === "string" && v.length <= 500 && /^https:\/\/[^\s"<>`]+$/i.test(v));
 /** Lo que la app deja crear como mensaje (archivos, bots y Prodi los escribe solo el servidor). */
-const TIPOS_MENSAJE = ["texto", "audio", "llamada", "minuta", "sistema", "sticker"];
+const TIPOS_MENSAJE = ["texto", "audio", "llamada", "minuta", "sistema", "sticker", "encuesta"];
+
+/** Encuesta: pregunta y de 2 a 10 opciones cortas; los votos arrancan vacíos. */
+function encuestaValida(e: unknown): boolean {
+  if (!e || typeof e !== "object") return false;
+  const x = e as Data;
+  const ops = x.opciones;
+  return (
+    typeof x.pregunta === "string" &&
+    x.pregunta.trim().length > 0 &&
+    x.pregunta.length <= 200 &&
+    Array.isArray(ops) &&
+    ops.length >= 2 &&
+    ops.length <= 10 &&
+    ops.every((o) => typeof o === "string" && o.trim().length > 0 && o.length <= 100) &&
+    (x.multiple === undefined || typeof x.multiple === "boolean")
+  );
+}
+
+/** Votos de una encuesta: entre antes y después solo cambió el de `uid` (lista de índices válidos). */
+function soloSuVoto(antes: unknown, despues: unknown, uid: string, opciones: number, multiple: boolean): boolean {
+  const mapa = (x: unknown): Record<string, unknown> => (x && typeof x === "object" && !Array.isArray(x) ? (x as Record<string, unknown>) : {});
+  const a = mapa(antes);
+  const d = mapa(despues);
+  if (Object.keys(d).length > 1000) return false;
+  for (const k of new Set([...Object.keys(a), ...Object.keys(d)])) {
+    if (k === uid) continue;
+    if (JSON.stringify(a[k]) !== JSON.stringify(d[k])) return false;
+  }
+  const mio = d[uid];
+  if (mio === undefined) return true;
+  return (
+    Array.isArray(mio) &&
+    mio.length <= (multiple ? opciones : 1) &&
+    mio.every((i) => Number.isInteger(i) && i >= 0 && i < opciones) &&
+    new Set(mio).size === mio.length
+  );
+}
+
+/** Mensajes fijados arriba del chat: hasta 3, cada uno con id, texto corto, quién y cuándo. */
+function fijadosValidos(f: unknown): boolean {
+  if (f == null) return true;
+  return (
+    Array.isArray(f) &&
+    f.length <= 3 &&
+    f.every((x) => x && typeof x === "object" && typeof (x as Data).id === "string" && typeof (x as Data).texto === "string" && String((x as Data).texto).length <= 300)
+  );
+}
 /** Sticker: solo el código del emoji (la imagen la arma la app con la dirección de Google). */
 const STICKER_OK = /^[0-9a-f]{2,6}(_[0-9a-f]{2,6}){0,6}$/;
 
@@ -241,6 +288,9 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
       return equipoDe(c, d.proyecto_id) || clienteDe(c, d.proyecto_id);
     case "piezas_ia":
       return equipoDe(c, d.proyecto_id) || esFinanzas(c) || clienteDe(c, d.proyecto_id);
+    case "programados":
+      // Mensajes programados del chat: cada uno ve los suyos.
+      return d.by === c.uid;
     case "planes_mes":
       // El cliente lo ve recién cuando producción se lo mandó.
       return equipoDe(c, d.proyecto_id) || (clienteDe(c, d.proyecto_id) && d.estado !== "borrador");
@@ -316,6 +366,14 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
     // Un mensaje con `archivo` le da acceso al archivo a todo el chat (api/_lib/media-token.ts).
     const delServidor = (d: Data | null) => !!d && (d.archivo != null || d.tipo === "archivo" || d.tipo === "bot" || d.by === "prodi");
     // Reacciones (👍 ✅ …): cualquier miembro, en cualquier mensaje, pero solo pone o saca la suya.
+    // Encuesta: cualquier miembro vota (pone, cambia o saca SU voto) y nada más.
+    if (sub === "mensajes" && !crea && !borra && antes!.tipo === "encuesta" && soloCambia(antes, despues, ["votos"])) {
+      const enc = antes!.encuesta as Data | undefined;
+      const n = Array.isArray(enc?.opciones) ? (enc!.opciones as unknown[]).length : 0;
+      if (!soloSuVoto(antes!.votos, despues!.votos, c.uid, n, enc?.multiple === true)) return false;
+      return esAdmin(c) || miembroDelChat(c, padreId!);
+    }
+    if (sub === "mensajes" && crea && despues?.tipo === "encuesta" && (!encuestaValida(despues.encuesta) || (despues.votos != null && Object.keys(despues.votos as object).length > 0))) return false;
     if (sub === "mensajes" && !crea && !borra && soloCambia(antes, despues, ["reacciones"])) {
       if (!soloSuReaccion(antes!.reacciones, despues!.reacciones, c.uid)) return false;
       return esAdmin(c) || miembroDelChat(c, padreId!);
@@ -384,6 +442,21 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       return equipoDe(c, antes!.proyecto_id) && equipoDe(c, despues!.proyecto_id);
     case "rodajes":
       return (crea || produceEn(c, antes!.proyecto_id)) && (borra || produceEn(c, despues!.proyecto_id));
+    case "programados": {
+      // Se crea uno propio para un chat del que es miembro (texto y hora); se puede borrar (cancelar). No se edita.
+      if (borra) return antes!.by === c.uid;
+      if (!crea) return false;
+      const ok =
+        despues!.by === c.uid &&
+        typeof despues!.chat_id === "string" &&
+        typeof despues!.texto === "string" &&
+        despues!.texto.trim().length > 0 &&
+        despues!.texto.length <= 4000 &&
+        typeof despues!.enviar_at === "string" &&
+        !Number.isNaN(Date.parse(despues!.enviar_at)) &&
+        Date.parse(despues!.enviar_at) < Date.now() + 366 * 86_400_000;
+      return ok && (await miembroDelChat(c, String(despues!.chat_id)));
+    }
     case "piezas_ia":
       // El cliente aprueba o pide cambios solo por /api/publico/pieza-cliente.
       if (crea || borra) return esAdmin(c);
@@ -471,6 +544,8 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       const miembrosAntes = lista(antes!.miembros);
       if (!miembrosAntes.includes(c.uid)) return false;
       if (soloCambia(antes, despues, ["ultimo", "leido"])) return true;
+      // Fijar o desfijar mensajes arriba del chat: cualquier miembro.
+      if (soloCambia(antes, despues, ["fijados"])) return fijadosValidos(despues!.fijados);
       if (antes!.tipo !== "grupo" || despues!.tipo !== "grupo" || !grupoValido(despues!)) return false;
       if (lista(antes!.admins).includes(c.uid)) {
         // Admin del grupo: nombre, foto, miembros y admins.
