@@ -135,6 +135,7 @@ export default function Equipo() {
     const id = clave.slice(8);
     return id === "-" ? "Sin empresa asignada" : clientes.find((c) => c.id === id)?.nombre ?? "Empresa";
   };
+  const colorEmpresa = (clave: string) => clientes.find((c) => c.id === clave.slice(8))?.color || "#6F40FC";
   const empresas = Array.from(new Set(filtrados.map(claveGrupo).filter((g) => g.startsWith("empresa:")))).sort(
     (a, b) => Number(a === "empresa:-") - Number(b === "empresa:-") || nombreEmpresa(a).localeCompare(nombreEmpresa(b))
   );
@@ -205,16 +206,29 @@ export default function Equipo() {
         )}
         <div className="space-y-6">
           {grupos.map(([grupo, gente]) => (
-            <section key={grupo} className="space-y-2.5">
+            <section
+              key={grupo}
+              className={cn(grupo.startsWith("empresa:") ? "overflow-hidden rounded-3xl border-2 bg-card shadow-sm" : "space-y-2.5")}
+            >
               {grupo.startsWith("empresa:") ? (
-                <div className="flex items-center gap-2.5">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                    <Building2 className="h-4 w-4" />
+                // Empresa: una tarjeta con su color, y adentro su gente.
+                <div
+                  className="flex items-center gap-3 border-b px-4 py-3.5 sm:px-5"
+                  style={{ background: `color-mix(in srgb, ${colorEmpresa(grupo)} 16%, transparent)` }}
+                >
+                  <span
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-base font-bold text-white shadow-sm"
+                    style={{ background: colorEmpresa(grupo) }}
+                  >
+                    {grupo === "empresa:-" ? <Building2 className="h-5 w-5" /> : nombreEmpresa(grupo).charAt(0).toUpperCase()}
                   </span>
-                  <p className="font-semibold">{nombreEmpresa(grupo)}</p>
-                  <span className="text-xs tabular-nums text-muted-foreground">
-                    {gente.length} {gente.length === 1 ? "persona" : "personas"}
-                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-lg font-bold leading-tight">{nombreEmpresa(grupo)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {gente.length} {gente.length === 1 ? "persona" : "personas"}
+                    </p>
+                  </div>
+                  <Building2 className="h-5 w-5 shrink-0 text-muted-foreground/60" />
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
@@ -224,7 +238,7 @@ export default function Equipo() {
                   <span className="text-xs tabular-nums text-muted-foreground">{gente.length}</span>
                 </div>
               )}
-              <div className="divide-y overflow-hidden rounded-2xl border bg-card">
+              <div className={cn("divide-y", grupo.startsWith("empresa:") ? "" : "overflow-hidden rounded-2xl border bg-card")}>
                 {gente.map((p) => {
             const pendiente = esPendiente(p);
             const inactivo = p.activo === false;
