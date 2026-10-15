@@ -7,7 +7,7 @@ import { doc, setDoc, getDoc } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { defaultRouteForRole } from "@/lib/roles";
@@ -179,141 +179,207 @@ const Auth = () => {
     }
   };
 
-  return (
-    <div className="dark relative flex min-h-dvh items-center justify-center overflow-hidden bg-black p-4 pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-[max(1rem,env(safe-area-inset-top))] text-foreground">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-40 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-prodi/25 blur-[120px]"
-      />
-      <Card className="relative w-full max-w-md border-white/10 bg-zinc-950/80 text-white backdrop-blur">
-        <CardHeader className="items-center text-center">
-          <img
-            src={asset("/brand/logo-horizontal-blanco.png")}
-            alt="Prodi"
-            className="mb-4 h-10 w-auto"
-          />
-          <CardTitle className="text-xl">
-            {linkClave ? "Creá tu contraseña" : isLogin ? (enChat ? "Ingresar a Prodi Chat" : "Ingresar al gestor") : "Crear cuenta"}
-          </CardTitle>
-          <CardDescription className="text-zinc-400">
-            {linkClave
-              ? "Elegí una contraseña de al menos 6 caracteres."
-              : isLogin
-                ? enChat
-                  ? "Tus chats con el equipo de Prodi"
-                  : "Producción de videos y pauta"
-                : "Necesitás el código de invitación del equipo"}
-          </CardDescription>
-        </CardHeader>
+  const titulo = linkClave ? "Creá tu contraseña" : isLogin ? (enChat ? "Ingresar a Prodi Chat" : "Ingresar al gestor") : "Crear cuenta";
+  const subtitulo = linkClave
+    ? "Elegí una contraseña de al menos 6 caracteres."
+    : isLogin
+      ? enChat
+        ? "Tus chats con el equipo de Prodi"
+        : "Producción de videos y pauta"
+      : "Necesitás el código de invitación del equipo";
 
-        <CardContent>
+  return (
+    <div className="dark relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-background px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-[max(1.5rem,env(safe-area-inset-top))] text-foreground">
+      {/* Fondo: dos manchas de color suaves */}
+      <div aria-hidden className="pointer-events-none absolute inset-0">
+        <div className="absolute -top-40 left-1/2 h-[480px] w-[480px] -translate-x-1/2 rounded-full bg-gradient-to-br from-primary to-fuchsia-500 opacity-20 blur-[120px] dark:opacity-25" />
+        <div className="absolute -bottom-48 -right-32 h-[380px] w-[380px] rounded-full bg-fuchsia-500 opacity-10 blur-[120px] dark:opacity-15" />
+      </div>
+
+      <div className="relative w-full max-w-sm">
+        <div className="mb-8 flex flex-col items-center text-center">
+          <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-[22px] bg-gradient-to-br from-primary to-fuchsia-500 shadow-lg shadow-primary/25">
+            <img src={asset("/brand/isotipo.png")} alt="" className="h-9 w-auto brightness-0 invert" />
+          </div>
+          <img src={asset("/brand/logo-horizontal-blanco.png")} alt="Prodi" className="mb-5 hidden h-6 w-auto dark:block" />
+          <img src={asset("/brand/logo-horizontal-negro.png")} alt="Prodi" className="mb-5 h-6 w-auto dark:hidden" />
+          <h1 className="text-[26px] font-bold leading-tight tracking-tight">{titulo}</h1>
+          <p className="mt-1.5 text-[15px] text-muted-foreground">{subtitulo}</p>
+        </div>
+
+        <div className="rounded-[28px] border border-border/60 bg-card/80 p-5 shadow-xl shadow-black/5 backdrop-blur-xl sm:p-6 dark:shadow-black/30">
           {linkClave ? (
             <form onSubmit={handleLinkClave} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="nueva">Contraseña nueva</Label>
-                <Input id="nueva" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required disabled={loading} autoFocus />
+              <Campo id="nueva" label="Contraseña nueva">
+                <InputClave id="nueva" value={password} onChange={setPassword} disabled={loading} autoFocus autoComplete="new-password" />
+              </Campo>
+              <Campo id="repetir" label="Repetila">
+                <InputClave id="repetir" value={confirmPassword} onChange={setConfirmPassword} disabled={loading} autoComplete="new-password" />
+              </Campo>
+              <div className="pt-1">
+                <Button type="submit" className={BOTON} disabled={loading}>
+                  {loading && <Loader2 className="h-5 w-5 animate-spin" />}
+                  {loading ? "Guardando..." : "Guardar y entrar"}
+                </Button>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="repetir">Repetila</Label>
-                <Input id="repetir" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required disabled={loading} />
-              </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Guardando..." : "Guardar y entrar"}
-              </Button>
             </form>
           ) : (
-          <>
-          <form onSubmit={isLogin ? handleLogin : handleRegister} className="space-y-4">
-            {!isLogin && (
-              <div className="space-y-2">
-                <Label htmlFor="nombre">Nombre</Label>
-                <Input
-                  id="nombre"
-                  type="text"
-                  value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
-                  required
-                  disabled={loading}
-                  placeholder="Tu nombre"
-                />
+            <>
+              <form onSubmit={isLogin ? handleLogin : handleRegister} className="space-y-4">
+                {!isLogin && (
+                  <Campo id="nombre" label="Nombre">
+                    <Input
+                      id="nombre"
+                      type="text"
+                      value={nombre}
+                      onChange={(e) => setNombre(e.target.value)}
+                      required
+                      disabled={loading}
+                      placeholder="Tu nombre"
+                      autoComplete="name"
+                      className={INPUT}
+                    />
+                  </Campo>
+                )}
+                <Campo id="email" label="Email">
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    disabled={loading}
+                    placeholder="tu@email.com"
+                    autoComplete="email"
+                    inputMode="email"
+                    className={INPUT}
+                  />
+                </Campo>
+                <Campo id="password" label="Contraseña">
+                  <InputClave
+                    id="password"
+                    value={password}
+                    onChange={setPassword}
+                    disabled={loading}
+                    placeholder="••••••••"
+                    autoComplete={isLogin ? "current-password" : "new-password"}
+                  />
+                </Campo>
+                {!isLogin && (
+                  <Campo id="confirmPassword" label="Repetir contraseña">
+                    <InputClave
+                      id="confirmPassword"
+                      value={confirmPassword}
+                      onChange={setConfirmPassword}
+                      disabled={loading}
+                      placeholder="••••••••"
+                      autoComplete="new-password"
+                    />
+                  </Campo>
+                )}
+                {!isLogin && (
+                  <Campo id="invitationCode" label="Código de invitación">
+                    <Input
+                      id="invitationCode"
+                      type="text"
+                      value={invitationCode}
+                      onChange={(e) => setInvitationCode(e.target.value)}
+                      required
+                      disabled={loading}
+                      placeholder="Código del equipo"
+                      className={INPUT}
+                    />
+                  </Campo>
+                )}
+                <div className="pt-1">
+                  <Button type="submit" className={BOTON} disabled={loading}>
+                    {loading && <Loader2 className="h-5 w-5 animate-spin" />}
+                    {loading ? "Procesando..." : isLogin ? "Ingresar" : "Registrarme"}
+                  </Button>
+                </div>
+              </form>
+              <div className="mt-5 text-center text-sm">
+                {/* Crear cuenta (con el código del equipo) solo con ?registro=1: a los clientes les damos el usuario nosotros. */}
+                {isLogin && !new URLSearchParams(window.location.search).has("registro") ? (
+                  <p className="text-muted-foreground">¿No tenés usuario? Pedíselo a tu contacto de Prodi.</p>
+                ) : (
+                  <button type="button" onClick={() => setIsLogin(!isLogin)} className="font-medium text-primary hover:underline" disabled={loading}>
+                    {isLogin ? "¿No tenés cuenta? Registrate" : "¿Ya tenés cuenta? Ingresá"}
+                  </button>
+                )}
               </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={loading}
-                placeholder="tu@email.com"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Contraseña</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={loading}
-                placeholder="••••••••"
-              />
-            </div>
-            {!isLogin && (
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Repetir contraseña</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  disabled={loading}
-                  placeholder="••••••••"
-                />
-              </div>
-            )}
-            {!isLogin && (
-              <div className="space-y-2">
-                <Label htmlFor="invitationCode">Código de invitación</Label>
-                <Input
-                  id="invitationCode"
-                  type="text"
-                  value={invitationCode}
-                  onChange={(e) => setInvitationCode(e.target.value)}
-                  required
-                  disabled={loading}
-                  placeholder="Código del equipo"
-                />
-              </div>
-            )}
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Procesando..." : isLogin ? "Ingresar" : "Registrarme"}
-            </Button>
-          </form>
-          <div className="mt-4 text-center text-sm">
-            {/* Crear cuenta (con el código del equipo) solo con ?registro=1: a los clientes les damos el usuario nosotros. */}
-            {isLogin && !new URLSearchParams(window.location.search).has("registro") ? (
-              <p className="text-muted-foreground">¿No tenés usuario? Pedíselo a tu contacto de Prodi.</p>
-            ) : (
-              <button type="button" onClick={() => setIsLogin(!isLogin)} className="text-primary hover:underline" disabled={loading}>
-                {isLogin ? "¿No tenés cuenta? Registrate" : "¿Ya tenés cuenta? Ingresá"}
-              </button>
-            )}
-          </div>
-          </>
+            </>
           )}
-          <div className="mt-3 border-t pt-3">
-            {enChat ? <BotonInstalarChat className="justify-center" /> : <BotonInstalar className="justify-center" />}
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+
+        <div className="mt-5">
+          {enChat ? <BotonInstalarChat className="justify-center" /> : <BotonInstalar className="justify-center" />}
+        </div>
+      </div>
       {enChat ? <InstalarChatHost /> : <AvisoInstalar />}
     </div>
   );
 };
+
+const INPUT =
+  "h-14 rounded-2xl border-transparent bg-muted/60 px-4 text-base focus-visible:border-primary focus-visible:bg-background focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:ring-offset-0";
+const BOTON = "h-14 w-full gap-2 rounded-2xl text-base font-semibold shadow-lg shadow-primary/25";
+
+function Campo({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id} className="pl-1 text-sm font-medium text-muted-foreground">
+        {label}
+      </Label>
+      {children}
+    </div>
+  );
+}
+
+/** Campo de contraseña con el ojito para mostrarla u ocultarla. */
+function InputClave({
+  id,
+  value,
+  onChange,
+  disabled,
+  placeholder,
+  autoFocus,
+  autoComplete,
+}: {
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  placeholder?: string;
+  autoFocus?: boolean;
+  autoComplete?: string;
+}) {
+  const [ver, setVer] = useState(false);
+  return (
+    <div className="relative">
+      <Input
+        id={id}
+        type={ver ? "text" : "password"}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        required
+        disabled={disabled}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+        autoComplete={autoComplete}
+        className={`${INPUT} pr-14`}
+      />
+      <button
+        type="button"
+        onClick={() => setVer((v) => !v)}
+        disabled={disabled}
+        aria-label={ver ? "Ocultar contraseña" : "Mostrar contraseña"}
+        className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+      >
+        {ver ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+      </button>
+    </div>
+  );
+}
 
 export default Auth;

@@ -6,7 +6,6 @@ import { doc, getDoc, setDoc } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -20,6 +19,10 @@ import {
   Bell,
   Camera,
   CheckCircle2,
+  Mail,
+  Smartphone,
+  Palette,
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "@/hooks/use-theme";
@@ -28,7 +31,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useUserRole } from "@/hooks/use-user-role";
 import { RoleBadge } from "@/components/RoleBadge";
 import { getRoleInfo } from "@/lib/roles";
-import { PageHeader } from "@/components/PageHeader";
 import { PushNotificationSettings } from "@/components/PushNotificationSettings";
 import { AvisosCorreoSonidoSettings } from "@/components/AvisosCorreoSonidoSettings";
 import {
@@ -56,6 +58,7 @@ const AVATAR_COLORS = [
 
 type ProfileTab = "cuenta" | "avisos";
 
+/** Grupo estilo "Ajustes": rótulo chico afuera y tarjeta redondeada adentro. */
 function Section({
   title,
   description,
@@ -68,24 +71,52 @@ function Section({
   className?: string;
 }) {
   return (
-    <section
-      className={cn(
-        "rounded-xl border border-border bg-card px-4 py-4 sm:px-5 sm:py-5 space-y-4",
-        className
-      )}
-    >
-      <div>
-        <h3 className="text-sm font-semibold">{title}</h3>
+    <section className="space-y-2">
+      <div className="px-1">
+        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {title}
+        </h3>
         {description && (
-          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+          <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">
             {description}
           </p>
         )}
       </div>
-      {children}
+      <div
+        className={cn(
+          "rounded-2xl border border-border bg-card divide-y divide-border overflow-hidden",
+          className
+        )}
+      >
+        {children}
+      </div>
     </section>
   );
 }
+
+/** Fila de ajuste: chip de ícono a la izquierda, contenido a la derecha. */
+function Row({
+  icon: Icon,
+  children,
+  className,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex items-start gap-3 px-4 py-3.5", className)}>
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <Icon className="h-5 w-5" />
+      </span>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
+const SPINNER = (
+  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+);
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -200,57 +231,80 @@ const Profile = () => {
   if (loading) {
     return (
       <div className="flex-1 flex flex-col min-h-0">
-        <PageHeader title="Mi Perfil" />
-        <main className="flex-1 px-4 py-4 max-w-2xl mx-auto w-full space-y-4">
-          <Skeleton className="h-28 w-full rounded-xl" />
-          <Skeleton className="h-11 w-full rounded-lg" />
-          <Skeleton className="h-48 w-full rounded-xl" />
+        <main className="flex-1 px-4 py-5 max-w-2xl mx-auto w-full space-y-4">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-40 rounded-xl" />
+            <Skeleton className="h-4 w-56 rounded-lg" />
+          </div>
+          <div className="flex flex-col items-center gap-3 rounded-2xl bg-muted/60 py-6">
+            <Skeleton className="h-24 w-24 rounded-full" />
+            <Skeleton className="h-5 w-36 rounded-lg" />
+            <Skeleton className="h-4 w-48 rounded-lg" />
+          </div>
+          <Skeleton className="h-12 w-full rounded-2xl" />
+          <Skeleton className="h-48 w-full rounded-2xl" />
         </main>
       </div>
     );
   }
 
+  const estadoAviso = (activo: boolean) => (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
+        activo ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+      )}
+    >
+      {activo && <CheckCircle2 className="h-3.5 w-3.5" />}
+      {activo ? "Activo" : "Apagado"}
+    </span>
+  );
+
+  const botonGuardar = (className?: string) => (
+    <Button
+      onClick={handleSave}
+      disabled={saving}
+      className={cn(
+        "w-full h-12 rounded-2xl text-[15px] font-semibold gap-2 shadow-lg shadow-primary/25",
+        className
+      )}
+    >
+      {saving ? (
+        <>
+          {SPINNER}
+          Guardando…
+        </>
+      ) : (
+        <>
+          <Save className="w-4 h-4" />
+          Guardar cambios
+        </>
+      )}
+    </Button>
+  );
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <PageHeader
-        title="Mi Perfil"
-        subtitle="Tu cuenta, avisos y preferencias"
-        actions={
-          tab === "cuenta" ? (
-            <Button
-              onClick={handleSave}
-              disabled={saving}
-              size="sm"
-              className="gap-2"
-            >
-              {saving ? (
-                <>
-                  <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                  <span className="hidden sm:inline">Guardando…</span>
-                </>
-              ) : (
-                <>
-                  <Save className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Guardar</span>
-                  <span className="sm:hidden">Guardar</span>
-                </>
-              )}
-            </Button>
-          ) : undefined
-        }
-      />
+      <main className="flex-1 px-4 py-5 sm:py-6 pb-[calc(var(--alto-barra)+5.5rem)] sm:pb-mobile-nav md:pb-8">
+        <div className="max-w-2xl mx-auto space-y-5">
+          <header className="space-y-1">
+            <h1 className="text-[26px] font-bold leading-tight tracking-tight">Mi perfil</h1>
+            <p className="text-sm text-muted-foreground">Tu cuenta, avisos y preferencias.</p>
+          </header>
 
-      <main className="flex-1 px-4 py-4 sm:py-5 pb-[calc(var(--alto-barra)+5rem)] sm:pb-mobile-nav md:pb-8">
-        <div className="max-w-2xl mx-auto space-y-4">
-          {/* Resumen */}
-          <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
-            <div className="flex gap-4">
-              <div className="relative shrink-0">
+          {/* Hero */}
+          <div className="relative overflow-hidden rounded-2xl border border-border bg-card px-4 pb-5 pt-6">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-r from-primary/15 to-fuchsia-500/15"
+            />
+            <div className="relative flex flex-col items-center text-center">
+              <div className="relative">
                 <Avatar
-                  className="h-16 w-16 sm:h-[4.5rem] sm:w-[4.5rem] ring-2 ring-border"
+                  className="h-24 w-24 ring-4 ring-card shadow-lg"
                   style={
                     !profileImage
-                      ? { boxShadow: `0 0 0 3px ${avatarColor}44` }
+                      ? { boxShadow: `0 0 0 4px ${avatarColor}44` }
                       : undefined
                   }
                 >
@@ -259,7 +313,7 @@ const Profile = () => {
                   ) : (
                     <AvatarFallback
                       style={{ backgroundColor: avatarColor }}
-                      className="text-white text-xl font-bold"
+                      className="text-white text-3xl font-bold"
                     >
                       {getUserInitials()}
                     </AvatarFallback>
@@ -268,11 +322,11 @@ const Profile = () => {
                 <button
                   type="button"
                   onClick={() => document.getElementById("image-upload")?.click()}
-                  className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full bg-primary text-primary-foreground shadow-md flex items-center justify-center hover:opacity-90 transition-opacity"
+                  className="absolute bottom-0 right-0 h-9 w-9 rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/25 ring-4 ring-card flex items-center justify-center hover:opacity-90 transition-opacity"
                   title="Cambiar foto"
                   aria-label="Cambiar foto"
                 >
-                  <Camera className="w-3.5 h-3.5" />
+                  <Camera className="w-4 h-4" />
                 </button>
                 <input
                   id="image-upload"
@@ -291,46 +345,43 @@ const Profile = () => {
                 />
               </div>
 
-              <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-lg font-semibold truncate leading-tight">
-                    {nombre || "Sin nombre"}
-                  </h2>
-                  {roleInfo && (
-                    <RoleBadge
-                      label={roleInfo.label}
-                      variant="text"
-                      className="text-xs shrink-0"
-                    />
-                  )}
-                </div>
-                <p className="text-sm text-muted-foreground truncate">
-                  {user?.email}
-                </p>
-                <div className="flex flex-wrap gap-2 pt-0.5">
+              <h2 className="mt-3 max-w-full truncate text-xl font-bold leading-tight tracking-tight">
+                {nombre || "Sin nombre"}
+              </h2>
+              <p className="mt-0.5 max-w-full truncate text-sm text-muted-foreground">
+                {user?.email}
+              </p>
+              {roleInfo && (
+                <RoleBadge
+                  label={roleInfo.label}
+                  variant="text"
+                  className="mt-2.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold"
+                />
+              )}
+
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 gap-1.5 rounded-full bg-muted/60 px-3.5 text-xs font-semibold hover:bg-muted"
+                  onClick={() => document.getElementById("image-upload")?.click()}
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  {profileImage ? "Cambiar foto" : "Subir foto"}
+                </Button>
+                {profileImage && (
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
-                    className="h-8 gap-1.5 text-xs"
-                    onClick={() => document.getElementById("image-upload")?.click()}
+                    className="h-9 gap-1.5 rounded-full px-3.5 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => void guardarFoto("")}
                   >
-                    <Upload className="w-3 h-3" />
-                    {profileImage ? "Cambiar foto" : "Subir foto"}
+                    <X className="w-3.5 h-3.5" />
+                    Quitar
                   </Button>
-                  {profileImage && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 gap-1.5 text-xs text-muted-foreground"
-                      onClick={() => void guardarFoto("")}
-                    >
-                      <X className="w-3 h-3" />
-                      Quitar
-                    </Button>
-                  )}
-                </div>
+                )}
               </div>
             </div>
           </div>
@@ -340,24 +391,30 @@ const Profile = () => {
             onValueChange={(v) => setTab(v as ProfileTab)}
             className="w-full"
           >
-            <TabsList className="grid w-full grid-cols-2 h-11 p-1">
-              <TabsTrigger value="cuenta" className="gap-2 text-sm data-[state=active]:shadow-sm">
+            <TabsList className="grid w-full grid-cols-2 h-12 rounded-2xl bg-muted/60 p-1">
+              <TabsTrigger
+                value="cuenta"
+                className="h-full gap-2 rounded-xl text-sm font-semibold data-[state=active]:shadow-sm"
+              >
                 <UserIcon className="w-4 h-4" />
                 Mi cuenta
               </TabsTrigger>
-              <TabsTrigger value="avisos" className="gap-2 text-sm data-[state=active]:shadow-sm">
+              <TabsTrigger
+                value="avisos"
+                className="h-full gap-2 rounded-xl text-sm font-semibold data-[state=active]:shadow-sm"
+              >
                 <Bell className="w-4 h-4" />
                 Notificaciones
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="cuenta" className="mt-4 space-y-3 focus-visible:ring-0">
+            <TabsContent value="cuenta" className="mt-5 space-y-5 focus-visible:ring-0">
               <Section
                 title="Datos personales"
                 description="Cómo te ven el resto del equipo en la app."
               >
-                <div className="space-y-1.5">
-                  <Label htmlFor="nombre" className="text-sm">
+                <Row icon={UserIcon}>
+                  <Label htmlFor="nombre" className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Nombre
                   </Label>
                   <Input
@@ -366,18 +423,16 @@ const Profile = () => {
                     onChange={(e) => setNombre(e.target.value)}
                     placeholder="Tu nombre"
                     required
-                    className="h-10"
+                    className="mt-1.5 h-12 rounded-2xl border-transparent bg-muted/60 text-[15px] focus-visible:border-primary focus-visible:bg-background focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:ring-offset-0"
                   />
-                </div>
+                </Row>
 
-                <div className="space-y-2">
-                  <div>
-                    <Label className="text-sm">Color del avatar</Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Solo se usa si no tenés foto.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
+                <Row icon={Palette}>
+                  <Label className="text-sm font-semibold">Color del avatar</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Solo se usa si no tenés foto.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2.5">
                     {AVATAR_COLORS.map((color) => {
                       const selected = avatarColor === color;
                       return (
@@ -386,7 +441,7 @@ const Profile = () => {
                           type="button"
                           onClick={() => setAvatarColor(color)}
                           className={cn(
-                            "relative h-8 w-8 rounded-full transition-transform hover:scale-110",
+                            "relative h-9 w-9 rounded-full transition-transform hover:scale-110",
                             selected &&
                               "ring-2 ring-offset-2 ring-offset-card ring-foreground scale-105"
                           )}
@@ -395,44 +450,59 @@ const Profile = () => {
                           aria-pressed={selected}
                         >
                           {selected && (
-                            <Check className="w-3.5 h-3.5 text-white absolute inset-0 m-auto drop-shadow" />
+                            <Check className="w-4 h-4 text-white absolute inset-0 m-auto drop-shadow" />
                           )}
                         </button>
                       );
                     })}
                   </div>
-                </div>
+                </Row>
               </Section>
 
               <Section
                 title="Apariencia"
                 description="Elegí el tema de la aplicación en este dispositivo."
+                className="p-2"
               >
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setTheme("light")}
                     className={cn(
-                      "h-12 rounded-lg border-2 transition-all flex items-center justify-center gap-2 text-sm font-medium",
+                      "flex flex-col items-center justify-center gap-2 rounded-xl border-2 py-4 text-sm font-semibold transition-all",
                       theme === "light"
                         ? "border-primary bg-primary/5 text-primary"
-                        : "border-border text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground"
+                        : "border-transparent bg-muted/60 text-muted-foreground hover:text-foreground"
                     )}
                   >
-                    <Sun className="w-4 h-4" />
+                    <span
+                      className={cn(
+                        "flex h-10 w-10 items-center justify-center rounded-xl",
+                        theme === "light" ? "bg-primary/10" : "bg-background"
+                      )}
+                    >
+                      <Sun className="w-5 h-5" />
+                    </span>
                     Claro
                   </button>
                   <button
                     type="button"
                     onClick={() => setTheme("dark")}
                     className={cn(
-                      "h-12 rounded-lg border-2 transition-all flex items-center justify-center gap-2 text-sm font-medium",
+                      "flex flex-col items-center justify-center gap-2 rounded-xl border-2 py-4 text-sm font-semibold transition-all",
                       theme === "dark"
                         ? "border-primary bg-primary/5 text-primary"
-                        : "border-border text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground"
+                        : "border-transparent bg-muted/60 text-muted-foreground hover:text-foreground"
                     )}
                   >
-                    <Moon className="w-4 h-4" />
+                    <span
+                      className={cn(
+                        "flex h-10 w-10 items-center justify-center rounded-xl",
+                        theme === "dark" ? "bg-primary/10" : "bg-background"
+                      )}
+                    >
+                      <Moon className="w-5 h-5" />
+                    </span>
                     Oscuro
                   </button>
                 </div>
@@ -441,49 +511,37 @@ const Profile = () => {
               {user && userHasPasswordProvider(user) && (
                 <ChangePasswordForm user={user} />
               )}
+
+              {/* En compu el guardar va al final; en el teléfono queda fijo abajo. */}
+              <div className="hidden sm:block pt-1">{botonGuardar()}</div>
             </TabsContent>
 
-            <TabsContent value="avisos" className="mt-4 space-y-3 focus-visible:ring-0">
-              <div className="flex flex-wrap gap-2">
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "gap-1 font-normal",
-                    emailAvisos
-                      ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5"
-                      : "text-muted-foreground"
-                  )}
-                >
-                  {emailAvisos ? (
-                    <CheckCircle2 className="w-3 h-3" />
-                  ) : (
-                    <Bell className="w-3 h-3" />
-                  )}
-                  Correo {emailAvisos ? "activo" : "apagado"}
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "gap-1 font-normal",
-                    pushEnabled
-                      ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5"
-                      : "text-muted-foreground"
-                  )}
-                >
-                  {pushEnabled ? (
-                    <CheckCircle2 className="w-3 h-3" />
-                  ) : (
-                    <Bell className="w-3 h-3" />
-                  )}
-                  Push {pushEnabled ? "activo" : "apagado"}
-                </Badge>
-              </div>
+            <TabsContent value="avisos" className="mt-5 space-y-5 focus-visible:ring-0">
+              <Section title="Estado">
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <Mail className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0 flex-1 text-[15px] font-medium">Correo</span>
+                  {estadoAviso(emailAvisos)}
+                </div>
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <Smartphone className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0 flex-1 text-[15px] font-medium">Push en el teléfono</span>
+                  {estadoAviso(pushEnabled)}
+                </div>
+              </Section>
 
-              <p className="text-sm text-muted-foreground leading-relaxed px-0.5">
-                Te avisamos cuando hay algo para vos: en la app, en el teléfono
-                (push) y por correo. Las reuniones y tareas con fecha te llegan
-                además como invitación de Google Calendar.
-              </p>
+              <div className="flex gap-3 rounded-2xl bg-muted/60 px-4 py-3.5">
+                <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Te avisamos cuando hay algo para vos: en la app, en el teléfono
+                  (push) y por correo. Las reuniones y tareas con fecha te llegan
+                  además como invitación de Google Calendar.
+                </p>
+              </div>
 
               <AvisosCorreoSonidoSettings
                 userId={user!.uid}
@@ -502,24 +560,8 @@ const Profile = () => {
       </main>
 
       {tab === "cuenta" && (
-        <div className="sm:hidden fixed inset-x-0 bottom-[calc(var(--alto-barra)+1px)] z-20 border-t border-border bg-card/95 backdrop-blur p-3">
-          <Button
-            onClick={handleSave}
-            disabled={saving}
-            className="w-full h-11 font-semibold gap-2"
-          >
-            {saving ? (
-              <>
-                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                Guardando…
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4" />
-                Guardar cambios
-              </>
-            )}
-          </Button>
+        <div className="sm:hidden fixed inset-x-0 bottom-[calc(var(--alto-barra)+1px)] z-20 border-t border-border bg-card/90 backdrop-blur-xl px-4 py-3">
+          {botonGuardar()}
         </div>
       )}
     </div>

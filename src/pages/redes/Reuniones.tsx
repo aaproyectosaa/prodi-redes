@@ -38,7 +38,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PageShell, EmptyState } from "@/components/redes/PageShell";
+import { PageShell } from "@/components/redes/PageShell";
 import { ClienteTag } from "@/components/redes/ClienteTag";
 import { Grabador } from "@/components/redes/Grabador";
 import UserAvatar from "@/components/UserAvatar";
@@ -47,14 +47,18 @@ import { useAppData } from "@/contexts/app-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { actualizarReunion, compartirMinuta, crearReunion, generarMinuta, minutaVacia } from "@/lib/redes/reuniones";
 import { chatClienteId } from "@/lib/redes/chat";
-import { aInputAR, desdeInputAR } from "@/lib/fecha";
+import { aInputAR, desdeInputAR, formatearFecha } from "@/lib/fecha";
 import { fechaHora } from "@/lib/redes/format";
 import { cn, hrefSeguro } from "@/lib/utils";
 import type { Minuta, Reunion } from "@/lib/redes/types";
 
+/** Campos suaves (mismo estilo que Pedir un video). */
+const SUAVE =
+  "rounded-2xl border-transparent bg-muted/60 shadow-none transition-colors focus-visible:border-primary focus-visible:bg-background focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:ring-offset-0 focus:ring-4 focus:ring-primary/15 focus:ring-offset-0";
+const ETIQUETA = "text-[11px] font-semibold uppercase tracking-wider text-muted-foreground";
+
 export default function Reuniones() {
-  const { reuniones, clienteById } = useRedes();
-  const { profiles } = useAppData();
+  const { reuniones } = useRedes();
   const { role } = useUserProfileContext();
   const [params, setParams] = useSearchParams();
   const abierta = reuniones.find((r) => r.id === params.get("r")) ?? null;
@@ -74,73 +78,176 @@ export default function Reuniones() {
     setParams(next, { replace: true });
   };
 
+  const [proxima, ...resto] = lista;
+
   return (
     <PageShell
-      title="Reuniones"
+      title={<span className="text-[26px] font-bold tracking-tight">Reuniones</span>}
       subtitle="Videollamadas gratis y minutas armadas con IA a partir de la grabación."
       actions={
         esEquipo && (
-          <Button onClick={() => setNueva(true)}>
+          <Button onClick={() => setNueva(true)} className="h-11 rounded-2xl px-5 font-semibold shadow-lg shadow-primary/25">
             <Plus className="mr-2 h-4 w-4" /> Nueva reunión
           </Button>
         )
       }
     >
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="mb-5">
-        <TabsList>
-          <TabsTrigger value="proximas">Próximas</TabsTrigger>
-          <TabsTrigger value="pasadas">Realizadas</TabsTrigger>
+        <TabsList className="h-11 rounded-2xl bg-muted/60 p-1">
+          <TabsTrigger value="proximas" className="rounded-xl px-4 font-semibold data-[state=active]:shadow-sm">
+            Próximas
+          </TabsTrigger>
+          <TabsTrigger value="pasadas" className="rounded-xl px-4 font-semibold data-[state=active]:shadow-sm">
+            Realizadas
+          </TabsTrigger>
         </TabsList>
       </Tabs>
 
       {lista.length === 0 ? (
-        <EmptyState
-          icon={Video}
-          title={tab === "proximas" ? "No hay reuniones agendadas" : "Todavía no hay reuniones realizadas"}
-          description="También podés arrancar una videollamada desde cualquier chat."
-        />
+        <div className="flex flex-col items-center justify-center rounded-2xl bg-muted/60 px-6 py-14 text-center">
+          <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-background text-primary shadow-sm">
+            <Video className="h-7 w-7" />
+          </span>
+          <p className="text-base font-semibold">{tab === "proximas" ? "No hay reuniones agendadas" : "Todavía no hay reuniones realizadas"}</p>
+          <p className="mt-1 max-w-sm text-sm text-muted-foreground">También podés arrancar una videollamada desde cualquier chat.</p>
+          {esEquipo && tab === "proximas" && (
+            <Button onClick={() => setNueva(true)} className="mt-5 h-11 rounded-2xl px-5 font-semibold shadow-lg shadow-primary/25">
+              <Plus className="mr-2 h-4 w-4" /> Nueva reunión
+            </Button>
+          )}
+        </div>
+      ) : tab === "proximas" ? (
+        <div className="space-y-6">
+          <ProximaHero reunion={proxima} onAbrir={() => abrir(proxima.id)} />
+          {resto.length > 0 && (
+            <section className="space-y-2.5">
+              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Después</h2>
+              <div className="grid gap-2.5 md:grid-cols-2">
+                {resto.map((r) => (
+                  <FilaReunion key={r.id} reunion={r} onAbrir={() => abrir(r.id)} />
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
-          {lista.map((r) => {
-            const cliente = clienteById(r.proyecto_id);
-            return (
-              <button
-                key={r.id}
-                type="button"
-                onClick={() => abrir(r.id)}
-                className="flex flex-col gap-2 rounded-xl border bg-card p-4 text-left transition-colors hover:border-primary/50"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="font-semibold">{r.titulo}</p>
-                  {r.minuta ? (
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success/12 px-2 py-0.5 text-[11px] font-medium text-success">
-                      <FileText className="h-3 w-3" /> Minuta
-                    </span>
-                  ) : r.estado === "realizada" ? (
-                    <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">Sin minuta</span>
-                  ) : null}
-                </div>
-                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <CalendarClock className="h-3.5 w-3.5" /> {fechaHora(r.fecha)}
-                </p>
-                <div className="flex items-center justify-between gap-2">
-                  {cliente ? <ClienteTag cliente={cliente} /> : <span className="text-xs text-muted-foreground">Interna</span>}
-                  <div className="flex -space-x-2">
-                    {r.participantes.slice(0, 5).map((id) => {
-                      const p = profiles.find((x) => x.id === id);
-                      return p ? <UserAvatar key={id} profile={p} size="sm" className="ring-2 ring-card" /> : null;
-                    })}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
+        <div className="divide-y overflow-hidden rounded-2xl border bg-card">
+          {lista.map((r) => (
+            <FilaReunion key={r.id} reunion={r} onAbrir={() => abrir(r.id)} compacta />
+          ))}
         </div>
       )}
 
       <NuevaReunionDialog open={nueva} onOpenChange={setNueva} onCreada={(id) => abrir(id)} />
       <ReunionSheet reunion={abierta} onClose={() => abrir(null)} />
     </PageShell>
+  );
+}
+
+/** Bloque de fecha estilo calendario: mes arriba y el día grande. */
+function BloqueFecha({ fecha, grande = false }: { fecha: string; grande?: boolean }) {
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 flex-col items-center justify-center rounded-2xl text-center leading-none",
+        grande ? "h-20 w-20 bg-primary text-primary-foreground shadow-lg shadow-primary/25" : "h-12 w-12 bg-primary/10 text-primary"
+      )}
+    >
+      <span className={cn("font-semibold uppercase tracking-wider", grande ? "text-[11px] opacity-90" : "text-[9px]")}>
+        {formatearFecha(fecha, { month: "short" }).replace(".", "")}
+      </span>
+      <span className={cn("font-bold tabular-nums tracking-tight", grande ? "mt-1 text-[32px]" : "mt-0.5 text-lg")}>{formatearFecha(fecha, { day: "numeric" })}</span>
+    </span>
+  );
+}
+
+function Avatares({ ids, max = 5 }: { ids: string[]; max?: number }) {
+  const { profiles } = useAppData();
+  const extra = ids.length - max;
+  return (
+    <div className="flex items-center -space-x-2">
+      {ids.slice(0, max).map((id) => {
+        const p = profiles.find((x) => x.id === id);
+        return p ? <UserAvatar key={id} profile={p} size="sm" className="ring-2 ring-card" /> : null;
+      })}
+      {extra > 0 && (
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground ring-2 ring-card">+{extra}</span>
+      )}
+    </div>
+  );
+}
+
+/** La próxima reunión, bien a la vista. */
+function ProximaHero({ reunion: r, onAbrir }: { reunion: Reunion; onAbrir: () => void }) {
+  const { clienteById } = useRedes();
+  const cliente = clienteById(r.proyecto_id);
+  return (
+    <div className="relative overflow-hidden rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
+      <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-gradient-to-br from-primary/15 to-fuchsia-500/10 blur-2xl" />
+      <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center">
+        <button type="button" onClick={onAbrir} className="flex min-w-0 flex-1 items-center gap-4 text-left">
+          <BloqueFecha fecha={r.fecha} grande />
+          <span className="min-w-0 flex-1 space-y-1.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-primary">
+              <CalendarClock className="h-3 w-3" /> Próxima
+            </span>
+            <span className="block truncate text-lg font-bold leading-tight tracking-tight sm:text-xl">{r.titulo}</span>
+            <span className="block text-sm capitalize text-muted-foreground">
+              {formatearFecha(r.fecha, { weekday: "long", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </span>
+        </button>
+        <div className="flex flex-wrap items-center justify-between gap-3 sm:flex-col sm:items-end">
+          <div className="flex items-center gap-3">
+            {cliente ? <ClienteTag cliente={cliente} /> : <span className="text-xs text-muted-foreground">Interna</span>}
+            <Avatares ids={r.participantes} max={4} />
+          </div>
+          <Button asChild className="h-11 rounded-2xl px-5 font-semibold shadow-lg shadow-primary/25">
+            <a href={hrefSeguro(r.link)} target="_blank" rel="noreferrer">
+              <Video className="mr-2 h-4 w-4" /> Entrar
+            </a>
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FilaReunion({ reunion: r, onAbrir, compacta = false }: { reunion: Reunion; onAbrir: () => void; compacta?: boolean }) {
+  const { clienteById } = useRedes();
+  const cliente = clienteById(r.proyecto_id);
+  return (
+    <button
+      type="button"
+      onClick={onAbrir}
+      className={cn(
+        "flex w-full items-center gap-3 text-left transition-colors",
+        compacta ? "px-4 py-3 hover:bg-muted/40" : "rounded-2xl border bg-card p-3 hover:border-primary/50"
+      )}
+    >
+      <BloqueFecha fecha={r.fecha} />
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-2">
+          <span className="truncate font-semibold">{r.titulo}</span>
+          {r.minuta ? (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success/12 px-2 py-0.5 text-[11px] font-medium text-success">
+              <FileText className="h-3 w-3" /> Minuta
+            </span>
+          ) : r.estado === "realizada" ? (
+            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">Sin minuta</span>
+          ) : null}
+        </span>
+        <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <CalendarClock className="h-3.5 w-3.5" /> {fechaHora(r.fecha)}
+          </span>
+          {cliente ? <ClienteTag cliente={cliente} /> : <span>Interna</span>}
+        </span>
+      </span>
+      <span className="hidden sm:block">
+        <Avatares ids={r.participantes} max={3} />
+      </span>
+    </button>
   );
 }
 
@@ -207,24 +314,29 @@ function NuevaReunionDialog({ open, onOpenChange, onCreada }: { open: boolean; o
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-h-[92dvh] max-w-lg overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Nueva reunión</DialogTitle>
-          <DialogDescription>Se crea un link de videollamada gratis (Jitsi Meet). No hace falta instalar nada.</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label>Tema</Label>
-            <Input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ej: Planificación de noviembre" />
+      <DialogContent className="max-w-lg overflow-y-auto sm:max-h-[92dvh] sm:rounded-2xl">
+        <DialogHeader className="space-y-3 text-left">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <Video className="h-5 w-5" />
+          </span>
+          <div className="space-y-1">
+            <DialogTitle className="text-[22px] font-bold tracking-tight">Nueva reunión</DialogTitle>
+            <DialogDescription>Se crea un link de videollamada gratis (Jitsi Meet). No hace falta instalar nada.</DialogDescription>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>Cliente</Label>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label className={ETIQUETA}>Tema</Label>
+            <Input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ej: Planificación de noviembre" className={cn(SUAVE, "h-12 text-[15px] font-medium")} />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label className={ETIQUETA}>Cliente</Label>
               <Select value={clienteId} onValueChange={setClienteId}>
-                <SelectTrigger>
+                <SelectTrigger className={cn(SUAVE, "h-12")}>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="rounded-xl">
                   <SelectItem value="interna">Reunión interna</SelectItem>
                   {clientes.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
@@ -234,16 +346,24 @@ function NuevaReunionDialog({ open, onOpenChange, onCreada }: { open: boolean; o
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label>Día y hora</Label>
-              <Input type="datetime-local" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+            <div className="space-y-2">
+              <Label className={ETIQUETA}>Día y hora</Label>
+              <Input type="datetime-local" value={fecha} onChange={(e) => setFecha(e.target.value)} className={cn(SUAVE, "h-12")} />
             </div>
           </div>
-          <div className="space-y-1.5">
-            <Label>Participantes</Label>
-            <div className="space-y-1 rounded-lg border p-2 sm:max-h-52 sm:overflow-y-auto">
+          <div className="space-y-2">
+            <Label className={ETIQUETA}>
+              Participantes {sel.size > 0 && <span className="font-normal normal-case tracking-normal">· {sel.size}</span>}
+            </Label>
+            <div className="space-y-0.5 rounded-2xl bg-muted/60 p-1.5 sm:max-h-56 sm:overflow-y-auto">
               {candidatos.map((p) => (
-                <label key={p.id} className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/60">
+                <label
+                  key={p.id}
+                  className={cn(
+                    "flex cursor-pointer items-center gap-3 rounded-xl px-2.5 py-2 transition-colors",
+                    sel.has(p.id) ? "bg-background shadow-sm" : "hover:bg-background/60"
+                  )}
+                >
                   <Checkbox
                     checked={sel.has(p.id)}
                     onCheckedChange={() =>
@@ -256,18 +376,18 @@ function NuevaReunionDialog({ open, onOpenChange, onCreada }: { open: boolean; o
                     }
                   />
                   <UserAvatar profile={p} size="sm" />
-                  <span className="flex-1 truncate text-sm">{p.nombre}</span>
-                  <span className="text-[11px] text-muted-foreground">{p.role === "cliente" ? "Cliente" : ""}</span>
+                  <span className="flex-1 truncate text-sm font-medium">{p.nombre}</span>
+                  {p.role === "cliente" && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">Cliente</span>}
                 </label>
               ))}
             </div>
           </div>
         </div>
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={() => save(true)} disabled={saving}>
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button variant="outline" onClick={() => save(true)} disabled={saving} className="h-12 rounded-2xl font-semibold">
             <Video className="mr-2 h-4 w-4" /> Empezar ahora
           </Button>
-          <Button onClick={() => save(false)} disabled={saving}>
+          <Button onClick={() => save(false)} disabled={saving} className="h-12 rounded-2xl px-6 font-semibold shadow-lg shadow-primary/25">
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Agendar
           </Button>
@@ -292,7 +412,7 @@ function ListaEditable({
     if (!items.length) return null;
     return (
       <div className="space-y-1.5">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+        <p className={ETIQUETA}>{label}</p>
         <ul className="space-y-1 text-sm">
           {items.map((t, i) => (
             <li key={i} className="flex gap-2">
@@ -306,12 +426,13 @@ function ListaEditable({
   }
   return (
     <div className="space-y-1.5">
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={ETIQUETA}>{label}</p>
       <Textarea
         rows={Math.max(2, items.length + 1)}
         value={items.join("\n")}
         onChange={(e) => onChange(e.target.value.split("\n"))}
         placeholder="Uno por línea"
+        className={SUAVE}
       />
     </div>
   );
@@ -365,8 +486,8 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
   return (
     <Sheet open={!!reunion} onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
-        <SheetHeader className="space-y-1 border-b px-5 pb-4 pt-5 text-left">
-          <SheetTitle className="pr-8 text-xl">{reunion.titulo}</SheetTitle>
+        <SheetHeader className="space-y-1.5 border-b px-5 pb-4 pt-5 text-left">
+          <SheetTitle className="pr-8 text-[22px] font-bold tracking-tight">{reunion.titulo}</SheetTitle>
           <SheetDescription asChild>
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span>{fechaHora(reunion.fecha)}</span>
@@ -382,7 +503,7 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
 
         <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
           <div className="flex flex-wrap items-center gap-2">
-            <Button asChild>
+            <Button asChild className="h-11 rounded-2xl px-5 font-semibold shadow-lg shadow-primary/25">
               <a href={hrefSeguro(reunion.link)} target="_blank" rel="noreferrer">
                 <Video className="mr-2 h-4 w-4" /> Entrar a la videollamada
               </a>
@@ -390,6 +511,7 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
             <Button
               variant="ghost"
               size="sm"
+              className="h-11 rounded-2xl"
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(reunion.link);
@@ -407,7 +529,7 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
             {reunion.participantes.map((id) => {
               const p = profiles.find((x) => x.id === id);
               return p ? (
-                <span key={id} className="inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2.5 text-xs">
+                <span key={id} className="inline-flex items-center gap-1.5 rounded-full bg-muted/60 py-0.5 pl-0.5 pr-3 text-xs font-medium">
                   <UserAvatar profile={p} size="sm" /> {p.nombre}
                 </span>
               ) : null;
@@ -416,7 +538,7 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
 
           {esEquipo && (
             <section className="space-y-2.5">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Grabación</h3>
+              <h3 className={ETIQUETA}>Grabación</h3>
               <Grabador reunion={reunion} clienteNombre={cliente?.nombre ?? "Interno"} />
               {grabaciones.length > 0 && (
                 <ul className="space-y-1 text-xs">
@@ -442,20 +564,21 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
 
           {esEquipo && (
             <section className="space-y-2.5">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Notas</h3>
+              <h3 className={ETIQUETA}>Notas</h3>
               <Textarea
                 rows={4}
                 value={notas}
                 onChange={(e) => setNotas(e.target.value)}
                 onBlur={() => notas !== (reunion.notas ?? "") && void run("notas", () => actualizarReunion(reunion.id, { notas }))}
                 placeholder="Anotá lo que se habló (si no hay grabación, la IA arma la minuta con esto)"
+                className={SUAVE}
               />
             </section>
           )}
 
           <section className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <h3 className={cn(ETIQUETA, "flex items-center gap-1.5")}>
                 <FileText className="h-3.5 w-3.5" /> Minuta
               </h3>
               {esEquipo && (
@@ -463,6 +586,7 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
                   <Button
                     size="sm"
                     variant="secondary"
+                    className="rounded-xl font-semibold"
                     disabled={!!busy || (!grabaciones.length && !notas.trim())}
                     title={!grabaciones.length && !notas.trim() ? "Grabá la reunión o escribí notas primero" : undefined}
                     onClick={() =>
@@ -483,6 +607,7 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
                     <Button
                       size="sm"
                       variant="ghost"
+                      className="rounded-xl"
                       onClick={() => {
                         setMinuta(reunion.minuta ?? minutaVacia());
                         setEditando(true);
@@ -497,7 +622,7 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
 
             {editando && minuta ? (
               <div className="space-y-3">
-                <Textarea rows={3} value={minuta.resumen} onChange={(e) => setMinuta({ ...minuta, resumen: e.target.value })} placeholder="Resumen" />
+                <Textarea rows={3} value={minuta.resumen} onChange={(e) => setMinuta({ ...minuta, resumen: e.target.value })} placeholder="Resumen" className={SUAVE} />
                 <ListaEditable label="Temas" items={minuta.temas} onChange={(temas) => setMinuta({ ...minuta, temas })} editable />
                 <ListaEditable label="Acuerdos" items={minuta.acuerdos} onChange={(acuerdos) => setMinuta({ ...minuta, acuerdos })} editable />
                 <ListaEditable
@@ -515,11 +640,12 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
                   editable
                 />
                 <div className="flex justify-end gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => setEditando(false)}>
+                  <Button variant="ghost" size="sm" className="rounded-xl" onClick={() => setEditando(false)}>
                     Cancelar
                   </Button>
                   <Button
                     size="sm"
+                    className="rounded-xl font-semibold shadow-lg shadow-primary/25"
                     onClick={() =>
                       run(
                         "guardar",
@@ -539,14 +665,14 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
                 </div>
               </div>
             ) : reunion.minuta ? (
-              <div className="space-y-4 rounded-xl border bg-card p-4">
+              <div className="space-y-4 rounded-2xl border bg-card p-4">
                 <p className="text-sm leading-relaxed">{reunion.minuta.resumen}</p>
                 <ListaEditable label="Temas" items={reunion.minuta.temas} onChange={() => undefined} editable={false} />
                 <ListaEditable label="Acuerdos" items={reunion.minuta.acuerdos} onChange={() => undefined} editable={false} />
                 {reunion.minuta.tareas.length > 0 && (
                   <div className="space-y-1.5">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tareas</p>
-                    <div className="divide-y rounded-lg border">
+                    <p className={ETIQUETA}>Tareas</p>
+                    <div className="divide-y overflow-hidden rounded-xl bg-muted/60">
                       {reunion.minuta.tareas.map((t, i) => (
                         <div key={i} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-2 text-sm">
                           <span className="flex-1">{t.tarea}</span>
@@ -565,6 +691,7 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
                   <Button
                     size="sm"
                     variant="outline"
+                    className="rounded-xl"
                     disabled={busy === "share"}
                     onClick={() => run("share", () => compartirMinuta(reunion, chat, user?.uid ?? "", profile?.nombre ?? ""), "Minuta enviada al chat")}
                   >
@@ -573,7 +700,7 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
                 )}
               </div>
             ) : (
-              <p className={cn("rounded-xl border border-dashed p-4 text-sm text-muted-foreground")}>
+              <p className={cn("rounded-2xl bg-muted/60 p-4 text-sm text-muted-foreground")}>
                 {esEquipo ? "Grabá la reunión o escribí notas y tocá «Generar minuta con IA»." : "Cuando el equipo cargue la minuta, la vas a ver acá."}
               </p>
             )}

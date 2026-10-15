@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { PageShell } from "@/components/redes/PageShell";
 import { callApi } from "@/lib/redes/api";
-import { cn } from "@/lib/utils";
 import { TextoIA } from "@/components/redes/TextoIA";
 
 type Msg = { role: "user" | "assistant"; content: string };
@@ -62,7 +61,7 @@ export default function MiAsistente() {
 
   return (
     <PageShell
-      title="Mi asistente"
+      title={<span className="text-[26px] font-bold tracking-tight">Mi asistente</span>}
       subtitle={
         <span className="inline-flex items-center gap-1.5">
           <Lock className="h-3.5 w-3.5" /> Solo vos. Ve todo el sistema: clientes, equipo, videos y plata.
@@ -70,48 +69,73 @@ export default function MiAsistente() {
       }
       actions={
         mensajes.length > 0 && (
-          <Button variant="outline" onClick={() => setMensajes([])} disabled={pensando}>
+          <Button variant="outline" onClick={() => setMensajes([])} disabled={pensando} className="h-11 rounded-2xl font-semibold">
             <Trash2 className="mr-2 h-4 w-4" /> Nueva conversación
           </Button>
         )
       }
     >
-      <div className="mx-auto flex max-w-3xl flex-col gap-4 pb-40">
+      <div className="mx-auto flex max-w-3xl flex-col gap-5 pb-44">
         {mensajes.length === 0 && (
-          <div className="space-y-4 rounded-2xl border bg-card p-6 text-center">
-            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-[#6F40FC] to-[#E040A0] text-white">
-              <Sparkles className="h-6 w-6" />
-            </span>
-            <div>
-              <p className="font-semibold">Preguntame lo que quieras del negocio</p>
-              <p className="text-sm text-muted-foreground">Tengo la facturación (también la de las planillas 2024-2025), gastos, deudas, pagos al equipo, clientes y videos.</p>
-            </div>
-            <div className="flex flex-wrap justify-center gap-2">
-              {EJEMPLOS.map((e) => (
-                <button key={e} type="button" onClick={() => void preguntar(e)} className="rounded-full border px-3 py-1.5 text-left text-xs hover:border-primary/50 hover:bg-primary/5">
-                  {e}
-                </button>
-              ))}
+          <div className="relative overflow-hidden rounded-2xl border bg-card px-5 py-8 text-center sm:px-8 sm:py-10">
+            <div className="pointer-events-none absolute -top-24 left-1/2 h-56 w-56 -translate-x-1/2 rounded-full bg-gradient-to-br from-primary/20 to-fuchsia-500/15 blur-3xl" />
+            <div className="relative space-y-5">
+              <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-fuchsia-500 text-white shadow-lg shadow-primary/30">
+                <Sparkles className="h-7 w-7" />
+              </span>
+              <div className="space-y-1.5">
+                <p className="text-[22px] font-bold leading-tight tracking-tight">Preguntame lo que quieras del negocio</p>
+                <p className="mx-auto max-w-md text-sm text-muted-foreground">
+                  Tengo la facturación (también la de las planillas 2024-2025), gastos, deudas, pagos al equipo, clientes y videos.
+                </p>
+              </div>
+              <div className="grid gap-2 text-left sm:grid-cols-2">
+                {EJEMPLOS.map((e) => (
+                  <button
+                    key={e}
+                    type="button"
+                    onClick={() => void preguntar(e)}
+                    className="group flex items-start gap-2.5 rounded-2xl bg-muted/60 px-3.5 py-3 text-sm font-medium leading-snug transition-all hover:bg-primary/10 hover:text-primary active:scale-[0.98]"
+                  >
+                    <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary/70 transition-colors group-hover:text-primary" />
+                    <span>{e}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
-        {mensajes.map((m, i) => (
-          <div key={i} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
-            <div className={cn("max-w-[90%] rounded-2xl px-4 py-3 text-sm leading-relaxed", m.role === "user" ? "bg-primary text-primary-foreground" : "border bg-card")}>
-              {m.role === "user" ? <p className="whitespace-pre-wrap">{m.content}</p> : <TextoIA texto={m.content} />}
+        {mensajes.map((m, i) =>
+          m.role === "user" ? (
+            <div key={i} className="flex justify-end animate-in fade-in slide-in-from-bottom-1 duration-300 motion-reduce:animate-none">
+              <div className="max-w-[85%] rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-[15px] leading-relaxed text-primary-foreground shadow-md shadow-primary/20">
+                <p className="whitespace-pre-wrap">{m.content}</p>
+              </div>
             </div>
-          </div>
-        ))}
+          ) : (
+            <div key={i} className="flex items-start gap-3 animate-in fade-in slide-in-from-bottom-1 duration-300 motion-reduce:animate-none">
+              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Sparkles className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 max-w-[calc(100%-2.75rem)] flex-1 rounded-2xl rounded-tl-md bg-muted/60 px-4 py-3 text-[15px] leading-relaxed">
+                <TextoIA texto={m.content} />
+              </div>
+            </div>
+          )
+        )}
         {pensando && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Mirando los números…
+          <div className="flex items-center gap-3">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </span>
+            <span className="rounded-2xl rounded-tl-md bg-muted/60 px-4 py-2.5 text-sm text-muted-foreground">Mirando los números…</span>
           </div>
         )}
         <div ref={fin} />
       </div>
       <div className="fixed inset-x-0 bottom-16 z-20 px-4 md:bottom-4 md:left-[var(--sidebar-width,16rem)] md:right-28">
         <form
-          className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border bg-background p-2 shadow-lg"
+          className="mx-auto flex max-w-3xl items-end gap-2 rounded-[1.75rem] border bg-background/95 p-2 pl-3 shadow-xl shadow-black/10 backdrop-blur transition-colors focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/15 dark:shadow-black/40"
           onSubmit={(e) => {
             e.preventDefault();
             void preguntar(texto);
@@ -128,10 +152,16 @@ export default function MiAsistente() {
             }}
             placeholder="Preguntá algo del negocio…"
             rows={1}
-            className="max-h-40 min-h-10 resize-none border-0 shadow-none focus-visible:ring-0"
+            className="max-h-40 min-h-11 resize-none border-0 bg-transparent px-1 py-2.5 text-[15px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
           />
-          <Button type="submit" size="icon" disabled={!texto.trim() || pensando} aria-label="Preguntar">
-            <ArrowUp className="h-4 w-4" />
+          <Button
+            type="submit"
+            size="icon"
+            disabled={!texto.trim() || pensando}
+            aria-label="Preguntar"
+            className="h-11 w-11 shrink-0 rounded-full shadow-lg shadow-primary/25 transition-transform active:scale-95"
+          >
+            {pensando ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowUp className="h-5 w-5" />}
           </Button>
         </form>
       </div>
