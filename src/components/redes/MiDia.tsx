@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { ArrowRight, CalendarClock, Check, CheckCircle2, ChevronDown, Sun } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, CalendarClock, ChevronDown, Sun, X } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { ClienteTag } from "@/components/redes/ClienteTag";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
@@ -29,21 +30,25 @@ function leerVisto(): { fecha: string; ids: string[] } | null {
   }
 }
 
-/** "Vencido", "Hoy", "Mañana" o el día. */
+/** "Atrasado N d", "Hoy", "Mañana" o el día. */
 function cuando(fecha: string | null | undefined): { texto: string; tono: "rojo" | "naranja" | "normal" } {
   if (!fecha) return { texto: "Sin fecha", tono: "normal" };
   const f = fecha.slice(0, 10);
   const hoy = hoyISO();
   const manana = hoyISO(Date.now() + 86_400_000);
-  if (f < hoy) return { texto: "Vencido", tono: "rojo" };
+  if (f < hoy) {
+    const dias = Math.max(1, Math.round((Date.parse(hoy) - Date.parse(f)) / 86_400_000));
+    return { texto: `Atrasado ${dias} d`, tono: "rojo" };
+  }
   if (f === hoy) return { texto: "Hoy", tono: "naranja" };
   if (f === manana) return { texto: "Mañana", tono: "normal" };
   return { texto: `${Number(f.slice(8, 10))}/${Number(f.slice(5, 7))}`, tono: "normal" };
 }
 
 /**
- * "Mi día": lo más urgente de cada uno arriba de su tablero, para que no tenga que buscar qué hacer.
- * Recibe lo que le toca a la persona y muestra las primeras, ordenadas por fecha (sin fecha, al final).
+ * "Mi día": lo más urgente de cada uno, para que no tenga que buscar qué hacer. Salta como cartel al entrar al
+ * tablero (una vez por día, o de nuevo si le entra algo nuevo y urgente). Al cerrarlo queda una pastillita
+ * "Mi día" para volver a abrirlo. Ordenado por fecha (sin fecha, al final).
  */
 export function MiDia({ items }: { items: ItemDia[] }) {
   const { clienteById } = useRedes();
@@ -54,96 +59,153 @@ export function MiDia({ items }: { items: ItemDia[] }) {
   const resto = ordenados.length - primeros.length;
   const h = new Date().getHours();
   const saludo = h < 13 ? "Buen día" : h < 20 ? "Buenas tardes" : "Buenas noches";
-  const [, refrescar] = useState(0);
+  const atrasados = ordenados.filter((it) => cuando(it.fecha).tono === "rojo").length;
+  const [abierto, setAbierto] = useState(false);
   const visto = leerVisto();
-  // Plegado si hoy ya tocó "Ya lo vi" y no le entró nada nuevo desde entonces.
-  const plegado = !!visto && visto.fecha === hoyISO() && primeros.every((it) => visto.ids.includes(it.id));
-  const marcar = (ids: string[] | null) => {
+  // Ya lo vio hoy y no le entró nada nuevo desde entonces.
+  const yaVisto = !!visto && visto.fecha === hoyISO() && primeros.every((it) => visto.ids.includes(it.id));
+  const clave = primeros.map((it) => it.id).join(",");
+
+  // Salta solo, un ratito después de entrar y sin pisar otro cartel (novedades, etc.).
+  useEffect(() => {
+    if (yaVisto || !primeros.length) return;
+    let t = 0;
+    const probar = () => {
+      if (document.querySelector('[role="dialog"]')) t = window.setTimeout(probar, 1500);
+      else setAbierto(true);
+    };
+    t = window.setTimeout(probar, 900);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clave, yaVisto]);
+
+  const cerrar = () => {
     try {
-      if (ids) localStorage.setItem(CLAVE, JSON.stringify({ fecha: hoyISO(), ids }));
-      else localStorage.removeItem(CLAVE);
+      localStorage.setItem(CLAVE, JSON.stringify({ fecha: hoyISO(), ids: primeros.map((it) => it.id) }));
     } catch {
       /* sin almacenamiento: no pasa nada */
     }
-    refrescar((n) => n + 1);
+    setAbierto(false);
   };
 
-  if (plegado) {
-    return (
-      <button
-        type="button"
-        onClick={() => marcar(null)}
-        className="mb-4 inline-flex items-center gap-2 rounded-full border bg-card px-3.5 py-1.5 text-sm font-medium transition-colors hover:border-primary/50"
-      >
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-primary to-fuchsia-500 text-white">
-          <Sun className="h-3 w-3" />
-        </span>
-        Mi día{items.length ? ` · ${items.length}` : ""}
-        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-      </button>
-    );
-  }
+  if (!items.length) return null;
 
   return (
-    <section className="mb-5 overflow-hidden rounded-3xl border bg-card">
-      <div className="flex items-center gap-3 border-b bg-gradient-to-r from-primary/10 via-fuchsia-500/5 to-transparent px-4 py-3 sm:px-5">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-fuchsia-500 text-white">
-          <Sun className="h-5 w-5" />
+    <>
+      <style>{SOL_CSS}</style>
+      <button
+        type="button"
+        onClick={() => setAbierto(true)}
+        className="mb-4 inline-flex items-center gap-2 rounded-full border bg-card px-3.5 py-1.5 text-sm font-medium transition-colors hover:border-primary/50"
+      >
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-orange-500 text-white">
+          <Sun className="h-3 w-3" />
         </span>
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold leading-tight">
-            {saludo}
-            {nombre ? `, ${nombre}` : ""} 👋
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {items.length ? `Lo más urgente de hoy${items.length > CUANTOS ? ` (${items.length} en total)` : ""}` : "No tenés nada pendiente"}
-          </p>
-        </div>
-      </div>
-      {primeros.length === 0 ? (
-        <p className="flex items-center gap-2 px-5 py-4 text-sm text-muted-foreground">
-          <CheckCircle2 className="h-4 w-4 text-success" /> Estás al día. ¡Bien ahí!
-        </p>
-      ) : (
-        <ol className="divide-y">
-          {primeros.map((it, i) => {
-            const c = cuando(it.fecha);
-            return (
-              <li key={it.id}>
-                <button type="button" onClick={it.onAbrir} className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 sm:px-5">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold tabular-nums">{i + 1}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold">{it.titulo}</span>
-                    <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                      <ClienteTag cliente={clienteById(it.clienteId)} />
-                      <span className="shrink-0">· {it.tarea}</span>
-                    </span>
-                  </span>
-                  <span
+        Mi día · {items.length}
+        {atrasados > 0 && <span className="rounded-full bg-destructive px-1.5 text-[10px] font-bold text-white">{atrasados} atrasado{atrasados === 1 ? "" : "s"}</span>}
+        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+      </button>
+
+      <Dialog open={abierto} onOpenChange={(v) => (v ? setAbierto(true) : cerrar())}>
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md gap-0 overflow-hidden rounded-[2rem] border-0 p-0 [&>button]:hidden">
+          {/* Encabezado de día: sol que gira y nubes que pasan */}
+          <div className="sol-cielo relative overflow-hidden px-6 pb-5 pt-6 text-white">
+            <span className="sol-nube absolute left-[-20%] top-5 h-5 w-16 rounded-full bg-white/30 blur-[1px]" />
+            <span className="sol-nube absolute left-[-30%] top-14 h-4 w-12 rounded-full bg-white/25 blur-[1px]" style={{ animationDelay: "4s" }} />
+            <button
+              type="button"
+              onClick={cerrar}
+              className="absolute right-3 top-3 z-10 rounded-full p-2 text-white/80 transition-colors hover:bg-white/15 hover:text-white"
+              aria-label="Cerrar"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <div className="relative flex items-center gap-4">
+              <div className="relative h-16 w-16 shrink-0">
+                <span className="sol-rayos absolute inset-0 rounded-full" />
+                <span className="absolute inset-2 rounded-full bg-gradient-to-br from-yellow-200 to-amber-400 shadow-[0_0_40px_rgba(253,224,71,0.8)]" />
+              </div>
+              <div className="min-w-0">
+                <DialogTitle className="text-2xl font-black leading-tight text-white">
+                  {saludo}
+                  {nombre ? `, ${nombre}` : ""} 👋
+                </DialogTitle>
+                <DialogDescription className="mt-0.5 text-sm text-white/90">
+                  {atrasados > 0
+                    ? `Tenés ${atrasados} cosa${atrasados === 1 ? "" : "s"} atrasada${atrasados === 1 ? "" : "s"}. Arrancá por ahí 💪`
+                    : "Esto es lo más urgente de hoy."}
+                </DialogDescription>
+              </div>
+            </div>
+          </div>
+
+          <ol className="space-y-2 bg-background p-3">
+            {primeros.map((it, i) => {
+              const c = cuando(it.fecha);
+              return (
+                <li key={it.id} className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both" style={{ animationDelay: `${150 + i * 110}ms` }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      cerrar();
+                      it.onAbrir();
+                    }}
                     className={cn(
-                      "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                      c.tono === "rojo" ? "bg-destructive/10 text-destructive" : c.tono === "naranja" ? "bg-warning/20 text-foreground" : "bg-muted text-muted-foreground"
+                      "group flex w-full items-center gap-3 rounded-2xl border bg-card px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md",
+                      c.tono === "rojo" && "animate-titilar border-destructive/60 bg-destructive/[0.07]"
                     )}
                   >
-                    <CalendarClock className="h-3 w-3" /> {c.texto}
-                  </span>
-                  <ArrowRight className="hidden h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 sm:block" />
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-      )}
-      <div className="flex items-center justify-between gap-2 border-t px-4 py-2 sm:px-5">
-        <p className="text-xs text-muted-foreground">{resto > 0 ? `y ${resto} más en tu tablero ↓` : ""}</p>
-        <button
-          type="button"
-          onClick={() => marcar(primeros.map((it) => it.id))}
-          className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/20"
-        >
-          <Check className="h-3.5 w-3.5" /> Ya lo vi
-        </button>
-      </div>
-    </section>
+                    <span
+                      className={cn(
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums text-white",
+                        c.tono === "rojo" ? "bg-destructive" : c.tono === "naranja" ? "bg-gradient-to-br from-amber-400 to-orange-500" : "bg-gradient-to-br from-primary to-fuchsia-500"
+                      )}
+                    >
+                      {i + 1}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold">{it.titulo}</span>
+                      <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                        <ClienteTag cliente={clienteById(it.clienteId)} />
+                        <span className="shrink-0">· {it.tarea}</span>
+                      </span>
+                    </span>
+                    <span
+                      className={cn(
+                        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                        c.tono === "rojo" ? "bg-destructive text-white" : c.tono === "naranja" ? "bg-warning/25 text-foreground" : "bg-muted text-muted-foreground"
+                      )}
+                    >
+                      <CalendarClock className="h-3 w-3" /> {c.texto}
+                    </span>
+                    <ArrowRight className="hidden h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 sm:block" />
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+
+          <div className="space-y-2 bg-background px-3 pb-4">
+            {resto > 0 && <p className="text-center text-xs text-muted-foreground">y {resto} más en tu tablero</p>}
+            <button
+              type="button"
+              onClick={cerrar}
+              className="h-12 w-full rounded-2xl bg-gradient-to-r from-amber-400 via-orange-500 to-pink-500 text-base font-bold text-white shadow-lg shadow-orange-500/25 transition-transform active:scale-[0.98]"
+            >
+              ¡Vamos! ☀️
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
+
+const SOL_CSS = `
+.sol-cielo { background: linear-gradient(135deg, #fbbf24 0%, #f97316 50%, #ec4899 100%); }
+.sol-rayos { background: repeating-conic-gradient(rgba(255,255,255,.55) 0 10deg, transparent 10deg 30deg); -webkit-mask: radial-gradient(circle, transparent 45%, #000 46%, #000 70%, transparent 71%); mask: radial-gradient(circle, transparent 45%, #000 46%, #000 70%, transparent 71%); animation: sol-gira 14s linear infinite; }
+@keyframes sol-gira { to { transform: rotate(360deg); } }
+.sol-nube { animation: sol-nube 9s linear infinite; }
+@keyframes sol-nube { 0% { transform: translateX(0); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { transform: translateX(560px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .sol-rayos, .sol-nube { animation: none; } }
+`;
