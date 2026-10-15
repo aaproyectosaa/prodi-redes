@@ -218,7 +218,7 @@ export function seed() {
   });
   const a1 = add("p1", 6, "agendado", 1);
   const a2 = add("p1", 7, "planificado", 2, { pedido_cliente: true, fecha_deseada: ymd(12) });
-  videos[a1].guion = "Escena 1 (0-3 s) · Gancho: “¿Qué dicen los que ya probaron Don Tano?” sobre un plano de la pizza saliendo del horno.\nEscena 2 (3-20 s) · Tres clientes, una frase cada uno, mirando a cámara.\nEscena 3 (20-28 s) · Plano del salón lleno y de la caja de delivery.\nEscena 4 (28-32 s) · Logo + “Pedí por WhatsApp”.";
+  videos[a1].guion = "¿Qué dicen los que ya probaron Don Tano?\nLa masa es casera, se nota.\nLa muzza más rica de Reconquista.\nY llega calentita a casa.\nPedí la tuya por WhatsApp.";
   videos[a1].tomas = [
     "Pizza saliendo del horno (cámara lenta)",
     "Cliente 1: frase corta a cámara, fondo del salón",

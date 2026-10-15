@@ -965,13 +965,13 @@ function GuionBlock({ video, editable }: { video: Video; editable: boolean }) {
       {editing ? (
         <div className="space-y-2">
           <label className="block space-y-1">
-            <span className="text-xs font-medium text-muted-foreground">Guion</span>
+            <span className="text-xs font-medium text-muted-foreground">Guion: lo que dice la persona a cámara</span>
             <Textarea
               value={guion}
               onChange={(e) => setGuion(e.target.value)}
               rows={6}
               autoFocus
-              placeholder={"Escena 1: … qué se ve y qué se dice\nEscena 2: …\nCierre: llamado a la acción"}
+              placeholder={"¿Tu equipo sigue sin uniforme para este verano?\nHacemos remeras con tu logo desde 10 unidades.\nEscribinos y te pasamos el presupuesto."}
             />
           </label>
           <label className="block space-y-1">
@@ -990,11 +990,17 @@ function GuionBlock({ video, editable }: { video: Video; editable: boolean }) {
         </div>
       ) : !tiene ? (
         <p className="text-xs text-muted-foreground">
-          Escribilo vos con «Escribirlo yo», o tocá «Armar con IA» y la IA arma el guion por escenas y la lista de tomas a partir de la idea (después lo podés corregir).
+          Escribilo vos con «Escribirlo yo», o tocá «Armar con IA» y la IA arma lo que dice la persona a cámara y la lista de tomas a partir de la idea (después lo podés corregir).
         </p>
       ) : (
         <div className="space-y-3 text-sm">
-          {video.guion && <p className="whitespace-pre-wrap">{video.guion}</p>}
+          {video.guion && (
+            <div className="rounded-xl border-l-4 border-primary bg-primary/[0.06] px-3.5 py-2.5">
+              <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-primary">🎤 Lo que dice a cámara</p>
+              <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{video.guion}</p>
+            </div>
+          )}
+          {(video.tomas?.length ?? 0) > 0 && <p className="-mb-1 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">🎥 Tomas para el rodaje</p>}
           {(video.tomas?.length ?? 0) > 0 && (
             <ol className="list-decimal space-y-1 rounded-xl border bg-muted/30 py-2.5 pl-8 pr-3 text-[13px]">
               {video.tomas!.map((t, i) => (

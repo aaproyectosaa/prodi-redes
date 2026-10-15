@@ -681,8 +681,8 @@ async function guion(req: VercelRequest) {
 
   const prompt = `Sos director creativo de una agencia argentina que filma videos comerciales verticales (Reels) de 20 a 45 segundos para pautar en Meta.
 Armá el guion de este video y la lista de tomas para el día de rodaje.
-- guion: por escenas cortas, con lo que se ve y lo que se dice (texto en pantalla o voz). Primeros 3 segundos con un gancho fuerte. Cierre con llamado a la acción.
-- tomas: lista concreta de planos para filmar (qué, cómo y dónde), en el orden más práctico para el rodaje. Máximo 12.
+- guion: SOLO las palabras que dice la persona frente a cámara, listas para leer y aprender: frases cortas, una por renglón, como se hablan (natural, nada de lenguaje de folleto). Entre 50 y 110 palabras en total (20 a 45 segundos dichos). La primera frase es el gancho de los primeros 3 segundos y la última, el llamado a la acción. NO pongas escenas, planos, tiempos, descripciones de lo que se ve, textos en pantalla, etiquetas ("Gancho:", "Escena 1", "Voz:") ni comillas: solo lo que se dice.
+- tomas: lista concreta de planos para filmar (qué, cómo y dónde), en el orden más práctico para el rodaje. Acá va todo lo visual. Máximo 12.
 Español rioplatense con voseo. No inventes precios, promociones ni datos que no estén abajo. Que se pueda filmar con un celular y una persona.
 
 ${marcaTexto(p)}
