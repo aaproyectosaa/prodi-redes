@@ -898,15 +898,15 @@ export function ChatConversacion({
           )
         ) : (
           <div className="mx-auto flex max-w-3xl flex-col gap-1.5">
-            <div className="pointer-events-none sticky top-1 z-20 -mb-1.5 flex h-0 justify-center">
-              <span
-                className={cn(
-                  "rounded-full border bg-background/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground shadow-md backdrop-blur transition-all duration-300",
-                  diaFlotante ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"
-                )}
-              >
-                {diaFlotante ?? ""}
-              </span>
+            {/* Fecha flotante: solo existe mientras se muestra (si no, en el iPhone quedaba el contorno vacío). */}
+            <div className="pointer-events-none sticky top-1 z-20 h-0 overflow-visible">
+              {diaFlotante && (
+                <div className="flex justify-center">
+                  <span key={diaFlotante} className="whitespace-nowrap rounded-full bg-muted px-3 py-1 text-[11px] font-semibold uppercase leading-none tracking-wider text-muted-foreground shadow-md animate-in fade-in slide-in-from-top-1 duration-200">
+                    {diaFlotante}
+                  </span>
+                </div>
+              )}
             </div>
             {mensajes.map((m, i) => {
               const mio = m.by === uid;
@@ -922,7 +922,7 @@ export function ChatConversacion({
                 return (
                   <div key={m.id} data-dia={dia}>
                     {mostrarDia && (
-                      <p className="my-3 flex justify-center"><span className="rounded-full bg-muted/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground shadow-sm">{dia}</span></p>
+                      <p className="my-3 flex justify-center"><span className="rounded-full bg-muted px-3 py-1.5 text-[11px] font-semibold uppercase leading-none tracking-wider text-muted-foreground shadow-sm">{dia}</span></p>
                     )}
                     <p className="mx-auto my-2 w-fit max-w-[90%] rounded-full bg-muted px-3 py-1 text-center text-xs text-muted-foreground">
                       {/* Las propias, sin "Vos" adelante (quedaba "Vos sumó…"): con mayúscula. */}
@@ -935,7 +935,7 @@ export function ChatConversacion({
                 <div key={m.id} id={`msj-${m.id}`} data-dia={dia} className="scroll-mt-24 rounded-xl transition-colors duration-700">
                   {mostrarDia && (
                     <p className="my-3 flex justify-center">
-                      <span className="rounded-full bg-muted/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground shadow-sm">{dia}</span>
+                      <span className="rounded-full bg-muted px-3 py-1.5 text-[11px] font-semibold uppercase leading-none tracking-wider text-muted-foreground shadow-sm">{dia}</span>
                     </p>
                   )}
                   {m.id === primerNuevo && (
