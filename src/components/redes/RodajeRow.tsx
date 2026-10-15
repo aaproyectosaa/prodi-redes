@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, ClipboardList, Loader2, MapPin, Send } from "lucide-react";
+import { CheckCircle2, ChevronDown, ClipboardList, FileText, Loader2, MapPin, Play, Send, Square, Timer } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -13,7 +13,9 @@ import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { useDriveUploadContext } from "@/contexts/drive-upload-context";
 import { formatearFecha } from "@/lib/fecha";
 import { fechaCorta, hoyISO } from "@/lib/redes/format";
-import { enviarAEdicion, marcarRodajeRealizado } from "@/lib/redes/videos";
+import { enviarAEdicion, iniciarRodaje, marcarRodajeRealizado, terminarRodaje, textoDuracionRodaje } from "@/lib/redes/videos";
+import { CompartirGuion } from "@/components/redes/CompartirGuion";
+import { cn } from "@/lib/utils";
 import type { Rodaje, Video } from "@/lib/redes/types";
 
 const SIN_EDITAR = ["planificado", "agendado"];
@@ -103,6 +105,7 @@ export function RodajeRow({
               <span className="font-medium text-foreground">Cliente tiene listo:</span> {rodaje.preparar}
             </p>
           )}
+          <CronometroRodaje rodaje={rodaje} puede={puedeSubir} />
           <div className="mt-2 flex flex-wrap gap-1">
             <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setHoja(true)}>
               <ClipboardList className="mr-1 h-3.5 w-3.5" /> Hoja de rodaje
@@ -160,6 +163,10 @@ function HojaRodaje({
   const [hechas, setHechas] = useState<Set<string>>(new Set());
   const [mandando, setMandando] = useState<string | null>(null);
   const [entregaDe, setEntregaDe] = useState<Video | null>(null);
+  // Guiones abiertos y a quién se manda (uno o todos).
+  const [abiertos, setAbiertos] = useState<Set<string>>(new Set());
+  const [compartir, setCompartir] = useState<Video[] | null>(null);
+  const conGuion = videos.filter((v) => v.guion?.trim() || v.idea?.trim() || v.tomas?.length);
   const conMaterial = videos.filter((v) => (v.attachments_crudo?.length ?? 0) > 0).length;
   const mandar = async (v: Video, fecha: string) => {
     setMandando(v.id);
@@ -190,6 +197,11 @@ function HojaRodaje({
             </DialogDescription>
           </DialogHeader>
           {rodaje.notas && <p className="rounded-lg bg-muted/50 p-2 text-xs">{rodaje.notas}</p>}
+          {conGuion.length > 0 && (
+            <Button variant="outline" className="w-full" onClick={() => setCompartir(conGuion)}>
+              <Send className="mr-2 h-4 w-4" /> {conGuion.length === 1 ? "Mandar el guion" : `Mandar los ${conGuion.length} guiones`} al cliente
+            </Button>
+          )}
           {puedeSubir && videos.length > 0 && (
             <div className="rounded-xl border border-primary/30 bg-primary/[0.05] p-3 text-xs">
               <p className="font-medium text-foreground">
@@ -206,8 +218,41 @@ function HojaRodaje({
           <div className="space-y-5">
             {videos.map((v) => (
               <div key={v.id} className="space-y-2 rounded-xl border p-3">
-                <p className="text-sm font-semibold">{v.titulo}</p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-semibold">{v.titulo}</p>
+                  {(v.guion?.trim() || v.idea?.trim() || v.tomas?.length) && (
+                    <button
+                      type="button"
+                      onClick={() => setCompartir([v])}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/10"
+                    >
+                      <Send className="h-3 w-3" /> Mandar
+                    </button>
+                  )}
+                </div>
                 {v.idea && <p className="text-xs text-muted-foreground">{v.idea}</p>}
+                {v.guion?.trim() ? (
+                  <div className="rounded-lg border bg-muted/30">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAbiertos((s) => {
+                          const n = new Set(s);
+                          if (n.has(v.id)) n.delete(v.id);
+                          else n.add(v.id);
+                          return n;
+                        })
+                      }
+                      className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-xs font-semibold"
+                    >
+                      <FileText className="h-3.5 w-3.5 text-primary" /> Guion
+                      <ChevronDown className={cn("ml-auto h-3.5 w-3.5 text-muted-foreground transition-transform", abiertos.has(v.id) && "rotate-180")} />
+                    </button>
+                    {abiertos.has(v.id) && <p className="whitespace-pre-line border-t px-2.5 py-2 text-xs leading-relaxed">{v.guion}</p>}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">Sin guion escrito todavía (se carga desde el video).</p>
+                )}
                 {(v.tomas?.length ?? 0) > 0 ? (
                   <div className="space-y-1">
                     {v.tomas!.map((t, i) => {
@@ -260,6 +305,7 @@ function HojaRodaje({
           </div>
         </DialogContent>
       </Dialog>
+      <CompartirGuion open={!!compartir} onOpenChange={(v) => !v && setCompartir(null)} videos={compartir ?? []} proyectoId={rodaje.proyecto_id} />
       <EntregaEdicionDialog
         video={entregaDe}
         open={!!entregaDe}
@@ -269,5 +315,82 @@ function HojaRodaje({
         }}
       />
     </>
+  );
+}
+
+/** Tiempo de rodaje (estadística interna): Iniciar al llegar, Terminar al irse. Mientras tanto corre el reloj. */
+function CronometroRodaje({ rodaje, puede }: { rodaje: Rodaje; puede: boolean }) {
+  const [ahora, setAhora] = useState(Date.now());
+  const [busy, setBusy] = useState(false);
+  const { user } = useUserProfileContext();
+  const enCurso = !!rodaje.inicio_at && !rodaje.fin_at;
+  useEffect(() => {
+    if (!enCurso) return;
+    const t = window.setInterval(() => setAhora(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [enCurso]);
+
+  if (rodaje.duracion_min) {
+    return (
+      <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+        <Timer className="h-3.5 w-3.5" /> Rodaje de {textoDuracionRodaje(rodaje.duracion_min)}
+      </p>
+    );
+  }
+  if (!puede || rodaje.estado === "cancelado") return null;
+  // Se puede iniciar el día del rodaje (o si quedó atrasado).
+  if (!enCurso && rodaje.fecha > hoyISO()) return null;
+
+  const accion = async (fn: () => Promise<unknown>, ok: string) => {
+    setBusy(true);
+    try {
+      await fn();
+      toast.success(ok);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!enCurso) {
+    return (
+      <Button
+        size="sm"
+        className="mt-2 h-9 w-full bg-emerald-600 font-semibold text-white hover:bg-emerald-600/90"
+        disabled={busy}
+        onClick={() => void accion(() => iniciarRodaje(rodaje, user?.uid ?? ""), "¡A filmar! El tiempo del rodaje empezó a correr")}
+      >
+        {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4 fill-current" />}
+        Iniciar rodaje
+      </Button>
+    );
+  }
+  const seg = Math.max(0, Math.floor((ahora - Date.parse(rodaje.inicio_at!)) / 1000));
+  const reloj = [Math.floor(seg / 3600), Math.floor((seg % 3600) / 60), seg % 60].map((n) => String(n).padStart(2, "0")).join(":");
+  return (
+    <div className="mt-2 flex items-center gap-2 rounded-xl border border-red-500/40 bg-red-500/[0.07] p-2">
+      <span className="relative flex h-2.5 w-2.5 shrink-0">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500/60" />
+        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[10px] font-bold uppercase tracking-wide text-red-500">Filmando</span>
+        <span className="block font-mono text-lg font-bold tabular-nums leading-tight">{reloj}</span>
+      </span>
+      <Button
+        size="sm"
+        variant="destructive"
+        className="h-9 shrink-0 font-semibold"
+        disabled={busy}
+        onClick={() => void accion(async () => {
+          const min = await terminarRodaje(rodaje);
+          toast.message(`Rodaje de ${textoDuracionRodaje(min)}. Subí el crudo de cada video.`);
+        }, "Rodaje terminado")}
+      >
+        {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Square className="mr-1.5 h-3.5 w-3.5 fill-current" />}
+        Terminar
+      </Button>
+    </div>
   );
 }

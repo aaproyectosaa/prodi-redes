@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CalendarDays, Plus } from "lucide-react";
+import { CalendarDays, Clock, Plus, Timer } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,7 +10,7 @@ import { useRedes } from "@/contexts/redes-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { formatearFecha } from "@/lib/fecha";
 import { hoyISO } from "@/lib/redes/format";
-import { cancelarRodaje, marcarRodajeRealizado } from "@/lib/redes/videos";
+import { cancelarRodaje, marcarRodajeRealizado, textoDuracionRodaje } from "@/lib/redes/videos";
 import { canManageProduction } from "@/lib/roles";
 import type { Rodaje } from "@/lib/redes/types";
 
@@ -61,6 +61,7 @@ export default function Rodajes() {
         )
       }
     >
+      {puede && <TiempoDeRodaje rodajes={rodajes} />}
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="mb-5">
         <TabsList>
           <TabsTrigger value="proximos">Próximos</TabsTrigger>
@@ -112,5 +113,33 @@ export default function Rodajes() {
 
       <RodajeDialog open={dlg.open} onOpenChange={(o) => setDlg((p) => ({ ...p, open: o }))} rodaje={dlg.rodaje} />
     </PageShell>
+  );
+}
+
+/** Estadística interna: cuánto tiempo se filmó este mes (de los rodajes que se iniciaron y terminaron en la app). */
+function TiempoDeRodaje({ rodajes }: { rodajes: Rodaje[] }) {
+  const mes = hoyISO().slice(0, 7);
+  const medidos = rodajes.filter((r) => r.duracion_min && r.fecha.startsWith(mes));
+  const enCurso = rodajes.filter((r) => r.inicio_at && !r.fin_at).length;
+  const total = medidos.reduce((a, r) => a + (r.duracion_min ?? 0), 0);
+  const prom = medidos.length ? Math.round(total / medidos.length) : 0;
+  const mayor = medidos.reduce<Rodaje | null>((m, r) => (!m || (r.duracion_min ?? 0) > (m.duracion_min ?? 0) ? r : m), null);
+  return (
+    <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {[
+        { t: "Rodajes medidos", v: String(medidos.length), s: "este mes" },
+        { t: "Tiempo filmando", v: total ? textoDuracionRodaje(total) : "—", s: "en total" },
+        { t: "Promedio", v: prom ? textoDuracionRodaje(prom) : "—", s: "por rodaje" },
+        { t: enCurso ? "Filmando ahora" : "El más largo", v: enCurso ? String(enCurso) : mayor?.duracion_min ? textoDuracionRodaje(mayor.duracion_min) : "—", s: enCurso ? "rodaje en curso" : "este mes" },
+      ].map((x) => (
+        <div key={x.t} className="rounded-xl border bg-card p-3">
+          <p className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+            {x.t === "Filmando ahora" ? <Timer className="h-3.5 w-3.5 text-red-500" /> : <Clock className="h-3.5 w-3.5" />} {x.t}
+          </p>
+          <p className="mt-1 text-xl font-bold tabular-nums">{x.v}</p>
+          <p className="text-[11px] text-muted-foreground">{x.s}</p>
+        </div>
+      ))}
+    </div>
   );
 }

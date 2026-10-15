@@ -178,6 +178,12 @@ export interface Rodaje {
   productor_id: string | null;
   created_at: string;
   created_by: string;
+  /** Estadística interna: producción toca "Iniciar rodaje" al llegar y "Terminar" al irse. */
+  inicio_at?: string | null;
+  fin_at?: string | null;
+  /** Lo que duró la filmación (minutos). */
+  duracion_min?: number | null;
+  iniciado_por?: string | null;
 }
 
 // ---------------------------------------------------------------------------

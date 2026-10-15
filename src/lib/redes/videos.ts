@@ -316,6 +316,25 @@ export async function marcarRodajeRealizado(rodaje: Rodaje) {
   await updateDoc(doc(db, RODAJES, rodaje.id), { estado: "realizado" });
 }
 
+/** Producción llegó y arranca a filmar: empieza a contar el tiempo del rodaje (estadística interna). */
+export async function iniciarRodaje(rodaje: Rodaje, by: string) {
+  assertEditable();
+  await updateDoc(doc(db, RODAJES, rodaje.id), { inicio_at: now(), fin_at: null, duracion_min: null, iniciado_por: by });
+}
+
+/** Terminó de filmar: se guarda cuánto duró y el rodaje queda realizado. */
+export async function terminarRodaje(rodaje: Rodaje) {
+  assertEditable();
+  if (!rodaje.inicio_at) throw new Error("Primero iniciá el rodaje");
+  const fin = now();
+  const duracion = Math.max(1, Math.round((Date.parse(fin) - Date.parse(rodaje.inicio_at)) / 60_000));
+  await updateDoc(doc(db, RODAJES, rodaje.id), { fin_at: fin, duracion_min: duracion, estado: "realizado" });
+  return duracion;
+}
+
+/** "1 h 25 min" / "40 min". */
+export const textoDuracionRodaje = (min: number) => (min >= 60 ? `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60} min` : ""}` : `${min} min`);
+
 // ---------------------------------------------------------------------------
 // Circuito
 // ---------------------------------------------------------------------------
