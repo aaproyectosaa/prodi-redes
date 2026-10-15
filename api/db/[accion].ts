@@ -239,7 +239,11 @@ async function usoEquipo(req: VercelRequest) {
       `select uid, count(*)::int as dias,
               avg(extract(epoch from (desde at time zone '${ZONA}')::time) / 60)::float as entrada,
               avg(extract(epoch from (hasta at time zone '${ZONA}')::time) / 60)::float as salida,
-              avg(minutos)::float as minutos
+              avg(minutos)::float as minutos,
+              -- Para cuidar al equipo (últimos 14 días): noches (después de las 21 o de madrugada) y días de más de 9 h.
+              count(*) filter (where fecha >= (now() at time zone '${ZONA}')::date - 14
+                and ((hasta at time zone '${ZONA}')::time >= '21:00' or (desde at time zone '${ZONA}')::time < '06:00'))::int as noches,
+              count(*) filter (where fecha >= (now() at time zone '${ZONA}')::date - 14 and minutos > 540)::int as largos
          from uso_diario
         where fecha >= (now() at time zone '${ZONA}')::date - 30 and minutos >= 5
         group by uid`
@@ -271,7 +275,9 @@ async function usoEquipo(req: VercelRequest) {
      select uid, count(*)::int as dias,
             avg(extract(epoch from desde) / 60)::float as entrada,
             avg(extract(epoch from hasta) / 60)::float as salida,
-            avg(extract(epoch from hasta - desde) / 60)::float as minutos
+            avg(extract(epoch from hasta - desde) / 60)::float as minutos,
+            count(*) filter (where fecha >= (now() at time zone '${ZONA}')::date - 14 and (hasta >= '21:00' or desde < '06:00'))::int as noches,
+            count(*) filter (where fecha >= (now() at time zone '${ZONA}')::date - 14 and hasta - desde > interval '9 hours')::int as largos
        from dias where n >= 3 group by uid`
   );
   // Lo que cargó cada uno en el mes (para administración: facturas, cobros, gastos…) y los mensajes que mandó.

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ArrowUpRight, Clock, Eye, MessageCircle } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowUpRight, Clock, Eye, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -25,7 +25,37 @@ import { getRoleInfo } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import { callApi } from "@/lib/redes/api";
 
-type Uso = { uid: string; dias: number; entrada: number; salida: number; minutos: number };
+type Uso = { uid: string; dias: number; entrada: number; salida: number; minutos: number; noches?: number; largos?: number };
+
+/** Para cuidar al equipo: noches (después de las 21 o de madrugada) y días de más de 9 h en los últimos 14 días. */
+function cargaDe(uso?: Uso, act?: Uso) {
+  const noches = Math.max(uso?.noches ?? 0, act?.noches ?? 0);
+  const largos = Math.max(uso?.largos ?? 0, act?.largos ?? 0);
+  return { noches, largos, alerta: noches >= 3 || largos >= 3 };
+}
+
+function AlertaCarga({ uso, act, grande = false }: { uso?: Uso; act?: Uso; grande?: boolean }) {
+  const { noches, largos, alerta } = cargaDe(uso, act);
+  if (!noches && !largos) return null;
+  const partes = [
+    noches ? `${noches} ${noches === 1 ? "noche" : "noches"} después de las 21` : null,
+    largos ? `${largos} ${largos === 1 ? "día" : "días"} de más de 9 h` : null,
+  ].filter(Boolean);
+  return (
+    <div
+      className={cn(
+        "flex items-start gap-2 rounded-lg px-2.5 py-2",
+        grande ? "text-sm" : "text-[11px]",
+        alerta ? "bg-destructive/10 text-destructive" : "bg-warning/15 text-foreground"
+      )}
+    >
+      <AlertTriangle className={cn("mt-0.5 shrink-0", grande ? "h-4 w-4" : "h-3.5 w-3.5")} />
+      <span>
+        <b>{partes.join(" · ")}</b> en las últimas 2 semanas.{alerta ? " Conviene hablarlo." : ""}
+      </span>
+    </div>
+  );
+}
 
 type DatosUso = { usos: Uso[]; desde: string | null; actividad: Uso[]; hechos: Record<string, Record<string, number>> };
 
@@ -139,6 +169,7 @@ function UsoLinea({ datos, uid, grande = false }: { datos: DatosUso | null; uid:
           )}
         </div>
         <Franja u={act} tono="fuerte" alto="h-2" />
+        <AlertaCarga uso={uso} act={act} />
       </div>
     );
   }
@@ -172,6 +203,9 @@ function UsoLinea({ datos, uid, grande = false }: { datos: DatosUso | null; uid:
               <Eje />
               <span />
             </div>
+          </div>
+          <div className="md:col-span-2">
+            <AlertaCarga uso={uso} act={act} grande />
           </div>
         </div>
       )}
