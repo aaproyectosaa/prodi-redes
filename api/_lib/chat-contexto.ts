@@ -25,12 +25,20 @@ const dias = (iso: unknown) => (typeof iso === "string" ? Math.max(0, Math.floor
 /** Clientes nombrados en el texto (por nombre completo o una palabra distintiva de 4+ letras). */
 export function clientesNombrados(texto: string, proyectos: Proyecto[]): Proyecto[] {
   const t = ` ${normalizar(texto).replace(/[^a-z0-9]+/g, " ")} `;
-  return proyectos.filter((p) => {
-    const n = normalizar(p.nombre).replace(/[^a-z0-9]+/g, " ").trim();
-    if (!n) return false;
-    if (t.includes(` ${n} `)) return true;
-    return n.split(" ").some((w) => w.length >= 4 && !["nutri", "automotores", "prodi"].includes(w) && t.includes(` ${w} `));
-  });
+  const nombre = (p: Proyecto) => normalizar(p.nombre).replace(/[^a-z0-9]+/g, " ").trim();
+  // 1) Si está el nombre completo de un cliente, es ese (si dos entran, el más largo: "Buyatti Materiales" le gana a "Buyatti").
+  const completos = proyectos.filter((p) => nombre(p) && t.includes(` ${nombre(p)} `));
+  if (completos.length) {
+    return completos.filter((p) => !completos.some((q) => q !== p && nombre(q).length > nombre(p).length && nombre(q).includes(nombre(p))));
+  }
+  // 2) Si no, por palabras sueltas: gana el que más palabras comparte (empate = hay que preguntar).
+  const puntaje = (p: Proyecto) =>
+    nombre(p)
+      .split(" ")
+      .filter((w) => w.length >= 4 && !["nutri", "automotores", "prodi"].includes(w) && t.includes(` ${w} `)).length;
+  const con = proyectos.map((p) => ({ p, s: puntaje(p) })).filter((x) => x.s > 0);
+  const mejor = Math.max(0, ...con.map((x) => x.s));
+  return con.filter((x) => x.s === mejor).map((x) => x.p);
 }
 
 export async function contextoSistema(opts: {
