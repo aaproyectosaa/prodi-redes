@@ -30,6 +30,80 @@ const RESERVA = 272;
 const PILDORA =
   "fixed bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 flex h-12 items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/40 ring-1 ring-white/20 transition-[right,transform,box-shadow,background-color] duration-200 hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/50";
 
+/** Dónde dejó la persona la burbuja del celular: de qué lado y a qué distancia del borde de abajo (px). */
+type PosBurbuja = { izq: boolean; abajo: number } | null;
+const CLAVE_BURBUJA = "prodi-burbuja-chat";
+const LADO = 56; // tamaño de la burbuja (48) + aire
+
+function leerPosBurbuja(): PosBurbuja {
+  try {
+    const p = JSON.parse(localStorage.getItem(CLAVE_BURBUJA) ?? "null");
+    return p && typeof p.abajo === "number" ? { izq: !!p.izq, abajo: p.abajo } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Arrastrar la burbuja con el dedo (o el mouse): sigue al dedo y al soltar se pega al costado más cercano.
+ * Un toque sin mover sigue siendo un click. La posición se recuerda en este dispositivo.
+ */
+function useBurbujaMovible() {
+  const [pos, setPos] = useState<PosBurbuja>(leerPosBurbuja);
+  const [arrastre, setArrastre] = useState<{ x: number; y: number } | null>(null);
+  const inicio = useRef<{ px: number; py: number; x: number; y: number; movio: boolean } | null>(null);
+  const recienMovida = useRef(false);
+
+  const limitar = (y: number) => Math.min(Math.max(y, 80), window.innerHeight - LADO - 24);
+
+  const onPointerDown = (e: React.PointerEvent<HTMLElement>) => {
+    if (e.button !== 0) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    inicio.current = { px: e.clientX, py: e.clientY, x: r.left, y: r.top, movio: false };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = (e: React.PointerEvent<HTMLElement>) => {
+    const i = inicio.current;
+    if (!i) return;
+    const dx = e.clientX - i.px;
+    const dy = e.clientY - i.py;
+    if (!i.movio && Math.hypot(dx, dy) < 8) return;
+    i.movio = true;
+    setArrastre({ x: Math.min(Math.max(i.x + dx, 4), window.innerWidth - 52), y: limitar(i.y + dy) });
+  };
+  const onPointerUp = (e: React.PointerEvent<HTMLElement>) => {
+    const i = inicio.current;
+    inicio.current = null;
+    if (!i?.movio || !arrastre) return setArrastre(null);
+    recienMovida.current = true;
+    const izq = arrastre.x + 24 < window.innerWidth / 2;
+    const nueva = { izq, abajo: Math.round(window.innerHeight - arrastre.y - 48) };
+    setPos(nueva);
+    setArrastre(null);
+    try {
+      localStorage.setItem(CLAVE_BURBUJA, JSON.stringify(nueva));
+    } catch {
+      /* sin almacenamiento: queda solo en esta sesión */
+    }
+    e.preventDefault();
+  };
+  /** El click que llega después de soltar un arrastre no abre nada. */
+  const fueArrastre = () => {
+    const r = recienMovida.current;
+    recienMovida.current = false;
+    return r;
+  };
+
+  // Si se achica la pantalla (girar el celular), que no quede afuera.
+  const abajo = pos ? Math.min(Math.max(pos.abajo, 24), Math.max(24, (typeof window !== "undefined" ? window.innerHeight : 800) - 80 - 48)) : null;
+  const estilo: React.CSSProperties = arrastre
+    ? { left: arrastre.x, top: arrastre.y, right: "auto", bottom: "auto", transition: "none" }
+    : pos
+      ? { bottom: abajo!, ...(pos.izq ? { left: "calc(0.75rem + env(safe-area-inset-left))", right: "auto" } : {}) }
+      : { bottom: "calc(var(--alto-barra) + 4.75rem)" };
+  return { pos, abajo, arrastrando: !!arrastre, estilo, handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp }, fueArrastre };
+}
+
 function useAnchoVentana() {
   const [ancho, setAncho] = useState(() => window.innerWidth);
   useEffect(() => {
@@ -76,6 +150,7 @@ export function ChatDock() {
   const botonChats = useRef<HTMLButtonElement>(null);
   const botonMas = useRef<HTMLButtonElement>(null);
   const [selector, setSelector] = useState(false);
+  const burbuja = useBurbujaMovible();
   const elegido = useRef(false);
   const uid = user?.uid;
 
@@ -348,8 +423,20 @@ export function ChatDock() {
               setSelector(false);
               botonChats.current?.focus({ preventScroll: true });
             }}
-            style={{ bottom: "calc(var(--alto-barra) + 4.75rem + 3.75rem)" }}
-            className="fixed right-[calc(0.75rem+env(safe-area-inset-right))] z-40 flex max-w-[calc(100vw-1.5rem-env(safe-area-inset-left)-env(safe-area-inset-right))] flex-col items-end gap-2.5"
+            style={
+              burbuja.pos
+                ? {
+                    ...(burbuja.abajo! > window.innerHeight / 2
+                      ? { top: window.innerHeight - burbuja.abajo! + 12 }
+                      : { bottom: burbuja.abajo! + 60 }),
+                    ...(burbuja.pos.izq ? { left: "calc(0.75rem + env(safe-area-inset-left))", right: "auto" } : {}),
+                  }
+                : { bottom: "calc(var(--alto-barra) + 4.75rem + 3.75rem)" }
+            }
+            className={cn(
+              "fixed right-[calc(0.75rem+env(safe-area-inset-right))] z-40 flex max-w-[calc(100vw-1.5rem-env(safe-area-inset-left)-env(safe-area-inset-right))] flex-col gap-2.5",
+              burbuja.pos?.izq ? "items-start" : "items-end"
+            )}
           >
             {abiertos.map((id, i) => {
               const c = chatDe(id)!;
@@ -406,15 +493,18 @@ export function ChatDock() {
       <button
         ref={botonChats}
         type="button"
-        onClick={abrirDesdeBoton}
+        onClick={() => !burbuja.fueArrastre() && abrirDesdeBoton()}
+        {...burbuja.handlers}
+        title="Tocá para abrir · mantené y arrastrá para moverla"
         aria-label={abiertos.length ? `Chats abiertos${chatsNoLeidos ? ` (${chatsNoLeidos} sin leer)` : ""}` : `Abrir chat${chatsNoLeidos ? ` (${chatsNoLeidos} sin leer)` : ""}`}
         aria-expanded={abiertos.length ? selector : false}
         aria-haspopup={abiertos.length ? "menu" : undefined}
-        // Por encima de la barra de abajo y de las barras de "Guardar" que quedan pegadas abajo.
-        style={{ bottom: "calc(var(--alto-barra) + 4.75rem)" }}
+        // Por defecto, por encima de la barra de abajo y de las barras de "Guardar"; se puede arrastrar a otro lugar.
+        style={burbuja.estilo}
         className={cn(
-          "fixed right-[calc(0.75rem+env(safe-area-inset-right))] flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95",
-          selector ? "z-40" : "z-30"
+          "fixed right-[calc(0.75rem+env(safe-area-inset-right))] flex h-12 w-12 touch-none select-none items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-[left,right,bottom] duration-200",
+          selector ? "z-40" : "z-30",
+          burbuja.arrastrando ? "z-50 scale-110 cursor-grabbing shadow-2xl shadow-primary/50" : "active:scale-95"
         )}
       >
         {selector ? <X className="h-5 w-5" /> : <MessageCircle className="h-5 w-5" />}
