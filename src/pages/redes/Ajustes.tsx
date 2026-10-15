@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { addDoc, collection, deleteDoc, doc, onSnapshot, setDoc, updateDoc } from "@/lib/db";
-import { CheckCircle2, FlaskConical, HardDrive, Loader2, Plus, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, FlaskConical, HardDrive, Loader2, Moon, Plus, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { db } from "@/integrations/firebase/client";
 import { assertEditable } from "@/lib/redes/vistaComo";
@@ -34,6 +34,7 @@ import { comisionPct, montoDebito } from "@/lib/redes/facturacion";
 import { ENFOQUE_PRODI_DEFAULT } from "../../../api/_lib/plan-mes";
 import { ViaticosAjustes } from "@/components/redes/ViaticosAjustes";
 import { promoJornada } from "../../../api/_lib/jornada";
+import { leerDescanso } from "../../../api/_lib/descanso";
 
 export default function Ajustes() {
   const { planes, settings } = useRedes();
@@ -110,6 +111,8 @@ export default function Ajustes() {
         </div>
 
         <div className="space-y-8">
+          <DescansoEquipo settings={settings} />
+
           <Section title="Precios y alertas">
             <div className="space-y-4 rounded-xl border bg-card p-4">
               <div className="space-y-1.5">
@@ -599,5 +602,73 @@ function IAConexiones() {
       ))}
       {estado?.claude && <p className="px-4 py-2 text-[11px] text-muted-foreground">Modelo de Claude: {estado.modelo_claude}</p>}
     </div>
+  );
+}
+
+/** Horario de descanso del equipo: de noche y los domingos no les suena nada; a la mañana, un resumen. */
+function DescansoEquipo({ settings }: { settings: RedesSettings }) {
+  const [d, setD] = useState(() => leerDescanso(settings));
+  const [guardando, setGuardando] = useState(false);
+  useEffect(() => setD(leerDescanso(settings)), [settings]);
+  const horas = Array.from({ length: 24 }, (_, h) => h);
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      assertEditable();
+      await setDoc(doc(db, "app_settings", "redes"), { descanso: d }, { merge: true });
+      toast.success("Descanso guardado");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo guardar");
+    } finally {
+      setGuardando(false);
+    }
+  };
+  return (
+    <Section
+      title="Descanso del equipo"
+      description="En ese horario no les llega ningún aviso al celular (los avisos quedan guardados). A la mañana les llega uno solo con el resumen. Si siguen conectados, la app les avisa que ya es tarde. No aplica a vos ni a los clientes."
+    >
+      <div className="space-y-4 rounded-xl border bg-card p-4">
+        <label className="flex items-center justify-between gap-3">
+          <span className="flex items-center gap-2 text-sm font-medium">
+            <Moon className="h-4 w-4 text-primary" /> Activado
+          </span>
+          <Switch checked={d.activo} onCheckedChange={(v) => setD({ ...d, activo: v })} />
+        </label>
+        <div className={cn("grid grid-cols-2 gap-3", !d.activo && "pointer-events-none opacity-50")}>
+          {(
+            [
+              ["desde", "Desde las"],
+              ["hasta", "Hasta las"],
+            ] as const
+          ).map(([k, l]) => (
+            <div key={k} className="space-y-1.5">
+              <Label>{l}</Label>
+              <select
+                value={d[k]}
+                onChange={(e) => setD({ ...d, [k]: Number(e.target.value) })}
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+              >
+                {horas.map((h) => (
+                  <option key={h} value={h}>
+                    {String(h).padStart(2, "0")}:00
+                  </option>
+                ))}
+              </select>
+            </div>
+          ))}
+          <label className="col-span-2 flex items-center justify-between gap-3 text-sm">
+            Domingos, todo el día
+            <Switch checked={d.domingo} onCheckedChange={(v) => setD({ ...d, domingo: v })} />
+          </label>
+        </div>
+        <div className="flex justify-end">
+          <Button onClick={() => void guardar()} disabled={guardando}>
+            {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Guardar
+          </Button>
+        </div>
+      </div>
+    </Section>
   );
 }

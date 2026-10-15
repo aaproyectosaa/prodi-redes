@@ -14,6 +14,7 @@ import { facturacionDel27, recordatoriosCobro, vencimientosObligaciones, recorda
 import { assertProjectAccess } from "../_lib/http";
 import { aprenderDeChats } from "../_lib/chat-memoria";
 import { recordatoriosTareas } from "../_lib/tareas";
+import { enviarRetenidos } from "../_lib/push";
 
 export const config = { maxDuration: 120 };
 
@@ -73,9 +74,11 @@ async function diario(req: VercelRequest) {
     recordatoriosTareas(base).catch((err) => `error: ${err}`),
     recordatoriosEdicion(base).catch((err) => `error: ${err}`),
   ]);
+  // Lo que les llegó al equipo mientras descansaban: un solo aviso de buenos días.
+  const manana = await enviarRetenidos(base).catch((err) => `error: ${err}`);
   // Lo borrado se anota unos días para que las pantallas abiertas se enteren; después se limpia.
   await getPool().query("delete from borrados where borrado < now() - interval '7 days'").catch(() => undefined);
-  return { ok: true, meta: metaRes, recordatorios_rodaje: rodajes, recordatorios_aprobar: aprobar, recordatorios_plan: planes, facturacion, vencimientos, recordatorios_cobro: cobros, aprendizaje_chats: chats, tareas, entregas_edicion: edicion };
+  return { ok: true, meta: metaRes, recordatorios_rodaje: rodajes, recordatorios_aprobar: aprobar, recordatorios_plan: planes, facturacion, vencimientos, recordatorios_cobro: cobros, aprendizaje_chats: chats, tareas, entregas_edicion: edicion, resumen_manana: manana };
 }
 
 async function cron(req: VercelRequest) {

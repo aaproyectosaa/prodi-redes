@@ -8,6 +8,7 @@
 
 import webpush from "web-push";
 import { getPool } from "./db";
+import { esHorarioDescanso, leerDescanso, ROLES_CON_DESCANSO } from "./descanso";
 
 export type AppPush = "chat" | "sistema";
 
@@ -74,8 +75,18 @@ export async function probarPush(uid: string): Promise<{ configurado: boolean; d
  * Manda el aviso a los dispositivos del usuario: con Prodi Chat aparte, solo a los de la app `canal`
  * (las suscripciones viejas, sin app, son del sistema). Borra las suscripciones que ya no existen.
  */
-export async function enviarPush(uid: string, aviso: { title: string; body: string; url: string; tag?: string }, canal: AppPush = "sistema"): Promise<number> {
+export async function enviarPush(
+  uid: string,
+  aviso: { title: string; body: string; url: string; tag?: string },
+  canal: AppPush = "sistema",
+  opciones: { forzar?: boolean } = {}
+): Promise<number> {
   if (!configurar()) return 0;
+  // Horario de descanso del equipo: no suena; queda para el resumen de la mañana (el aviso igual está en Avisos).
+  if (!opciones.forzar && (await descansando(uid))) {
+    await retener(uid, aviso.title).catch((err) => console.warn("[push] no se pudo guardar para la mañana", err));
+    return 0;
+  }
   const r = await getPool().query("select endpoint, datos from push_suscripciones where uid = $1", [uid]);
   const todas = r.rows as { endpoint: string; datos: Suscripcion & { app?: AppPush } }[];
   // Las suscripciones viejas (sin app) son del sistema.
@@ -98,5 +109,83 @@ export async function enviarPush(uid: string, aviso: { title: string; body: stri
       }
     })
   );
+  return enviados;
+}
+
+// ---------------------------------------------------------------------------
+// Horario de descanso (ver descanso.ts)
+// ---------------------------------------------------------------------------
+
+let cacheDescanso: { d: ReturnType<typeof leerDescanso>; hasta: number } | null = null;
+const cacheRoles = new Map<string, { roles: string[]; hasta: number }>();
+
+async function configDescanso() {
+  if (cacheDescanso && cacheDescanso.hasta > Date.now()) return cacheDescanso.d;
+  const r = await getPool().query("select data from documentos where coleccion = 'app_settings' and id = 'redes'");
+  const d = leerDescanso(r.rows[0]?.data);
+  cacheDescanso = { d, hasta: Date.now() + 5 * 60_000 };
+  return d;
+}
+
+async function rolesDe(uid: string): Promise<string[]> {
+  const c = cacheRoles.get(uid);
+  if (c && c.hasta > Date.now()) return c.roles;
+  const r = await getPool().query("select data->>'role' as role, data->'roles_extra' as extra from documentos where coleccion = 'profiles' and id = $1", [uid]);
+  const fila = r.rows[0] as { role: string | null; extra: unknown } | undefined;
+  const roles = [fila?.role ?? "", ...(Array.isArray(fila?.extra) ? (fila!.extra as string[]) : [])];
+  if (cacheRoles.size > 500) cacheRoles.clear();
+  cacheRoles.set(uid, { roles, hasta: Date.now() + 5 * 60_000 });
+  return roles;
+}
+
+/** ¿A esta persona hay que dejarla descansar ahora? (equipo, en su horario de descanso; nunca el super admin). */
+export async function descansando(uid: string): Promise<boolean> {
+  try {
+    const d = await configDescanso();
+    if (!esHorarioDescanso(d)) return false;
+    const roles = await rolesDe(uid);
+    if (roles.includes("admin") || roles.includes("cliente") || roles.includes("contacto")) return false;
+    return roles.some((r) => ROLES_CON_DESCANSO.includes(r));
+  } catch {
+    return false;
+  }
+}
+
+let tablaRetenidos: Promise<unknown> | null = null;
+function asegurarRetenidos() {
+  tablaRetenidos ??= getPool()
+    .query("create table if not exists push_retenidos (uid text primary key, n int not null default 0, ultimo text not null default '', desde timestamptz not null default now())")
+    .catch((err) => {
+      tablaRetenidos = null;
+      throw err;
+    });
+  return tablaRetenidos;
+}
+
+async function retener(uid: string, titulo: string) {
+  await asegurarRetenidos();
+  await getPool().query(
+    "insert into push_retenidos (uid, n, ultimo) values ($1, 1, $2) on conflict (uid) do update set n = push_retenidos.n + 1, ultimo = $2",
+    [uid, String(titulo ?? "").slice(0, 120)]
+  );
+}
+
+/** A la mañana (cron diario de las 8): un solo aviso con lo que llegó mientras descansaban. */
+export async function enviarRetenidos(baseUrl: string): Promise<number> {
+  await asegurarRetenidos();
+  const d = await configDescanso();
+  // Domingo (o si el cron corre todavía en horario de descanso): se guarda para el próximo día hábil.
+  if (esHorarioDescanso(d)) return 0;
+  const r = await getPool().query("delete from push_retenidos returning uid, n, ultimo");
+  let enviados = 0;
+  for (const fila of r.rows as { uid: string; n: number; ultimo: string }[]) {
+    const cuerpo = fila.n === 1 ? fila.ultimo : `${fila.n} avisos nuevos. El último: ${fila.ultimo}`;
+    enviados += await enviarPush(
+      fila.uid,
+      { title: "Buen día ☀️ Mientras descansabas…", body: cuerpo, url: `${baseUrl}/notificaciones`, tag: "resumen-manana" },
+      "sistema",
+      { forzar: true }
+    );
+  }
   return enviados;
 }

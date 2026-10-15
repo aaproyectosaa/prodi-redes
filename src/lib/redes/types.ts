@@ -428,6 +428,8 @@ export interface RedesSettings {
   viaticos?: import("../../../api/_lib/viaticos").MontosViatico;
   /** Promo (%) desde el 2º video extra pedido para la misma filmación (ver api/_lib/jornada.ts). */
   promo_jornada_pct?: number;
+  /** Horario de descanso del equipo: sin avisos al celular de noche y los domingos (ver api/_lib/descanso.ts). */
+  descanso?: Partial<import("../../../api/_lib/descanso").Descanso>;
   /** Días en una etapa a partir de los cuales un video se marca como trabado. */
   dias_alerta: number;
   /** Envío automático del informe mensual el día 1. */
