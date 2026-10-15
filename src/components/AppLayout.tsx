@@ -13,6 +13,7 @@ import { VerComoBanner } from "@/components/redes/VerComo";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { RedesDataProvider } from "@/contexts/redes-data-context";
 import { BadgeApp } from "@/components/BadgeApp";
+import { AvisoTarde } from "@/components/AvisoTarde";
 import { SidebarExtrasProvider, useSidebarExtras } from "@/hooks/use-sidebar-extras";
 import { useAltoVisible } from "@/hooks/use-alto-visible";
 import { useChatDock } from "@/lib/redes/chatDock";
@@ -77,6 +78,7 @@ const LayoutInner = () => {
         <InstalarChatHost />
         <AvisoActivarAvisos uid={viewingAs ? undefined : user?.uid} />
         <RecorridoAuto />
+        <AvisoTarde />
         <DriveUploadStatusBar />
         <VideoSheet />
         <ChatDock />

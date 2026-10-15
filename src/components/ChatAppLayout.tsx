@@ -14,6 +14,7 @@ import { RecorridoAuto } from "@/components/recorrido/Recorrido";
 import { BarraInstalarChat, BotonInstalarChat, InstalarChatHost } from "@/components/InstalarChat";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { RedesDataProvider } from "@/contexts/redes-data-context";
+import { AvisoTarde } from "@/components/AvisoTarde";
 import { BadgeApp } from "@/components/BadgeApp";
 import { useInAppNotifications } from "@/hooks/use-in-app-notifications";
 import { useTheme } from "@/hooks/use-theme";
@@ -261,6 +262,7 @@ export function ChatAppLayout() {
         <InstalarChatHost />
         <AvisoActivarAvisos uid={viewingAs ? undefined : user?.uid} />
         <RecorridoAuto enChat />
+        <AvisoTarde />
       </div>
     </RedesDataProvider>
   );
