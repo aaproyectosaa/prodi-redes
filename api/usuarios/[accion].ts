@@ -9,7 +9,10 @@
 // POST /api/usuarios/ejemplo-borrar  → los borra
 // POST /api/usuarios/chat-borrar    { chat_id } → borra un grupo con sus mensajes (el del equipo o de un cliente queda dado de baja)
 // Contactos (solo chat), super admin o producción asignada al cliente:
-// POST /api/usuarios/contacto-crear   { proyecto_id, nombre, email, telefono?, cargo? } → { uid, link, mail }
+// POST /api/usuarios/contacto-crear   { proyecto_id, nombre, email, telefono?, cargo?, password?, acceso? } → { uid, link, mail } o { uid, password }
+//   Con password (solo super admin): queda con esa contraseña y no se manda invitación. acceso "sistema" (solo super
+//   admin): entra al panel del cliente como un usuario más de la empresa; "chat" (el de siempre): solo Prodi Chat.
+// POST /api/usuarios/contacto-clave   { uid, password } → el super admin le pone la contraseña (cierra sus sesiones)
 // POST /api/usuarios/contacto-activo  { uid, activo }  → (des)activa y lo saca/suma al grupo del cliente
 // POST /api/usuarios/contacto-invitar { uid }          → link nuevo para crear la contraseña (y lo manda por mail)
 
@@ -17,7 +20,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import crypto from "crypto";
 import { FieldValue } from "../_lib/db";
 import { adminDb } from "../_lib/db";
-import { adminAuth, crearUsuario, linkDeClave, usuarioFresco } from "../_lib/cuentas";
+import { adminAuth, cambiarClave, crearUsuario, linkDeClave, usuarioFresco, validarClave } from "../_lib/cuentas";
 import { appUrl, body, HttpError, olvidarPerfil, requireCaller, rolesDe, sendError, type Caller } from "../_lib/http";
 import { enviarMailsLote } from "../_lib/informe";
 import { mailAvisoHtml } from "../_lib/mail-aviso";
@@ -187,17 +190,27 @@ async function clienteParaContactos(caller: Caller, proyectoId: unknown) {
   return { id: proyectoId, nombre: String(p.nombre ?? "") };
 }
 
-/** Lo suma (o lo saca) del grupo del cliente, marcado como contacto. */
-async function grupoDelCliente(proyectoId: string, uid: string, nombre: string, adentro: boolean) {
+/** Lo suma (o lo saca) del grupo del cliente, marcado como contacto (o como gente del cliente, con acceso al sistema). */
+async function grupoDelCliente(proyectoId: string, uid: string, nombre: string, adentro: boolean, comoContacto = true) {
   const ref = adminDb().collection("chats").doc(`cliente_${proyectoId}`);
   const chat = await ref.get();
   // Si el grupo todavía no existe, lo arma el super admin al abrir la app (sincronizarChats ya los incluye).
   if (!chat.exists) return;
   await ref.update(
     adentro
-      ? { miembros: FieldValue.arrayUnion(uid), contactos: FieldValue.arrayUnion(uid), [`nombres.${uid}`]: nombre }
+      ? { miembros: FieldValue.arrayUnion(uid), ...(comoContacto ? { contactos: FieldValue.arrayUnion(uid) } : {}), [`nombres.${uid}`]: nombre }
       : { miembros: FieldValue.arrayRemove(uid), contactos: FieldValue.arrayRemove(uid) }
   );
+}
+
+/** La contraseña que pone el super admin: mismas reglas que al elegirla uno. */
+function claveValida(clave: unknown): string {
+  try {
+    validarClave(String(clave ?? ""));
+  } catch (err) {
+    throw new HttpError(400, err instanceof Error ? err.message : "Contraseña inválida");
+  }
+  return String(clave);
 }
 
 /** Link para que elija su contraseña: entra directo a Prodi Chat. */
@@ -222,14 +235,19 @@ async function invitarContacto(email: string, nombre: string, cliente: string, l
 }
 
 async function contactoCrear(req: VercelRequest, caller: Caller) {
-  const b = body<{ proyecto_id?: string; nombre?: string; email?: string; telefono?: string; cargo?: string }>(req);
+  const b = body<{ proyecto_id?: string; nombre?: string; email?: string; telefono?: string; cargo?: string; password?: string; acceso?: string }>(req);
   const cliente = await clienteParaContactos(caller, b.proyecto_id);
   const nombre = String(b.nombre ?? "").trim().slice(0, 80);
   const email = String(b.email ?? "").trim().toLowerCase();
   if (!nombre || !/.+@.+\..+/.test(email)) throw new HttpError(400, "Completá nombre y mail");
+  const sistema = b.acceso === "sistema";
+  const conClave = !!b.password;
+  // Poner la contraseña o dar acceso al sistema: solo el super admin (nadie más del equipo puede entrar como el cliente).
+  if ((sistema || conClave) && caller.role !== "admin") throw new HttpError(403, "Solo el super admin puede poner la contraseña o dar acceso al sistema");
+  const password = conClave ? claveValida(b.password) : null;
   let user;
   try {
-    user = await crearUsuario({ email, displayName: nombre });
+    user = await crearUsuario({ email, displayName: nombre, password });
   } catch (err: any) {
     if (err?.code === "auth/email-already-exists") throw new HttpError(409, "Ya existe un usuario con ese mail");
     throw err;
@@ -240,7 +258,7 @@ async function contactoCrear(req: VercelRequest, caller: Caller) {
     .set({
       nombre,
       email,
-      role: "contacto",
+      role: sistema ? "cliente" : "contacto",
       proyecto_id: cliente.id,
       telefono: String(b.telefono ?? "").trim().slice(0, 40) || null,
       cargo: String(b.cargo ?? "").trim().slice(0, 80) || null,
@@ -248,10 +266,26 @@ async function contactoCrear(req: VercelRequest, caller: Caller) {
       creado_por: caller.uid,
       created_at: new Date().toISOString(),
     });
-  await grupoDelCliente(cliente.id, user.uid, nombre, true);
-  const link = await linkContacto(user.uid, req);
+  // Con acceso al sistema es uno más del cliente (ve sus videos, aprueba, etc.).
+  if (sistema) await asignarClientes(user.uid, "cliente", [cliente.id]);
+  await grupoDelCliente(cliente.id, user.uid, nombre, true, !sistema);
+  // Con contraseña puesta: se le pasan el usuario y la contraseña, no hace falta invitación.
+  if (password) return { ok: true, uid: user.uid, password, acceso: sistema ? "sistema" : "chat" };
+  const link = sistema ? await linkDeClave(user.uid, appUrl(req)) : await linkContacto(user.uid, req);
   const mail = await invitarContacto(email, nombre, cliente.nombre, link, req);
-  return { ok: true, uid: user.uid, link, mail };
+  return { ok: true, uid: user.uid, link, mail, acceso: sistema ? "sistema" : "chat" };
+}
+
+/** El super admin le pone la contraseña a un integrante de un cliente (contacto o usuario del cliente). */
+async function contactoClave(req: VercelRequest, caller: Caller) {
+  if (caller.role !== "admin") throw new HttpError(403, "Solo el super admin");
+  const b = body<{ uid?: string; password?: string }>(req);
+  if (!b.uid) throw new HttpError(400, "Falta el usuario");
+  const p = (await adminDb().collection("profiles").doc(b.uid).get()).data();
+  if (!p || !["contacto", "cliente"].includes(String(p.role))) throw new HttpError(404, "Solo para gente de un cliente");
+  const password = claveValida(b.password);
+  await cambiarClave(b.uid, password);
+  return { ok: true, password };
 }
 
 async function contactoDe(req: VercelRequest, caller: Caller) {
@@ -335,6 +369,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (accion === "contacto-crear") res.status(200).json(await contactoCrear(req, caller));
       else if (accion === "contacto-activo") res.status(200).json(await contactoActivo(req, caller));
       else if (accion === "contacto-invitar") res.status(200).json(await contactoInvitar(req, caller));
+      else if (accion === "contacto-clave") res.status(200).json(await contactoClave(req, caller));
       else res.status(404).json({ error: "Acción desconocida" });
       return;
     }

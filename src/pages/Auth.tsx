@@ -295,14 +295,14 @@ const Auth = () => {
             </Button>
           </form>
           <div className="mt-4 text-center text-sm">
-            <button
-              type="button"
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-primary hover:underline"
-              disabled={loading}
-            >
-              {isLogin ? "¿No tenés cuenta? Registrate" : "¿Ya tenés cuenta? Ingresá"}
-            </button>
+            {/* Crear cuenta (con el código del equipo) solo con ?registro=1: a los clientes les damos el usuario nosotros. */}
+            {isLogin && !new URLSearchParams(window.location.search).has("registro") ? (
+              <p className="text-muted-foreground">¿No tenés usuario? Pedíselo a tu contacto de Prodi.</p>
+            ) : (
+              <button type="button" onClick={() => setIsLogin(!isLogin)} className="text-primary hover:underline" disabled={loading}>
+                {isLogin ? "¿No tenés cuenta? Registrate" : "¿Ya tenés cuenta? Ingresá"}
+              </button>
+            )}
           </div>
           </>
           )}

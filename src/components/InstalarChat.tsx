@@ -107,6 +107,16 @@ export function InstalarChatDialog({ open, onOpenChange }: { open: boolean; onOp
               <Button size="lg" className="w-full" onClick={() => void instalar()}>
                 <Download className="mr-2 h-4 w-4" /> Instalar Prodi Chat
               </Button>
+            ) : !enPagina && app.instalada && app.plataforma === "iphone" ? (
+              // Dentro de la app Prodi del iPhone no se puede instalar otra (se abre adentro, sin "Agregar a inicio").
+              <div className="space-y-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-center text-sm">
+                <p>
+                  Desde adentro de la app Prodi no se puede. Copiá el link y pegalo en <b>Safari</b>.
+                </p>
+                <Button size="lg" className="w-full" onClick={() => void copiar()}>
+                  <Copy className="mr-2 h-4 w-4" /> Copiar link para Safari
+                </Button>
+              </div>
             ) : (
               !enPagina && (
                 <Button size="lg" className="w-full" onClick={() => irAInstalarChat()}>
