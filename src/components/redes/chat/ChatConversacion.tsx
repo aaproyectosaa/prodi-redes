@@ -1369,51 +1369,45 @@ export function ChatConversacion({
                 <Paperclip className="h-5 w-5" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="top" className="w-60">
-              <DropdownMenuItem onSelect={() => elegirArchivo.current?.click()}>
-                <ImageIcon className="mr-2 h-4 w-4" /> Fotos y videos
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => elegirDocumento.current?.click()}>
-                <FileText className="mr-2 h-4 w-4" />
-                <span>
-                  Documento
-                  <span className="block text-xs text-muted-foreground">Archivo original, sin comprimir</span>
-                </span>
-              </DropdownMenuItem>
-              {chat.tipo !== "prodi" && (
-                <DropdownMenuItem onSelect={() => setEncuesta(true)}>
-                  <BarChart3 className="mr-2 h-4 w-4" />
-                  <span>
-                    Encuesta
-                    <span className="block text-xs text-muted-foreground">Ej.: “¿Qué portada va?”</span>
-                  </span>
-                </DropdownMenuItem>
-              )}
-              {chat.tipo !== "prodi" && (
-                <DropdownMenuItem
-                  onSelect={() => {
-                    if (!texto.trim()) {
-                      toast.info("Escribí el mensaje y después elegí “Programar”.");
-                      setTimeout(() => caja.current?.focus(), 50);
-                      return;
-                    }
-                    setProgramar(true);
-                  }}
-                >
-                  <CalendarClock className="mr-2 h-4 w-4" />
-                  <span>
-                    Programar mensaje
-                    <span className="block text-xs text-muted-foreground">Sale solo a la hora que elijas</span>
-                  </span>
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem onSelect={() => setGaleria(true)}>
-                <Images className="mr-2 h-4 w-4" />
-                <span>
-                  Ver fotos, videos y archivos
-                  <span className="block text-xs text-muted-foreground">Todo lo mandado en este chat</span>
-                </span>
-              </DropdownMenuItem>
+            <DropdownMenuContent align="start" side="top" className="w-[19rem] rounded-2xl p-3">
+              {/* Como WhatsApp: círculos de colores con su nombre. */}
+              <div className="grid grid-cols-3 gap-x-2 gap-y-3">
+                {[
+                  { label: "Fotos y videos", icono: ImageIcon, color: "from-[#6F40FC] to-[#E040A0]", accion: () => elegirArchivo.current?.click() },
+                  { label: "Documento", icono: FileText, color: "from-sky-500 to-blue-600", accion: () => elegirDocumento.current?.click() },
+                  ...(chat.tipo !== "prodi"
+                    ? [
+                        { label: "Encuesta", icono: BarChart3, color: "from-amber-400 to-orange-500", accion: () => setEncuesta(true) },
+                        {
+                          label: "Programar",
+                          icono: CalendarClock,
+                          color: "from-emerald-400 to-teal-600",
+                          accion: () => {
+                            if (!texto.trim()) {
+                              toast.info("Escribí el mensaje y después elegí “Programar”.");
+                              setTimeout(() => caja.current?.focus(), 50);
+                              return;
+                            }
+                            setProgramar(true);
+                          },
+                        },
+                      ]
+                    : []),
+                  { label: "Galería", icono: Images, color: "from-pink-500 to-rose-600", accion: () => setGaleria(true) },
+                ].map((o) => (
+                  <DropdownMenuItem
+                    key={o.label}
+                    onSelect={o.accion}
+                    className="flex cursor-pointer flex-col items-center gap-1.5 rounded-xl p-2 text-center focus:bg-muted"
+                  >
+                    <span className={cn("flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br text-white shadow-md transition-transform", o.color)}>
+                      <o.icono className="h-5 w-5" />
+                    </span>
+                    <span className="text-[11px] font-medium leading-tight">{o.label}</span>
+                  </DropdownMenuItem>
+                ))}
+              </div>
+              <p className="mt-2 border-t pt-2 text-center text-[10px] text-muted-foreground">Documento: llega el archivo original, sin comprimir · hasta {CHAT_MAX_MB} MB</p>
             </DropdownMenuContent>
           </DropdownMenu>
           {/* Cámara: en el celular, la del sistema (foto, selfie o video); en la compu, un diálogo con vista previa. */}
