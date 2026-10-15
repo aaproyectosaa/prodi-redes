@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, CalendarClock, ChevronDown, Clapperboard, ImageIcon, Inbox, MapPin, Package, Sparkles } from "lucide-react";
+import { ArrowRight, CalendarClock, ChevronDown, Clapperboard, ImageIcon, Inbox, Loader2, MapPin, Package, Sparkles, Square, Volume2 } from "lucide-react";
+import { callApi } from "@/lib/redes/api";
 import { PageShell } from "@/components/redes/PageShell";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
@@ -163,6 +164,9 @@ function Tarjeta({ p, nuevo }: { p: PedidoCliente; nuevo?: boolean }) {
   const detalle = esVideo ? p.video.idea : p.pieza.producto ? p.pieza.pedido : null;
   const fecha = esVideo ? p.video.fecha_deseada : p.pieza.fecha_deseada;
   const largo = (detalle?.length ?? 0) > 160;
+  // Con resumen de Prodi, lo que escribió el cliente queda plegado (se abre con un toque).
+  const conResumen = !!(esVideo ? p.video.resumen_ia : p.pieza.resumen_ia)?.texto;
+  const plegable = largo || conResumen;
 
   // Plan: del plan, extra/aparte y si está pago.
   const plan = esVideo
@@ -229,8 +233,9 @@ function Tarjeta({ p, nuevo }: { p: PedidoCliente; nuevo?: boolean }) {
           <h3 className="text-lg font-bold leading-snug">{titulo}</h3>
           {detalle && (
             <>
-              <p className={cn("mt-1 whitespace-pre-line text-sm leading-relaxed text-muted-foreground", !abierta && "line-clamp-2")}>{detalle}</p>
-              {largo && (
+              <ResumenIA p={p} largo={largo} />
+              <p className={cn("mt-1 whitespace-pre-line text-sm leading-relaxed text-muted-foreground", !abierta && "line-clamp-2", plegable && !abierta && "hidden")}>{detalle}</p>
+              {plegable && (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -239,7 +244,7 @@ function Tarjeta({ p, nuevo }: { p: PedidoCliente; nuevo?: boolean }) {
                   }}
                   className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
                 >
-                  {abierta ? "Ver menos" : "Ver todo"}
+                  {abierta ? "Ocultar lo que escribió" : "Ver lo que escribió el cliente"}
                   <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", abierta && "rotate-180")} />
                 </button>
               )}
@@ -275,6 +280,104 @@ function Celda({ icono: Icono, label, valor, clase }: { icono: React.ElementType
         <Icono className="h-3 w-3" /> {label}
       </p>
       <p className={cn("mt-0.5 truncate text-sm font-semibold", clase)}>{valor}</p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Resumen de Prodi: la IA cuenta el pedido en 1 o 2 frases (y lo lee en voz alta).
+
+/** De a uno: si se abren muchos pedidos sin resumen, no se piden todos juntos. */
+let cola: Promise<unknown> = Promise.resolve();
+const pedidos = new Map<string, Promise<string | null>>();
+function pedirResumen(tipo: string, id: string): Promise<string | null> {
+  const k = `${tipo}:${id}`;
+  if (!pedidos.has(k)) {
+    const p = cola.then(() => callApi<{ texto: string | null }>("/api/ia/resumen-pedido", { tipo, id }).then((r) => r.texto));
+    cola = p.catch(() => undefined);
+    pedidos.set(k, p);
+  }
+  return pedidos.get(k)!;
+}
+
+function ResumenIA({ p, largo }: { p: PedidoCliente; largo: boolean }) {
+  const { viewingAs } = useUserProfileContext();
+  const guardado = (p.tipo === "video" ? p.video.resumen_ia : p.pieza.resumen_ia)?.texto ?? null;
+  const [texto, setTexto] = useState<string | null>(guardado);
+  const [estado, setEstado] = useState<"listo" | "cargando" | "error">(guardado ? "listo" : "cargando");
+  const [hablando, setHablando] = useState(false);
+
+  useEffect(() => {
+    if (guardado) {
+      setTexto(guardado);
+      setEstado("listo");
+      return;
+    }
+    // Solo hace falta si lo que escribió el cliente es largo. Mirando "como" otro no se genera (sería escribir).
+    if (!largo || viewingAs) return;
+    let vivo = true;
+    setEstado("cargando");
+    pedirResumen(p.tipo, p.id)
+      .then((r) => vivo && (setTexto(r), setEstado("listo")))
+      .catch(() => vivo && setEstado("error"));
+    return () => {
+      vivo = false;
+    };
+  }, [guardado, largo, viewingAs, p.tipo, p.id]);
+
+  useEffect(() => () => window.speechSynthesis?.cancel(), []);
+
+  if (!largo && !guardado) return null;
+  if (estado === "error" || (estado === "listo" && !texto) || (viewingAs && !guardado)) return null;
+
+  const escuchar = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const s = window.speechSynthesis;
+    if (!s || !texto) return;
+    if (hablando) {
+      s.cancel();
+      setHablando(false);
+      return;
+    }
+    s.cancel();
+    const u = new SpeechSynthesisUtterance(texto);
+    u.lang = "es-AR";
+    const voz = s.getVoices().find((v) => v.lang === "es-AR") ?? s.getVoices().find((v) => v.lang.startsWith("es"));
+    if (voz) u.voice = voz;
+    u.rate = 1.05;
+    u.onend = () => setHablando(false);
+    u.onerror = () => setHablando(false);
+    setHablando(true);
+    s.speak(u);
+  };
+
+  return (
+    <div className="mt-2 rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/[0.10] to-fuchsia-500/[0.06] p-3">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-primary">
+          <Sparkles className="h-3.5 w-3.5" /> Prodi te lo resume
+        </span>
+        {estado === "listo" && texto && "speechSynthesis" in window && (
+          <button
+            type="button"
+            onClick={escuchar}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold transition-colors",
+              hablando ? "bg-primary text-primary-foreground" : "bg-background/70 text-primary hover:bg-background"
+            )}
+          >
+            {hablando ? <Square className="h-3 w-3 fill-current" /> : <Volume2 className="h-3.5 w-3.5" />}
+            {hablando ? "Parar" : "Escuchar"}
+          </button>
+        )}
+      </div>
+      {estado === "cargando" ? (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Leyendo el pedido…
+        </p>
+      ) : (
+        <p className="text-[15px] font-medium leading-snug">{texto}</p>
+      )}
     </div>
   );
 }

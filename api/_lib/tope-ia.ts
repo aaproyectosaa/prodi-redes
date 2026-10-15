@@ -17,7 +17,7 @@ const TOPE_LINKS_CHAT = 100;
 /** Sugerir tareas en el chat de Software: también en segundo plano y aparte; tope entre todos en 24 h. */
 const TOPE_SOFTWARE_TAREA = 300;
 /** Acciones de segundo plano: no gastan el tope de la persona. */
-const APARTE = ["links-chat", "software-tarea"];
+const APARTE = ["links-chat", "software-tarea", "resumen-pedido"];
 /** Entre todo el sistema en 24 h (el admin no lo tiene). */
 const TOPE_GLOBAL = 1500;
 

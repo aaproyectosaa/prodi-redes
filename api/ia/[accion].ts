@@ -1288,6 +1288,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "pieza-editar") res.status(200).json(await piezaEditar(req).catch((e) => liberarTurnoPieza(req, e)));
     else if (accion === "pieza-compartir") res.status(200).json(await piezaCompartir(req));
     else if (accion === "reenviar") res.status(200).json(await reenviar(req));
+    else if (accion === "resumen-pedido") res.status(200).json(await resumenPedido(req));
     else if (accion === "minuta") res.status(200).json(await minuta(req));
     else if (accion === "minuta-llamada") res.status(200).json(await minutaLlamada(req));
     else if (accion === "llamada-texto") res.status(200).json(await llamadaTexto(req));
@@ -1319,6 +1320,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (err) {
     sendError(res, err);
   }
+}
+
+/**
+ * Bandeja "Pedidos": lo que pidió el cliente contado en 1 o 2 frases simples, para entenderlo sin leer todo.
+ * Se genera una sola vez por pedido y queda guardado en el doc (resumen_ia).
+ */
+async function resumenPedido(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "productor"]);
+  const b = body<{ tipo?: string; id?: string }>(req);
+  const col = b.tipo === "pieza" ? "piezas_ia" : b.tipo === "video" ? "videos" : null;
+  if (!col || typeof b.id !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(b.id)) throw new HttpError(400, "Pedido inválido");
+  const db = adminDb();
+  const ref = db.collection(col).doc(b.id);
+  const d = (await ref.get()).data();
+  if (!d) throw new HttpError(404, "Ese pedido ya no existe");
+  await assertProjectAccess(caller, String(d.proyecto_id));
+  if (d.resumen_ia?.texto) return { texto: String(d.resumen_ia.texto) };
+
+  const cliente = String((await db.collection("projects").doc(String(d.proyecto_id)).get()).data()?.nombre ?? "el cliente");
+  const pedido =
+    col === "videos"
+      ? [`Título: ${d.titulo ?? ""}`, `Idea: ${d.idea ?? ""}`, d.objetivo ? `Objetivo: ${d.objetivo}` : ""].filter(Boolean).join("\n")
+      : [
+          `Tipo: ${FORMATOS_PIEZA[d.formato as keyof typeof FORMATOS_PIEZA]?.label ?? d.formato ?? "pieza"}`,
+          d.producto ? `Producto: ${d.producto}` : "",
+          `Pedido: ${d.pedido ?? ""}`,
+          d.texto_en_pieza ? `Texto que va en la pieza: ${d.texto_en_pieza}` : "",
+          d.oferta ? `Precio/promo: ${d.oferta}` : "",
+          d.cta ? `Llamado a la acción: ${d.cta}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n");
+  // Si es cortito no hace falta la IA: ya se entiende.
+  if (pedido.length < 120) return { texto: null };
+
+  await controlarTopeIA(caller, "resumen-pedido");
+  const prompt = `Sos parte de una productora de videos y redes de Argentina. ${cliente} hizo este pedido desde su panel (${col === "videos" ? "un video" : "una pieza gráfica"}):
+
+${pedido.slice(0, 6000)}
+
+Contale al productor de qué se trata en 1 o 2 frases cortas (máximo 40 palabras), en castellano rioplatense, simple y directo, como se lo dirías en un audio de WhatsApp. Decí qué quieren mostrar, para qué y lo más importante a tener en cuenta (público, gancho o dato clave). Sin saludar, sin comillas, sin listas, sin inventar nada que no esté en el pedido.`;
+  const r = await generarJSONBarato<{ resumen?: string }>(prompt, { type: "OBJECT", properties: { resumen: { type: "STRING" } }, required: ["resumen"] });
+  const texto = String(r.resumen ?? "").replace(/\s+/g, " ").trim().slice(0, 400);
+  if (!texto) throw new HttpError(502, "La IA no pudo resumirlo. Probá de nuevo.");
+  await ref.update({ resumen_ia: { texto, at: new Date().toISOString() } });
+  return { texto };
 }
 
 /** Para Ajustes: qué claves de IA hay cargadas en Vercel (solo sí/no). */

@@ -125,6 +125,8 @@ export interface Video {
   meta?: { post_id?: string; ad_id?: string; campaign_id?: string } | null;
   /** Lo pidió el cliente desde su panel. */
   pedido_cliente?: boolean;
+  /** Resumen corto del pedido hecho por la IA (bandeja "Pedidos"). */
+  resumen_ia?: { texto: string; at: string } | null;
   /** Para cuándo lo quiere publicado el cliente (YYYY-MM-DD). */
   fecha_deseada?: string | null;
   /** Guion por escenas (lo arma la IA o producción). */
@@ -303,6 +305,8 @@ export interface PiezaIA {
   solicitado_por: string;
   /** La pidió el cliente desde su panel (no la cargó el equipo). Las viejas no lo tienen. */
   pedido_cliente?: boolean;
+  /** Resumen corto del pedido hecho por la IA (bandeja "Pedidos"). */
+  resumen_ia?: { texto: string; at: string } | null;
   /** Fotos para usar que cargó el equipo con el pedido (producto, local, persona). */
   attachments_crudo?: import("@/integrations/firebase/types").DriveAttachmentRef[];
   /** Qué quiere el cliente, con sus palabras. */
