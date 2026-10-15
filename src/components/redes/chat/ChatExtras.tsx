@@ -741,6 +741,7 @@ export function ProgramarMensaje({
   onOpenChange,
   onListo,
   editando,
+  aLaManana,
 }: {
   chat: Chat;
   uid: string;
@@ -751,6 +752,8 @@ export function ProgramarMensaje({
   onListo: () => void;
   /** Con un programado: se edita ese (texto y hora). */
   editando?: Programado | null;
+  /** De noche: viene elegida la hora en que termina el descanso del equipo (ej. mañana 8:00). */
+  aLaManana?: { hasta: number; domingo: boolean } | null;
 }) {
   const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const [dia, setDia] = useState(iso(new Date()));
@@ -765,7 +768,17 @@ export function ProgramarMensaje({
       setMsj(editando.texto);
       setDia(iso(d));
       setHh(`${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`);
-    } else setMsj(texto);
+    } else {
+      setMsj(texto);
+      if (aLaManana) {
+        // La próxima mañana a la hora en que termina el descanso (saltea el domingo si descansan ese día).
+        const d = new Date();
+        if (d.getHours() >= aLaManana.hasta) d.setDate(d.getDate() + 1);
+        if (aLaManana.domingo && d.getDay() === 0) d.setDate(d.getDate() + 1);
+        setDia(iso(d));
+        setHh(`${String(aLaManana.hasta).padStart(2, "0")}:00`);
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, texto, editando?.id]);
   const atajos = useMemo(() => {

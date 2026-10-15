@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { collection, limit, onSnapshot, orderBy, query } from "@/lib/db";
-import { ArrowLeft, BarChart3, CalendarClock, Camera, Check, CheckCheck, CornerUpRight, FileText, Headphones, Image as ImageIcon, Images, Info, Loader2, Paperclip, Reply, Search, Send, Sparkles, Upload, Video, X } from "lucide-react";
+import { ArrowLeft, BarChart3, CalendarClock, Camera, Check, CheckCheck, CornerUpRight, FileText, Headphones, Image as ImageIcon, Images, Info, Loader2, Moon, Paperclip, Reply, Search, Send, Sparkles, Upload, Video, X } from "lucide-react";
+import { esHorarioDescanso, leerDescanso, ROLES_CON_DESCANSO } from "../../../../api/_lib/descanso";
 import { toast } from "sonner";
 import { db } from "@/integrations/firebase/client";
 import { Button } from "@/components/ui/button";
@@ -300,7 +301,7 @@ export function ChatConversacion({
   /** Cuántos mensajes sin leer tiene (el chat flotante lo muestra en la burbuja minimizada). */
   onSinLeer?: (n: number) => void;
 }) {
-  const { clienteById, chats } = useRedes();
+  const { clienteById, chats, settings } = useRedes();
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
   const [cargando, setCargando] = useState(true);
   // Hasta dónde había leído al abrir este chat (se toma una vez, antes de marcarlo leído): ahí va "N mensajes sin leer".
@@ -355,6 +356,15 @@ export function ChatConversacion({
   const [reenviarMsg, setReenviarMsg] = useState<Mensaje | null>(null);
   const [encuesta, setEncuesta] = useState(false);
   const [programar, setProgramar] = useState(false);
+  // De noche: si alguien del equipo de este chat está en su horario de descanso, se sugiere programar para la mañana.
+  const [programarManana, setProgramarManana] = useState(false);
+  const descanso = leerDescanso(settings);
+  const descansan = esHorarioDescanso(descanso)
+    ? chat.miembros
+        .filter((id) => id !== uid)
+        .map((id) => profiles.find((p) => p.id === id))
+        .filter((p): p is Profile => !!p && p.role !== "admin" && [p.role, ...(p.roles_extra ?? [])].some((r) => ROLES_CON_DESCANSO.includes(String(r))))
+    : [];
   const [editProg, setEditProg] = useState<import("@/lib/redes/chat").Programado | null>(null);
   const programados = useProgramados(chat.id, uid);
   // Cuántos mensajes se cargan (al saltar a uno viejo, se cargan más) y a cuál saltar cuando lleguen.
@@ -1260,6 +1270,25 @@ export function ChatConversacion({
         )}
       </div>
 
+      {descansan.length > 0 && texto.trim() && !programar && (
+        <div className="mx-3 mb-1.5 flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-xs animate-in fade-in">
+          <Moon className="h-3.5 w-3.5 shrink-0 text-primary" />
+          <span className="min-w-0 flex-1">
+            {descansan.length === 1 ? `${descansan[0].nombre.split(" ")[0]} está descansando.` : "El equipo está descansando."} Si no es urgente, que le llegue a las {descanso.hasta}:00.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setProgramarManana(true);
+              setProgramar(true);
+            }}
+            className="shrink-0 rounded-full bg-primary px-2.5 py-1 font-semibold text-primary-foreground"
+          >
+            Programar
+          </button>
+        </div>
+      )}
+
       <ProgramadosChat
         lista={programados}
         onEditar={(p) => {
@@ -1642,10 +1671,14 @@ export function ChatConversacion({
         open={programar}
         onOpenChange={(v) => {
           setProgramar(v);
-          if (!v) setEditProg(null);
+          if (!v) {
+            setEditProg(null);
+            setProgramarManana(false);
+          }
         }}
         onListo={() => setTexto("")}
         editando={editProg}
+        aLaManana={programarManana ? descanso : null}
       />
       <TareaMensajeDialog
         chat={chat}
