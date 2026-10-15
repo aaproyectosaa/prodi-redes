@@ -55,6 +55,52 @@ export function clientePorNombre(clave: string, proyectos: Proyecto[]): Proyecto
   return hay.length === 1 ? hay[0] : null;
 }
 
+export interface PreviaLink {
+  url: string;
+  sitio: string;
+  titulo: string | null;
+  descripcion: string | null;
+  imagen: string | null;
+}
+
+/** Tarjeta del link (como WhatsApp): título, descripción, imagen y sitio. Mismo cuidado que leerPagina. */
+export async function previaDeLink(u: URL): Promise<PreviaLink | null> {
+  if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+  if (/^(localhost|\d+\.\d+\.\d+\.\d+|\[.*\])$/i.test(u.hostname) || /\.(local|internal|localhost)$/i.test(u.hostname) || /(^|\.)(nip\.io|sslip\.io|xip\.io|localtest\.me)$/i.test(u.hostname)) return null;
+  try {
+    const r = await fetch(u.toString(), { redirect: "manual", signal: AbortSignal.timeout(5000), headers: { "User-Agent": "Mozilla/5.0 (Prodi)" } });
+    if (!r.ok || !String(r.headers.get("content-type") ?? "").includes("text/html")) return null;
+    const html = (await r.text()).slice(0, 300_000);
+    const meta = (n: string) =>
+      html.match(new RegExp(`<meta[^>]+(?:name|property)=["']${n}["'][^>]+content=["']([^"']{2,500})["']`, "i"))?.[1] ??
+      html.match(new RegExp(`<meta[^>]+content=["']([^"']{2,500})["'][^>]+(?:name|property)=["']${n}["']`, "i"))?.[1];
+    const limpio = (s?: string) =>
+      s?.replace(/&amp;/g, "&").replace(/&#039;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ").trim() || null;
+    const titulo = limpio(meta("og:title") ?? html.match(/<title[^>]*>([^<]{2,200})<\/title>/i)?.[1]);
+    const descripcion = limpio(meta("og:description") ?? meta("description"));
+    let imagen = limpio(meta("og:image") ?? meta("twitter:image"));
+    // Solo imágenes https (relativas se completan con el sitio).
+    if (imagen) {
+      try {
+        const iu = new URL(imagen, u);
+        imagen = iu.protocol === "https:" ? iu.toString() : null;
+      } catch {
+        imagen = null;
+      }
+    }
+    if (!titulo && !descripcion && !imagen) return null;
+    return {
+      url: u.toString(),
+      sitio: limpio(meta("og:site_name")) ?? u.hostname.replace(/^www\./, ""),
+      titulo: titulo?.slice(0, 200) ?? null,
+      descripcion: descripcion?.slice(0, 300) ?? null,
+      imagen: imagen?.slice(0, 1000) ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Título y descripción de la página (para el contexto de la IA). Solo hosts públicos, rápido y sin seguir a otros lados. */
 export async function leerPagina(u: URL): Promise<string | null> {
   if (u.protocol !== "https:" && u.protocol !== "http:") return null;
@@ -83,9 +129,9 @@ export async function linksDeMensaje(caller: Caller, chatId: unknown, mensajeId:
   const chat = await chatDeMiembro(chatId, caller.uid);
   const cid = String(chatId);
   if (typeof mensajeId !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(mensajeId)) throw new HttpError(400, "Mensaje inválido");
-  if (!["admin", "productor", "editor", "pauta", "diseno", "administracion", "cliente"].includes(caller.role)) return { guardados: 0 };
   const db = adminDb();
-  const msg = (await db.collection(`chats/${cid}/mensajes`).doc(mensajeId).get()).data();
+  const ref = db.collection(`chats/${cid}/mensajes`).doc(mensajeId);
+  const msg = (await ref.get()).data();
   if (!msg || msg.by !== caller.uid || msg.by === PRODI_ID) throw new HttpError(403, "Ese mensaje no es tuyo");
   const texto = String(msg.texto ?? msg.leyenda ?? "");
   // Sin la parte de un mail ("lucas@gmail.com" no es una web).
@@ -95,6 +141,12 @@ export async function linksDeMensaje(caller: Caller, chatId: unknown, mensajeId:
     .filter((u): u is URL => !!u)
     .slice(0, 5);
   if (!urls.length) return { guardados: 0 };
+  // Vista previa del primer link (para todos los del chat).
+  if (!msg.previa) {
+    const previa = await previaDeLink(urls[0]);
+    if (previa) await ref.update({ previa });
+  }
+  if (!["admin", "productor", "editor", "pauta", "diseno", "administracion", "cliente"].includes(caller.role)) return { guardados: 0 };
 
   const proyectos = (await db.collection("projects").get()).docs
     .map((d) => ({ id: d.id, ...(d.data() ?? {}) }) as Proyecto)

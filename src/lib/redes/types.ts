@@ -542,6 +542,8 @@ export interface Mensaje {
   votos?: Record<string, number[]> | null;
   /** Vino reenviado de otro chat. */
   reenviado?: boolean;
+  /** Tarjeta del primer link (la arma el servidor): título, descripción, imagen y sitio. */
+  previa?: { url: string; sitio: string; titulo: string | null; descripcion: string | null; imagen: string | null } | null;
   /** Lo mandó el servidor a la hora programada. */
   programado?: boolean;
   archivo?: ArchivoChat | null;

@@ -358,6 +358,10 @@ export function ChatConversacion({
   const programados = useProgramados(chat.id, uid);
   // Cuántos mensajes se cargan (al saltar a uno viejo, se cargan más) y a cuál saltar cuando lleguen.
   const [limite, setLimite] = useState(200);
+  // Fecha flotante al scrollear (como WhatsApp) y mensajes que llegan mientras está abierto (entran animados).
+  const [diaFlotante, setDiaFlotante] = useState<string | null>(null);
+  const tDia = useRef<ReturnType<typeof setTimeout>>();
+  const yaVistos = useRef<{ chat: string; ids: Set<string> } | null>(null);
   const saltoPendiente = useRef<string | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const pegadoAbajo = useRef(true);
@@ -457,6 +461,16 @@ export function ChatConversacion({
     setBuscando(false);
   }, [chat.id]);
 
+  useEffect(() => {
+    if (cargando) return;
+    if (!yaVistos.current || yaVistos.current.chat !== chat.id) {
+      yaVistos.current = { chat: chat.id, ids: new Set(mensajes.map((m) => m.id)) };
+      return;
+    }
+    const t = setTimeout(() => mensajes.forEach((m) => yaVistos.current?.ids.add(m.id)), 600);
+    return () => clearTimeout(t);
+  }, [mensajes, cargando, chat.id]);
+
   // Mientras se ve, sus avisos no muestran cartel ni suenan (ya estás leyendo).
   useEffect(() => {
     if (!activa) return;
@@ -487,6 +501,14 @@ export function ChatConversacion({
     if (!el) return;
     const alScroll = () => {
       pegadoAbajo.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+      // El día del primer mensaje que se ve arriba.
+      const r = el.getBoundingClientRect();
+      const arriba = document.elementFromPoint(r.left + r.width / 2, r.top + 16)?.closest("[data-dia]") as HTMLElement | null;
+      if (arriba?.dataset.dia) {
+        setDiaFlotante(arriba.dataset.dia);
+        clearTimeout(tDia.current);
+        tDia.current = setTimeout(() => setDiaFlotante(null), 1400);
+      }
     };
     const abajo = () => {
       if (pegadoAbajo.current) el.scrollTop = el.scrollHeight;
@@ -876,6 +898,16 @@ export function ChatConversacion({
           )
         ) : (
           <div className="mx-auto flex max-w-3xl flex-col gap-1.5">
+            <div className="pointer-events-none sticky top-1 z-20 -mb-1.5 flex h-0 justify-center">
+              <span
+                className={cn(
+                  "rounded-full border bg-background/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground shadow-md backdrop-blur transition-all duration-300",
+                  diaFlotante ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"
+                )}
+              >
+                {diaFlotante ?? ""}
+              </span>
+            </div>
             {mensajes.map((m, i) => {
               const mio = m.by === uid;
               const bot = m.by === PRODI_ID;
@@ -888,9 +920,9 @@ export function ChatConversacion({
               // Avisos del grupo ("Lucas sumó a Ana"): al medio, sin burbuja.
               if (m.tipo === "sistema")
                 return (
-                  <div key={m.id}>
+                  <div key={m.id} data-dia={dia}>
                     {mostrarDia && (
-                      <p className="my-3 text-center text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{dia}</p>
+                      <p className="my-3 flex justify-center"><span className="rounded-full bg-muted/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground shadow-sm">{dia}</span></p>
                     )}
                     <p className="mx-auto my-2 w-fit max-w-[90%] rounded-full bg-muted px-3 py-1 text-center text-xs text-muted-foreground">
                       {/* Las propias, sin "Vos" adelante (quedaba "Vos sumó…"): con mayúscula. */}
@@ -900,9 +932,11 @@ export function ChatConversacion({
                 );
               const reacciones = Object.entries(m.reacciones ?? {}).filter(([, l]) => l.length > 0);
               return (
-                <div key={m.id} id={`msj-${m.id}`} className="scroll-mt-24 rounded-xl transition-colors duration-700">
+                <div key={m.id} id={`msj-${m.id}`} data-dia={dia} className="scroll-mt-24 rounded-xl transition-colors duration-700">
                   {mostrarDia && (
-                    <p className="my-3 text-center text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{dia}</p>
+                    <p className="my-3 flex justify-center">
+                      <span className="rounded-full bg-muted/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground shadow-sm">{dia}</span>
+                    </p>
                   )}
                   {m.id === primerNuevo && (
                     <div id={`sin-leer-${chat.id}`} className="my-3 flex scroll-mt-16 items-center gap-3" role="separator">
@@ -914,7 +948,15 @@ export function ChatConversacion({
                     </div>
                   )}
                   <DeslizarParaResponder onResponder={() => responder(m)} onInfo={() => setInfoMsg(m)}>
-                  <div className={cn("group/msj flex items-end gap-2", mio ? "justify-end" : "justify-start", !agrupado && "mt-2")}>
+                  <div
+                    className={cn(
+                      "group/msj flex items-end gap-2",
+                      mio ? "justify-end" : "justify-start",
+                      !agrupado && "mt-2",
+                      yaVistos.current?.chat === chat.id && !yaVistos.current.ids.has(m.id) &&
+                        cn("animate-in fade-in zoom-in-95 duration-300 motion-reduce:animate-none", mio ? "slide-in-from-bottom-3 origin-bottom-right" : "slide-in-from-bottom-2 origin-bottom-left")
+                    )}
+                  >
                     {mio && (
                       <button
                         type="button"
@@ -953,7 +995,7 @@ export function ChatConversacion({
                       {...alMantenerApretado(tMantener, () => setInfoMsg(m))}
                       style={!mio && !bot && chat.tipo !== "directo" && m.tipo !== "sticker" ? colorGlobo(m.by) : undefined}
                       className={cn(
-                        "min-w-0 rounded-2xl px-3.5 py-2 text-sm shadow-sm [-webkit-touch-callout:none]", compacto ? "max-w-[85%]" : "max-w-[82%] sm:max-w-[70%]",
+                        "relative min-w-0 rounded-2xl px-3 py-1.5 text-sm leading-relaxed shadow-sm [-webkit-touch-callout:none]", compacto ? "max-w-[85%]" : "max-w-[82%] sm:max-w-[70%]",
                         mio
                           ? "rounded-br-md bg-primary text-primary-foreground"
                           : bot
@@ -1064,17 +1106,22 @@ export function ChatConversacion({
                         enSoftware && (tieneCodigo(m.texto) || esError(m.texto)) ? (
                           <TextoConCodigo texto={m.texto} mio={mio} render={(t) => conMenciones(t, mio)} />
                         ) : (
-                          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-                            {textoRico(m.texto, mio, (t) => conMenciones(t, mio))}
-                          </p>
+                          <>
+                            <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                              {textoRico(m.texto, mio, (t) => conMenciones(t, mio))}
+                              {!m.previa && <span className={cn("inline-block", mio ? (m.editado_at ? "w-[6.5rem]" : "w-[4.25rem]") : m.editado_at ? "w-[5.5rem]" : "w-[3.25rem]")} aria-hidden />}
+                            </p>
+                            {m.previa && <PreviaLink p={m.previa} mio={mio} />}
+                          </>
                         )
                       )}
                       <button
                         type="button"
                         onClick={() => setInfoMsg(m)}
                         className={cn(
-                          "ml-auto mt-0.5 flex items-center justify-end gap-1 rounded-sm text-[10px]",
-                          mio ? "text-primary-foreground/70" : "text-muted-foreground"
+                          "flex items-center justify-end gap-1 rounded-sm text-[10px] leading-none",
+                          esTextoEnLinea(m, bot, enSoftware) ? "absolute bottom-1.5 right-2.5" : "ml-auto mt-1",
+                          mio ? "text-primary-foreground/75" : "text-muted-foreground"
                         )}
                         aria-label="Info del mensaje"
                       >
@@ -1692,5 +1739,39 @@ function TarjetaSugerencia({
         </div>
       </div>
     </div>
+  );
+}
+
+/** Texto común (sin código, sin tarjeta de link): la hora va sobre la última línea, adentro del globo. */
+function esTextoEnLinea(m: Mensaje, bot: boolean, enSoftware: boolean): boolean {
+  if (bot || m.previa) return false;
+  if ((m.tipo ?? "texto") !== "texto") return false;
+  return !(enSoftware && (tieneCodigo(m.texto) || esError(m.texto)));
+}
+
+/** Tarjeta del link (imagen, sitio, título y descripción), como en WhatsApp. */
+function PreviaLink({ p, mio }: { p: NonNullable<Mensaje["previa"]>; mio: boolean }) {
+  const [sinImagen, setSinImagen] = useState(false);
+  const href = hrefSeguro(p.url);
+  if (!href) return null;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className={cn(
+        "mt-1.5 block overflow-hidden rounded-xl border transition-opacity hover:opacity-90",
+        mio ? "border-white/20 bg-white/10" : "bg-muted/50"
+      )}
+    >
+      {p.imagen && !sinImagen && (
+        <img src={p.imagen} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setSinImagen(true)} className="aspect-[1.91/1] w-full bg-black/10 object-cover" />
+      )}
+      <span className="block px-3 py-2">
+        <span className={cn("block truncate text-[10px] font-semibold uppercase tracking-wide", mio ? "text-primary-foreground/70" : "text-muted-foreground")}>{p.sitio}</span>
+        {p.titulo && <span className="line-clamp-2 text-[13px] font-semibold leading-snug">{p.titulo}</span>}
+        {p.descripcion && <span className={cn("mt-0.5 line-clamp-2 text-xs leading-snug", mio ? "text-primary-foreground/80" : "text-muted-foreground")}>{p.descripcion}</span>}
+      </span>
+    </a>
   );
 }

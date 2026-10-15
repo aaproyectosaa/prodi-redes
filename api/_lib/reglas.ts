@@ -387,7 +387,7 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       if (JSON.stringify({ ...a, estado: null }) !== JSON.stringify({ ...d, estado: null })) return false;
       return esAdmin(c) || miembroDelChat(c, padreId!);
     }
-    if (sub === "mensajes" && despues && (escribeAlguna(antes, despues, ["sugerencia_tarea", "sugerencia_revisada"]))) return false;
+    if (sub === "mensajes" && despues && (escribeAlguna(antes, despues, ["sugerencia_tarea", "sugerencia_revisada", "previa"]))) return false;
     if (sub === "mensajes" && (delServidor(despues) || (delServidor(antes) && !(borra && esAdmin(c))))) return false;
     // Nadie (ni el admin desde la app) guarda un link que no sea https: un "javascript:" se ejecutaría al tocarlo.
     if (sub === "mensajes" && despues && (!linkOk(despues.link) || (crea && !TIPOS_MENSAJE.includes(String(despues.tipo ?? "texto"))))) return false;
