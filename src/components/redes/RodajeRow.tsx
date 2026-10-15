@@ -19,6 +19,8 @@ import { cn } from "@/lib/utils";
 import type { Rodaje, Video } from "@/lib/redes/types";
 
 const SIN_EDITAR = ["planificado", "agendado"];
+/** Videos que tienen algo para mandar (guion, idea o tomas). */
+const conGuionDe = (vs: Video[]) => vs.filter((v) => v.guion?.trim() || v.idea?.trim() || v.tomas?.length);
 
 export function RodajeRow({
   rodaje,
@@ -35,6 +37,7 @@ export function RodajeRow({
   const vids = videos.filter((v) => rodaje.video_ids.includes(v.id));
   const esHoy = rodaje.fecha === hoyISO();
   const [hoja, setHoja] = useState(false);
+  const [mandarGuiones, setMandarGuiones] = useState(false);
   const { user, role, tieneRol } = useUserProfileContext();
   const { jobs } = useDriveUploadContext();
   const puedeSubir = role === "admin" || tieneRol("productor");
@@ -106,6 +109,24 @@ export function RodajeRow({
             </p>
           )}
           <CronometroRodaje rodaje={rodaje} puede={puedeSubir} />
+          {puedeSubir && conGuionDe(vids).length > 0 && rodaje.estado !== "cancelado" && (
+            <button
+              type="button"
+              onClick={() => setMandarGuiones(true)}
+              className="mt-2 flex w-full items-center gap-2.5 rounded-xl border border-primary/40 bg-gradient-to-r from-primary/[0.12] to-fuchsia-500/[0.08] px-3 py-2 text-left transition-colors hover:border-primary"
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#6F40FC] to-[#E040A0] text-white">
+                <FileText className="h-4 w-4" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold">
+                  {conGuionDe(vids).length === 1 ? "Mandar el guion al cliente" : `Mandar los ${conGuionDe(vids).length} guiones al cliente`}
+                </span>
+                <span className="block text-[11px] text-muted-foreground">Por el grupo o por privado, con las tomas</span>
+              </span>
+              <Send className="h-4 w-4 shrink-0 text-primary" />
+            </button>
+          )}
           <div className="mt-2 flex flex-wrap gap-1">
             <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setHoja(true)}>
               <ClipboardList className="mr-1 h-3.5 w-3.5" /> Hoja de rodaje
@@ -127,6 +148,7 @@ export function RodajeRow({
           </div>
         </div>
       </div>
+      <CompartirGuion open={mandarGuiones} onOpenChange={setMandarGuiones} videos={conGuionDe(vids)} proyectoId={rodaje.proyecto_id} />
       <HojaRodaje
         rodaje={rodaje}
         videos={vids}
@@ -166,7 +188,7 @@ function HojaRodaje({
   // Guiones abiertos y a quién se manda (uno o todos).
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set());
   const [compartir, setCompartir] = useState<Video[] | null>(null);
-  const conGuion = videos.filter((v) => v.guion?.trim() || v.idea?.trim() || v.tomas?.length);
+  const conGuion = conGuionDe(videos);
   const conMaterial = videos.filter((v) => (v.attachments_crudo?.length ?? 0) > 0).length;
   const mandar = async (v: Video, fecha: string) => {
     setMandando(v.id);
@@ -198,7 +220,7 @@ function HojaRodaje({
           </DialogHeader>
           {rodaje.notas && <p className="rounded-lg bg-muted/50 p-2 text-xs">{rodaje.notas}</p>}
           {conGuion.length > 0 && (
-            <Button variant="outline" className="w-full" onClick={() => setCompartir(conGuion)}>
+            <Button className="h-11 w-full bg-gradient-to-r from-[#6F40FC] to-[#E040A0] font-semibold text-white shadow-md hover:opacity-95" onClick={() => setCompartir(conGuion)}>
               <Send className="mr-2 h-4 w-4" /> {conGuion.length === 1 ? "Mandar el guion" : `Mandar los ${conGuion.length} guiones`} al cliente
             </Button>
           )}
@@ -224,7 +246,7 @@ function HojaRodaje({
                     <button
                       type="button"
                       onClick={() => setCompartir([v])}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/10"
+                      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
                     >
                       <Send className="h-3 w-3" /> Mandar
                     </button>
