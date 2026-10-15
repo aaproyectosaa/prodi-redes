@@ -66,8 +66,10 @@ function MiDiaCartel({ items }: { items: ItemDia[] }) {
   const ordenados = [...items].sort((a, b) => (a.fecha || "9999").localeCompare(b.fecha || "9999"));
   const primeros = ordenados.slice(0, CUANTOS);
   const resto = ordenados.length - primeros.length;
+  // Mañana (hasta las 13), tarde (hasta las 20) o noche: cambia el saludo, el cielo y el dibujo.
   const h = new Date().getHours();
-  const saludo = h < 13 ? "Buen día" : h < 20 ? "Buenas tardes" : "Buenas noches";
+  const momento: "dia" | "tarde" | "noche" = h >= 6 && h < 13 ? "dia" : h >= 13 && h < 20 ? "tarde" : "noche";
+  const saludo = { dia: "Buen día", tarde: "Buenas tardes", noche: "Buenas noches" }[momento];
   const atrasados = ordenados.filter((it) => cuando(it.fecha).tono === "rojo").length;
   const [abierto, setAbierto] = useState(false);
   const visto = leerVisto();
@@ -113,10 +115,22 @@ function MiDiaCartel({ items }: { items: ItemDia[] }) {
 
       <Dialog open={abierto} onOpenChange={(v) => (v ? setAbierto(true) : cerrar())}>
         <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md gap-0 overflow-hidden rounded-[2rem] border-0 p-0 [&>button]:hidden">
-          {/* Encabezado de día: sol que gira y nubes que pasan */}
-          <div className="sol-cielo relative overflow-hidden px-6 pb-5 pt-6 text-white">
-            <span className="sol-nube absolute left-[-20%] top-5 h-5 w-16 rounded-full bg-white/30 blur-[1px]" />
-            <span className="sol-nube absolute left-[-30%] top-14 h-4 w-12 rounded-full bg-white/25 blur-[1px]" style={{ animationDelay: "4s" }} />
+          {/* Encabezado según la hora: sol de mañana, atardecer o noche con luna y estrellas */}
+          <div className={cn("relative overflow-hidden px-6 pb-5 pt-6 text-white", `cielo-${momento}`)}>
+            {momento === "noche" ? (
+              ESTRELLAS.map((e, i) => (
+                <span
+                  key={i}
+                  className="sol-estrella absolute rounded-full bg-white"
+                  style={{ left: `${e.x}%`, top: `${e.y}%`, width: e.t, height: e.t, animationDelay: `${e.d}s` }}
+                />
+              ))
+            ) : (
+              <>
+                <span className="sol-nube absolute left-[-20%] top-5 h-5 w-16 rounded-full bg-white/30 blur-[1px]" />
+                <span className="sol-nube absolute left-[-30%] top-14 h-4 w-12 rounded-full bg-white/25 blur-[1px]" style={{ animationDelay: "4s" }} />
+              </>
+            )}
             <button
               type="button"
               onClick={cerrar}
@@ -126,10 +140,26 @@ function MiDiaCartel({ items }: { items: ItemDia[] }) {
               <X className="h-5 w-5" />
             </button>
             <div className="relative flex items-center gap-4">
-              <div className="relative h-16 w-16 shrink-0">
-                <span className="sol-rayos absolute inset-0 rounded-full" />
-                <span className="absolute inset-2 rounded-full bg-gradient-to-br from-yellow-200 to-amber-400 shadow-[0_0_40px_rgba(253,224,71,0.8)]" />
-              </div>
+              {momento === "noche" ? (
+                <div className="sol-flota relative flex h-16 w-16 shrink-0 items-center justify-center">
+                  {/* medialuna: un círculo vacío con la sombra de adentro clara */}
+                  <span
+                    className="h-12 w-12 rounded-full"
+                    style={{ boxShadow: "inset 11px -5px 0 0 #fef3c7", filter: "drop-shadow(0 0 14px rgba(253,230,138,0.7))", transform: "rotate(-20deg)" }}
+                  />
+                </div>
+              ) : momento === "tarde" ? (
+                <div className="relative h-16 w-16 shrink-0 overflow-hidden">
+                  {/* sol que baja detrás del horizonte */}
+                  <span className="sol-baja absolute inset-x-1 top-2 h-14 rounded-full bg-gradient-to-b from-yellow-200 via-orange-300 to-rose-400 shadow-[0_0_40px_rgba(251,146,60,0.8)]" />
+                  <span className="absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-[#7c3aed]/70 to-transparent" />
+                </div>
+              ) : (
+                <div className="relative h-16 w-16 shrink-0">
+                  <span className="sol-rayos absolute inset-0 rounded-full" />
+                  <span className="absolute inset-2 rounded-full bg-gradient-to-br from-yellow-200 to-amber-400 shadow-[0_0_40px_rgba(253,224,71,0.8)]" />
+                </div>
+              )}
               <div className="min-w-0">
                 <DialogTitle className="text-2xl font-black leading-tight text-white">
                   {saludo}
@@ -197,7 +227,7 @@ function MiDiaCartel({ items }: { items: ItemDia[] }) {
               onClick={cerrar}
               className="h-12 w-full rounded-2xl bg-gradient-to-r from-amber-400 via-orange-500 to-pink-500 text-base font-bold text-white shadow-lg shadow-orange-500/25 transition-transform active:scale-[0.98]"
             >
-              ¡Vamos! ☀️
+              {momento === "noche" ? "Listo, mañana sigo 🌙" : "¡Vamos! ☀️"}
             </button>
           </div>
         </DialogContent>
@@ -206,13 +236,26 @@ function MiDiaCartel({ items }: { items: ItemDia[] }) {
   );
 }
 
+const ESTRELLAS = Array.from({ length: 22 }, (_, i) => {
+  const r = (n: number) => ((Math.sin(i * 12.9898 + n * 78.233) * 43758.5453) % 1 + 1) % 1;
+  return { x: r(1) * 100, y: r(2) * 90, t: r(3) > 0.75 ? 3 : 2, d: r(4) * 3 };
+});
+
 const SOL_CSS = `
-.sol-cielo { background: linear-gradient(135deg, #fbbf24 0%, #f97316 50%, #ec4899 100%); }
+.cielo-dia { background: linear-gradient(135deg, #fbbf24 0%, #f97316 50%, #ec4899 100%); }
+.cielo-tarde { background: linear-gradient(160deg, #fb923c 0%, #e11d48 45%, #7c3aed 100%); }
+.cielo-noche { background: radial-gradient(120% 90% at 30% 0%, #3b2a8a 0%, #241a5c 45%, #0f0b2e 100%); }
+.sol-estrella { opacity: .3; animation: sol-titila 3s ease-in-out infinite; }
+@keyframes sol-titila { 0%, 100% { opacity: .2; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.2); } }
+.sol-flota { animation: sol-flota 6s ease-in-out infinite; }
+@keyframes sol-flota { 0%, 100% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-4px) rotate(4deg); } }
+.sol-baja { animation: sol-baja 6s ease-in-out infinite alternate; }
+@keyframes sol-baja { from { transform: translateY(-2px); } to { transform: translateY(6px); } }
 .sol-rayos { background: repeating-conic-gradient(rgba(255,255,255,.55) 0 10deg, transparent 10deg 30deg); -webkit-mask: radial-gradient(circle, transparent 45%, #000 46%, #000 70%, transparent 71%); mask: radial-gradient(circle, transparent 45%, #000 46%, #000 70%, transparent 71%); animation: sol-gira 14s linear infinite; }
 @keyframes sol-gira { to { transform: rotate(360deg); } }
 .sol-nube { animation: sol-nube 9s linear infinite; }
 @keyframes sol-nube { 0% { transform: translateX(0); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { transform: translateX(560px); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .sol-rayos, .sol-nube { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .sol-rayos, .sol-nube, .sol-estrella, .sol-flota, .sol-baja { animation: none; } }
 `;
 
 // ---------------------------------------------------------------------------
