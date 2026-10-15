@@ -50,6 +50,50 @@ const copiar = (t: string, ok = "Copiado") =>
     () => toast.error("No se pudo copiar")
   );
 
+/** Los links de las dos apps, para mandárselos a la gente del cliente. */
+function LinksApps() {
+  const apps = [
+    { icon: LayoutDashboard, nombre: "Prodi (sistema)", url: `${window.location.origin}/` },
+    { icon: MessageCircle, nombre: "Prodi Chat", url: urlChatApp() },
+  ];
+  const todo = [
+    "Las apps de Prodi 👇",
+    ...apps.map((a) => `${a.nombre}: ${a.url}`),
+    "",
+    'Abrí cada link en Safari (iPhone) o Chrome (Android) y tocá "Agregar a inicio" / "Instalar app". Entrás con tu usuario y contraseña.',
+  ].join("\n");
+  return (
+    <div className="rounded-xl bg-muted/50 p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold">Links de las apps</p>
+        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => copiar(todo, "Copiados los dos links con las instrucciones")}>
+          <Copy className="mr-1 h-3.5 w-3.5" /> Copiar los dos
+        </Button>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {apps.map((a) => (
+          <button
+            key={a.nombre}
+            type="button"
+            onClick={() => copiar(a.url, `Link de ${a.nombre} copiado`)}
+            className="flex min-w-0 items-center gap-2.5 rounded-lg border bg-background p-2.5 text-left transition-colors hover:border-primary"
+            title="Tocá para copiar"
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <a.icon className="h-4 w-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium">{a.nombre}</span>
+              <span className="block truncate text-[11px] text-muted-foreground">{a.url.replace(/^https?:\/\//, "")}</span>
+            </span>
+            <Copy className="h-4 w-4 shrink-0 text-muted-foreground" />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Integrantes del cliente: cada persona de la empresa con su propio usuario (así no se pisan en el chat).
  * - Con acceso al sistema: ven el panel del cliente (videos, pedidos, aprobar) y están en el grupo de chat.
@@ -144,6 +188,7 @@ export function ContactosCliente({ cliente }: { cliente: Project }) {
       description="Cada persona de la empresa con su propio usuario, así en el chat se sabe quién escribe. Todos quedan en el grupo de chat del cliente."
     >
       <div className="space-y-3 rounded-xl border bg-card p-4">
+        <LinksApps />
         {integrantes.length === 0 ? (
           <p className="text-sm text-muted-foreground">Todavía no hay integrantes de este cliente.</p>
         ) : (
