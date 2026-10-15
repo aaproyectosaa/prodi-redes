@@ -19,7 +19,7 @@ import { crearTarea } from "./tareas";
 import { sincronizarCalendario } from "./calendario";
 import { marcaTexto } from "./marca";
 import { soloPauta } from "./pedidos";
-import { clientesNombrados, contextoSistema, type Proyecto } from "./chat-contexto";
+import { clientesNombrados, contextoSistema, resolverCliente, type Proyecto } from "./chat-contexto";
 
 export const MENCION_PRODI = /(^|[\s(])@prodi\b/i;
 const POR_MINUTO = 4;
@@ -455,7 +455,8 @@ Español rioplatense con voseo.`;
       const delChat = typeof chat.proyecto_id === "string" && proj ? ({ id: chat.proyecto_id, ...proj } as Proyecto) : null;
       const candidatos = chat.tipo === "cliente" || !ctx ? (delChat ? [delChat] : []) : ctx.proyectos;
       const pedido = String(a.cliente ?? "").trim();
-      const encontrados = pedido ? clientesNombrados(pedido, candidatos) : delChat ? [delChat] : [];
+      const encontrados = pedido || texto ? resolverCliente(pedido, texto, candidatos) : delChat ? [delChat] : [];
+      if (!encontrados.length && delChat) encontrados.push(delChat);
       if (encontrados.length !== 1) {
         out.push({
           texto: !candidatos.length

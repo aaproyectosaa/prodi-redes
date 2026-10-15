@@ -23,6 +23,43 @@ export type Proyecto = Data & { id: string; nombre: string };
 const dias = (iso: unknown) => (typeof iso === "string" ? Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)) : 0);
 
 /** Clientes nombrados en el texto (por nombre completo o una palabra distintiva de 4+ letras). */
+/** Las dos palabras son iguales salvo una letra (cambiada, de más o de menos). */
+function unaLetra(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  let j = 0;
+  let dif = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      i++;
+      j++;
+      continue;
+    }
+    if (++dif > 1) return false;
+    if (a.length > b.length) i++;
+    else if (b.length > a.length) j++;
+    else {
+      i++;
+      j++;
+    }
+  }
+  return dif + (a.length - i) + (b.length - j) <= 1;
+}
+
+/** El cliente que se nombra: primero con lo que entendió la IA y, si hay duda, con lo que escribió la persona. */
+export function resolverCliente(pedido: string, textoOriginal: string, proyectos: Proyecto[]): Proyecto[] {
+  const porPedido = pedido ? clientesNombrados(pedido, proyectos) : [];
+  if (porPedido.length === 1) return porPedido;
+  const porTexto = textoOriginal ? clientesNombrados(textoOriginal, proyectos) : [];
+  if (porTexto.length === 1) return porTexto;
+  if (porPedido.length > 1 && porTexto.length) {
+    const ambos = porPedido.filter((p) => porTexto.some((q) => q.id === p.id));
+    if (ambos.length) return ambos;
+  }
+  return porPedido.length ? porPedido : porTexto;
+}
+
 export function clientesNombrados(texto: string, proyectos: Proyecto[]): Proyecto[] {
   const t = ` ${normalizar(texto).replace(/[^a-z0-9]+/g, " ")} `;
   const nombre = (p: Proyecto) => normalizar(p.nombre).replace(/[^a-z0-9]+/g, " ").trim();
@@ -32,10 +69,13 @@ export function clientesNombrados(texto: string, proyectos: Proyecto[]): Proyect
     return completos.filter((p) => !completos.some((q) => q !== p && nombre(q).length > nombre(p).length && nombre(q).includes(nombre(p))));
   }
   // 2) Si no, por palabras sueltas: gana el que más palabras comparte (empate = hay que preguntar).
+  // Tolera una letra de diferencia en palabras largas (errores de tipeo o de voz: "Bugatti" por "Buyatti").
+  const palabras = t.trim().split(" ");
+  const parecida = (w: string) => t.includes(` ${w} `) || (w.length >= 6 && palabras.some((x) => Math.abs(x.length - w.length) <= 1 && unaLetra(x, w)));
   const puntaje = (p: Proyecto) =>
     nombre(p)
       .split(" ")
-      .filter((w) => w.length >= 4 && !["nutri", "automotores", "prodi"].includes(w) && t.includes(` ${w} `)).length;
+      .filter((w) => w.length >= 4 && !["nutri", "automotores", "prodi"].includes(w) && parecida(w)).length;
   const con = proyectos.map((p) => ({ p, s: puntaje(p) })).filter((x) => x.s > 0);
   const mejor = Math.max(0, ...con.map((x) => x.s));
   return con.filter((x) => x.s === mejor).map((x) => x.p);
