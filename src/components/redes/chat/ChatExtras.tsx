@@ -12,6 +12,7 @@ import {
   File as FileIcon,
   Images,
   Link2,
+  Pencil,
   Loader2,
   Pin,
   Play,
@@ -34,6 +35,7 @@ import { peso, urlArchivo } from "@/components/redes/chat/Archivo";
 import { descargarArchivo } from "@/utils/drive/driveMediaUrl";
 import {
   cancelarProgramado,
+  editarProgramado,
   mandarEncuesta,
   programarMensaje,
   reenviarMensaje,
@@ -684,7 +686,7 @@ export function useProgramados(chatId: string, uid: string): Programado[] {
   return lista;
 }
 
-export function ProgramadosChat({ lista }: { lista: Programado[] }) {
+export function ProgramadosChat({ lista, onEditar }: { lista: Programado[]; onEditar: (p: Programado) => void }) {
   const [abierto, setAbierto] = useState(false);
   if (!lista.length) return null;
   return (
@@ -700,7 +702,18 @@ export function ProgramadosChat({ lista }: { lista: Programado[] }) {
             <div key={p.id} className="flex items-center gap-2 rounded-lg bg-background px-2.5 py-1.5 text-sm">
               <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               <span className="shrink-0 text-[11px] text-muted-foreground">{hora(p.enviar_at)}</span>
-              <span className="min-w-0 flex-1 truncate">{p.texto}</span>
+              <button type="button" onClick={() => onEditar(p)} className="min-w-0 flex-1 truncate text-left hover:underline" title="Editar">
+                {p.texto}
+              </button>
+              <button
+                type="button"
+                onClick={() => onEditar(p)}
+                className="shrink-0 rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label="Editar"
+                title="Editar"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
               <button
                 type="button"
                 onClick={() => void cancelarProgramado(p.id).then(() => toast.success("Cancelado"))}
@@ -727,6 +740,7 @@ export function ProgramarMensaje({
   open,
   onOpenChange,
   onListo,
+  editando,
 }: {
   chat: Chat;
   uid: string;
@@ -735,6 +749,8 @@ export function ProgramarMensaje({
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onListo: () => void;
+  /** Con un programado: se edita ese (texto y hora). */
+  editando?: Programado | null;
 }) {
   const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const [dia, setDia] = useState(iso(new Date()));
@@ -743,8 +759,15 @@ export function ProgramarMensaje({
   // El mensaje se escribe acá (si ya había algo en la caja del chat, viene cargado).
   const [msj, setMsj] = useState("");
   useEffect(() => {
-    if (open) setMsj(texto);
-  }, [open, texto]);
+    if (!open) return;
+    if (editando) {
+      const d = new Date(editando.enviar_at);
+      setMsj(editando.texto);
+      setDia(iso(d));
+      setHh(`${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`);
+    } else setMsj(texto);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, texto, editando?.id]);
   const atajos = useMemo(() => {
     const ahora = new Date();
     const enUnaHora = new Date(ahora.getTime() + 60 * 60_000);
@@ -767,9 +790,14 @@ export function ProgramarMensaje({
     }
     setGuardando(true);
     try {
-      await programarMensaje(chat, uid, remitente, msj, d);
-      toast.success(`Programado para el ${hora(d.toISOString())}`);
-      onListo();
+      if (editando) {
+        await editarProgramado(editando.id, msj, d);
+        toast.success(`Listo: sale el ${hora(d.toISOString())}`);
+      } else {
+        await programarMensaje(chat, uid, remitente, msj, d);
+        toast.success(`Programado para el ${hora(d.toISOString())}`);
+        onListo();
+      }
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo programar");
@@ -789,9 +817,11 @@ export function ProgramarMensaje({
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/25">
                 <CalendarClock className="h-5 w-5" />
               </span>
-              Programar mensaje
+              {editando ? "Editar mensaje programado" : "Programar mensaje"}
             </DialogTitle>
-            <DialogDescription className="text-white/85">Escribilo ahora y sale solo, a tu nombre, a la hora que elijas.</DialogDescription>
+            <DialogDescription className="text-white/85">
+              {editando ? "Cambiá el texto o la hora. Todavía no salió." : "Escribilo ahora y sale solo, a tu nombre, a la hora que elijas."}
+            </DialogDescription>
           </DialogHeader>
         </div>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
@@ -835,7 +865,7 @@ export function ProgramarMensaje({
             className="h-12 w-full rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-600 text-base font-semibold text-white shadow-lg shadow-emerald-500/25 hover:opacity-95 disabled:opacity-50"
           >
             {guardando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarClock className="mr-2 h-4 w-4" />}
-            {!msj.trim() ? "Escribí el mensaje" : `Programar para el ${hora(personalizada.toISOString())}`}
+            {!msj.trim() ? "Escribí el mensaje" : `${editando ? "Guardar: sale el" : "Programar para el"} ${hora(personalizada.toISOString())}`}
           </Button>
           <p className="text-center text-[11px] text-muted-foreground">Hasta que salga, lo ves arriba de la caja de texto y lo podés cancelar.</p>
         </div>

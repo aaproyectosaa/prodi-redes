@@ -355,6 +355,7 @@ export function ChatConversacion({
   const [reenviarMsg, setReenviarMsg] = useState<Mensaje | null>(null);
   const [encuesta, setEncuesta] = useState(false);
   const [programar, setProgramar] = useState(false);
+  const [editProg, setEditProg] = useState<import("@/lib/redes/chat").Programado | null>(null);
   const programados = useProgramados(chat.id, uid);
   // Cuántos mensajes se cargan (al saltar a uno viejo, se cargan más) y a cuál saltar cuando lleguen.
   const [limite, setLimite] = useState(200);
@@ -1259,7 +1260,13 @@ export function ChatConversacion({
         )}
       </div>
 
-      <ProgramadosChat lista={programados} />
+      <ProgramadosChat
+        lista={programados}
+        onEditar={(p) => {
+          setEditProg(p);
+          setProgramar(true);
+        }}
+      />
       <footer
         // Abajo: aire + la barra del celular (o la barra de inicio del iPhone si la barra está escondida).
         className={cn(
@@ -1633,8 +1640,12 @@ export function ChatConversacion({
         remitente={nombre}
         texto={texto}
         open={programar}
-        onOpenChange={setProgramar}
+        onOpenChange={(v) => {
+          setProgramar(v);
+          if (!v) setEditProg(null);
+        }}
         onListo={() => setTexto("")}
+        editando={editProg}
       />
       <TareaMensajeDialog
         chat={chat}

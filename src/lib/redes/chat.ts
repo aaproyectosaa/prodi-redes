@@ -696,6 +696,15 @@ export async function programarMensaje(chat: Chat, by: string, remitente: string
   await addDoc(collection(db, "programados"), { chat_id: chat.id, texto: texto.trim().slice(0, 4000), enviar_at: enviarAt.toISOString(), by, by_nombre: remitente, created_at: now() });
 }
 
+/** Cambia el texto y/o la hora de un mensaje programado (si todavía no salió). */
+export async function editarProgramado(id: string, texto: string, enviarAt: Date) {
+  assertEditable();
+  if (enviarAt.getTime() < Date.now() + 30_000) throw new Error("Elegí una hora que no haya pasado");
+  const ref = doc(db, "programados", id);
+  if (!(await getDoc(ref)).exists()) throw new Error("Ese mensaje ya salió (o se canceló)");
+  await updateDoc(ref, { texto: texto.trim().slice(0, 4000), enviar_at: enviarAt.toISOString(), editado_at: now() });
+}
+
 export async function cancelarProgramado(id: string) {
   assertEditable();
   await deleteDoc(doc(db, "programados", id));

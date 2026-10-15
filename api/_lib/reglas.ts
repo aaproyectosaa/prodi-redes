@@ -443,9 +443,20 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
     case "rodajes":
       return (crea || produceEn(c, antes!.proyecto_id)) && (borra || produceEn(c, despues!.proyecto_id));
     case "programados": {
-      // Se crea uno propio para un chat del que es miembro (texto y hora); se puede borrar (cancelar). No se edita.
+      // Se crea uno propio para un chat del que es miembro (texto y hora); se puede editar (texto y hora) o borrar (cancelar).
       if (borra) return antes!.by === c.uid;
-      if (!crea) return false;
+      if (!crea) {
+        return (
+          antes!.by === c.uid &&
+          soloCambia(antes, despues, ["texto", "enviar_at", "editado_at"]) &&
+          typeof despues!.texto === "string" &&
+          despues!.texto.trim().length > 0 &&
+          despues!.texto.length <= 4000 &&
+          typeof despues!.enviar_at === "string" &&
+          !Number.isNaN(Date.parse(despues!.enviar_at)) &&
+          Date.parse(despues!.enviar_at) < Date.now() + 366 * 86_400_000
+        );
+      }
       const ok =
         despues!.by === c.uid &&
         typeof despues!.chat_id === "string" &&
