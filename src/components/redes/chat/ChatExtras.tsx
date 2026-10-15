@@ -686,47 +686,66 @@ export function useProgramados(chatId: string, uid: string): Programado[] {
   return lista;
 }
 
+/** "Hoy 20:00", "Mañana 08:00" o "Jue 15 oct · 08:00". */
+function cuandoSale(at: string) {
+  const d = new Date(at);
+  const hhmm = d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const hoy = new Date();
+  const man = new Date();
+  man.setDate(hoy.getDate() + 1);
+  if (d.toDateString() === hoy.toDateString()) return `Hoy ${hhmm}`;
+  if (d.toDateString() === man.toDateString()) return `Mañana ${hhmm}`;
+  const dia = d.toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" }).replace(/[.,]/g, "");
+  return `${dia.charAt(0).toUpperCase()}${dia.slice(1)} · ${hhmm}`;
+}
+
 export function ProgramadosChat({ lista, onEditar }: { lista: Programado[]; onEditar: (p: Programado) => void }) {
   const [abierto, setAbierto] = useState(false);
   if (!lista.length) return null;
+  const visibles = abierto ? lista : lista.slice(0, 1);
   return (
-    <div className="shrink-0 border-t bg-amber-500/[0.06] px-3 py-1.5">
-      <button type="button" onClick={() => setAbierto((v) => !v)} className="flex w-full items-center gap-2 text-left text-xs font-medium text-amber-700 dark:text-amber-300">
-        <CalendarClock className="h-3.5 w-3.5" />
-        {lista.length === 1 ? "1 mensaje programado" : `${lista.length} mensajes programados`} · sale el {hora(lista[0].enviar_at)}
-        <ChevronDown className={cn("ml-auto h-3.5 w-3.5 transition-transform", abierto && "rotate-180")} />
-      </button>
-      {abierto && (
-        <div className="mt-1.5 space-y-1">
-          {lista.map((p) => (
-            <div key={p.id} className="flex items-center gap-2 rounded-lg bg-background px-2.5 py-1.5 text-sm">
-              <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              <span className="shrink-0 text-[11px] text-muted-foreground">{hora(p.enviar_at)}</span>
-              <button type="button" onClick={() => onEditar(p)} className="min-w-0 flex-1 truncate text-left hover:underline" title="Editar">
-                {p.texto}
-              </button>
-              <button
-                type="button"
-                onClick={() => onEditar(p)}
-                className="shrink-0 rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="Editar"
-                title="Editar"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => void cancelarProgramado(p.id).then(() => toast.success("Cancelado"))}
-                className="shrink-0 rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
-                aria-label="Cancelar"
-                title="Cancelar"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+    <div className="shrink-0 px-3 pt-2">
+      <div className="overflow-hidden rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.08]">
+        {visibles.map((p, i) => (
+          <div key={p.id} className={cn("flex items-center gap-3 px-3 py-2", i > 0 && "border-t border-emerald-500/15")}>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 text-white shadow-sm">
+              <CalendarClock className="h-4 w-4" />
+            </span>
+            <button type="button" onClick={() => onEditar(p)} className="min-w-0 flex-1 text-left" title="Editar">
+              <span className="block text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">Programado · sale {cuandoSale(p.enviar_at)}</span>
+              <span className="block truncate text-sm">{p.texto}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onEditar(p)}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-emerald-500/15 hover:text-emerald-600"
+              aria-label="Editar"
+              title="Editar"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => void cancelarProgramado(p.id).then(() => toast.success("Cancelado"))}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              aria-label="Cancelar"
+              title="Cancelar"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
+        {lista.length > 1 && (
+          <button
+            type="button"
+            onClick={() => setAbierto((v) => !v)}
+            className="flex w-full items-center justify-center gap-1 border-t border-emerald-500/15 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400"
+          >
+            {abierto ? "Ver menos" : `Ver los ${lista.length} programados`}
+            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", abierto && "rotate-180")} />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
