@@ -340,3 +340,11 @@ html.teclado-ios {
   pointer-events: none;
   user-select: none;
 }
+
+/* Fondo del chat con dibujitos (como WhatsApp): cámara, claqueta, play, corazón, globito… muy suaves. */
+.fondo-chat {
+  background-color: hsl(var(--background));
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27260%27 height=%27260%27 viewBox=%270 0 260 260%27 fill=%27none%27 stroke=%27%236F40FC%27 stroke-width=%272%27 stroke-opacity=%270.12%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Crect x=%2718%27 y=%2726%27 width=%2738%27 height=%2726%27 rx=%276%27/%3E%3Ccircle cx=%2737%27 cy=%2739%27 r=%277%27/%3E%3Cpath d=%27M28 26l3-6h12l3 6%27/%3E%3Ccircle cx=%27132%27 cy=%2734%27 r=%2715%27/%3E%3Cpath d=%27M127 26l12 8-12 8z%27/%3E%3Cpath d=%27M212 50c-15-10-13-24-5-24 3 0 5 3 5 3s2-3 5-3c8 0 10 14-5 24z%27/%3E%3Cpath d=%27M76 88h38a7 7 0 0 1 7 7v16a7 7 0 0 1-7 7H90l-10 8v-8h-4a7 7 0 0 1-7-7V95a7 7 0 0 1 7-7z%27/%3E%3Cpath d=%27M83 103h24%27/%3E%3Cpath d=%27M190 86l4 9 10 1-7 7 2 10-9-5-9 5 2-10-7-7 10-1z%27/%3E%3Cpath d=%27M22 168v-26l18-5v26%27/%3E%3Ccircle cx=%2717%27 cy=%27168%27 r=%275%27/%3E%3Ccircle cx=%2735%27 cy=%27163%27 r=%275%27/%3E%3Cpath d=%27M120 150l-4 30M134 150l-4 30M111 160h28M109 171h28%27/%3E%3Cpath d=%27M222 150q2 12 13 14-11 2-13 14-2-12-13-14 11-2 13-14z%27/%3E%3Crect x=%2760%27 y=%27212%27 width=%2738%27 height=%2724%27 rx=%273%27/%3E%3Cpath d=%27M60 212l3-10h38l-3 10M72 202l-4 10M86 202l-4 10%27/%3E%3Cpath d=%27M160 210v14h8l22 11v-36l-22 11zM168 224l3 11%27/%3E%3Ccircle cx=%27232%27 cy=%27226%27 r=%2713%27/%3E%3Cpath d=%27M226 230q6 6 12 0%27/%3E%3Cpath d=%27M227 222h.01M237 222h.01%27/%3E%3Ccircle cx=%27170%27 cy=%27130%27 r=%273%27/%3E%3Ccircle cx=%2760%27 cy=%27140%27 r=%272%27/%3E%3Ccircle cx=%27100%27 cy=%2745%27 r=%272%27/%3E%3Ccircle cx=%27245%27 cy=%27100%27 r=%272%27/%3E%3Ccircle cx=%2720%27 cy=%2792%27 r=%273%27/%3E%3Ccircle cx=%27130%27 cy=%27240%27 r=%272%27/%3E%3Cpath d=%27M38 110l6 4M228 15l-5 5%27/%3E%3C/svg%3E");
+  background-size: 260px 260px;
+  background-repeat: repeat;
+}

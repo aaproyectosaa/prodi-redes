@@ -890,7 +890,7 @@ export function ChatConversacion({
         </div>
       )}
 
-      <div ref={scroller} className={cn("min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-3", compacto ? "py-3" : "py-4 md:px-6")}>
+      <div ref={scroller} className={cn("fondo-chat min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-3", compacto ? "py-3" : "py-4 md:px-6")}>
         {cargando ? (
           <div className="flex justify-center py-10">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
