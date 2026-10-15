@@ -2,49 +2,51 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
-import { ahoraAR, esHorarioDescanso, leerDescanso, ROLES_CON_DESCANSO } from "../../api/_lib/descanso";
+import { ahoraAR, leerDescanso, ROLES_CON_DESCANSO } from "../../api/_lib/descanso";
 
-const CLAVE = "prodi-aviso-tarde-2";
-/** La noche a la que pertenece ahora (de madrugada cuenta como la noche anterior), para avisar una vez por noche. */
-const nocheDe = (d: Date) => new Date(d.getTime() - 8 * 3600_000).toISOString().slice(0, 10);
-const leer = () => {
+const CLAVE = "prodi-aviso-tarde-3";
+/** Desde qué hora sale el cartel (y vuelve a salir cada una hora mientras siga en la app). */
+const DESDE = 21;
+const CADA = 60 * 60_000;
+/** Cuándo lo cerró por última vez (ms). */
+const ultimoCierre = () => {
   try {
-    return localStorage.getItem(CLAVE);
+    return Number(localStorage.getItem(CLAVE)) || 0;
   } catch {
-    return null;
+    return 0;
   }
 };
 
 /**
- * Si alguien del equipo sigue usando la app en su horario de descanso, una vez por noche le recordamos que ya es tarde
- * (y que los avisos están en pausa hasta la mañana). No aplica al super admin ni a los clientes.
+ * Si alguien del equipo sigue usando la app de noche, a las 21 le recordamos que ya es tarde (y que los avisos están
+ * en pausa hasta la mañana). Si sigue, el cartel vuelve a salir cada una hora hasta que termina el descanso.
+ * No aplica al super admin ni a los clientes.
  */
 export function AvisoTarde() {
   const { settings } = useRedes();
   const { realRole, roles, viewingAs } = useUserProfileContext();
   const [ver, setVer] = useState(false);
   const d = leerDescanso(settings);
-  // Por ahora también le aparece al admin, para probarlo.
-  const delEquipo = !viewingAs && (realRole === "admin" || (roles ?? [realRole]).some((r) => ROLES_CON_DESCANSO.includes(String(r))));
+  const delEquipo = realRole !== "admin" && !viewingAs && (roles ?? [realRole]).some((r) => ROLES_CON_DESCANSO.includes(String(r)));
 
   useEffect(() => {
     if (!delEquipo || !d.activo) return;
     const revisar = () => {
-      const ahora = new Date();
-      // Domingo de día no: el aviso es para la noche.
-      const { hora } = ahoraAR(ahora);
-      const deNoche = d.desde > d.hasta ? hora >= d.desde || hora < d.hasta : hora >= d.desde && hora < d.hasta;
-      if (deNoche && esHorarioDescanso(d, ahora) && leer() !== nocheDe(ahora)) setVer(true);
+      const { hora } = ahoraAR();
+      // De noche: desde las 21 (o más tarde si el descanso empieza después) hasta que termina el descanso.
+      const desde = Math.max(DESDE, d.desde);
+      const deNoche = hora >= desde || hora < d.hasta;
+      if (deNoche && Date.now() - ultimoCierre() >= CADA) setVer(true);
     };
     revisar();
     const t = window.setInterval(revisar, 60_000);
     return () => window.clearInterval(t);
-  }, [delEquipo, d.activo, d.desde, d.hasta, d.domingo]);
+  }, [delEquipo, d.activo, d.desde, d.hasta]);
 
   if (!ver) return null;
   const cerrar = () => {
     try {
-      localStorage.setItem(CLAVE, nocheDe(new Date()));
+      localStorage.setItem(CLAVE, String(Date.now()));
     } catch {
       /* sin almacenamiento: igual se cierra */
     }
