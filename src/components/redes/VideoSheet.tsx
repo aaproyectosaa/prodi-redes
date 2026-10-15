@@ -378,7 +378,13 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
 
         {!isCliente && (
           <div className="sticky top-0 z-10 border-b bg-background/95 px-4 py-2 backdrop-blur lg:static lg:col-start-2 lg:row-start-2 lg:border-b lg:bg-transparent lg:px-7 lg:pb-3 lg:pt-2 lg:backdrop-blur-none">
-            <div role="tablist" aria-label="Secciones del video" className="flex gap-1 overflow-x-auto rounded-2xl bg-muted/60 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {/* Todas entran siempre: grilla pareja, ícono arriba y nombre abajo. */}
+            <div
+              role="tablist"
+              aria-label="Secciones del video"
+              className="grid gap-1 rounded-2xl bg-muted/60 p-1"
+              style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+            >
               {tabs.map((t) => (
                 <button
                   key={t.id}
@@ -387,14 +393,14 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
                   aria-selected={tab === t.id}
                   onClick={() => setTab(t.id)}
                   className={cn(
-                    "inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-medium transition-all",
+                    "flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[11px] font-medium leading-none transition-all sm:text-xs",
                     tab === t.id
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  <t.icon className={cn("h-3.5 w-3.5", tab === t.id && "text-primary")} />
-                  {t.label}
+                  <t.icon className={cn("h-4 w-4 shrink-0", tab === t.id && "text-primary")} />
+                  <span className="max-w-full truncate">{t.label}</span>
                 </button>
               ))}
             </div>
