@@ -36,7 +36,7 @@ import { adminDb, getPool } from "../_lib/db";
 import { appUrl, assertProjectAccess, body, HttpError, requireCaller, sendError } from "../_lib/http";
 import { sincronizarCalendario } from "../_lib/calendario";
 import { armarMinutaDeLlamada, asegurarTablaTextos as asegurarTablaTextosLlamada } from "../_lib/minuta-llamada";
-import { generarImagen, generarJSON, generarJSONBarato, generarMinutaIA, generarTextos, transcribir } from "../_lib/ia";
+import { generarImagen, generarJSON, generarJSONBarato, generarMinutaIA, generarTextos, transcribir, vozNatural } from "../_lib/ia";
 import { clienteSoftware, clientesSoftware, esChatSoftware } from "../_lib/software/chat-software";
 import { descargarDrive } from "../_lib/drive-stream";
 import { getAppDriveAccessToken } from "../_lib/drive-connection";
@@ -1289,6 +1289,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "pieza-compartir") res.status(200).json(await piezaCompartir(req));
     else if (accion === "reenviar") res.status(200).json(await reenviar(req));
     else if (accion === "resumen-pedido") res.status(200).json(await resumenPedido(req));
+    else if (accion === "resumen-voz") res.status(200).json(await resumenVoz(req));
     else if (accion === "minuta") res.status(200).json(await minuta(req));
     else if (accion === "minuta-llamada") res.status(200).json(await minutaLlamada(req));
     else if (accion === "llamada-texto") res.status(200).json(await llamadaTexto(req));
@@ -1366,6 +1367,32 @@ Contale al productor de qué se trata en 1 o 2 frases cortas (máximo 40 palabra
   if (!texto) throw new HttpError(502, "La IA no pudo resumirlo. Probá de nuevo.");
   await ref.update({ resumen_ia: { texto, at: new Date().toISOString() } });
   return { texto };
+}
+
+/**
+ * El resumen del pedido leído con voz natural. Se genera la primera vez que alguien toca "Escuchar" y queda
+ * guardado aparte (resumen_audios) para no pagarlo de nuevo. Sin Gemini: { audio: null } y el navegador usa su voz.
+ */
+async function resumenVoz(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "productor"]);
+  const b = body<{ tipo?: string; id?: string }>(req);
+  const col = b.tipo === "pieza" ? "piezas_ia" : b.tipo === "video" ? "videos" : null;
+  if (!col || typeof b.id !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(b.id)) throw new HttpError(400, "Pedido inválido");
+  const db = adminDb();
+  const d = (await db.collection(col).doc(b.id).get()).data();
+  if (!d) throw new HttpError(404, "Ese pedido ya no existe");
+  await assertProjectAccess(caller, String(d.proyecto_id));
+  const texto = String(d.resumen_ia?.texto ?? "");
+  if (!texto) throw new HttpError(400, "Todavía no hay resumen");
+  const ref = db.collection("resumen_audios").doc(`${b.tipo}_${b.id}`);
+  const ya = (await ref.get()).data();
+  if (ya?.data && ya.texto === texto) return { audio: { data: String(ya.data), mime: String(ya.mime ?? "audio/wav") } };
+  await controlarTopeIA(caller, "resumen-pedido");
+  const voz = await vozNatural(texto);
+  if (!voz) return { audio: null };
+  const data = voz.data.toString("base64");
+  await ref.set({ data, mime: voz.mime, texto, at: new Date().toISOString() });
+  return { audio: { data, mime: voz.mime } };
 }
 
 /** Para Ajustes: qué claves de IA hay cargadas en Vercel (solo sí/no). */

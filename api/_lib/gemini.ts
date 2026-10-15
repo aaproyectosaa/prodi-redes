@@ -45,6 +45,49 @@ async function call(model: string, payload: unknown, reintento = false): Promise
   return json;
 }
 
+/** Voz natural (texto → audio). Modelo y voz se pueden cambiar en Vercel. */
+export const TTS_MODEL = () => process.env.GEMINI_TTS_MODEL || "gemini-2.5-flash-preview-tts";
+const TTS_VOZ = () => process.env.GEMINI_TTS_VOZ || "Sulafat";
+
+/**
+ * Lee un texto con voz natural. Gemini devuelve PCM crudo (16 bits, mono, 24 kHz): se le arma el encabezado
+ * WAV para que el navegador lo reproduzca directo.
+ */
+export async function hablar(texto: string, estilo: string): Promise<{ data: Buffer; mime: string }> {
+  const json = await call(TTS_MODEL(), {
+    contents: [{ parts: [{ text: `${estilo}\n\n${texto}` }] }],
+    generationConfig: {
+      responseModalities: ["AUDIO"],
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: TTS_VOZ() } } },
+    },
+  });
+  const inline = json?.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData ?? p.inline_data);
+  const d = inline?.inlineData ?? inline?.inline_data;
+  if (!d?.data) throw new Error("IA: no se pudo generar la voz.");
+  const pcm = Buffer.from(d.data, "base64");
+  const rate = Number(/rate=(\d+)/.exec(String(d.mimeType ?? d.mime_type ?? ""))?.[1] ?? 24000);
+  return { data: wav(pcm, rate), mime: "audio/wav" };
+}
+
+/** Encabezado WAV (PCM 16 bits, mono). */
+function wav(pcm: Buffer, rate: number): Buffer {
+  const h = Buffer.alloc(44);
+  h.write("RIFF", 0);
+  h.writeUInt32LE(36 + pcm.length, 4);
+  h.write("WAVE", 8);
+  h.write("fmt ", 12);
+  h.writeUInt32LE(16, 16);
+  h.writeUInt16LE(1, 20);
+  h.writeUInt16LE(1, 22);
+  h.writeUInt32LE(rate, 24);
+  h.writeUInt32LE(rate * 2, 28);
+  h.writeUInt16LE(2, 32);
+  h.writeUInt16LE(16, 34);
+  h.write("data", 36);
+  h.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([h, pcm]);
+}
+
 /** Devuelve una lista de textos (JSON estructurado). */
 export async function generarTextos(prompt: string, cantidad = 3): Promise<string[]> {
   const json = await call(TEXT_MODEL(), {

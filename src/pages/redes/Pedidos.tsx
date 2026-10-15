@@ -300,12 +300,42 @@ function pedirResumen(tipo: string, id: string): Promise<string | null> {
   return pedidos.get(k)!;
 }
 
+/** Audios ya bajados en esta sesión (no se piden de nuevo). */
+const audios = new Map<string, string>();
+
+/**
+ * Plan B: la voz del dispositivo, eligiendo la menos robótica (las "Natural"/"Online" de Edge, las de Google en
+ * Chrome) y en castellano (Argentina primero).
+ */
+function hablarConElNavegador(texto: string, alTerminar: () => void) {
+  const s = window.speechSynthesis;
+  if (!s) return alTerminar();
+  const voces = s.getVoices().filter((v) => v.lang.toLowerCase().startsWith("es"));
+  const puntos = (v: SpeechSynthesisVoice) =>
+    (/natural|neural/i.test(v.name) ? 100 : 0) +
+    (/online/i.test(v.name) ? 40 : 0) +
+    (/google/i.test(v.name) ? 30 : 0) +
+    (/es-AR/i.test(v.lang) ? 20 : /es-(US|MX|419)/i.test(v.lang) ? 12 : 0) -
+    (v.localService && !/natural/i.test(v.name) ? 5 : 0);
+  const voz = [...voces].sort((a, b) => puntos(b) - puntos(a))[0];
+  const u = new SpeechSynthesisUtterance(texto);
+  u.lang = voz?.lang ?? "es-AR";
+  if (voz) u.voice = voz;
+  u.rate = 1;
+  u.pitch = 1;
+  u.onend = alTerminar;
+  u.onerror = alTerminar;
+  s.speak(u);
+}
+
 function ResumenIA({ p, largo }: { p: PedidoCliente; largo: boolean }) {
   const { viewingAs } = useUserProfileContext();
   const guardado = (p.tipo === "video" ? p.video.resumen_ia : p.pieza.resumen_ia)?.texto ?? null;
   const [texto, setTexto] = useState<string | null>(guardado);
   const [estado, setEstado] = useState<"listo" | "cargando" | "error">(guardado ? "listo" : "cargando");
   const [hablando, setHablando] = useState(false);
+  const [preparando, setPreparando] = useState(false);
+  const audio = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (guardado) {
@@ -325,30 +355,55 @@ function ResumenIA({ p, largo }: { p: PedidoCliente; largo: boolean }) {
     };
   }, [guardado, largo, viewingAs, p.tipo, p.id]);
 
-  useEffect(() => () => window.speechSynthesis?.cancel(), []);
+  useEffect(
+    () => () => {
+      window.speechSynthesis?.cancel();
+      audio.current?.pause();
+    },
+    []
+  );
 
   if (!largo && !guardado) return null;
   if (estado === "error" || (estado === "listo" && !texto) || (viewingAs && !guardado)) return null;
 
-  const escuchar = (e: React.MouseEvent) => {
+  const parar = () => {
+    window.speechSynthesis?.cancel();
+    audio.current?.pause();
+    setHablando(false);
+  };
+
+  // Voz natural (IA, la primera vez se genera y queda guardada); si no hay, la mejor voz del dispositivo.
+  const escuchar = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const s = window.speechSynthesis;
-    if (!s || !texto) return;
-    if (hablando) {
-      s.cancel();
-      setHablando(false);
-      return;
+    if (!texto) return;
+    if (hablando) return parar();
+    window.speechSynthesis?.cancel();
+    try {
+      let src = audios.get(p.tipo + p.id);
+      if (!src) {
+        setPreparando(true);
+        const r = await callApi<{ audio: { data: string; mime: string } | null }>("/api/ia/resumen-voz", { tipo: p.tipo, id: p.id }).catch(() => ({ audio: null }));
+        if (r.audio) {
+          src = `data:${r.audio.mime};base64,${r.audio.data}`;
+          audios.set(p.tipo + p.id, src);
+        }
+      }
+      if (src) {
+        const a = new Audio(src);
+        audio.current = a;
+        a.onended = () => setHablando(false);
+        a.onerror = () => setHablando(false);
+        setHablando(true);
+        await a.play();
+        return;
+      }
+    } catch {
+      /* si falla el audio, va la voz del navegador */
+    } finally {
+      setPreparando(false);
     }
-    s.cancel();
-    const u = new SpeechSynthesisUtterance(texto);
-    u.lang = "es-AR";
-    const voz = s.getVoices().find((v) => v.lang === "es-AR") ?? s.getVoices().find((v) => v.lang.startsWith("es"));
-    if (voz) u.voice = voz;
-    u.rate = 1.05;
-    u.onend = () => setHablando(false);
-    u.onerror = () => setHablando(false);
+    hablarConElNavegador(texto, () => setHablando(false));
     setHablando(true);
-    s.speak(u);
   };
 
   return (
@@ -357,7 +412,7 @@ function ResumenIA({ p, largo }: { p: PedidoCliente; largo: boolean }) {
         <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-primary">
           <Sparkles className="h-3.5 w-3.5" /> Prodi te lo resume
         </span>
-        {estado === "listo" && texto && "speechSynthesis" in window && (
+        {estado === "listo" && texto && (
           <button
             type="button"
             onClick={escuchar}
@@ -366,8 +421,8 @@ function ResumenIA({ p, largo }: { p: PedidoCliente; largo: boolean }) {
               hablando ? "bg-primary text-primary-foreground" : "bg-background/70 text-primary hover:bg-background"
             )}
           >
-            {hablando ? <Square className="h-3 w-3 fill-current" /> : <Volume2 className="h-3.5 w-3.5" />}
-            {hablando ? "Parar" : "Escuchar"}
+            {preparando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : hablando ? <Square className="h-3 w-3 fill-current" /> : <Volume2 className="h-3.5 w-3.5" />}
+            {preparando ? "Preparando…" : hablando ? "Parar" : "Escuchar"}
           </button>
         )}
       </div>

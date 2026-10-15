@@ -223,6 +223,12 @@ export async function generarImagen(
 }
 
 /** Mensaje de voz a texto: Gemini (Claude no recibe audio). */
+/** Voz natural para leer un texto (solo con Gemini; sin clave, null y el navegador usa su voz). */
+export async function vozNatural(texto: string): Promise<{ data: Buffer; mime: string } | null> {
+  if (!hayGemini()) return null;
+  return gemini.hablar(texto, "Leé esto en castellano rioplatense (Argentina), con tono cálido, cercano y natural, como un compañero de trabajo contándolo en un audio de WhatsApp, a ritmo tranquilo:");
+}
+
 export async function transcribir(data: Buffer, mime: string, pista?: string): Promise<string> {
   if (!hayGemini()) throw new Error("Para entender audios falta la clave de Gemini (GEMINI_API_KEY) en Vercel.");
   try {
