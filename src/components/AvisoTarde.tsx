@@ -24,7 +24,8 @@ export function AvisoTarde() {
   const { realRole, roles, viewingAs } = useUserProfileContext();
   const [ver, setVer] = useState(false);
   const d = leerDescanso(settings);
-  const delEquipo = realRole !== "admin" && !viewingAs && (roles ?? [realRole]).some((r) => ROLES_CON_DESCANSO.includes(String(r)));
+  // Por ahora también le aparece al admin, para probarlo.
+  const delEquipo = !viewingAs && (realRole === "admin" || (roles ?? [realRole]).some((r) => ROLES_CON_DESCANSO.includes(String(r))));
 
   useEffect(() => {
     if (!delEquipo || !d.activo) return;
