@@ -436,6 +436,8 @@ export interface RedesSettings {
   promo_jornada_pct?: number;
   /** Horario de descanso del equipo: sin avisos al celular de noche y los domingos (ver api/_lib/descanso.ts). */
   descanso?: Partial<import("../../../api/_lib/descanso").Descanso>;
+  /** % de cada video extra para la editora y la productora (ver src/lib/redes/reparto.ts). */
+  reparto_extras?: { editor?: number; productor?: number };
   /** Días en una etapa a partir de los cuales un video se marca como trabado. */
   dias_alerta: number;
   /** Envío automático del informe mensual el día 1. */

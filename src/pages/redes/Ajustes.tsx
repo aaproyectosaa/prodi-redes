@@ -35,6 +35,7 @@ import { ENFOQUE_PRODI_DEFAULT } from "../../../api/_lib/plan-mes";
 import { ViaticosAjustes } from "@/components/redes/ViaticosAjustes";
 import { promoJornada } from "../../../api/_lib/jornada";
 import { leerDescanso } from "../../../api/_lib/descanso";
+import { leerPctExtras } from "@/lib/redes/reparto";
 
 export default function Ajustes() {
   const { planes, settings } = useRedes();
@@ -112,6 +113,7 @@ export default function Ajustes() {
 
         <div className="space-y-8">
           <DescansoEquipo settings={settings} />
+          <RepartoExtras settings={settings} />
 
           <Section title="Precios y alertas">
             <div className="space-y-4 rounded-xl border bg-card p-4">
@@ -664,6 +666,61 @@ function DescansoEquipo({ settings }: { settings: RedesSettings }) {
         </div>
         <div className="flex justify-end">
           <Button onClick={() => void guardar()} disabled={guardando}>
+            {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Guardar
+          </Button>
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+/** % de cada video extra para la editora y la productora. */
+function RepartoExtras({ settings }: { settings: RedesSettings }) {
+  const [p, setP] = useState(() => leerPctExtras(settings));
+  const [guardando, setGuardando] = useState(false);
+  useEffect(() => setP(leerPctExtras(settings)), [settings]);
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      assertEditable();
+      await setDoc(doc(db, "app_settings", "redes"), { reparto_extras: p }, { merge: true });
+      toast.success("Reparto guardado");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo guardar");
+    } finally {
+      setGuardando(false);
+    }
+  };
+  const ejemplo = 70000;
+  return (
+    <Section
+      title="Reparto de los videos extra"
+      description="De cada video extra que paga un cliente, qué % se lleva la editora y la productora. Se calcula sobre lo que entra (sin la comisión de Mercado Pago ni los viáticos) y se les paga cuando Mercado Pago libera la plata."
+    >
+      <div className="space-y-4 rounded-xl border bg-card p-4">
+        <div className="grid grid-cols-2 gap-3">
+          {(
+            [
+              ["editor", "Editora"],
+              ["productor", "Productora"],
+            ] as const
+          ).map(([k, l]) => (
+            <div key={k} className="space-y-1.5">
+              <Label>{l}</Label>
+              <div className="relative">
+                <InputNumero value={p[k]} onChange={(v) => setP({ ...p, [k]: Math.max(0, Math.min(100, Number(v) || 0)) })} className="pr-8" />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Ej.: si entran {formatARS(ejemplo)}, la editora se lleva {formatARS((ejemplo * p.editor) / 100)}, la productora {formatARS((ejemplo * p.productor) / 100)} y a Prodi le
+          quedan {formatARS(ejemplo - (ejemplo * (p.editor + p.productor)) / 100)}.
+        </p>
+        <div className="flex justify-end">
+          <Button onClick={() => void guardar()} disabled={guardando || p.editor + p.productor > 100}>
             {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Guardar
           </Button>

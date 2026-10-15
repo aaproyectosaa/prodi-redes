@@ -46,6 +46,16 @@ export interface Reparto {
   ganancia: number;
 }
 
+/** % de cada video extra para la editora y la productora (Ajustes → reparto_extras), sobre lo que entra sin comisión ni viáticos. */
+export interface PctExtras {
+  editor: number;
+  productor: number;
+}
+export const leerPctExtras = (s: { reparto_extras?: Partial<PctExtras> } | null | undefined): PctExtras => ({
+  editor: Math.max(0, Math.min(100, Number(s?.reparto_extras?.editor) || 0)),
+  productor: Math.max(0, Math.min(100, Number(s?.reparto_extras?.productor) || 0)),
+});
+
 /** Tipos de cobro que se reparten (el abono mensual va por la facturación del mes). */
 export const SE_REPARTE: Cobro["tipo"][] = ["video_extra", "jornada", "pieza_ia", "viatico"];
 
@@ -95,7 +105,7 @@ const disenadoraDe = (p: PiezaIA, equipoDiseno: string[]) =>
 
 export function repartoDe(
   c: CobroConMp,
-  ctx: { videos: Video[]; piezas: PiezaIA[]; pagos: Record<string, ConfigPago>; equipoDiseno?: string[] }
+  ctx: { videos: Video[]; piezas: PiezaIA[]; pagos: Record<string, ConfigPago>; equipoDiseno?: string[]; pct?: PctExtras }
 ): Reparto {
   const mes = mesDe(c);
   const bruto = Number(c.monto) || 0;
@@ -116,12 +126,26 @@ export function repartoDe(
     const p = uid ? porTrabajo(ctx.pagos[uid], proyectoId, mes) : { monto: 0, nota: "sin asignar" };
     equipo.push({ clave: `${c.id}_${uid ?? "nadie"}_${trabajoId}_${rol}`, uid, rol, trabajoId, titulo, ...p });
   };
+  // Videos extra: la editora y la productora se llevan su % de lo que entra por cada video (sin comisión ni viáticos).
+  const pct = ctx.pct ?? { editor: 0, productor: 0 };
+  const basePorVideo = videos.length ? Math.max(0, neto - viaticos) / videos.length : 0;
+  const porPct = (uid: string | null, rol: "editor" | "productor", v: Video) => {
+    const p = pct[rol];
+    equipo.push({
+      clave: `${c.id}_${uid ?? "nadie"}_${v.id}_${rol}`,
+      uid,
+      rol,
+      trabajoId: v.id,
+      titulo: v.titulo,
+      monto: uid ? Math.round((basePorVideo * p) / 100) : 0,
+      nota: !uid ? "sin asignar" : !p ? "poné el % en Ajustes → Reparto de los videos extra" : `${p}% de ${formatoPesos(basePorVideo)}`,
+    });
+  };
   for (const v of videos) {
     // La productora cobra si lo filmamos nosotros (no si lo filma el cliente o se hace con material ya cargado).
     const filmado = !v.filma_cliente && v.material_base?.tipo !== "existente" && v.material_base?.tipo !== "cliente";
-    if (filmado) sumar(v.productor_id, "productor", v.id, v.titulo, v.proyecto_id);
-    sumar(v.editor_id, "editor", v.id, v.titulo, v.proyecto_id);
-    if (v.pauta_id) sumar(v.pauta_id, "pauta", v.id, v.titulo, v.proyecto_id);
+    if (filmado) porPct(v.productor_id, "productor", v);
+    porPct(v.editor_id, "editor", v);
   }
   for (const p of piezas) sumar(disenadoraDe(p, ctx.equipoDiseno ?? []), "diseno", p.id, p.producto || p.pedido.slice(0, 60), p.proyecto_id);
   const aEquipo = equipo.reduce((a, e) => a + e.monto, 0);
@@ -140,3 +164,5 @@ export function repartoDe(
     ganancia: Math.round((neto - viaticos - aEquipo) * 100) / 100,
   };
 }
+
+const formatoPesos = (n: number) => `$ ${Math.round(n).toLocaleString("es-AR")}`;

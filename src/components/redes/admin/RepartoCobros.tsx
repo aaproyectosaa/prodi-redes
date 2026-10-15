@@ -10,7 +10,7 @@ import { assertEditable } from "@/lib/redes/vistaComo";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { fechaCorta, formatARS } from "@/lib/redes/format";
-import { NOMBRE_ROL, repartoDe, SE_REPARTE, type CobroConMp, type Reparto } from "@/lib/redes/reparto";
+import { leerPctExtras, NOMBRE_ROL, repartoDe, SE_REPARTE, type CobroConMp, type Reparto } from "@/lib/redes/reparto";
 import type { Cobro } from "@/lib/redes/types";
 import { cn } from "@/lib/utils";
 
@@ -43,8 +43,9 @@ export function useDetalleMp(cobros: Cobro[]) {
 
 /** Los repartos de esos cobros (los que se reparten). */
 export function useRepartos(cobros: Cobro[]): Reparto[] {
-  const { videos, piezas, clientes } = useRedes();
+  const { videos, piezas, clientes, settings } = useRedes();
   const pagos = useConfigPagos();
+  const pct = leerPctExtras(settings);
   return useMemo(
     () =>
       cobros
@@ -55,9 +56,11 @@ export function useRepartos(cobros: Cobro[]): Reparto[] {
             piezas,
             pagos,
             equipoDiseno: clientes.find((x) => x.id === c.proyecto_id)?.team_roles?.diseno ?? [],
+            pct,
           })
         ),
-    [cobros, videos, piezas, pagos, clientes]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cobros, videos, piezas, pagos, clientes, pct.editor, pct.productor]
   );
 }
 
