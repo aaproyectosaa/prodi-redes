@@ -413,11 +413,22 @@ export function EncuestaMensaje({ chat, m, uid, mio, nombreDe }: { chat: Chat; m
   );
 }
 
+/** Ejemplos de un toque: completan la pregunta y las opciones. */
+const EJEMPLOS_ENCUESTA: { pregunta: string; opciones: string[] }[] = [
+  { pregunta: "¿Qué portada va?", opciones: ["La 1", "La 2", "La 3"] },
+  { pregunta: "¿Qué día filmamos?", opciones: ["Lunes", "Miércoles", "Viernes"] },
+  { pregunta: "¿Cuál te gusta más?", opciones: ["Opción A", "Opción B"] },
+  { pregunta: "¿Lo publicamos así?", opciones: ["Sí, va", "No, cambiemos algo"] },
+];
+/** Color de cada opción (A, B, C…). */
+const TONOS_OPCION = ["bg-violet-500", "bg-sky-500", "bg-emerald-500", "bg-amber-500", "bg-pink-500", "bg-indigo-500", "bg-teal-500", "bg-orange-500", "bg-fuchsia-500", "bg-lime-600"];
+
 export function CrearEncuesta({ chat, uid, remitente, open, onOpenChange }: { chat: Chat; uid: string; remitente: string; open: boolean; onOpenChange: (v: boolean) => void }) {
   const [pregunta, setPregunta] = useState("");
   const [ops, setOps] = useState(["", ""]);
   const [multiple, setMultiple] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const refs = useRef<(HTMLInputElement | null)[]>([]);
   useEffect(() => {
     if (!open) return;
     setPregunta("");
@@ -425,6 +436,8 @@ export function CrearEncuesta({ chat, uid, remitente, open, onOpenChange }: { ch
     setMultiple(false);
   }, [open]);
   const validas = ops.filter((o) => o.trim()).length;
+  const listo = !!pregunta.trim() && validas >= 2;
+  const enfocar = (i: number) => setTimeout(() => refs.current[i]?.focus(), 30);
   const mandar = async () => {
     setEnviando(true);
     try {
@@ -438,44 +451,119 @@ export function CrearEncuesta({ chat, uid, remitente, open, onOpenChange }: { ch
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-primary" /> Encuesta rápida
-          </DialogTitle>
-          <DialogDescription>Ej.: “¿Qué portada va?” — cada uno vota y se ve el resultado al instante.</DialogDescription>
-        </DialogHeader>
-        <Input autoFocus value={pregunta} onChange={(e) => setPregunta(e.target.value)} placeholder="Pregunta" maxLength={200} className="h-11" />
-        <div className="space-y-2">
-          {ops.map((o, i) => (
-            <div key={i} className="flex gap-2">
-              <Input
-                value={o}
-                onChange={(e) => setOps((xs) => xs.map((x, j) => (j === i ? e.target.value : x)))}
-                placeholder={`Opción ${i + 1}`}
-                maxLength={100}
-              />
-              {ops.length > 2 && (
-                <Button size="icon" variant="ghost" className="shrink-0" onClick={() => setOps((xs) => xs.filter((_, j) => j !== i))} aria-label="Quitar opción">
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-          ))}
-          {ops.length < 10 && (
-            <Button variant="outline" size="sm" className="w-full border-dashed" onClick={() => setOps((xs) => [...xs, ""])}>
-              <Plus className="mr-1.5 h-4 w-4" /> Agregar opción
-            </Button>
-          )}
+      <DialogContent className="flex max-h-[92dvh] max-w-md flex-col gap-0 overflow-hidden rounded-3xl p-0">
+        {/* Encabezado con color (el mismo de "Encuesta" en el clip). */}
+        <div className="relative overflow-hidden bg-gradient-to-br from-amber-400 to-orange-500 px-5 pb-4 pt-5 text-white">
+          <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/15" />
+          <DialogHeader className="relative space-y-1 text-left">
+            <DialogTitle className="flex items-center gap-2.5 text-lg text-white">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/25">
+                <BarChart3 className="h-5 w-5" />
+              </span>
+              Encuesta rápida
+            </DialogTitle>
+            <DialogDescription className="text-white/85">Cada uno vota y el resultado se ve al instante.</DialogDescription>
+          </DialogHeader>
         </div>
-        <label className="flex items-center justify-between gap-3 text-sm">
-          Que se puedan elegir varias
-          <Switch checked={multiple} onCheckedChange={setMultiple} />
-        </label>
-        <Button onClick={() => void mandar()} disabled={enviando || !pregunta.trim() || validas < 2} className="w-full">
-          {enviando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-          Mandar encuesta
-        </Button>
+
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          <div className="space-y-2">
+            <textarea
+              value={pregunta}
+              onChange={(e) => setPregunta(e.target.value.slice(0, 200))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  enfocar(0);
+                }
+              }}
+              rows={2}
+              placeholder="¿Qué querés preguntar?"
+              className="w-full resize-none rounded-2xl border-2 border-orange-500/30 bg-orange-500/[0.06] px-4 py-3 text-base font-semibold outline-none transition-colors placeholder:font-normal placeholder:text-muted-foreground focus:border-orange-500"
+            />
+            {!pregunta && (
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {EJEMPLOS_ENCUESTA.map((e) => (
+                  <button
+                    key={e.pregunta}
+                    type="button"
+                    onClick={() => {
+                      setPregunta(e.pregunta);
+                      setOps(e.opciones);
+                    }}
+                    className="shrink-0 rounded-full border bg-muted/50 px-3 py-1.5 text-xs font-medium transition-colors hover:border-orange-500/50 hover:bg-orange-500/10"
+                  >
+                    {e.pregunta}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Opciones</p>
+            {ops.map((o, i) => (
+              <div key={i} className="flex items-center gap-2 rounded-2xl border bg-card px-2 py-1.5 transition-colors focus-within:border-orange-500/60">
+                <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white", TONOS_OPCION[i % TONOS_OPCION.length])}>
+                  {String.fromCharCode(65 + i)}
+                </span>
+                <input
+                  ref={(el) => (refs.current[i] = el)}
+                  value={o}
+                  onChange={(e) => setOps((xs) => xs.map((x, j) => (j === i ? e.target.value.slice(0, 100) : x)))}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter") return;
+                    e.preventDefault();
+                    // Enter: a la próxima opción (o se suma una nueva al final).
+                    if (i < ops.length - 1) enfocar(i + 1);
+                    else if (o.trim() && ops.length < 10) {
+                      setOps((xs) => [...xs, ""]);
+                      enfocar(i + 1);
+                    }
+                  }}
+                  placeholder={`Opción ${String.fromCharCode(65 + i)}`}
+                  className="h-9 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground"
+                />
+                {ops.length > 2 && (
+                  <button type="button" onClick={() => setOps((xs) => xs.filter((_, j) => j !== i))} className="shrink-0 rounded-full p-1.5 text-muted-foreground hover:bg-muted" aria-label="Quitar opción">
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+            {ops.length < 10 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOps((xs) => [...xs, ""]);
+                  enfocar(ops.length);
+                }}
+                className="flex w-full items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-orange-500/40 py-2.5 text-sm font-semibold text-orange-600 transition-colors hover:bg-orange-500/10 dark:text-orange-400"
+              >
+                <Plus className="h-4 w-4" /> Agregar opción
+              </button>
+            )}
+          </div>
+
+          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl bg-muted/50 px-4 py-3">
+            <span>
+              <span className="block text-sm font-medium">Elegir varias</span>
+              <span className="block text-xs text-muted-foreground">{multiple ? "Cada uno puede marcar más de una" : "Cada uno elige una sola"}</span>
+            </span>
+            <Switch checked={multiple} onCheckedChange={setMultiple} />
+          </label>
+        </div>
+
+        <div className="border-t px-5 py-3">
+          <Button
+            onClick={() => void mandar()}
+            disabled={enviando || !listo}
+            className="h-12 w-full rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-base font-semibold text-white shadow-lg shadow-orange-500/25 hover:opacity-95 disabled:opacity-50"
+          >
+            {enviando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+            {listo ? "Mandar encuesta" : !pregunta.trim() ? "Escribí la pregunta" : "Poné al menos 2 opciones"}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -652,6 +740,11 @@ export function ProgramarMensaje({
   const [dia, setDia] = useState(iso(new Date()));
   const [hh, setHh] = useState("09:00");
   const [guardando, setGuardando] = useState(false);
+  // El mensaje se escribe acá (si ya había algo en la caja del chat, viene cargado).
+  const [msj, setMsj] = useState("");
+  useEffect(() => {
+    if (open) setMsj(texto);
+  }, [open, texto]);
   const atajos = useMemo(() => {
     const ahora = new Date();
     const enUnaHora = new Date(ahora.getTime() + 60 * 60_000);
@@ -668,9 +761,13 @@ export function ProgramarMensaje({
     ];
   }, [open]);
   const programar = async (d: Date) => {
+    if (!msj.trim()) {
+      toast.error("Escribí el mensaje que querés programar");
+      return;
+    }
     setGuardando(true);
     try {
-      await programarMensaje(chat, uid, remitente, texto, d);
+      await programarMensaje(chat, uid, remitente, msj, d);
       toast.success(`Programado para el ${hora(d.toISOString())}`);
       onListo();
       onOpenChange(false);
@@ -680,31 +777,68 @@ export function ProgramarMensaje({
       setGuardando(false);
     }
   };
+  const personalizada = new Date(`${dia}T${hh}:00`);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CalendarClock className="h-5 w-5 text-primary" /> Programar mensaje
-          </DialogTitle>
-          <DialogDescription className="line-clamp-2">“{texto}”</DialogDescription>
-        </DialogHeader>
-        <div className="grid grid-cols-3 gap-2">
-          {atajos.map((a) => (
-            <Button key={a.label} variant="outline" className="h-auto flex-col py-2 text-xs" disabled={guardando} onClick={() => void programar(a.d)}>
-              <span className="font-semibold">{a.label}</span>
-            </Button>
-          ))}
+      <DialogContent className="flex max-h-[92dvh] max-w-md flex-col gap-0 overflow-hidden rounded-3xl p-0">
+        {/* Encabezado con color (el mismo de "Programar" en el clip). */}
+        <div className="relative overflow-hidden bg-gradient-to-br from-emerald-400 to-teal-600 px-5 pb-4 pt-5 text-white">
+          <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/15" />
+          <DialogHeader className="relative space-y-1 text-left">
+            <DialogTitle className="flex items-center gap-2.5 text-lg text-white">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/25">
+                <CalendarClock className="h-5 w-5" />
+              </span>
+              Programar mensaje
+            </DialogTitle>
+            <DialogDescription className="text-white/85">Escribilo ahora y sale solo, a tu nombre, a la hora que elijas.</DialogDescription>
+          </DialogHeader>
         </div>
-        <div className="flex items-center gap-2">
-          <Input type="date" value={dia} min={iso(new Date())} onChange={(e) => setDia(e.target.value)} />
-          <Input type="time" value={hh} onChange={(e) => setHh(e.target.value)} className="w-28" />
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          <textarea
+            value={msj}
+            onChange={(e) => setMsj(e.target.value.slice(0, 4000))}
+            rows={3}
+            autoFocus={!texto}
+            placeholder="Ej.: Buen día, les recuerdo que hoy filmamos a las 10"
+            className="w-full resize-none rounded-2xl border-2 border-emerald-500/30 bg-emerald-500/[0.06] px-4 py-3 text-[15px] outline-none transition-colors placeholder:text-muted-foreground focus:border-emerald-500"
+          />
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">¿Cuándo sale?</p>
+            <div className="grid grid-cols-3 gap-2">
+              {atajos.map((a) => (
+                <button
+                  key={a.label}
+                  type="button"
+                  disabled={guardando || !msj.trim()}
+                  onClick={() => void programar(a.d)}
+                  className="flex flex-col items-center gap-1 rounded-2xl border bg-card px-2 py-3 text-center transition-all hover:-translate-y-0.5 hover:border-emerald-500/60 hover:bg-emerald-500/10 disabled:pointer-events-none disabled:opacity-50"
+                >
+                  <Clock className="h-4 w-4 text-emerald-500" />
+                  <span className="text-xs font-semibold">{a.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2 rounded-2xl bg-muted/50 p-3">
+            <p className="text-xs font-medium text-muted-foreground">U otro día y hora</p>
+            <div className="flex items-center gap-2">
+              <Input type="date" value={dia} min={iso(new Date())} onChange={(e) => setDia(e.target.value)} className="h-11 rounded-xl bg-background" />
+              <Input type="time" value={hh} onChange={(e) => setHh(e.target.value)} className="h-11 w-28 rounded-xl bg-background" />
+            </div>
+          </div>
         </div>
-        <Button onClick={() => void programar(new Date(`${dia}T${hh}:00`))} disabled={guardando || !dia || !hh} className="w-full">
-          {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Programar
-        </Button>
-        <p className="text-[11px] text-muted-foreground">Sale a esa hora a tu nombre. Lo podés cancelar antes desde arriba de la caja de texto.</p>
+        <div className="space-y-2 border-t px-5 py-3">
+          <Button
+            onClick={() => void programar(personalizada)}
+            disabled={guardando || !dia || !hh || !msj.trim()}
+            className="h-12 w-full rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-600 text-base font-semibold text-white shadow-lg shadow-emerald-500/25 hover:opacity-95 disabled:opacity-50"
+          >
+            {guardando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarClock className="mr-2 h-4 w-4" />}
+            {!msj.trim() ? "Escribí el mensaje" : `Programar para el ${hora(personalizada.toISOString())}`}
+          </Button>
+          <p className="text-center text-[11px] text-muted-foreground">Hasta que salga, lo ves arriba de la caja de texto y lo podés cancelar.</p>
+        </div>
       </DialogContent>
     </Dialog>
   );

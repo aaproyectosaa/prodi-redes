@@ -1109,7 +1109,13 @@ export function ChatConversacion({
                           <>
                             <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                               {textoRico(m.texto, mio, (t) => conMenciones(t, mio))}
-                              {!m.previa && <span className={cn("inline-block", mio ? (m.editado_at ? "w-[6.5rem]" : "w-[4.25rem]") : m.editado_at ? "w-[5.5rem]" : "w-[3.25rem]")} aria-hidden />}
+                              {!m.previa && (
+                                <span className="invisible ml-2 inline-flex select-none gap-1 text-[10px] leading-none" aria-hidden>
+                                  {m.editado_at && <span>editado ·</span>}
+                                  {hora(m.at)}
+                                  {mio && <span className="w-4" />}
+                                </span>
+                              )}
                             </p>
                             {m.previa && <PreviaLink p={m.previa} mio={mio} />}
                           </>
@@ -1382,14 +1388,7 @@ export function ChatConversacion({
                           label: "Programar",
                           icono: CalendarClock,
                           color: "from-emerald-400 to-teal-600",
-                          accion: () => {
-                            if (!texto.trim()) {
-                              toast.info("Escribí el mensaje y después elegí “Programar”.");
-                              setTimeout(() => caja.current?.focus(), 50);
-                              return;
-                            }
-                            setProgramar(true);
-                          },
+                          accion: () => setProgramar(true),
                         },
                       ]
                     : []),
