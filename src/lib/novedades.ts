@@ -30,7 +30,22 @@ export type AnimRecorrido =
   | "meta-copiar"
   | "meta-pegar"
   | "meta-datos"
-  | "hablar-cliente";
+  | "hablar-cliente"
+  | "chat-buscar"
+  | "chat-fijar"
+  | "chat-encuesta"
+  | "chat-programar"
+  | "chat-audio"
+  | "chat-reenviar"
+  | "chat-pantalla"
+  | "revision-interna"
+  | "deshacer"
+  | "filtros"
+  | "atrasado"
+  | "cronometro"
+  | "guion-cliente"
+  | "viaticos"
+  | "jornada";
 
 export interface Diapositiva {
   titulo: string;
@@ -87,6 +102,77 @@ const HABLAR_CLIENTE: Diapositiva = {
 
 /** Novedades, de la más nueva a la más vieja. */
 export const NOVEDADES: Novedad[] = [
+  {
+    id: "2026-10-chat-herramientas",
+    fecha: "2026-10-15",
+    titulo: "Chats con todo",
+    chat: true,
+    diapositivas: [
+      { titulo: "Buscá dentro del chat", texto: "Tocá la lupa arriba, escribí una palabra y saltás directo a ese mensaje, aunque sea viejo.", anim: "chat-buscar" },
+      { titulo: "Fijá lo importante", texto: "Mantené apretado un mensaje → «Fijar». Queda arriba de todo el chat para que nadie lo pierda.", anim: "chat-fijar" },
+      { titulo: "Encuestas rápidas", texto: "En el clip 📎 → «Encuesta». Escribís la pregunta y las opciones; cada uno vota y el resultado se ve al instante.", anim: "chat-encuesta" },
+      { titulo: "Programá un mensaje", texto: "En el clip 📎 → «Programar»: lo escribís ahora y sale solo a la hora que elijas. Hasta que salga lo podés editar o cancelar.", anim: "chat-programar" },
+      { titulo: "Audios a 1,5x y 2x", texto: "Tocá «1x» en un audio para escucharlo más rápido. Y tocá la onda para saltar a esa parte.", anim: "chat-audio" },
+      { titulo: "Reenviá y mirá lo compartido", texto: "Mantené apretado → «Reenviar» para mandarlo a otro chat. En el ícono de fotos de arriba ves todas las fotos, videos y archivos del chat.", anim: "chat-reenviar" },
+      { titulo: "Compartí tu pantalla", texto: "En una llamada tocá el botón de pantalla. Los demás la ven en una ventanita que pueden mover, agrandar o dejar flotando como en YouTube.", anim: "chat-pantalla" },
+    ],
+  },
+  {
+    id: "2026-10-revision-piezas",
+    fecha: "2026-10-15",
+    titulo: "Gráficas: igual que los videos",
+    roles: ["admin", "productor", "diseno"],
+    diapositivas: [
+      {
+        titulo: "Revisión interna antes del cliente",
+        texto: "Cuando diseño termina una pieza, la revisa el productor: la aprueba (y le llega al cliente) o pide cambios. El mismo camino que los videos.",
+        anim: "revision-interna",
+      },
+    ],
+  },
+  {
+    id: "2026-10-deshacer-aprobacion",
+    fecha: "2026-10-15",
+    titulo: "¿Aprobaste por error?",
+    roles: ["admin", "productor"],
+    diapositivas: [
+      {
+        titulo: "Deshacer aprobación",
+        texto: "Si aprobaste un video o una pieza sin querer, abrilo y tocá «Deshacer aprobación»: vuelve a revisión y al cliente le desaparece.",
+        anim: "deshacer",
+      },
+    ],
+  },
+  {
+    id: "2026-10-tableros",
+    fecha: "2026-10-15",
+    titulo: "Tu tablero, más claro",
+    roles: ["admin", "productor", "editor", "diseno"],
+    diapositivas: [
+      { titulo: "Filtrá por empresa o urgencia", texto: "Arriba del tablero y del calendario elegís una empresa, o que se ordene por lo más urgente según la fecha de entrega.", anim: "filtros" },
+      { titulo: "Lo atrasado titila en rojo", texto: "Si algo se pasó de la fecha, la tarjeta se pone roja, titila y dice cuántos días lleva atrasada. Así no se escapa nada.", anim: "atrasado" },
+    ],
+  },
+  {
+    id: "2026-10-rodajes",
+    fecha: "2026-10-15",
+    titulo: "Novedades en Rodajes",
+    roles: ["admin", "productor"],
+    diapositivas: [
+      { titulo: "Iniciar y terminar el rodaje", texto: "Al llegar tocá «Iniciar» y al irte «Terminar»: el sistema mide cuánto dura cada rodaje para organizarnos mejor.", anim: "cronometro" },
+      { titulo: "El guion, en el rodaje", texto: "En la hoja del rodaje está el guion de cada video. Con «Mandar el guion al cliente» se lo pasás por chat a él o a alguien de su equipo.", anim: "guion-cliente" },
+    ],
+  },
+  {
+    id: "2026-10-viaticos-jornada",
+    fecha: "2026-10-15",
+    titulo: "Novedades al pedir un video",
+    roles: ["cliente"],
+    diapositivas: [
+      { titulo: "¿Filmamos fuera de Reconquista?", texto: "Al pedir un video elegí tu localidad en el mapa: te mostramos el viático del viaje antes de confirmar.", anim: "viaticos" },
+      { titulo: "Varios videos el mismo día", texto: "Aprovechá el viaje: sumá más videos a la misma filmación y desde el segundo tenés descuento.", anim: "jornada" },
+    ],
+  },
   {
     id: "2026-10-nueva-pieza",
     fecha: "2026-10-10",
