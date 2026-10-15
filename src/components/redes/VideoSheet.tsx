@@ -6,6 +6,7 @@ import {
   BellRing,
   CalendarDays,
   Check,
+  ChevronDown,
   Clapperboard,
   Copy,
   ExternalLink,
@@ -25,10 +26,11 @@ import {
   Trash2,
   TrendingUp,
   Users,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogOverlay, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -118,7 +120,30 @@ function Block({
   );
 }
 
-/** Panel de detalle del video. Se abre con ?video=<id> desde cualquier pantalla. */
+
+/** Pestañas de la ficha del video (equipo). */
+type TabFicha = "resumen" | "guion" | "texto" | "pauta" | "archivos" | "historial";
+
+const ETAPAS_SIN_FINAL = ["planificado", "agendado", "material_cliente"];
+
+/** Con qué pestaña abre la ficha según la etapa del video. */
+function tabInicial(video: Video, hayFeedback: boolean): TabFicha {
+  if (hayFeedback) return "resumen";
+  switch (video.etapa) {
+    case "planificado":
+    case "agendado":
+      return "guion";
+    case "edicion":
+      return "archivos";
+    case "para_publicar":
+    case "publicado":
+      return "pauta";
+    default:
+      return "resumen";
+  }
+}
+
+/** Ficha del video. Se abre con ?video=<id> desde cualquier pantalla. */
 export function VideoSheet() {
   const [params, setParams] = useSearchParams();
   const videoId = params.get("video");
@@ -132,20 +157,72 @@ export function VideoSheet() {
   };
 
   return (
-    <Sheet open={!!videoId} onOpenChange={(o) => !o && close()}>
-      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
-        {video ? (
-          <VideoDetail video={video} onClose={close} />
-        ) : (
-          <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-            <SheetHeader className="sr-only">
-              <SheetTitle>Video</SheetTitle>
-            </SheetHeader>
-            {videoId ? "Cargando video…" : null}
-          </div>
-        )}
-      </SheetContent>
-    </Sheet>
+    <DialogPrimitive.Root open={!!videoId} onOpenChange={(o) => !o && close()}>
+      <DialogPrimitive.Portal>
+        <DialogOverlay className="bg-black/60 backdrop-blur-[2px]" />
+        <DialogPrimitive.Content
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          className={cn(
+            // Celular (y tablet): pantalla completa, una sola columna.
+            "pantalla-celular fixed inset-0 z-50 flex flex-col overflow-hidden bg-background outline-none",
+            "duration-300 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-bottom-8 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-bottom-8",
+            // Compu: ficha grande centrada en dos columnas (media | detalle).
+            "lg:m-auto lg:grid lg:h-[min(92dvh,52rem)] lg:w-[calc(100%-3rem)] lg:max-w-6xl lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:grid-rows-[auto_auto_minmax(0,1fr)_auto] lg:rounded-3xl lg:border lg:shadow-2xl",
+            "lg:data-[state=open]:slide-in-from-bottom-0 lg:data-[state=open]:zoom-in-95 lg:data-[state=closed]:slide-out-to-bottom-0 lg:data-[state=closed]:zoom-out-95"
+          )}
+        >
+          {video ? (
+            <VideoDetail video={video} onClose={close} />
+          ) : (
+            <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground lg:col-span-2 lg:row-span-4">
+              <DialogPrimitive.Title className="sr-only">Video</DialogPrimitive.Title>
+              <DialogPrimitive.Description className="sr-only">Detalle del video</DialogPrimitive.Description>
+              {videoId ? "Cargando video…" : null}
+            </div>
+          )}
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  );
+}
+
+/** Columna izquierda (arriba en el celular): el video o el material, grande. En el celular se puede plegar. */
+function MediaPanel({
+  icon: Icon,
+  title,
+  children,
+}: {
+  icon: React.ElementType;
+  title?: string;
+  children: React.ReactNode;
+}) {
+  const [abierta, setAbierta] = useState(true);
+  return (
+    <section className="border-b bg-muted/40 lg:col-start-1 lg:row-span-4 lg:row-start-1 lg:flex lg:min-h-0 lg:flex-col lg:overflow-y-auto lg:overscroll-contain lg:border-b-0 lg:border-r">
+      {title && (
+        <div className="flex items-center justify-between gap-2 px-4 pt-3 lg:px-6 lg:pt-6">
+          <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Icon className="h-3.5 w-3.5" />
+            </span>
+            {title}
+          </p>
+          <button
+            type="button"
+            onClick={() => setAbierta((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-full bg-background/70 px-3 py-1.5 text-xs font-medium text-muted-foreground ring-1 ring-border transition-colors hover:text-foreground lg:hidden"
+            aria-expanded={abierta}
+          >
+            {abierta ? "Ocultar" : "Mostrar"}
+            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", abierta && "rotate-180")} />
+          </button>
+        </div>
+      )}
+      {/* Se oculta con CSS (no se desmonta) para no perder subidas en curso. */}
+      <div className={cn("w-full px-4 pb-4 pt-3 lg:my-auto lg:px-6 lg:pb-6", !abierta && "hidden lg:block")}>
+        <div className="rounded-2xl border bg-card p-3 shadow-sm sm:p-4">{children}</div>
+      </div>
+    </section>
   );
 }
 
@@ -195,290 +272,317 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
   const feedback = video.etapa === "edicion" ? video.feedback_cliente || video.feedback_interno : null;
   const feedbackDe = video.feedback_cliente ? "el cliente" : "producción";
   const trabado = !isCliente && estaTrabado(video, settings.dias_alerta);
-  const avanzado = ["revision_interna", "revision_cliente", "para_publicar", "publicado"].includes(video.etapa);
   const filma = quienFilma(cliente);
   const delCliente = (video.attachments_crudo ?? []).filter((a) => a.origen === "cliente").length;
 
+  // El video final se muestra desde edición en adelante; antes, lo principal es el material crudo.
+  const finalPrimario = !ETAPAS_SIN_FINAL.includes(video.etapa);
+  const conPauta = video.etapa === "para_publicar" || video.etapa === "publicado";
+
+  const tabs: { id: TabFicha; label: string; icon: React.ElementType }[] = [
+    { id: "resumen", label: "Resumen", icon: ListChecks },
+    { id: "guion", label: "Guion", icon: Sparkles },
+    { id: "texto", label: "Texto", icon: Copy },
+    ...(conPauta ? [{ id: "pauta" as const, label: "Pauta", icon: TrendingUp }] : []),
+    ...(finalPrimario ? [{ id: "archivos" as const, label: "Archivos", icon: Clapperboard }] : []),
+    { id: "historial", label: "Historial", icon: History },
+  ];
+  const [tabElegida, setTab] = useState<TabFicha>(() => tabInicial(video, !!feedback));
+  useEffect(() => {
+    setTab(tabInicial(video, !!feedback));
+    // Solo al cambiar de video: si cambia la etapa con la ficha abierta, no le movemos la pestaña.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [video.id]);
+  const tab: TabFicha = tabs.some((t) => t.id === tabElegida) ? tabElegida : "resumen";
+  const panel = (id: TabFicha) => cn("space-y-5", tab !== id && "hidden");
+
+  const crudoBlock = (
+    <MaterialSlot
+      video={video}
+      slot="crudo"
+      clienteNombre={cliente?.nombre ?? "Cliente"}
+      canUpload={isProd && ["planificado", "agendado", "material_cliente", "edicion"].includes(video.etapa)}
+      emptyText={video.filma_cliente ? "El cliente todavía no subió su material." : "Producción todavía no subió el material filmado."}
+    />
+  );
+
+  const primario = "shadow-md shadow-primary/25";
+
   return (
     <>
-      <SheetHeader className="space-y-2 border-b px-5 pb-4 pt-5 text-left">
-        <div className="flex flex-wrap items-center gap-2 pr-8">
-          <ClienteTag cliente={cliente} size="md" />
-          <span className="text-muted-foreground/50">·</span>
-          <VideoMesFecha video={video} editable={isProd} uid={uid} />
-          {video.extra && (
-            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-              EXTRA
-            </span>
-          )}
-        </div>
-        <SheetTitle className="text-xl leading-tight">{video.titulo}</SheetTitle>
-        <SheetDescription asChild>
-          <div className="flex flex-wrap items-center gap-2">
-            <EtapaBadge etapa={video.etapa} vista={isCliente ? "cliente" : "equipo"} />
-            {!isCliente && <EntregaChip video={video} />}
-            {isProd && video.etapa === "edicion" && (
-              <button type="button" onClick={() => setEntregaDlg("cambiar")} className="text-xs text-primary underline-offset-2 hover:underline">
-                {video.entrega_edicion ? "Cambiar fecha" : "Poner fecha de entrega"}
-              </button>
-            )}
-            {!isCliente && video.etapa !== "publicado" && (
-              <span className={cn("text-xs", trabado ? "font-medium text-warning" : "text-muted-foreground")}>
-                {trabado && <AlertTriangle className="mr-1 inline h-3 w-3" />}
-                {diasEnEtapa(video) === 1 ? "1 día" : `${diasEnEtapa(video)} días`} en esta etapa · le toca{" "}
-                {info.responsable === "cliente" ? "al cliente" : `a ${roleNombre(info.responsable)}`}
+      {/* Encabezado: cliente, plan/mes, título, estado y cerrar. */}
+      <header className="shrink-0 border-b px-4 pb-4 pt-[max(0.875rem,env(safe-area-inset-top))] lg:col-start-2 lg:row-start-1 lg:border-b-0 lg:px-7 lg:pb-2 lg:pt-6">
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1 space-y-2.5 lg:space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex min-w-0 items-center rounded-full bg-muted/60 px-3 py-1">
+                <ClienteTag cliente={cliente} size="md" className="font-medium text-foreground" />
               </span>
-            )}
+              <VideoMesFecha video={video} editable={isProd} uid={uid} />
+              {video.extra && (
+                <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-semibold text-primary">
+                  EXTRA
+                </span>
+              )}
+            </div>
+            <DialogPrimitive.Title className="text-xl font-bold leading-tight tracking-tight lg:text-[28px]">
+              {video.titulo}
+            </DialogPrimitive.Title>
+            <DialogPrimitive.Description asChild>
+              <div className="flex flex-wrap items-center gap-2">
+                <EtapaBadge etapa={video.etapa} vista={isCliente ? "cliente" : "equipo"} />
+                {!isCliente && <EntregaChip video={video} />}
+                {isProd && video.etapa === "edicion" && (
+                  <button type="button" onClick={() => setEntregaDlg("cambiar")} className="text-xs text-primary underline-offset-2 hover:underline">
+                    {video.entrega_edicion ? "Cambiar fecha" : "Poner fecha de entrega"}
+                  </button>
+                )}
+                {!isCliente && video.etapa !== "publicado" && (
+                  <span className={cn("text-xs", trabado ? "font-medium text-warning" : "text-muted-foreground")}>
+                    {trabado && <AlertTriangle className="mr-1 inline h-3 w-3" />}
+                    {diasEnEtapa(video) === 1 ? "1 día" : `${diasEnEtapa(video)} días`} en esta etapa · le toca{" "}
+                    {info.responsable === "cliente" ? "al cliente" : `a ${roleNombre(info.responsable)}`}
+                  </span>
+                )}
+              </div>
+            </DialogPrimitive.Description>
           </div>
-        </SheetDescription>
-      </SheetHeader>
+          <DialogPrimitive.Close
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/70 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Cerrar"
+          >
+            <X className="h-5 w-5" />
+          </DialogPrimitive.Close>
+        </div>
+      </header>
 
-      <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
-        {feedback && !isCliente && (
-          <div className="rounded-xl border border-orange-500/40 bg-orange-500/[0.08] p-3">
-            <p className="flex items-center gap-1.5 text-xs font-semibold text-orange-700 dark:text-orange-300">
-              <MessageSquareWarning className="h-3.5 w-3.5" />
-              Cambios pedidos por {feedbackDe}
-            </p>
-            <p className="mt-1 whitespace-pre-wrap text-sm">{feedback}</p>
-            {(video.feedback_marcas?.length ?? 0) > 0 && <MarcasEdicion video={video} marcas={video.feedback_marcas!} />}
-            {video.feedback_cliente && (
-              <HablarConCliente
-                proyectoId={video.proyecto_id}
-                referencia={{ tipo: "video", id: video.id, titulo: video.titulo, detalle: etapaInfo(video.etapa).label, correccion: video.feedback_cliente }}
-                className="mt-2 h-8 bg-background/60 text-xs"
-              />
-            )}
-          </div>
-        )}
-
-        {!isCliente && video.etapa === "revision_cliente" && <RecordatorioCliente video={video} />}
-
-        {!isCliente && (video.filma_cliente || delCliente > 0) && (
-          <p className="flex items-start gap-2 rounded-xl border border-violet-500/30 bg-violet-500/[0.07] px-3 py-2.5 text-xs">
-            <Smartphone className="mt-px h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-300" />
-            <span>
-              {video.etapa === "material_cliente"
-                ? delCliente
-                  ? `Lo filma el cliente: ya subió ${delCliente} archivo${delCliente === 1 ? "" : "s"}. Pasa a edición cuando avise que terminó (o mandalo vos).`
-                  : "Lo filma el cliente: estamos esperando que suba su material desde su panel."
-                : video.filma_cliente
-                  ? `Lo filmó el cliente${delCliente ? ` · ${delCliente} archivo${delCliente === 1 ? "" : "s"} suyo${delCliente === 1 ? "" : "s"} en el crudo` : ""}.`
-                  : `El cliente mandó ${delCliente} archivo${delCliente === 1 ? "" : "s"} de material extra (en el crudo).`}
-            </span>
-          </p>
-        )}
-
-        {!isCliente && video.material_base?.tipo === "existente" && (
-          <Block icon={FolderOpen} title="Material elegido por el cliente">
-            <MaterialElegido video={video} />
-          </Block>
-        )}
-        {!isCliente && video.material_base?.tipo === "nueva" && video.material_base.preferencia && video.etapa === "planificado" && (
-          <p className="flex items-start gap-2 rounded-xl border bg-muted/30 px-3 py-2.5 text-xs">
-            <CalendarDays className="mt-px h-3.5 w-3.5 shrink-0 text-primary" />
-            Para filmar, al cliente le quedan mejor: {video.material_base.preferencia.toLowerCase()}.
-          </p>
-        )}
-
-        {video.viatico && (["planificado", "agendado"].includes(video.etapa) || video.viatico.estado === "pendiente") && (
-          <ViaticoInfo video={video} esCliente={isCliente} />
-        )}
-
+      {/* En el celular scrollea todo junto (media, pestañas y contenido); en la compu cada columna por su lado. */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain lg:contents">
         {isCliente ? (
-          <ClienteView video={video} />
+          <ClienteView video={video} parte="media" />
+        ) : finalPrimario ? (
+          <MediaPanel icon={Film} title="Video final">
+            <MaterialSlot
+              video={video}
+              slot="finalizado"
+              clienteNombre={cliente?.nombre ?? "Cliente"}
+              canUpload={(isEditor && video.etapa === "edicion") || isAdmin}
+              emptyText="La edición todavía no subió el video."
+            />
+          </MediaPanel>
         ) : (
-          <>
-            {avanzado ? (
-              <>
-                {/* Ya hay video final: lo primero es verlo */}
-                {!["planificado", "agendado", "material_cliente"].includes(video.etapa) && (
-              <Block icon={Film} title="Video final">
-                <MaterialSlot
-                  video={video}
-                  slot="finalizado"
-                  clienteNombre={cliente?.nombre ?? "Cliente"}
-                  canUpload={(isEditor && video.etapa === "edicion") || isAdmin}
-                  emptyText="La edición todavía no subió el video."
-                />
-              </Block>
-            )}
-                <CopyBlock video={video} editable={isProd || isEditor} uid={uid} />
-                {(video.etapa === "para_publicar" || video.etapa === "publicado") && (
-              <PublicacionBlock
-                video={video}
-                canEdit={isPauta}
-                onPauta={() => setPautaOpen(true)}
-                onResultados={() => setResultadosOpen(true)}
-              />
-            )}
-                
-                <details className="group rounded-xl border px-3 py-2">
-                  <summary className="cursor-pointer select-none text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Idea, rodaje y material crudo
-                  </summary>
-                  <div className="mt-4 space-y-6 pb-2">
-                    <IdeaBlock video={video} editable={isProd} uid={uid} />
-                <GuionBlock video={video} editable={isProd} />
-                    {(rodaje || video.etapa === "planificado") && (
-              <Block
-                icon={CalendarDays}
-                title="Rodaje"
-                actions={
-                  isProd && (
-                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setRodajeOpen(true)}>
-                      {rodaje ? "Editar" : "Agendar"}
-                    </Button>
-                  )
-                }
-              >
-                {rodaje ? (
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border p-3 text-sm">
-                    <span className="inline-flex items-center gap-1.5">
-                      <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                      {fechaCorta(rodaje.fecha)} {rodaje.hora ?? ""}
-                    </span>
-                    {rodaje.lugar && (
-                      <span className="inline-flex items-center gap-1.5">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                        {rodaje.lugar}
-                      </span>
+          <MediaPanel icon={Clapperboard} title="Material crudo">
+            {crudoBlock}
+          </MediaPanel>
+        )}
+
+        {!isCliente && (
+          <div className="sticky top-0 z-10 border-b bg-background/95 px-4 py-2 backdrop-blur lg:static lg:col-start-2 lg:row-start-2 lg:border-b lg:bg-transparent lg:px-7 lg:pb-3 lg:pt-2 lg:backdrop-blur-none">
+            <div role="tablist" aria-label="Secciones del video" className="flex gap-1 overflow-x-auto rounded-2xl bg-muted/60 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {tabs.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === t.id}
+                  onClick={() => setTab(t.id)}
+                  className={cn(
+                    "inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-medium transition-all",
+                    tab === t.id
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <t.icon className={cn("h-3.5 w-3.5", tab === t.id && "text-primary")} />
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="px-4 py-5 lg:col-start-2 lg:row-start-3 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:px-7 lg:py-6">
+          {isCliente ? (
+            <div className="space-y-5">
+              {video.viatico && (["planificado", "agendado"].includes(video.etapa) || video.viatico.estado === "pendiente") && (
+                <ViaticoInfo video={video} esCliente={isCliente} />
+              )}
+              <ClienteView video={video} parte="contenido" />
+            </div>
+          ) : (
+            <>
+              {/* Resumen: lo que hace falta ahora */}
+              <div role="tabpanel" className={panel("resumen")}>
+                {feedback && (
+                  <div className="rounded-2xl border border-orange-500/40 bg-orange-500/[0.08] p-4">
+                    <p className="flex items-center gap-1.5 text-xs font-semibold text-orange-700 dark:text-orange-300">
+                      <MessageSquareWarning className="h-3.5 w-3.5" />
+                      Cambios pedidos por {feedbackDe}
+                    </p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm">{feedback}</p>
+                    {(video.feedback_marcas?.length ?? 0) > 0 && <MarcasEdicion video={video} marcas={video.feedback_marcas!} />}
+                    {video.feedback_cliente && (
+                      <HablarConCliente
+                        proyectoId={video.proyecto_id}
+                        referencia={{ tipo: "video", id: video.id, titulo: video.titulo, detalle: etapaInfo(video.etapa).label, correccion: video.feedback_cliente }}
+                        className="mt-2 h-8 bg-background/60 text-xs"
+                      />
                     )}
-                    {rodaje.notas && <p className="w-full text-xs text-muted-foreground">{rodaje.notas}</p>}
                   </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Todavía sin rodaje agendado.</p>
                 )}
-              </Block>
-            )}
-                    <Block icon={Clapperboard} title="Material crudo">
-              <MaterialSlot
-                video={video}
-                slot="crudo"
-                clienteNombre={cliente?.nombre ?? "Cliente"}
-                canUpload={isProd && ["planificado", "agendado", "material_cliente", "edicion"].includes(video.etapa)}
-                emptyText={video.filma_cliente ? "El cliente todavía no subió su material." : "Producción todavía no subió el material filmado."}
-              />
-            </Block>
-                  </div>
-                </details>
-              </>
-            ) : (
-              <>
-                <IdeaBlock video={video} editable={isProd} uid={uid} />
-                <GuionBlock video={video} editable={isProd} />
+
+                {video.etapa === "revision_cliente" && <RecordatorioCliente video={video} />}
+
+                {(video.filma_cliente || delCliente > 0) && (
+                  <p className="flex items-start gap-2 rounded-2xl border border-violet-500/30 bg-violet-500/[0.07] px-3.5 py-3 text-xs">
+                    <Smartphone className="mt-px h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-300" />
+                    <span>
+                      {video.etapa === "material_cliente"
+                        ? delCliente
+                          ? `Lo filma el cliente: ya subió ${delCliente} archivo${delCliente === 1 ? "" : "s"}. Pasa a edición cuando avise que terminó (o mandalo vos).`
+                          : "Lo filma el cliente: estamos esperando que suba su material desde su panel."
+                        : video.filma_cliente
+                          ? `Lo filmó el cliente${delCliente ? ` · ${delCliente} archivo${delCliente === 1 ? "" : "s"} suyo${delCliente === 1 ? "" : "s"} en el crudo` : ""}.`
+                          : `El cliente mandó ${delCliente} archivo${delCliente === 1 ? "" : "s"} de material extra (en el crudo).`}
+                    </span>
+                  </p>
+                )}
+
+                {video.material_base?.tipo === "existente" && (
+                  <Block icon={FolderOpen} title="Material elegido por el cliente">
+                    <MaterialElegido video={video} />
+                  </Block>
+                )}
+                {video.material_base?.tipo === "nueva" && video.material_base.preferencia && video.etapa === "planificado" && (
+                  <p className="flex items-start gap-2 rounded-2xl bg-muted/60 px-3.5 py-3 text-xs">
+                    <CalendarDays className="mt-px h-3.5 w-3.5 shrink-0 text-primary" />
+                    Para filmar, al cliente le quedan mejor: {video.material_base.preferencia.toLowerCase()}.
+                  </p>
+                )}
+
+                {video.viatico && (["planificado", "agendado"].includes(video.etapa) || video.viatico.estado === "pendiente") && (
+                  <ViaticoInfo video={video} esCliente={isCliente} />
+                )}
+
                 {(rodaje || video.etapa === "planificado") && (
-              <Block
-                icon={CalendarDays}
-                title="Rodaje"
-                actions={
-                  isProd && (
-                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setRodajeOpen(true)}>
-                      {rodaje ? "Editar" : "Agendar"}
-                    </Button>
-                  )
-                }
-              >
-                {rodaje ? (
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border p-3 text-sm">
-                    <span className="inline-flex items-center gap-1.5">
-                      <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                      {fechaCorta(rodaje.fecha)} {rodaje.hora ?? ""}
-                    </span>
-                    {rodaje.lugar && (
-                      <span className="inline-flex items-center gap-1.5">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                        {rodaje.lugar}
-                      </span>
-                    )}
-                    {rodaje.notas && <p className="w-full text-xs text-muted-foreground">{rodaje.notas}</p>}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Todavía sin rodaje agendado.</p>
-                )}
-              </Block>
-            )}
-                <Block icon={Clapperboard} title="Material crudo">
-              <MaterialSlot
-                video={video}
-                slot="crudo"
-                clienteNombre={cliente?.nombre ?? "Cliente"}
-                canUpload={isProd && ["planificado", "agendado", "material_cliente", "edicion"].includes(video.etapa)}
-                emptyText={video.filma_cliente ? "El cliente todavía no subió su material." : "Producción todavía no subió el material filmado."}
-              />
-            </Block>
-                {!["planificado", "agendado", "material_cliente"].includes(video.etapa) && (
-              <Block icon={Film} title="Video final">
-                <MaterialSlot
-                  video={video}
-                  slot="finalizado"
-                  clienteNombre={cliente?.nombre ?? "Cliente"}
-                  canUpload={(isEditor && video.etapa === "edicion") || isAdmin}
-                  emptyText="La edición todavía no subió el video."
-                />
-              </Block>
-            )}
-                <CopyBlock video={video} editable={isProd || isEditor} uid={uid} />
-              </>
-            )}
-
-            <details className="group rounded-xl border px-3 py-2" open={isAdmin}>
-              <summary className="cursor-pointer select-none text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Equipo e historial
-              </summary>
-              <div className="mt-4 space-y-6 pb-2">
-            <TeamBlock video={video} editable={isProd} uid={uid} nombre={nombre} />
-
-            {isAdmin && (
-              <Block icon={Pencil} title="Solo para vos (admin)">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Select
-                    value={video.etapa}
-                    onValueChange={(v) =>
-                      run("forzar", () => forzarEtapa(video, v as EtapaVideo, uid), "Etapa cambiada")
+                  <Block
+                    icon={CalendarDays}
+                    title="Rodaje"
+                    actions={
+                      isProd && (
+                        <Button size="sm" variant="outline" className="h-8 rounded-xl text-xs" onClick={() => setRodajeOpen(true)}>
+                          {rodaje ? "Editar" : "Agendar"}
+                        </Button>
+                      )
                     }
                   >
-                    <SelectTrigger className="h-8 w-56 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ETAPAS.map((e) => (
-                        <SelectItem key={e.value} value={e.value}>
-                          Mover a: {e.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 text-xs text-destructive hover:text-destructive"
-                    onClick={() => setDeleteOpen(true)}
-                  >
-                    <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Borrar este video
-                  </Button>
-                </div>
-              </Block>
-            )}
+                    {rodaje ? (
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-2xl bg-muted/60 p-3 text-sm">
+                        <span className="inline-flex items-center gap-1.5">
+                          <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                          {fechaCorta(rodaje.fecha)} {rodaje.hora ?? ""}
+                        </span>
+                        {rodaje.lugar && (
+                          <span className="inline-flex items-center gap-1.5">
+                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                            {rodaje.lugar}
+                          </span>
+                        )}
+                        {rodaje.notas && <p className="w-full text-xs text-muted-foreground">{rodaje.notas}</p>}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Todavía sin rodaje agendado.</p>
+                    )}
+                  </Block>
+                )}
 
-            <Block icon={History} title="Historial">
-              <ol className="relative space-y-3 border-l pl-4">
-                {[...(video.historial ?? [])].reverse().map((h, i) => (
-                  <li key={i} className="text-xs">
-                    <span className="absolute -left-[4.5px] mt-1 h-2 w-2 rounded-full bg-primary/60" />
-                    <p className="font-medium text-foreground">{h.accion}</p>
-                    <p className="text-muted-foreground">
-                      {nombre(h.by)} · {fechaHora(h.at)}
-                    </p>
-                    {h.nota && <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground">“{h.nota}”</p>}
-                  </li>
-                ))}
-              </ol>
-            </Block>
+                <TeamBlock video={video} editable={isProd} uid={uid} nombre={nombre} />
               </div>
-            </details>
-          </>
-        )}
+
+              {/* Guion: idea, guion y tomas */}
+              <div role="tabpanel" className={panel("guion")}>
+                <IdeaBlock video={video} editable={isProd} uid={uid} />
+                <GuionBlock video={video} editable={isProd} />
+              </div>
+
+              {/* Texto del posteo */}
+              <div role="tabpanel" className={panel("texto")}>
+                <CopyBlock video={video} editable={isProd || isEditor} uid={uid} />
+              </div>
+
+              {/* Publicación, pauta y resultados */}
+              {conPauta && (
+                <div role="tabpanel" className={panel("pauta")}>
+                  <PublicacionBlock
+                    video={video}
+                    canEdit={isPauta}
+                    onPauta={() => setPautaOpen(true)}
+                    onResultados={() => setResultadosOpen(true)}
+                  />
+                </div>
+              )}
+
+              {/* Archivos: el crudo, cuando lo principal ya es el video final */}
+              {finalPrimario && (
+                <div role="tabpanel" className={panel("archivos")}>
+                  <Block icon={Clapperboard} title="Material crudo">
+                    {crudoBlock}
+                  </Block>
+                </div>
+              )}
+
+              {/* Historial (y lo de admin) */}
+              <div role="tabpanel" className={panel("historial")}>
+                {isAdmin && (
+                  <Block icon={Pencil} title="Solo para vos (admin)">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Select
+                        value={video.etapa}
+                        onValueChange={(v) =>
+                          run("forzar", () => forzarEtapa(video, v as EtapaVideo, uid), "Etapa cambiada")
+                        }
+                      >
+                        <SelectTrigger className="h-8 w-56 rounded-xl text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ETAPAS.map((e) => (
+                            <SelectItem key={e.value} value={e.value}>
+                              Mover a: {e.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 rounded-xl text-xs text-destructive hover:text-destructive"
+                        onClick={() => setDeleteOpen(true)}
+                      >
+                        <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Borrar este video
+                      </Button>
+                    </div>
+                  </Block>
+                )}
+
+                <Block icon={History} title="Historial">
+                  <ol className="relative space-y-3 border-l pl-4">
+                    {[...(video.historial ?? [])].reverse().map((h, i) => (
+                      <li key={i} className="text-xs">
+                        <span className="absolute -left-[4.5px] mt-1 h-2 w-2 rounded-full bg-primary/60" />
+                        <p className="font-medium text-foreground">{h.accion}</p>
+                        <p className="text-muted-foreground">
+                          {nombre(h.by)} · {fechaHora(h.at)}
+                        </p>
+                        {h.nota && <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground">“{h.nota}”</p>}
+                      </li>
+                    ))}
+                  </ol>
+                </Block>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Barra de acciones según rol + etapa */}
@@ -505,6 +609,7 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
               </Button>
             )}
             <Button
+              className={primario}
               disabled={!hasCrudo || busy === "edicion"}
               onClick={() => (soloPauta(cliente) ? void run("edicion", () => enviarAPauta(video, cliente, uid), "Enviado a pauta") : setEntregaDlg("enviar"))}
               title={!hasCrudo ? (soloPauta(cliente) ? "Primero subí el video que mandó el cliente" : "Primero subí el material crudo") : undefined}
@@ -517,6 +622,7 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
 
         {isEditor && video.etapa === "edicion" && (
           <Button
+            className={primario}
             disabled={!hasFinal || busy === "entregar"}
             onClick={() => run("entregar", () => entregarEdicion(video, cliente, uid), "Entregado para revisión")}
             title={!hasFinal ? "Subí el video final primero" : undefined}
@@ -532,6 +638,7 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
               Pedir cambios
             </Button>
             <Button
+              className={primario}
               disabled={busy === "aprobar"}
               onClick={() =>
                 run("aprobar", () => aprobarInterno(video, cliente, uid), "Enviado al cliente para aprobar")
@@ -558,7 +665,7 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
         )}
 
         {isProd && video.etapa === "revision_cliente" && (
-          <Button onClick={() => setLinkOpen(true)}>
+          <Button className={primario} onClick={() => setLinkOpen(true)}>
             <Link2 className="mr-2 h-4 w-4" /> Link para el cliente
           </Button>
         )}
@@ -582,13 +689,13 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
         {isCliente && video.etapa === "revision_cliente" && <ClienteActions video={video} onDone={onClose} />}
 
         {isPauta && video.etapa === "para_publicar" && (
-          <Button onClick={() => setPublicarOpen(true)}>
+          <Button className={primario} onClick={() => setPublicarOpen(true)}>
             <Send className="mr-2 h-4 w-4" /> Marcar publicado
           </Button>
         )}
 
         {isPauta && video.etapa === "publicado" && (
-          <Button onClick={() => setResultadosOpen(true)}>
+          <Button className={primario} onClick={() => setResultadosOpen(true)}>
             <TrendingUp className="mr-2 h-4 w-4" /> Cargar resultados
           </Button>
         )}
@@ -658,6 +765,7 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
   );
 }
 
+
 /** Para el equipo: si al cliente ya le llegó el recordatorio automático de 48 h. */
 function RecordatorioCliente({ video }: { video: Video }) {
   const n = video.recordatorios_cliente ?? 0;
@@ -685,7 +793,7 @@ function ActionBar({ children }: { children: React.ReactNode }) {
   const items = (Array.isArray(children) ? children : [children]).flat().filter(Boolean);
   if (items.length === 0) return null;
   return (
-    <div className="flex flex-wrap justify-end gap-2 border-t bg-card/95 px-5 py-3 backdrop-blur">
+    <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t bg-card/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur lg:col-start-2 lg:row-start-4 lg:px-7 lg:pb-4 lg:pt-4 [&>button]:rounded-2xl">
       {children}
     </div>
   );
@@ -1279,15 +1387,58 @@ function TeamBlock({
 // Vista del cliente
 // ---------------------------------------------------------------------------
 
-function ClienteView({ video }: { video: Video }) {
+/** Vista del cliente. `parte="media"` es la columna grande (video o su material); `parte="contenido"`, el resto. */
+function ClienteView({ video, parte }: { video: Video; parte: "media" | "contenido" }) {
   const { clienteById } = useRedes();
   const cliente = clienteById(video.proyecto_id);
   const visibleFinal = ["revision_cliente", "para_publicar", "publicado"].includes(video.etapa);
+  const acepta = aceptaMaterialCliente(video, cliente);
+  // Lo grande: el video si ya lo puede ver; si no, donde sube su material; si no, el aviso de que estamos trabajando.
+  const media: "final" | "material" | "aviso" = visibleFinal ? "final" : acepta ? "material" : "aviso";
+  const aviso =
+    !visibleFinal && video.etapa !== "material_cliente" ? (
+      <div className="rounded-2xl bg-muted/60 p-4 text-sm text-muted-foreground">
+        Estamos trabajando en este video ({etapaInfo(video.etapa).clienteLabel.toLowerCase()}). Te avisamos
+        cuando esté listo para que lo veas.
+      </div>
+    ) : null;
+  const tituloMaterial = video.etapa === "material_cliente" ? "Tu material" : "Material extra";
+
+  if (parte === "media") {
+    if (media === "final")
+      return (
+        <MediaPanel icon={Film} title="Video">
+          <MaterialSlot
+            video={video}
+            slot="finalizado"
+            clienteNombre={cliente?.nombre ?? ""}
+            canUpload={false}
+            audience="client"
+          />
+        </MediaPanel>
+      );
+    if (media === "material")
+      return (
+        <MediaPanel icon={Clapperboard} title={tituloMaterial}>
+          <SubirMaterial video={video} />
+        </MediaPanel>
+      );
+    return (
+      <MediaPanel icon={Film}>
+        {aviso ?? (
+          <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
+            <Film className="h-8 w-8 text-muted-foreground/50" />
+            {etapaInfo(video.etapa).clienteLabel}
+          </div>
+        )}
+      </MediaPanel>
+    );
+  }
 
   return (
     <>
       {video.etapa === "revision_cliente" && (
-        <ol className="space-y-1.5 rounded-xl border border-primary/30 bg-primary/[0.06] p-3 text-sm">
+        <ol className="space-y-1.5 rounded-2xl border border-primary/30 bg-primary/[0.06] p-4 text-sm">
           {["Mirá el video completo.", "Leé el texto que va a acompañar la publicación.", "Abajo: tocá “Aprobar” o “Pedir cambios” y contanos qué."].map((t, i) => (
             <li key={t} className="flex items-start gap-2">
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
@@ -1298,24 +1449,9 @@ function ClienteView({ video }: { video: Video }) {
           ))}
         </ol>
       )}
-      {visibleFinal ? (
-        <Block icon={Film} title="Video">
-          <MaterialSlot
-            video={video}
-            slot="finalizado"
-            clienteNombre={cliente?.nombre ?? ""}
-            canUpload={false}
-            audience="client"
-          />
-        </Block>
-      ) : video.etapa === "material_cliente" ? null : (
-        <div className="rounded-xl border p-4 text-sm text-muted-foreground">
-          Estamos trabajando en este video ({etapaInfo(video.etapa).clienteLabel.toLowerCase()}). Te avisamos
-          cuando esté listo para que lo veas.
-        </div>
-      )}
-      {aceptaMaterialCliente(video, cliente) && (
-        <Block icon={Clapperboard} title={video.etapa === "material_cliente" ? "Tu material" : "Material extra"}>
+      {media !== "aviso" && aviso}
+      {acepta && media !== "material" && (
+        <Block icon={Clapperboard} title={tituloMaterial}>
           <SubirMaterial video={video} />
         </Block>
       )}
@@ -1331,7 +1467,7 @@ function ClienteView({ video }: { video: Video }) {
       )}
       {visibleFinal && video.copy && (
         <Block icon={Copy} title="Texto del posteo">
-          <p className="whitespace-pre-wrap rounded-xl border bg-muted/30 p-3 text-sm">{video.copy}</p>
+          <p className="whitespace-pre-wrap rounded-2xl bg-muted/60 p-3 text-sm">{video.copy}</p>
         </Block>
       )}
       {video.etapa === "publicado" && (
@@ -1376,10 +1512,10 @@ function ClienteActions({ video, onDone }: { video: Video; onDone: () => void })
         <StarRating value={rating} onChange={setRating} size="md" />
       </div>
       <div className="flex gap-2">
-        <Button variant="outline" onClick={() => setCambiosOpen(true)}>
+        <Button variant="outline" className="rounded-2xl" onClick={() => setCambiosOpen(true)}>
           Pedir cambios
         </Button>
-        <Button onClick={aprobar} disabled={saving}>
+        <Button className="rounded-2xl shadow-md shadow-primary/25" onClick={aprobar} disabled={saving}>
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
           Aprobar
         </Button>
