@@ -32,6 +32,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageShell, EmptyState } from "@/components/redes/PageShell";
+import { MiDia } from "@/components/redes/MiDia";
 import { ClienteTag } from "@/components/redes/ClienteTag";
 import { EnfoqueBadge, EstadoPiezaBadge, VerVersion, VersionImg, driveThumb } from "@/components/redes/PiezaDialogs";
 import { NotaDialog } from "@/components/redes/PautaDialogs";
@@ -317,6 +318,21 @@ export default function Piezas() {
         </>
       }
     >
+      {/* Diseño: lo más urgente que tiene para hacer o corregir. */}
+      {tieneRol("diseno") && role !== "admin" && (
+        <MiDia
+          items={piezas
+            .filter((p) => p.estado === "pagada" || p.estado === "en_proceso")
+            .map((p) => ({
+              id: p.id,
+              titulo: p.pedido.slice(0, 80),
+              clienteId: p.proyecto_id,
+              fecha: p.fecha_deseada,
+              tarea: p.estado === "pagada" ? "Para hacer" : (p.rondas ?? 0) > 0 || p.feedback_interno ? "Corregir" : "Diseñando",
+              onAbrir: () => setAbierta(p.id),
+            }))}
+        />
+      )}
       {todas.length === 0 ? (
         <EmptyState
           icon={Sparkles}

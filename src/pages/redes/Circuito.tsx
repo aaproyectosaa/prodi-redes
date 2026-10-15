@@ -10,7 +10,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PageShell } from "@/components/redes/PageShell";
-import { VideoCard } from "@/components/redes/VideoCard";
+import { VideoCard, useOpenVideo } from "@/components/redes/VideoCard";
+import { MiDia } from "@/components/redes/MiDia";
 import { PlanificarDialog, type ModoPlanificar } from "@/components/redes/PlanificarDialog";
 import { RodajeDialog } from "@/components/redes/RodajeDialog";
 import { useRedes } from "@/contexts/redes-data-context";
@@ -54,6 +55,22 @@ function TableroEquipo({ tablero }: { tablero: TableroRol }) {
     [videos, tablero, uid, cliente]
   );
   const borrar = useBorrarVideos(mios);
+  const abrirVideo = useOpenVideo();
+  // Mi día: lo que hoy le toca hacer a esta persona (su etapa), lo más urgente primero.
+  const miDia = useMemo(
+    () =>
+      mios
+        .filter((v) => v.etapa !== "publicado" && roles.includes(etapaInfo(v.etapa).responsable))
+        .map((v) => ({
+          id: v.id,
+          titulo: v.titulo,
+          clienteId: v.proyecto_id,
+          fecha: v.entrega_edicion ?? v.fecha_deseada,
+          tarea: etapaInfo(v.etapa).label,
+          onAbrir: () => abrirVideo(v.id),
+        })),
+    [mios, roles, abrirVideo]
+  );
 
   return (
     <PageShell
@@ -82,6 +99,7 @@ function TableroEquipo({ tablero }: { tablero: TableroRol }) {
       }
     >
       {esProd && <PlanesAviso />}
+      <MiDia items={miDia} />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <SelectorVista vista={vista} onChange={setVista} />
         {esProd && vista === "kanban" && borrar.boton}
