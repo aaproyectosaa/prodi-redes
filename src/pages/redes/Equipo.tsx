@@ -13,6 +13,7 @@ import {
   Trash2,
   UserCheck,
   UserX,
+  Building2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -120,14 +121,29 @@ export default function Equipo() {
     })
     .sort((a, b) => Number(esPendiente(b)) - Number(esPendiente(a)) || (a.nombre ?? "").localeCompare(b.nombre ?? ""));
 
-  // Agrupa lo filtrado por rol principal (mismo orden adentro de cada grupo).
-  const grupos = ORDEN_GRUPOS.concat(filtrados.map(grupoDe).filter((g) => !ORDEN_GRUPOS.includes(g)))
-    .filter((g, i, a) => a.indexOf(g) === i)
-    .map((g) => [g, filtrados.filter((p) => grupoDe(p) === g)] as const)
-    .filter(([, gente]) => gente.length > 0);
-
   const clientesDe = (p: Profile) =>
     clientes.filter((c) => Object.values(c.team_roles ?? {}).some((ids) => (ids ?? []).includes(p.id)));
+
+  // La gente de los clientes va por empresa (una empresa tiene varias personas); el equipo, por rol.
+  const empresaDe = (p: Profile): string | null => {
+    if (p.role !== "cliente" && p.role !== "contacto") return null;
+    const id = (p.role === "contacto" ? p.proyecto_id : null) ?? clientesDe(p)[0]?.id ?? null;
+    return `empresa:${id ?? "-"}`;
+  };
+  const claveGrupo = (p: Profile) => (esPendiente(p) ? "pending" : empresaDe(p) ?? grupoDe(p));
+  const nombreEmpresa = (clave: string) => {
+    const id = clave.slice(8);
+    return id === "-" ? "Sin empresa asignada" : clientes.find((c) => c.id === id)?.nombre ?? "Empresa";
+  };
+  const empresas = Array.from(new Set(filtrados.map(claveGrupo).filter((g) => g.startsWith("empresa:")))).sort(
+    (a, b) => Number(a === "empresa:-") - Number(b === "empresa:-") || nombreEmpresa(a).localeCompare(nombreEmpresa(b))
+  );
+  const grupos = ORDEN_GRUPOS.filter((g) => g !== "cliente" && g !== "contacto")
+    .concat(filtrados.map(claveGrupo).filter((g) => !ORDEN_GRUPOS.includes(g) && !g.startsWith("empresa:")))
+    .concat(empresas)
+    .filter((g, i, a) => a.indexOf(g) === i)
+    .map((g) => [g, filtrados.filter((p) => claveGrupo(p) === g)] as const)
+    .filter(([, gente]) => gente.length > 0);
 
   const accion = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true);
@@ -190,12 +206,24 @@ export default function Equipo() {
         <div className="space-y-6">
           {grupos.map(([grupo, gente]) => (
             <section key={grupo} className="space-y-2.5">
-              <div className="flex items-center gap-2">
-                <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider", colorRol(grupo))}>
-                  {grupo === "pending" ? "Sin rol" : getRoleInfo(grupo as Profile["role"]).label}
-                </span>
-                <span className="text-xs tabular-nums text-muted-foreground">{gente.length}</span>
-              </div>
+              {grupo.startsWith("empresa:") ? (
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <Building2 className="h-4 w-4" />
+                  </span>
+                  <p className="font-semibold">{nombreEmpresa(grupo)}</p>
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {gente.length} {gente.length === 1 ? "persona" : "personas"}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider", colorRol(grupo))}>
+                    {grupo === "pending" ? "Sin rol" : getRoleInfo(grupo as Profile["role"]).label}
+                  </span>
+                  <span className="text-xs tabular-nums text-muted-foreground">{gente.length}</span>
+                </div>
+              )}
               <div className="divide-y overflow-hidden rounded-2xl border bg-card">
                 {gente.map((p) => {
             const pendiente = esPendiente(p);
