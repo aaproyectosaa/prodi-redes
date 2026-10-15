@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { AccionTile, GrillaAcciones } from "@/components/redes/AccionesTablero";
 import { AlertTriangle, CalendarPlus, Clapperboard, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,21 +80,28 @@ function TableroEquipo({ tablero }: { tablero: TableroRol }) {
       className="max-w-none"
       actions={
         <>
-          <FiltrosTablero {...filtros} clientes={clientes} conOrden={vista === "kanban"} />
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+            <FiltrosTablero {...filtros} clientes={clientes} conOrden={vista === "kanban"} />
+          </div>
           {esProd && (
-            <>
-              <BotonArmarMes clienteId={cliente === "todos" ? null : cliente} />
-              <BotonNuevaPieza clienteId={cliente === "todos" ? null : cliente} />
-              <Button variant="outline" onClick={() => setRodaje(true)}>
-                <CalendarPlus className="mr-2 h-4 w-4" /> Agendar rodaje
-              </Button>
-              <Button variant="outline" onClick={() => setPlanificar("filmado")} title="Fuiste a grabar sin planificar: creás el video y subís el material">
-                <Clapperboard className="mr-2 h-4 w-4" /> Ya lo filmé
-              </Button>
-              <Button onClick={() => setPlanificar("planificar")}>
+            <GrillaAcciones>
+              <BotonArmarMes tile clienteId={cliente === "todos" ? null : cliente} />
+              <BotonNuevaPieza tile clienteId={cliente === "todos" ? null : cliente} />
+              <AccionTile icon={CalendarPlus} label="Rodaje" color="from-amber-400 to-orange-500" onClick={() => setRodaje(true)} title="Agendar rodaje" />
+              <AccionTile
+                icon={Clapperboard}
+                label="Ya lo filmé"
+                color="from-sky-500 to-blue-600"
+                onClick={() => setPlanificar("filmado")}
+                title="Fuiste a grabar sin planificar: creás el video y subís el material"
+              />
+              <Button
+                onClick={() => setPlanificar("planificar")}
+                className="col-span-4 h-11 rounded-2xl bg-gradient-to-r from-[#6F40FC] to-[#9B6BFF] text-base font-semibold shadow-md shadow-primary/25 sm:col-auto sm:h-10 sm:rounded-xl sm:text-sm"
+              >
                 <Plus className="mr-2 h-4 w-4" /> Planificar
               </Button>
-            </>
+            </GrillaAcciones>
           )}
         </>
       }
@@ -232,16 +240,23 @@ function CircuitoCompleto() {
       className="max-w-none"
       actions={
         canManageProduction(role) && (
-          <>
-            <BotonArmarMes clienteId={cliente === "todos" ? null : cliente} />
-            <BotonNuevaPieza clienteId={cliente === "todos" ? null : cliente} />
-            <Button variant="outline" onClick={() => setPlanificar("filmado")} title="Fuiste a grabar sin planificar: creás el video y subís el material">
-              <Clapperboard className="mr-2 h-4 w-4" /> Ya lo filmé
-            </Button>
-            <Button onClick={() => setPlanificar("planificar")}>
-              <Plus className="mr-2 h-4 w-4" /> Planificar
-            </Button>
-          </>
+          <GrillaAcciones className="grid-cols-3">
+            <BotonArmarMes tile clienteId={cliente === "todos" ? null : cliente} />
+            <BotonNuevaPieza tile clienteId={cliente === "todos" ? null : cliente} />
+            <AccionTile
+              icon={Clapperboard}
+              label="Ya lo filmé"
+              color="from-sky-500 to-blue-600"
+              onClick={() => setPlanificar("filmado")}
+              title="Fuiste a grabar sin planificar: creás el video y subís el material"
+            />
+            <Button
+                onClick={() => setPlanificar("planificar")}
+                className="col-span-3 h-11 rounded-2xl bg-gradient-to-r from-[#6F40FC] to-[#9B6BFF] text-base font-semibold shadow-md shadow-primary/25 sm:col-auto sm:h-10 sm:rounded-xl sm:text-sm"
+              >
+                <Plus className="mr-2 h-4 w-4" /> Planificar
+              </Button>
+          </GrillaAcciones>
         )
       }
     >

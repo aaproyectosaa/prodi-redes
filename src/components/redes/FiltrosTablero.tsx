@@ -49,8 +49,8 @@ export function FiltrosTablero({
     <>
       {clientes.length > 1 && (
         <Select value={cliente} onValueChange={setCliente}>
-          <SelectTrigger className="w-full sm:w-52" aria-label="Empresa">
-            <Building2 className="mr-1.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <SelectTrigger className="h-10 w-full min-w-0 gap-1 rounded-xl bg-card px-3 text-[13px] sm:w-52 sm:text-sm [&>span]:truncate" aria-label="Empresa">
+            <Building2 className="h-4 w-4 shrink-0 text-primary" />
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -67,8 +67,8 @@ export function FiltrosTablero({
       )}
       {conOrden && (
         <Select value={orden} onValueChange={(v) => setOrden(v as OrdenTablero)}>
-          <SelectTrigger className="w-full sm:w-52" aria-label="Orden">
-            <ArrowDownWideNarrow className="mr-1.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <SelectTrigger className="h-10 w-full min-w-0 gap-1 rounded-xl bg-card px-3 text-[13px] sm:w-52 sm:text-sm [&>span]:truncate" aria-label="Orden">
+            <ArrowDownWideNarrow className="h-4 w-4 shrink-0 text-primary" />
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

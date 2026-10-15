@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AccionTile } from "@/components/redes/AccionesTablero";
 import { Check, ChevronDown, Gift, ImagePlus, Loader2, Megaphone, Receipt, Search, ShoppingBag, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -385,14 +386,18 @@ function Paso({ n, titulo, ayuda, children }: { n: number; titulo: string; ayuda
  * Botón "Pieza gráfica" para cargar una pieza desde cualquier pantalla de la productora (Mis videos, la ficha
  * del cliente). Al cargarla abre la pieza en Piezas gráficas.
  */
-export function BotonNuevaPieza({ clienteId, className }: { clienteId?: string | null; className?: string }) {
+export function BotonNuevaPieza({ clienteId, className, tile }: { clienteId?: string | null; className?: string; tile?: boolean }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)} className={className} title="Cargar un pedido de pieza gráfica para diseño (con las fotos)">
-        <ImagePlus className="mr-2 h-4 w-4" /> Pieza gráfica
-      </Button>
+      {tile ? (
+        <AccionTile icon={ImagePlus} label="Pieza gráfica" color="from-pink-500 to-rose-600" onClick={() => setOpen(true)} title="Cargar un pedido de pieza gráfica para diseño (con las fotos)" />
+      ) : (
+        <Button variant="outline" onClick={() => setOpen(true)} className={className} title="Cargar un pedido de pieza gráfica para diseño (con las fotos)">
+          <ImagePlus className="mr-2 h-4 w-4" /> Pieza gráfica
+        </Button>
+      )}
       <NuevaPiezaEquipo open={open} onOpenChange={setOpen} clienteInicial={clienteId ?? null} onCreada={(id) => navigate(`/piezas?pieza=${id}`)} />
     </>
   );

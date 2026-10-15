@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AccionTile } from "@/components/redes/AccionesTablero";
 import { useSearchParams } from "react-router-dom";
 import { ChevronRight, Clock, MessageSquareWarning, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,13 +11,17 @@ import { cambiosPendientes, mesParaPlanificar, usePlanesDelMes } from "@/lib/red
 import { cn } from "@/lib/utils";
 
 /** Botón "Armar el mes" para la cabecera del kanban (producción y admin). */
-export function BotonArmarMes({ clienteId, className }: { clienteId?: string | null; className?: string }) {
+export function BotonArmarMes({ clienteId, className, tile }: { clienteId?: string | null; className?: string; tile?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)} className={cn("border-primary/40", className)}>
-        <Sparkles className="mr-2 h-4 w-4 text-primary" /> Armar el mes con IA
-      </Button>
+      {tile ? (
+        <AccionTile icon={Sparkles} label="Mes con IA" color="from-violet-500 to-fuchsia-500" onClick={() => setOpen(true)} title="Armar el mes con IA" />
+      ) : (
+        <Button variant="outline" onClick={() => setOpen(true)} className={cn("border-primary/40", className)}>
+          <Sparkles className="mr-2 h-4 w-4 text-primary" /> Armar el mes con IA
+        </Button>
+      )}
       <PlanMesDialog open={open} onOpenChange={setOpen} clienteId={clienteId} />
     </>
   );
