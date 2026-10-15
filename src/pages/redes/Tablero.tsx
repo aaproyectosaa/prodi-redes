@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { BotonMiDia } from "@/components/redes/MiDia";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowDownRight,
@@ -193,6 +194,7 @@ export default function Tablero() {
       subtitle={`Cómo va el negocio · ${mesLabel(mes)}`}
       actions={<MesNav mes={mes} setMes={setMes} max={mesHoy} />}
     >
+      <BotonMiDia />
       <div className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
           label={actual.estimado ? "A facturar este mes" : "Facturado este mes"}

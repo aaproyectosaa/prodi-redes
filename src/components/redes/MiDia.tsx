@@ -1,16 +1,25 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useNavigate } from "react-router-dom";
 import { ArrowRight, CalendarClock, ChevronDown, Sun, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { ClienteTag } from "@/components/redes/ClienteTag";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
-import { hoyISO } from "@/lib/redes/format";
+import { etapaInfo } from "@/lib/redes/etapas";
+import { TIPOS_OBLIGACION, useFacturas, useObligaciones, vencimientos } from "@/lib/redes/facturacion";
+import { hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
+import { tableroDe } from "@/lib/redes/tableros";
+import { useTareas } from "@/lib/redes/tareas";
 import { cn } from "@/lib/utils";
 
 export interface ItemDia {
   id: string;
   titulo: string;
-  clienteId: string;
+  /** Cliente (si es de uno); si no, se muestra `sub`. */
+  clienteId?: string | null;
+  sub?: string;
+  /** Texto de la etiqueta en vez de la fecha (ej. "Hoy 15:00"). */
+  etiqueta?: string;
   /** Para cuándo (YYYY-MM-DD…), o null si no tiene fecha. */
   fecha: string | null | undefined;
   /** Qué hay que hacer ("Editar", "Revisar", "Publicar"…). */
@@ -50,7 +59,7 @@ function cuando(fecha: string | null | undefined): { texto: string; tono: "rojo"
  * tablero (una vez por día, o de nuevo si le entra algo nuevo y urgente). Al cerrarlo queda una pastillita
  * "Mi día" para volver a abrirlo. Ordenado por fecha (sin fecha, al final).
  */
-export function MiDia({ items }: { items: ItemDia[] }) {
+function MiDiaCartel({ items }: { items: ItemDia[] }) {
   const { clienteById } = useRedes();
   const { profile } = useUserProfileContext();
   const nombre = (profile?.nombre ?? "").split(" ")[0];
@@ -65,6 +74,14 @@ export function MiDia({ items }: { items: ItemDia[] }) {
   // Ya lo vio hoy y no le entró nada nuevo desde entonces.
   const yaVisto = !!visto && visto.fecha === hoyISO() && primeros.every((it) => visto.ids.includes(it.id));
   const clave = primeros.map((it) => it.id).join(",");
+  useEffect(() => {
+    publicar({ total: items.length, atrasados });
+  }, [items.length, atrasados]);
+  useEffect(() => {
+    const abrir = () => setAbierto(true);
+    window.addEventListener(EVENTO, abrir);
+    return () => window.removeEventListener(EVENTO, abrir);
+  }, []);
 
   // Salta solo, un ratito después de entrar y sin pisar otro cartel (novedades, etc.).
   useEffect(() => {
@@ -93,18 +110,6 @@ export function MiDia({ items }: { items: ItemDia[] }) {
   return (
     <>
       <style>{SOL_CSS}</style>
-      <button
-        type="button"
-        onClick={() => setAbierto(true)}
-        className="mb-4 inline-flex items-center gap-2 rounded-full border bg-card px-3.5 py-1.5 text-sm font-medium transition-colors hover:border-primary/50"
-      >
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-orange-500 text-white">
-          <Sun className="h-3 w-3" />
-        </span>
-        Mi día · {items.length}
-        {atrasados > 0 && <span className="rounded-full bg-destructive px-1.5 text-[10px] font-bold text-white">{atrasados} atrasado{atrasados === 1 ? "" : "s"}</span>}
-        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-      </button>
 
       <Dialog open={abierto} onOpenChange={(v) => (v ? setAbierto(true) : cerrar())}>
         <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md gap-0 overflow-hidden rounded-[2rem] border-0 p-0 [&>button]:hidden">
@@ -166,8 +171,8 @@ export function MiDia({ items }: { items: ItemDia[] }) {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold">{it.titulo}</span>
                       <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                        <ClienteTag cliente={clienteById(it.clienteId)} />
-                        <span className="shrink-0">· {it.tarea}</span>
+                        {it.clienteId ? <ClienteTag cliente={clienteById(it.clienteId)} /> : it.sub ? <span className="truncate">{it.sub}</span> : null}
+                        <span className="shrink-0">{it.clienteId || it.sub ? "· " : ""}{it.tarea}</span>
                       </span>
                     </span>
                     <span
@@ -176,7 +181,7 @@ export function MiDia({ items }: { items: ItemDia[] }) {
                         c.tono === "rojo" ? "bg-destructive text-white" : c.tono === "naranja" ? "bg-warning/25 text-foreground" : "bg-muted text-muted-foreground"
                       )}
                     >
-                      <CalendarClock className="h-3 w-3" /> {c.texto}
+                      <CalendarClock className="h-3 w-3" /> {c.tono === "rojo" ? c.texto : (it.etiqueta ?? c.texto)}
                     </span>
                     <ArrowRight className="hidden h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 sm:block" />
                   </button>
@@ -186,7 +191,7 @@ export function MiDia({ items }: { items: ItemDia[] }) {
           </ol>
 
           <div className="space-y-2 bg-background px-3 pb-4">
-            {resto > 0 && <p className="text-center text-xs text-muted-foreground">y {resto} más en tu tablero</p>}
+            {resto > 0 && <p className="text-center text-xs text-muted-foreground">y {resto} más para después</p>}
             <button
               type="button"
               onClick={cerrar}
@@ -209,3 +214,141 @@ const SOL_CSS = `
 @keyframes sol-nube { 0% { transform: translateX(0); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { transform: translateX(560px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .sol-rayos, .sol-nube { animation: none; } }
 `;
+
+// ---------------------------------------------------------------------------
+// La pastillita "Mi día · N" en las páginas: abre el cartel.
+
+const EVENTO = "prodi-mi-dia";
+let estado = { total: 0, atrasados: 0 };
+const oyentes = new Set<() => void>();
+function publicar(e: typeof estado) {
+  if (e.total === estado.total && e.atrasados === estado.atrasados) return;
+  estado = e;
+  oyentes.forEach((f) => f());
+}
+const suscribir = (f: () => void) => {
+  oyentes.add(f);
+  return () => oyentes.delete(f);
+};
+
+export function BotonMiDia() {
+  const e = useSyncExternalStore(suscribir, () => estado);
+  if (!e.total) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => window.dispatchEvent(new Event(EVENTO))}
+      className="mb-4 inline-flex items-center gap-2 rounded-full border bg-card px-3.5 py-1.5 text-sm font-medium transition-colors hover:border-primary/50"
+    >
+      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-orange-500 text-white">
+        <Sun className="h-3 w-3" />
+      </span>
+      Mi día · {e.total}
+      {e.atrasados > 0 && <span className="rounded-full bg-destructive px-1.5 text-[10px] font-bold text-white">{e.atrasados} atrasado{e.atrasados === 1 ? "" : "s"}</span>}
+      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Qué le toca a cada uno, según sus roles. Se monta una vez en el sistema (AppLayout).
+
+const EQUIPO = ["admin", "productor", "editor", "pauta", "diseno", "administracion", "programador"];
+
+export function MiDia() {
+  const navigate = useNavigate();
+  const { user, role, roles } = useUserProfileContext();
+  const { videos, piezas, reuniones } = useRedes();
+  const uid = user?.uid ?? "";
+  const misRoles = useMemo(() => [...new Set([role, ...(roles ?? [])].filter(Boolean).map(String))], [role, roles]);
+  const delEquipo = misRoles.some((r) => EQUIPO.includes(r));
+  const plata = misRoles.includes("admin") || misRoles.includes("administracion");
+  const { mias } = useTareas(delEquipo ? uid : undefined);
+  const { facturas } = useFacturas(sumarMeses(mesActual(), -3), plata);
+  const obligaciones = useObligaciones(plata);
+
+  const items = useMemo(() => {
+    if (!delEquipo || !uid) return [];
+    const hoy = hoyISO();
+    const out: ItemDia[] = [];
+    // Videos: donde le toca hacer algo a esta persona (su etapa), en cada tablero que tenga.
+    const vistos = new Set<string>();
+    for (const r of misRoles) {
+      const tablero = tableroDe(r as never);
+      if (!tablero) continue;
+      for (const v of videos) {
+        if (vistos.has(v.id) || v.etapa === "publicado" || etapaInfo(v.etapa).responsable !== r || !tablero.esMio(v, uid)) continue;
+        vistos.add(v.id);
+        out.push({
+          id: v.id,
+          titulo: v.titulo,
+          clienteId: v.proyecto_id,
+          fecha: v.entrega_edicion ?? v.fecha_deseada,
+          tarea: etapaInfo(v.etapa).label,
+          onAbrir: () => navigate(`/videos?video=${v.id}`),
+        });
+      }
+    }
+    // Diseño: piezas para hacer o corregir.
+    if (misRoles.includes("diseno")) {
+      for (const p of piezas.filter((p) => p.estado === "pagada" || p.estado === "en_proceso")) {
+        out.push({
+          id: p.id,
+          titulo: p.pedido.slice(0, 80),
+          clienteId: p.proyecto_id,
+          fecha: p.fecha_deseada,
+          tarea: p.estado === "pagada" ? "Para hacer" : (p.rondas ?? 0) > 0 || p.feedback_interno ? "Corregir" : "Diseñando",
+          onAbrir: () => navigate(`/piezas?pieza=${p.id}`),
+        });
+      }
+    }
+    // Productor: piezas que diseño terminó y tiene que revisar.
+    if (misRoles.includes("productor")) {
+      for (const p of piezas.filter((p) => p.estado === "revision_interna")) {
+        out.push({ id: p.id, titulo: p.pedido.slice(0, 80), clienteId: p.proyecto_id, fecha: p.fecha_deseada, tarea: "Revisar pieza", onAbrir: () => navigate(`/piezas?pieza=${p.id}`) });
+      }
+    }
+    // Administración: boletas para revisar o cobrar, y cuotas e impuestos que vencen.
+    if (plata) {
+      for (const f of facturas) {
+        if (f.estado === "borrador") out.push({ id: f.id, titulo: `Boleta de ${mesLabel(f.mes)}`, clienteId: f.proyecto_id, fecha: hoy, tarea: "Revisar y emitir", onAbrir: () => navigate("/cobros") });
+        else if (f.estado === "pendiente" && f.vencimiento && f.vencimiento < hoy)
+          out.push({ id: f.id, titulo: `Cobrar boleta de ${mesLabel(f.mes)}`, clienteId: f.proyecto_id, fecha: f.vencimiento, tarea: "Vencida sin cobrar", onAbrir: () => navigate("/cobros") });
+      }
+      const en7 = hoyISO(Date.now() + 7 * 86_400_000);
+      for (const { o, c } of vencimientos(obligaciones, en7)) {
+        out.push({
+          id: `${o.id}-${c.n}`,
+          titulo: o.tipo === "impuesto" ? o.nombre : `${o.nombre} · cuota ${c.n}`,
+          sub: TIPOS_OBLIGACION[o.tipo].label,
+          fecha: c.vence,
+          tarea: `Pagar $ ${Math.round(c.monto).toLocaleString("es-AR")}`,
+          onAbrir: () => navigate("/administracion"),
+        });
+      }
+    }
+    // Todos: las tareas que le dejaron en el chat…
+    for (const ta of mias.filter((x) => !x.hecha)) {
+      out.push({
+        id: ta.id,
+        titulo: ta.titulo,
+        clienteId: ta.proyecto_id,
+        sub: ta.creada_por_nombre ? `De ${ta.creada_por_nombre}` : undefined,
+        fecha: ta.vence,
+        tarea: "Tarea",
+        onAbrir: () => navigate(ta.chat_id ? `/chat?c=${ta.chat_id}` : "/chat"),
+      });
+    }
+    // …y las reuniones de hoy que todavía no pasaron.
+    for (const r of reuniones) {
+      if (r.estado !== "programada" || !r.participantes?.includes(uid) || hoyISO(r.fecha) !== hoy) continue;
+      if (new Date(r.fin ?? r.fecha).getTime() < Date.now()) continue;
+      const hh = new Date(r.fecha).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
+      out.push({ id: r.id, titulo: r.titulo, clienteId: r.proyecto_id, sub: "Reunión", fecha: hoy, etiqueta: `Hoy ${hh}`, tarea: "Reunión", onAbrir: () => navigate(`/reuniones?r=${r.id}`) });
+    }
+    return out;
+  }, [delEquipo, uid, misRoles, videos, piezas, plata, facturas, obligaciones, mias, reuniones, navigate]);
+
+  if (!delEquipo) return null;
+  return <MiDiaCartel items={items} />;
+}

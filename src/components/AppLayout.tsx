@@ -14,6 +14,7 @@ import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { RedesDataProvider } from "@/contexts/redes-data-context";
 import { BadgeApp } from "@/components/BadgeApp";
 import { AvisoTarde } from "@/components/AvisoTarde";
+import { MiDia } from "@/components/redes/MiDia";
 import { SidebarExtrasProvider, useSidebarExtras } from "@/hooks/use-sidebar-extras";
 import { useAltoVisible } from "@/hooks/use-alto-visible";
 import { useChatDock } from "@/lib/redes/chatDock";
@@ -79,6 +80,7 @@ const LayoutInner = () => {
         <AvisoActivarAvisos uid={viewingAs ? undefined : user?.uid} />
         <RecorridoAuto />
         <AvisoTarde />
+        <MiDia />
         <DriveUploadStatusBar />
         <VideoSheet />
         <ChatDock />
