@@ -21,8 +21,7 @@ import {
   Store,
   FolderOpen,
   Sparkles,
-  ListTodo,
-} from "lucide-react";
+  ListTodo, Inbox } from "lucide-react";
 import type { UserRole } from "@/integrations/firebase/types";
 
 export interface NavItem {
@@ -105,6 +104,7 @@ export function navForRole(role: UserRole | undefined): NavSection[] {
         {
           items: [
             { label: "Tablero", icon: Gauge, path: "/tablero", mobile: true },
+            { label: "Pedidos", icon: Inbox, path: "/pedidos" },
             { label: "Clientes", icon: Building2, path: "/clientes", mobile: true },
             { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
             { label: "Mi asistente", icon: Sparkles, path: "/mi-asistente" },
@@ -144,6 +144,7 @@ export function navForRole(role: UserRole | undefined): NavSection[] {
         {
           items: [
             { label: "Mis videos", icon: LayoutGrid, path: "/videos", mobile: true },
+            { label: "Pedidos", icon: Inbox, path: "/pedidos" },
             { label: "Rodajes", icon: CalendarDays, path: "/rodajes", mobile: true },
             { label: "Piezas gráficas", icon: ImageIcon, path: "/piezas" },
             { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },

@@ -96,14 +96,14 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
         <span className="relative shrink-0">
           <Icon className="h-4 w-4" />
           {collapsed && !!badge && (
-            <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-destructive px-0.5 text-[9px] font-bold text-destructive-foreground ring-2 ring-card">
+            <span className={cn("absolute -right-1.5 -top-1.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-destructive px-0.5 text-[9px] font-bold text-destructive-foreground ring-2 ring-card", item.path === "/pedidos" && "motion-safe:animate-pulse ring-2 ring-destructive/40")}>
               {badge > 99 ? "99+" : badge}
             </span>
           )}
         </span>
         {!collapsed && <span className="flex-1 truncate text-left">{item.label}</span>}
         {!collapsed && !!badge && (
-          <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground">
+          <span className={cn("flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground", item.path === "/pedidos" && "motion-safe:animate-pulse ring-2 ring-destructive/40")}>
             {badge > 99 ? "99+" : badge}
           </span>
         )}

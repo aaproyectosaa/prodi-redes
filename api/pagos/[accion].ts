@@ -450,6 +450,11 @@ async function pedirPieza(req: VercelRequest) {
   const settings = (await db.collection("app_settings").doc("redes").get()).data() ?? {};
   // No todas valen lo mismo: un banner puede ocupar 2 piezas del plan.
   const ocupa = cupoPieza(settings, pedido.formato);
+  // Para la bandeja "Pedidos" del equipo: la pidió el cliente (no la cargó producción).
+  const piezaDocDe = (incl: boolean, precio: number, cupo?: number) => ({
+    ...piezaDoc(pid, caller.uid, mes, pedido, incl, precio, cupo),
+    pedido_cliente: caller.role === "cliente",
+  });
 
   // Se cuenta y se crea con lock: dos pedidos a la vez no se pasan del plan. Lo que no entra en el plan
   // (ocupa 0: cartelería, otros diseños) va directo a "aparte".
@@ -463,7 +468,7 @@ async function pedirPieza(req: VercelRequest) {
     ocupa,
     cupo: () => incluidas,
     ref,
-    data: () => piezaDoc(pid, caller.uid, mes, pedido, true, 0, ocupa),
+    data: () => piezaDocDe(true, 0, ocupa),
   });
 
   // Cargada por el equipo (productora o admin) y ya no le quedan piezas del plan: se elige en el momento.
@@ -472,7 +477,7 @@ async function pedirPieza(req: VercelRequest) {
     const fuera = String(b.fuera_plan ?? "");
     if (fuera !== "sin_cargo" && fuera !== "cobrar") return { estado: "sin_cupo", incluidas, ocupa };
     if (fuera === "sin_cargo") {
-      const d = piezaDoc(pid, caller.uid, mes, pedido, false, 0);
+      const d = piezaDocDe(false, 0);
       await ref.set({
         ...d,
         estado: "pagada",
@@ -494,7 +499,7 @@ async function pedirPieza(req: VercelRequest) {
     // "Que la pague el cliente": queda pendiente de pago y le avisamos para que la pague desde su panel.
     const monto = precioPieza(settings, pedido.formato);
     if (!(monto > 0)) throw new HttpError(409, "El precio de las piezas no está configurado (Ajustes).");
-    await ref.set(piezaDoc(pid, caller.uid, mes, pedido, false, monto));
+    await ref.set(piezaDocDe(false, monto));
     await enviarAviso(
       {
         destinatarios: await destinatariosDe(pid, ["cliente"], false),
@@ -526,7 +531,7 @@ async function pedirPieza(req: VercelRequest) {
 
   const monto = precioPieza(settings, pedido.formato);
   if (!(monto > 0)) throw new HttpError(409, "El precio de las piezas no está configurado. Escribinos y lo vemos.");
-  await ref.set(piezaDoc(pid, caller.uid, mes, pedido, false, monto));
+  await ref.set(piezaDocDe(false, monto));
   const concepto = `Pieza gráfica · ${FORMATOS_PIEZA[pedido.formato].label}`;
   const cobroRef = db.collection("cobros").doc();
   const now = new Date().toISOString();

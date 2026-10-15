@@ -141,7 +141,7 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
                       <Icon className="h-4 w-4" />
                       <span className="flex-1 text-left">{item.label}</span>
                       {!!pendientes[item.path] && (
-                        <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground">
+                        <span className={cn("flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground", item.path === "/pedidos" && "motion-safe:animate-pulse ring-2 ring-destructive/40")}>
                           {pendientes[item.path]}
                         </span>
                       )}
@@ -255,10 +255,10 @@ export const MobileTabBar = ({ role }: { role?: UserRole }) => {
   const pendientes = usePendientes();
   const { empresa: empresaBarra } = useEmpresa();
   const { roles: rolesBarra } = useUserProfileContext();
-  const items = navForRoles(role, empresaBarra === "software" ? rolesBarra : [], empresaBarra)
-    .flatMap((s) => s.items)
-    .filter((i) => i.mobile)
-    .slice(0, 4);
+  const todos = navForRoles(role, empresaBarra === "software" ? rolesBarra : [], empresaBarra).flatMap((s) => s.items);
+  const base = todos.filter((i) => i.mobile);
+  const pedidos = todos.find((i) => i.path === "/pedidos");
+  const items = (pendientes["/pedidos"] && pedidos && !base.includes(pedidos) ? [base[0], pedidos, ...base.slice(1)] : base).filter(Boolean).slice(0, 4);
   if (items.length === 0 || teclado) return null;
   return (
     <nav className="safe-area-pb seguro-costados fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 backdrop-blur md:hidden">
@@ -279,7 +279,7 @@ export const MobileTabBar = ({ role }: { role?: UserRole }) => {
               <span className="relative">
                 <Icon className={cn("h-5 w-5", active && "drop-shadow-[0_0_8px_hsl(var(--primary)/0.6)]")} />
                 {!!pendientes[item.path] && (
-                  <span className="absolute -right-2 -top-1.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">
+                  <span className={cn("absolute -right-2 -top-1.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground", item.path === "/pedidos" && "motion-safe:animate-pulse ring-2 ring-destructive/40")}>
                     {pendientes[item.path]}
                   </span>
                 )}
