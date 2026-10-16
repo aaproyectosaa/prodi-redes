@@ -1,15 +1,20 @@
 import { useNavigate } from "react-router-dom";
+import { FilaKpis, Kpi } from "@/components/redes/admin/AdminUI";
 import {
   AlertTriangle,
   ArrowRight,
   CalendarClock,
   CheckCircle2,
+  Clock,
   Copy,
   FileSpreadsheet,
   HandCoins,
   Landmark,
+  PiggyBank,
   Receipt,
   Send,
+  TrendingDown,
+  TrendingUp,
   Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -111,7 +116,7 @@ export default function Administracion() {
       id: "deuda-vencida",
       urgencia: "alta",
       icono: AlertTriangle,
-      titulo: vencDeudas.length === 1 ? `Venció ${vencDeudas[0].o.nombre}` : `Hay ${vencDeudas.length} pagos vencidos`,
+      titulo: vencDeudas.length === 1 ? `Se te venció ${vencDeudas[0].o.nombre}` : `Tenés ${vencDeudas.length} pagos vencidos (créditos e impuestos)`,
       detalle: `${formatARS(vencDeudas.reduce((a, v) => a + v.c.monto, 0))} sin pagar. Si ya lo pagaste, marcalo.`,
       cta: "Ver y pagar",
       ir: "/deudas",
@@ -173,19 +178,23 @@ export default function Administracion() {
   tareas.sort((a, b) => orden[a.urgencia] - orden[b.urgencia]);
 
   const nombre = profile?.nombre?.split(" ")[0];
+  const deben = porCobrar.reduce((a, f) => a + f.bruto, 0);
   const areas = [
     {
       titulo: "Cobros",
       icono: Receipt,
+      color: "from-[#6F40FC] to-[#E040A0]",
       ir: "/cobros",
-      valor: totalMes ? `${formatARS(cobradoMes)}` : "—",
-      sub: totalMes ? `cobrado de ${formatARS(totalMes)}` : `Se factura el 27`,
+      // Lo que los clientes todavía deben (de cualquier mes); el avance es el de las boletas de este mes.
+      valor: formatARS(deben),
+      sub: porCobrar.length ? `por cobrar · ${porCobrar.length} boleta${porCobrar.length === 1 ? "" : "s"}` : "nada por cobrar",
       pct: totalMes ? cobradoMes / totalMes : null,
-      extra: porCobrar.length ? `${porCobrar.length} por cobrar` : null,
+      extra: totalMes ? `Boletas de ${mesCorto(periodoDe(mes))}: ${formatARS(cobradoMes)} de ${formatARS(totalMes)}` : "Se factura el 27",
     },
     {
       titulo: "Pagos al equipo",
       icono: HandCoins,
+      color: "from-sky-400 to-blue-600",
       ir: "/pagos-equipo",
       valor: formatARS(equipoTotal),
       sub: `a pagar en ${mesCorto(mes)}`,
@@ -195,6 +204,7 @@ export default function Administracion() {
     {
       titulo: "Gastos",
       icono: Wallet,
+      color: "from-amber-400 to-orange-500",
       ir: "/gastos",
       valor: formatARS(gastos.reduce((a, g) => a + g.monto, 0)),
       sub: `${gastos.length} cargados en ${mesCorto(mes)}`,
@@ -204,6 +214,7 @@ export default function Administracion() {
     {
       titulo: "Deudas e impuestos",
       icono: Landmark,
+      color: "from-red-500 to-rose-600",
       ir: "/deudas",
       valor: formatARS(cuotasFalta),
       sub: `para pagar en ${mesCorto(mes)}`,
@@ -218,6 +229,26 @@ export default function Administracion() {
       subtitle={`${mesLabel(mes)} · ${tareas.length ? `tenés ${tareas.length} ${tareas.length === 1 ? "cosa" : "cosas"} para hacer` : "todo al día"}`}
     >
       <div className="space-y-8">
+        <div className="space-y-2">
+          <FilaKpis>
+            <Kpi icono={TrendingUp} label={`Entró en ${mesCorto(mes)}`} valor={formatARS(ingresos)} sub="Cobros y pagos que llegaron" tono="verde" />
+            <Kpi icono={TrendingDown} label={`Salió en ${mesCorto(mes)}`} valor={formatARS(egresos)} sub="Gastos, equipo, cuotas e impuestos" tono="ambar" />
+            <Kpi
+              icono={PiggyBank}
+              label="Quedó"
+              valor={formatARS(ingresos - egresos)}
+              sub={ingresos - egresos < 0 ? "Salió más de lo que entró" : "Entró menos lo que salió"}
+              tono={ingresos - egresos < 0 ? "rojo" : "violeta"}
+            />
+            <Kpi icono={Clock} label="Te deben" valor={formatARS(deben)} sub={`${porCobrar.length} boleta${porCobrar.length === 1 ? "" : "s"} sin cobrar`} tono={vencidas.length ? "rojo" : "azul"} onClick={() => navigate("/cobros")} />
+          </FilaKpis>
+          <div className="flex justify-end">
+            <Button variant="ghost" size="sm" onClick={() => descargarLibro(libro, mes)} disabled={!libro.length}>
+              <FileSpreadsheet className="mr-1.5 h-4 w-4" /> Libro para el contador (Excel)
+            </Button>
+          </div>
+        </div>
+
         <Section title="Qué hacer ahora">
           {tareas.length === 0 ? (
             <div className="flex items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.06] p-4 text-sm">
@@ -269,7 +300,10 @@ export default function Administracion() {
               >
                 <span className="flex items-center justify-between text-sm font-semibold">
                   <span className="flex items-center gap-2">
-                    <a.icono className="h-4 w-4 text-muted-foreground" /> {a.titulo}
+                    <span className={cn("flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-sm", a.color)}>
+                      <a.icono className="h-4 w-4" />
+                    </span>
+                    {a.titulo}
                   </span>
                   <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                 </span>
@@ -288,28 +322,6 @@ export default function Administracion() {
           </div>
         </Section>
 
-        <Section
-          title={`Cómo viene ${mesCorto(mes)}`}
-          description="Lo que entró y salió de verdad este mes (cobros, gastos, equipo, cuotas e impuestos pagados)."
-          actions={
-            <Button variant="outline" size="sm" onClick={() => descargarLibro(libro, mes)} disabled={!libro.length}>
-              <FileSpreadsheet className="mr-1.5 h-4 w-4" /> Libro para el contador
-            </Button>
-          }
-        >
-          <div className="grid grid-cols-1 divide-y rounded-2xl border bg-card lg:grid-cols-3 lg:divide-x lg:divide-y-0">
-            {[
-              { l: "Entró", v: ingresos, c: "text-emerald-600 dark:text-emerald-400" },
-              { l: "Salió", v: egresos, c: "" },
-              { l: "Quedó", v: ingresos - egresos, c: ingresos - egresos < 0 ? "text-destructive" : "" },
-            ].map((x) => (
-              <div key={x.l} className="flex items-baseline justify-between gap-3 px-4 py-3 lg:block lg:p-4">
-                <p className="text-xs text-muted-foreground">{x.l}</p>
-                <p className={cn("text-lg font-bold tabular-nums sm:text-2xl lg:mt-1", x.c)}>{formatARS(x.v)}</p>
-              </div>
-            ))}
-          </div>
-        </Section>
       </div>
     </PageShell>
   );
