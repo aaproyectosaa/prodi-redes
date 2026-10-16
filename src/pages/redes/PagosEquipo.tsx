@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
@@ -40,7 +40,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { planDe } from "@/lib/redes/planes";
-import { PageShell, StatCard } from "@/components/redes/PageShell";
+import { PageShell } from "@/components/redes/PageShell";
 import { ClienteTag } from "@/components/redes/ClienteTag";
 import UserAvatar from "@/components/UserAvatar";
 import { useRedes } from "@/contexts/redes-data-context";
@@ -88,7 +88,9 @@ import { DATOS_COBRO_DEFAULT, type DatosCobro } from "@/lib/redes/types";
 import { cn } from "@/lib/utils";
 
 import { MesNav } from "@/components/redes/admin/FacturaPartes";
-import { ExtrasEquipo } from "@/components/redes/admin/RepartoCobros";
+import { ExtrasEquipo, useRepartos } from "@/components/redes/admin/RepartoCobros";
+import { ComoFunciona, FilaKpis, Kpi, Pestanias, Vacio, type Pestania } from "@/components/redes/admin/AdminUI";
+import { SE_REPARTE } from "@/lib/redes/reparto";
 
 const err = (e: unknown) => toast.error(e instanceof Error ? e.message : "Algo salió mal");
 
@@ -100,11 +102,7 @@ export default function PagosEquipoPage() {
   return (
     <PageShell
       title="Pagos al equipo"
-      subtitle={
-        mes === mesActual()
-          ? `Trabajo de ${mesLabel(mes)}: el mes sigue (se paga del 1 al 10 de ${mesLabel(siguiente).split(" ")[0].toLowerCase()}).`
-          : `Trabajo de ${mesLabel(mes)} · se paga del 1 al 10 de ${mesLabel(siguiente).split(" ")[0].toLowerCase()} (a mes vencido).`
-      }
+      subtitle={`Trabajo de ${mesLabel(mes).split(" ")[0].toLowerCase()}${mes === mesActual() ? " (el mes sigue)" : ""} · se paga del 1 al 10 de ${mesLabel(siguiente).split(" ")[0].toLowerCase()}.`}
       actions={<MesNav mes={mes} setMes={setMes} max={mesActual()} />}
     >
       <PagosEquipo mes={mes} />
@@ -114,7 +112,7 @@ export default function PagosEquipoPage() {
 
 function PagosEquipo({ mes }: { mes: string }) {
   const { profiles } = useAppData();
-  const { videos, piezas, clientes } = useRedes();
+  const { videos, piezas, clientes, cobros } = useRedes();
   const cfg = useConfigPagos();
   const liqs = useLiquidaciones(mes);
   // Lo que se cargó en el mes siguiente por error (los pagos son a mes vencido): se ofrece pasarlo a este mes.
@@ -137,36 +135,126 @@ function PagosEquipo({ mes }: { mes: string }) {
   });
   const total = filas.reduce((a, f) => a + (f.liq?.estado === "pagado" ? (f.liq.total_pagado ?? f.calc.total) : f.calc.total), 0);
   const pagado = filas.reduce((a, f) => a + (f.liq?.estado === "pagado" ? (f.liq?.total_pagado ?? 0) : totalParciales(f.liq)), 0);
-  const sinConfig = filas.filter((f) => !cfg[f.p.id]).length;
+  const delSiguienteDe = (uid: string) =>
+    liqsSig.find((l) => l.uid === uid && l.mes === sumarMeses(mes, 1) && l.estado !== "pagado" && ((l.ajustes ?? []).length > 0 || (l.pagos_parciales ?? []).length > 0));
+
+  // Cada persona va a una sola pestaña: al día (pagada, o configurada y este mes no le toca nada), sin configurar o
+  // a la que falta pagarle.
+  const pagados = filas.filter((f) => f.liq?.estado === "pagado" || (!!cfg[f.p.id] && f.calc.total <= 0));
+  const sinConfigurar = filas.filter((f) => f.liq?.estado !== "pagado" && !cfg[f.p.id]);
+  const faltan = filas.filter((f) => f.liq?.estado !== "pagado" && !!cfg[f.p.id] && f.calc.total > 0);
+
+  // Extras cobrados por Mercado Pago (los mismos que muestra ExtrasEquipo): solo para el número y la pestaña.
+  const cobrosMp = useMemo(() => cobros.filter((c) => c.estado === "aprobado" && SE_REPARTE.includes(c.tipo)), [cobros]);
+  const extras = useRepartos(cobrosMp)
+    .filter((r) => r.mes === mes)
+    .flatMap((r) => r.equipo.filter((e) => e.uid && e.monto > 0));
+  const totalExtras = extras.reduce((a, e) => a + e.monto, 0);
+
+  const sugerido: Paso = faltan.length ? "faltan" : sinConfigurar.length ? "sin_config" : pagados.length ? "pagados" : extras.length ? "extras" : "faltan";
+  const [paso, setPaso] = useState<Paso>(sugerido);
+  const [tocado, setTocado] = useState(false);
+  useEffect(() => {
+    if (!tocado) setPaso(sugerido);
+  }, [sugerido, tocado]);
+  useEffect(() => setTocado(false), [mes]);
+  const ir = (k: Paso) => {
+    setTocado(true);
+    setPaso(k);
+  };
+  const pestanias: Pestania<Paso>[] = [
+    { k: "faltan", label: "Falta pagar", n: faltan.length, listo: filas.length > 0 && !faltan.length },
+    { k: "pagados", label: "Al día", n: pagados.length },
+    { k: "sin_config", label: "Sin configurar", n: sinConfigurar.length, alerta: sinConfigurar.length > 0 },
+    ...(extras.length ? [{ k: "extras" as const, label: "Extras MP", n: extras.length }] : []),
+  ];
+  const lista = paso === "faltan" ? faltan : paso === "pagados" ? pagados : paso === "sin_config" ? sinConfigurar : [];
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <StatCard label={`A pagar en ${mesLabel(mes).split(" ")[0].toLowerCase()}`} value={formatARS(total)} icon={Users} tone="primary" hint={`${filas.length} personas`} />
-        <StatCard label="Ya pagado" value={formatARS(pagado)} icon={Check} tone="success" />
-        <StatCard label="Falta pagar" value={formatARS(total - pagado)} icon={Clock} />
-      </div>
-      {sinConfig > 0 && (
-        <p className="rounded-xl border border-amber-500/40 bg-amber-500/[0.07] p-3 text-sm">
-          Cargá cómo le pagás a cada uno (fijo, por trabajo o las dos cosas) y el sistema calcula solo lo del mes con lo que hizo cada uno.
-        </p>
-      )}
-      <ExtrasEquipo mes={mes} />
-      <div className="grid gap-3 lg:grid-cols-2">
-        {filas.map((f) => (
-          <PersonaPago
-            key={f.p.id}
-            {...f}
-            cfg={cfg[f.p.id]}
-            mes={mes}
-            delSiguiente={liqsSig.find((l) => l.uid === f.p.id && l.mes === sumarMeses(mes, 1) && l.estado !== "pagado" && ((l.ajustes ?? []).length > 0 || (l.pagos_parciales ?? []).length > 0))}
+      <FilaKpis>
+        <Kpi icono={Users} label="A pagar" valor={formatARS(total)} sub={`${filas.length} ${filas.length === 1 ? "persona" : "personas"}`} tono="violeta" />
+        <Kpi
+          icono={Check}
+          label="Ya pagado"
+          valor={formatARS(pagado)}
+          avance={total > 0 ? pagado / total : 0}
+          sub={`${pagados.length} de ${filas.length} al día`}
+          tono="verde"
+          onClick={() => ir("pagados")}
+        />
+        <Kpi
+          icono={Clock}
+          label="Falta pagar"
+          valor={formatARS(total - pagado)}
+          sub={faltan.length ? `${faltan.length} ${faltan.length === 1 ? "persona" : "personas"}` : "Nadie pendiente"}
+          tono="ambar"
+          onClick={() => ir("faltan")}
+        />
+        {extras.length ? (
+          <Kpi icono={CircleDollarSign} label="Extras por Mercado Pago" valor={formatARS(totalExtras)} sub="Se pagan aparte del mes" tono="azul" onClick={() => ir("extras")} />
+        ) : (
+          <Kpi
+            icono={AlertTriangle}
+            label="Sin configurar"
+            valor={String(sinConfigurar.length)}
+            sub={sinConfigurar.length ? "Cargá cómo le pagás" : "Todos configurados"}
+            tono={sinConfigurar.length ? "rojo" : "gris"}
+            onClick={() => ir("sin_config")}
           />
-        ))}
-        {filas.length === 0 && <p className="text-sm text-muted-foreground">Todavía no hay equipo cargado.</p>}
+        )}
+      </FilaKpis>
+
+      <Pestanias items={pestanias} valor={paso} onChange={ir} />
+
+      <div key={`${mes}-${paso}`} className="animate-in fade-in slide-in-from-bottom-1 duration-200 motion-reduce:animate-none">
+        {paso === "extras" ? (
+          <ExtrasEquipo mes={mes} />
+        ) : filas.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Todavía no hay equipo cargado.</p>
+        ) : lista.length === 0 ? (
+          paso === "faltan" ? (
+            <Vacio icono={Check} titulo="No falta pagarle a nadie" texto={sinConfigurar.length ? "Revisá «Sin configurar»: ahí están los que todavía no tienen cómo se les paga." : undefined} />
+          ) : paso === "pagados" ? (
+            <Vacio icono={Clock} titulo="Todavía no le pagaste a nadie este mes" texto="Cuando marques a alguien como pagado aparece acá." />
+          ) : (
+            <Vacio icono={Check} titulo="Todos tienen cómo se les paga" />
+          )
+        ) : (
+          <div className="space-y-3">
+            {paso === "sin_config" && <p className="text-xs text-muted-foreground">Cargá cómo le pagás a cada uno y el sistema calcula solo lo del mes.</p>}
+            <div className="grid gap-3 lg:grid-cols-2">
+              {lista.map((f) => (
+                <PersonaPago key={f.p.id} {...f} cfg={cfg[f.p.id]} mes={mes} delSiguiente={delSiguienteDe(f.p.id)} />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+
+      <ComoFunciona>
+        <p>
+          <b>A mes vencido</b>: el trabajo de un mes se paga del 1 al 10 del mes siguiente. La pantalla abre en el mes que toca pagar ahora; con las flechas de arriba vas a
+          otros meses.
+        </p>
+        <p>
+          <b>Cómo se calcula</b>: a cada uno le cargás cómo le pagás (sueldo fijo, por trabajo, fijo + por trabajo, por cliente o un acuerdo por cliente con historial) y el
+          sistema calcula solo lo del mes con lo que hizo cada uno. Los que no tienen nada cargado quedan en <b>Sin configurar</b>; los que ya cobraron (o este mes no les toca nada) en <b>Al día</b>.
+        </p>
+        <p>
+          <b>Pagos parciales, bonos y descuentos</b>: un pago parcial o adelanto no cambia lo que le corresponde, solo baja lo que falta pagar. Un bono se suma y un descuento
+          se resta de lo del mes. Cuando le pagaste todo, tocá <b>Marcar pagado</b> y pasa a <b>Pagados</b> (con «Deshacer» vuelve a pendiente).
+        </p>
+        <p>
+          <b>Extras por Mercado Pago</b>: la parte de cada uno en los extras cobrados por Mercado Pago se paga aparte del mes, recién cuando Mercado Pago libera la plata. No
+          cuentan en el pago del mes.
+        </p>
+      </ComoFunciona>
     </div>
   );
 }
+
+type Paso = "faltan" | "pagados" | "sin_config" | "extras";
 
 function PersonaPago({
   p,
@@ -310,11 +398,17 @@ function PersonaPago({
               : `${unidades} ${unidades === 1 ? unidad.label : unidad.plural} en el mes`}
           </p>
         </div>
-        <div className="text-right">
-          <p className="text-lg font-bold tabular-nums">{formatARS(pagado ? (liq?.total_pagado ?? calc.total) : calc.total - yaPagadoParcial)}</p>
-          <p className={cn("text-[11px] font-medium", pagado ? "text-emerald-600" : "text-muted-foreground")}>
-            {pagado ? "Pagado" : yaPagadoParcial ? `Falta pagar · de ${formatARS(calc.total)}` : "A pagar"}
-          </p>
+        <div className="flex shrink-0 flex-col items-end gap-1 text-right">
+          <p className="text-xl font-bold tabular-nums tracking-tight">{formatARS(pagado ? (liq?.total_pagado ?? calc.total) : calc.total - yaPagadoParcial)}</p>
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium",
+              pagado ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+            )}
+          >
+            {pagado ? <Check className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+            {pagado ? "Pagado" : yaPagadoParcial ? `Falta · de ${formatARS(calc.total)}` : "A pagar"}
+          </span>
         </div>
       </div>
       {cfg?.modo === "acuerdos" && (cfg.acuerdos ?? []).length > 0 && (cfg.acuerdos ?? []).every((x) => x.desde > mes) && !pagado && (
@@ -640,7 +734,7 @@ function PersonaPago({
           )}
           <Button
             size="sm"
-            variant={pagado ? "ghost" : "secondary"}
+            variant={pagado ? "ghost" : "default"}
             className="ml-auto h-8"
             onClick={() =>
               void marcarPagado(p.id, mes, calc.total, [detalle, yaPagadoParcial ? `pagado en ${parciales.length + 1} partes` : ""].filter(Boolean).join(" · "), !pagado)
