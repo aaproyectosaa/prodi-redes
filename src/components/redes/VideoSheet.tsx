@@ -332,6 +332,11 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
               <div className="flex flex-wrap items-center gap-2">
                 <EtapaBadge etapa={video.etapa} vista={isCliente ? "cliente" : "equipo"} />
                 {!isCliente && <EntregaChip video={video} />}
+                {!isCliente && video.sube_cliente && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:text-sky-300">
+                    Lo sube el cliente
+                  </span>
+                )}
                 {isProd && video.etapa === "edicion" && (
                   <button type="button" onClick={() => setEntregaDlg("cambiar")} className="text-xs text-primary underline-offset-2 hover:underline">
                     {video.entrega_edicion ? "Cambiar fecha" : "Poner fecha de entrega"}

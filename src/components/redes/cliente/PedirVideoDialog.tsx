@@ -31,6 +31,8 @@ import {
   ShoppingBag,
   Sparkles,
   Store,
+  Download,
+  Megaphone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -142,6 +144,8 @@ export function PedirVideoDialog({
   const [enviando, setEnviando] = useState(false);
   // Si es extra: para dónde es (el precio cambia entre Instagram/Facebook, TikTok y YouTube).
   const [plataforma, setPlataforma] = useState<PlataformaExtra>("meta");
+  // Extra: lo publicamos nosotros (como siempre) o se lo pasamos para que lo suba él.
+  const [subeCliente, setSubeCliente] = useState(false);
   const [listo, setListo] = useState(false);
   const [videoId, setVideoId] = useState<string | null>(null);
   const tituloRef = useRef<HTMLInputElement>(null);
@@ -205,6 +209,7 @@ export function PedirVideoDialog({
     setMesFinal(null);
     setAviso(null);
     setListo(false);
+    setSubeCliente(false);
     setVideoId(null);
   }, [open, arrancaSoloEdicion]);
 
@@ -238,6 +243,8 @@ export function PedirVideoDialog({
   // Varios videos en la misma filmación: misma cuenta que el servidor (api/_lib/jornada.ts).
   const varios = materialFinal === "nueva" && otros.length > 0;
   const promoPct = promoJornada(settings);
+  // Si toda su cuenta la sube el cliente, no hace falta preguntar.
+  const publicaSiempreElCliente = (cliente as { produccion?: { publica?: string } }).produccion?.publica === "cliente";
   const hoy = hoyISO();
   const limite = new Date(`${sumarMeses(hoy, 3)}T12:00:00`);
   // "Esta semana": hasta el domingo.
@@ -338,6 +345,7 @@ export function PedirVideoDialog({
         idea,
         objetivo,
         plataforma,
+        sube_cliente: subeCliente,
         // El servidor lo decide con la ficha del cliente (y valida que los archivos sean suyos).
         filma_cliente: filmaCliente,
         material: {
@@ -856,6 +864,38 @@ export function PedirVideoDialog({
                             )}
                           </div>
                         )}
+                        {/* Extra: ¿lo publicamos nosotros o se lo pasamos? */}
+                        {!publicaSiempreElCliente &&
+                          (varios
+                            ? cuentaJornada({ cantidad: 1 + otros.length, disponibles: uso.disponibles, precioExtra, promoPct, viaje: montoViaje }).extras > 0
+                            : !entra) && (
+                            <div className="space-y-2 rounded-2xl border bg-card p-4">
+                              <p className="text-sm font-semibold">Cuando esté listo y lo apruebes…</p>
+                              <div className="grid grid-cols-2 gap-2">
+                                {(
+                                  [
+                                    [false, Megaphone, "Publicalo vos", "Lo subimos a tus redes"],
+                                    [true, Download, "Pasámelo", "Lo descargo y lo subo yo"],
+                                  ] as const
+                                ).map(([v, Icon, t, d]) => (
+                                  <button
+                                    key={t}
+                                    type="button"
+                                    onClick={() => setSubeCliente(v)}
+                                    aria-pressed={subeCliente === v}
+                                    className={cn(
+                                      "flex flex-col items-start gap-1 rounded-2xl border-2 p-3 text-left transition-all active:scale-[0.98]",
+                                      subeCliente === v ? "border-primary bg-primary/10" : "border-transparent bg-muted/60 hover:bg-muted"
+                                    )}
+                                  >
+                                    <Icon className={cn("h-5 w-5", subeCliente === v ? "text-primary" : "text-muted-foreground")} />
+                                    <span className="text-sm font-semibold leading-tight">{t}</span>
+                                    <span className="text-[11px] leading-tight text-muted-foreground">{d}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                       </div>
                     )}
                   </>

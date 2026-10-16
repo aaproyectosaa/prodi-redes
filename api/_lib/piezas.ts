@@ -54,6 +54,8 @@ export interface PedidoPieza {
   oferta: string | null;
   cta: string | null;
   fecha_deseada?: string | null;
+  /** Extra: "pasámela y la subo yo" (no la publicamos nosotros). Solo cuenta si no entra en el plan. */
+  sube_cliente?: boolean;
 }
 
 const t = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
@@ -72,6 +74,7 @@ export function leerPedidoPieza(b: Record<string, unknown>): PedidoPieza | strin
     oferta: t(b.oferta, 160) || null,
     cta: t(b.cta, 120) || null,
     fecha_deseada: /^\d{4}-\d{2}-\d{2}$/.test(String(b.fecha_deseada ?? "")) ? String(b.fecha_deseada) : null,
+    sube_cliente: b.sube_cliente === true,
   };
   if (enfoque === "comercial" && !p.producto && p.pedido.length < 10) return "Contanos qué producto o servicio querés vender";
   if (enfoque === "institucional" && p.pedido.length < 10) return "Contanos qué querés comunicar";
@@ -87,6 +90,8 @@ export function piezaDoc(proyectoId: string, by: string, mes: string, p: PedidoP
     mes,
     incluida,
     precio,
+    // Solo en las extra: las del plan siguen como siempre.
+    sube_cliente: !incluida && p.sube_cliente === true,
     // Piezas del plan que ocupa (las que entran en el plan).
     cupo_usado: incluida ? cupo : 0,
     estado: incluida ? "pagada" : "pendiente_pago",

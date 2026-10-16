@@ -546,6 +546,8 @@ export function PedirPiezaDialog({
   const [pedido, setPedido] = useState("");
   const [texto, setTexto] = useState("");
   const [fecha, setFecha] = useState("");
+  // Extra: la publicamos nosotros o se la pasamos para que la suba él.
+  const [subeCliente, setSubeCliente] = useState(false);
   const [intentado, setIntentado] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -561,6 +563,7 @@ export function PedirPiezaDialog({
     setTexto("");
     setFecha("");
     setIntentado(false);
+    setSubeCliente(false);
   }, [open]);
 
   const info = formatoInfo(formato);
@@ -600,6 +603,7 @@ export function PedirPiezaDialog({
         oferta: enfoque === "comercial" ? oferta.trim() || null : null,
         cta: enfoque === "comercial" ? cta : null,
         fecha_deseada: fecha || null,
+        ...(!entra ? { sube_cliente: subeCliente } : {}),
       });
       if (r.estado === "pago") {
         window.location.href = r.init_point;
@@ -936,6 +940,35 @@ export function PedirPiezaDialog({
                   </p>
                 )}
               </div>
+              {/* Extra: ¿la publicamos nosotros o se la pasamos? */}
+              {!entra && (cliente as { produccion?: { publica?: string } } | null)?.produccion?.publica !== "cliente" && (
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold">Cuando esté lista y la apruebes…</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(
+                      [
+                        [false, Megaphone, "Publicala vos", "La suben a mis redes"],
+                        [true, Download, "Pasámela", "La descargo y la subo yo"],
+                      ] as const
+                    ).map(([v, Icon, t, d]) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setSubeCliente(v)}
+                        aria-pressed={subeCliente === v}
+                        className={cn(
+                          "flex flex-col items-start gap-1 rounded-2xl border-2 p-3 text-left transition-all active:scale-[0.98]",
+                          subeCliente === v ? "border-primary bg-primary/10" : "border-transparent bg-muted/60 hover:bg-muted"
+                        )}
+                      >
+                        <Icon className={cn("h-5 w-5", subeCliente === v ? "text-primary" : "text-muted-foreground")} />
+                        <span className="text-sm font-semibold leading-tight">{t}</span>
+                        <span className="text-[11px] leading-tight text-muted-foreground">{d}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <ol className="space-y-1 text-xs text-muted-foreground">
                 <li>1. Nuestra diseñadora la arma con tu marca.</li>
                 <li>2. Te llega para aprobar: si algo no va, pedís cambios.</li>

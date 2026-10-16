@@ -156,6 +156,8 @@ export interface DatosPedidoPieza {
   oferta?: string | null;
   cta?: string | null;
   fecha_deseada?: string | null;
+  /** Extra: "pasámela y la subo yo" (no la publicamos nosotros). */
+  sube_cliente?: boolean;
 }
 
 /** El cliente pide la pieza: si entra en el plan se crea; si no, devuelve el link de pago. */

@@ -77,8 +77,9 @@ export async function responderCliente(
     const by = (p.team_roles?.cliente ?? [])[0] ?? "cliente";
     const evento = (accion: string) => ({ at: now, by, accion, nota: nota || null });
     if (decision === "aprobar") {
-      // Si los sube el cliente, el video aprobado se le entrega (queda publicado) y no pasa por pauta.
-      const subeCliente = p.produccion?.publica === "cliente";
+      // Si los sube el cliente (toda su cuenta, o este extra que pidió "pasámelo"), el video aprobado se le entrega
+      // (queda publicado) y no pasa por pauta.
+      const subeCliente = p.produccion?.publica === "cliente" || v.sube_cliente === true;
       tx.update(ref, {
         etapa: subeCliente ? "publicado" : "para_publicar",
         etapa_desde: now,
@@ -109,8 +110,8 @@ export async function responderCliente(
   if (decision === "aprobar") {
     await enviarAviso(
       {
-        destinatarios: [...(p.produccion?.publica === "cliente" ? [] : uno(v.pauta_id, "pauta")), ...uno(v.productor_id, "productor")],
-        titulo: p.produccion?.publica === "cliente" ? "Video aprobado: se le entregó al cliente para que lo suba" : "Video aprobado: listo para subir y pautar",
+        destinatarios: [...(p.produccion?.publica === "cliente" || v.sube_cliente === true ? [] : uno(v.pauta_id, "pauta")), ...uno(v.productor_id, "productor")],
+        titulo: p.produccion?.publica === "cliente" || v.sube_cliente === true ? "Video aprobado: se le entregó al cliente para que lo suba" : "Video aprobado: listo para subir y pautar",
         cuerpo: `${p.nombre ?? "Cliente"} · ${v.titulo}`,
         link: `/videos?video=${videoId}`,
         clave: `para_publicar:${videoId}`,

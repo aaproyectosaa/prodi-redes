@@ -70,8 +70,9 @@ export async function responderVideoApp(caller: Caller, b: PedidoVideo, base: st
     if (v.etapa !== "revision_cliente") throw new HttpError(409, "Este video ya fue respondido");
     const evento = (accion: string, n: string | null) => ({ at: now, by: caller.uid, accion, nota: n });
     if (decision === "aprobar") {
-      // Si los sube el cliente, el video aprobado se le entrega (queda publicado) y no pasa por pauta.
-      const subeCliente = p.produccion?.publica === "cliente";
+      // Si los sube el cliente (toda su cuenta, o este extra que pidió "pasámelo"), el video aprobado se le entrega
+      // (queda publicado) y no pasa por pauta.
+      const subeCliente = p.produccion?.publica === "cliente" || v.sube_cliente === true;
       tx.update(ref, {
         etapa: subeCliente ? "publicado" : "para_publicar",
         etapa_desde: now,
@@ -103,8 +104,8 @@ export async function responderVideoApp(caller: Caller, b: PedidoVideo, base: st
   if (decision === "aprobar") {
     await enviarAviso(
       {
-        destinatarios: sinMi([...(p.produccion?.publica === "cliente" ? [] : uno(v.pauta_id, "pauta")), ...uno(v.productor_id, "productor")]),
-        titulo: p.produccion?.publica === "cliente" ? "Video aprobado: se le entregó al cliente para que lo suba" : "Video aprobado: listo para subir y pautar",
+        destinatarios: sinMi([...(p.produccion?.publica === "cliente" || v.sube_cliente === true ? [] : uno(v.pauta_id, "pauta")), ...uno(v.productor_id, "productor")]),
+        titulo: p.produccion?.publica === "cliente" || v.sube_cliente === true ? "Video aprobado: se le entregó al cliente para que lo suba" : "Video aprobado: listo para subir y pautar",
         cuerpo: `${p.nombre ?? "Cliente"} · ${v.titulo}`,
         link: `/videos?video=${videoId}`,
         clave: `para_publicar:${videoId}`,
@@ -190,6 +191,8 @@ export async function responderPiezaApp(caller: Caller, b: PedidoPieza, base: st
           version_aprobada_id: aprobadas[0],
           versiones_aprobadas: aprobadas,
           updated_at: now,
+          // "Pasámela": se le entrega para que la suba él (va al historial, nadie del equipo la publica).
+          ...(pz.sube_cliente === true ? { publicada_at: now } : {}),
           historial: FieldValue.arrayUnion({ at: now, by: caller.uid, accion: `Aprobadas por el cliente (las ${enviadas.length})`, nota: null }),
         });
       } else {
@@ -215,6 +218,7 @@ export async function responderPiezaApp(caller: Caller, b: PedidoPieza, base: st
         estado: "entregada",
         version_aprobada_id: pz.version_enviada_id ?? null,
         updated_at: now,
+        ...(pz.sube_cliente === true ? { publicada_at: now } : {}),
         historial: FieldValue.arrayUnion({ at: now, by: caller.uid, accion: "Aprobada por el cliente", nota: null }),
       });
     } else {

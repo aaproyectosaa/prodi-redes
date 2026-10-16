@@ -42,6 +42,8 @@ export interface PedidoVideo {
   material_base?: MaterialBase | null;
   /** Filmación nueva: dónde se filma y el viático (ver viaticos.ts). */
   viatico?: ViaticoVideo | null;
+  /** Extra: "pasámelo y lo subo yo". Al aprobarlo se le entrega y no pasa por pauta. */
+  sube_cliente?: boolean;
 }
 
 export type QuienFilma = "prodi" | "cliente" | "ambos";
@@ -173,6 +175,7 @@ export function videoDesdePedido(proyectoId: string, team: Record<string, string
     filma_cliente: filma,
     material_base: p.material_base ?? null,
     viatico: p.viatico ?? null,
+    ...(p.sube_cliente ? { sube_cliente: true } : {}),
     historial: [
       {
         at: ts,

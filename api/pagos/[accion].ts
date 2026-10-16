@@ -763,6 +763,8 @@ async function pedirVideo(req: VercelRequest) {
     localidad?: string;
     /** Más videos para filmar en la misma jornada (un solo viaje, promo desde el 2º extra). */
     otros?: { titulo?: unknown; idea?: unknown }[];
+    /** Extra: el cliente lo quiere para subirlo él (no lo publicamos nosotros). Solo cuenta si termina siendo extra. */
+    sube_cliente?: boolean;
   }>(req);
   // Con fecha, el mes sale de la fecha (no puede ser pasada). Con o sin fecha, el mes tiene que ser
   // este o uno de los 3 siguientes (hora de Argentina): si no, cada mes viejo o lejano daría su cupo gratis.
@@ -909,7 +911,12 @@ async function pedirVideo(req: VercelRequest) {
       monto: cuenta.total,
       moneda: "ARS",
       estado: "pendiente",
-      pedidos: pedidos.map((p, i) => ({ ...p, viatico: i === 0 && viaje > 0 ? { ...viatico!, estado: "pagado" } : viajeDe(i) })),
+      pedidos: pedidos.map((p, i) => ({
+        ...p,
+        viatico: i === 0 && viaje > 0 ? { ...viatico!, estado: "pagado" } : viajeDe(i),
+        // "Pasámelo": solo en los que son extra (los del plan siguen el circuito del cliente).
+        ...(b.sube_cliente === true && !cuenta.items[i]?.plan ? { sube_cliente: true } : {}),
+      })),
       detalle: cuenta,
       created_by: caller.uid,
       created_at: new Date().toISOString(),
@@ -997,6 +1004,7 @@ async function pedirVideo(req: VercelRequest) {
   // Extra con viaje: el viático va en el mismo pago (el video se crea al acreditarse, ya con el viaje pago).
   const conViaje = viatico?.estado === "pendiente" && Number(viatico.monto) > 0;
   if (conViaje) pedido.viatico = { ...viatico!, estado: "pagado" };
+  if (b.sube_cliente === true) pedido.sube_cliente = true;
   const total = precioVideo + (conViaje ? Number(viatico!.monto) : 0);
   const concepto = `Video extra${soloEdicion ? " solo edición" : ""}${plataforma === "meta" ? "" : ` (${PLATAFORMA_NOMBRE[plataforma]})`} · ${MESES[m - 1]} ${y}: ${titulo}${conViaje ? ` + viáticos a ${viatico!.localidad}` : ""}`.slice(0, 120);
   const cobroRef = db.collection("cobros").doc();
