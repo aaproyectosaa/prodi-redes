@@ -310,8 +310,9 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
 
   return (
     <>
-      {/* Encabezado: cliente, plan/mes, título, estado y cerrar. */}
-      <header className="shrink-0 border-b px-4 pb-4 pt-[max(0.875rem,env(safe-area-inset-top))] lg:col-start-2 lg:row-start-1 lg:border-b-0 lg:px-7 lg:pb-2 lg:pt-6">
+      {/* Encabezado: cliente, plan/mes, título, estado y cerrar. En el celular, con el teclado abierto se esconden
+          el encabezado, las pestañas y los botones de abajo: queda todo el lugar para escribir (vuelven al cerrarlo). */}
+      <header className="shrink-0 border-b px-4 pb-4 [.teclado-abierto_&]:hidden pt-[max(0.875rem,env(safe-area-inset-top))] lg:col-start-2 lg:row-start-1 lg:border-b-0 lg:px-7 lg:pb-2 lg:pt-6">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1 space-y-2.5 lg:space-y-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -382,7 +383,7 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
         )}
 
         {!isCliente && (
-          <div className="sticky top-0 z-10 border-b bg-background/95 px-4 py-2 backdrop-blur lg:static lg:col-start-2 lg:row-start-2 lg:border-b lg:bg-transparent lg:px-7 lg:pb-3 lg:pt-2 lg:backdrop-blur-none">
+          <div className="sticky top-0 z-10 border-b bg-background/95 px-4 py-2 backdrop-blur [.teclado-abierto_&]:hidden lg:static lg:col-start-2 lg:row-start-2 lg:border-b lg:bg-transparent lg:px-7 lg:pb-3 lg:pt-2 lg:backdrop-blur-none">
             {/* Todas entran siempre: grilla pareja, ícono arriba y nombre abajo. */}
             <div
               role="tablist"
@@ -804,7 +805,7 @@ function ActionBar({ children }: { children: React.ReactNode }) {
   const items = (Array.isArray(children) ? children : [children]).flat().filter(Boolean);
   if (items.length === 0) return null;
   return (
-    <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t bg-card/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur lg:col-start-2 lg:row-start-4 lg:px-7 lg:pb-4 lg:pt-4 [&>button]:rounded-2xl">
+    <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t bg-card/95 px-4 [.teclado-abierto_&]:hidden pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur lg:col-start-2 lg:row-start-4 lg:px-7 lg:pb-4 lg:pt-4 [&>button]:rounded-2xl">
       {children}
     </div>
   );
