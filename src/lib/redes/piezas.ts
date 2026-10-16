@@ -237,10 +237,15 @@ export async function borrarVersiones(pieza: PiezaIA, ids: string[]) {
   if (pieza.version_aprobada_id && fuera.has(pieza.version_aprobada_id)) throw new Error("La versión aprobada por el cliente no se puede borrar.");
   if (pieza.estado === "para_aprobar" && pieza.version_enviada_id && fuera.has(pieza.version_enviada_id))
     throw new Error("Esa versión la está viendo el cliente: no se puede borrar ahora.");
+  // En revisión interna, la que entregó diseño es la que revisa producción: tampoco se borra (si no, "Aprobar" se queda sin versión).
+  const enRevision = [pieza.version_enviada_id, ...(pieza.versiones_enviadas ?? [])].filter(Boolean) as string[];
+  if (pieza.estado === "revision_interna" && enRevision.some((id) => fuera.has(id)))
+    throw new Error("Esa versión la está revisando producción: no se puede borrar ahora.");
   await updateDoc(doc(db, PIEZAS, pieza.id), {
     versiones: (pieza.versiones ?? []).filter((v) => !fuera.has(v.id)),
     attachments_finalizado: (pieza.attachments_finalizado ?? []).filter((a) => !fuera.has(a.drive_file_id)),
     ...(pieza.version_enviada_id && fuera.has(pieza.version_enviada_id) ? { version_enviada_id: null } : {}),
+    ...(pieza.versiones_enviadas?.some((id) => fuera.has(id)) ? { versiones_enviadas: pieza.versiones_enviadas.filter((id) => !fuera.has(id)) } : {}),
     updated_at: now(),
   });
 }

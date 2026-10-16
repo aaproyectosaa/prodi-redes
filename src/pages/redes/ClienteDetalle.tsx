@@ -51,6 +51,7 @@ import { cn } from "@/lib/utils";
 import { assertEditable } from "@/lib/redes/vistaComo";
 import { chatClienteId } from "@/lib/redes/chat";
 import { CobrosConReparto } from "@/components/redes/admin/RepartoCobros";
+import { AccionTile, GrillaAcciones } from "@/components/redes/AccionesTablero";
 import { abrirEnDock } from "@/lib/redes/chatDock";
 
 export default function ClienteDetalle() {
@@ -100,7 +101,7 @@ export default function ClienteDetalle() {
       actions={
         <>
           <Select value={mes} onValueChange={setMes}>
-            <SelectTrigger className="w-44">
+            <SelectTrigger className="h-11 w-full rounded-2xl border-transparent bg-muted/60 px-4 font-medium shadow-none hover:bg-muted sm:h-10 sm:w-44 sm:rounded-xl">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -114,25 +115,46 @@ export default function ClienteDetalle() {
               })}
             </SelectContent>
           </Select>
-          <BotonArmarMes clienteId={cliente.id} />
-          {(isAdmin || tieneRol("productor")) && <BotonNuevaPieza clienteId={cliente.id} />}
-          {chats.some((c) => c.id === chatClienteId(cliente.id)) && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                const id = chatClienteId(cliente.id);
-                if (!abrirEnDock(id)) navigate(`/chat?c=${id}`);
-              }}
-            >
-              <MessageCircle className="mr-2 h-4 w-4" /> Chat
-            </Button>
-          )}
-          <Button variant="outline" onClick={() => setPlanificar("filmado")} title="Fuiste a grabar sin planificar: creás el video y subís el material">
-            <Clapperboard className="mr-2 h-4 w-4" /> Ya lo filmé
-          </Button>
-          <Button onClick={() => setPlanificar("planificar")}>
-            <Plus className="mr-2 h-4 w-4" /> Planificar
-          </Button>
+          {/* Mismas tarjetas de acción que el tablero de Videos: en el celular, de a 4 por fila con su color. */}
+          {(() => {
+            const conPieza = isAdmin || tieneRol("productor");
+            const conChat = chats.some((c) => c.id === chatClienteId(cliente.id));
+            const n = 2 + Number(conPieza) + Number(conChat);
+            return (
+              <GrillaAcciones className={n === 4 ? "grid-cols-4" : n === 3 ? "grid-cols-3" : "grid-cols-2"}>
+                <BotonArmarMes tile clienteId={cliente.id} />
+                {conPieza && <BotonNuevaPieza tile clienteId={cliente.id} />}
+                {conChat && (
+                  <AccionTile
+                    icon={MessageCircle}
+                    label="Chat"
+                    color="from-emerald-500 to-teal-600"
+                    onClick={() => {
+                      const id = chatClienteId(cliente.id);
+                      if (!abrirEnDock(id)) navigate(`/chat?c=${id}`);
+                    }}
+                    title="Abrir el grupo de chat del cliente"
+                  />
+                )}
+                <AccionTile
+                  icon={Clapperboard}
+                  label="Ya lo filmé"
+                  color="from-sky-500 to-blue-600"
+                  onClick={() => setPlanificar("filmado")}
+                  title="Fuiste a grabar sin planificar: creás el video y subís el material"
+                />
+                <Button
+                  onClick={() => setPlanificar("planificar")}
+                  className={cn(
+                    "h-11 rounded-2xl bg-gradient-to-r from-[#6F40FC] to-[#9B6BFF] text-base font-semibold shadow-md shadow-primary/25 sm:col-auto sm:h-10 sm:rounded-xl sm:text-sm",
+                    n === 4 ? "col-span-4" : n === 3 ? "col-span-3" : "col-span-2"
+                  )}
+                >
+                  <Plus className="mr-2 h-4 w-4" /> Planificar
+                </Button>
+              </GrillaAcciones>
+            );
+          })()}
         </>
       }
     >

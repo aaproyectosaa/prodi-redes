@@ -718,8 +718,11 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
     }
   };
   const aprobarRevision = async () => {
-    const ids = pieza.versiones_enviadas?.length ? pieza.versiones_enviadas : pieza.version_enviada_id ? [pieza.version_enviada_id] : [];
-    if (!ids.length) return toast.error("No hay versión entregada: elegí una y mandala.");
+    // Las que entregó diseño (que todavía existan). Si se borró la entregada, la que está elegida o, si no, la última.
+    const existe = (id: string) => versiones.some((v) => v.id === id);
+    const entregadas = (pieza.versiones_enviadas?.length ? pieza.versiones_enviadas : pieza.version_enviada_id ? [pieza.version_enviada_id] : []).filter(existe);
+    const ids = entregadas.length ? entregadas : sel && existe(sel) ? [sel] : ultima ? [ultima] : [];
+    if (!ids.length) return toast.error("Esta pieza no tiene ninguna versión: pedile a diseño que la suba.");
     setAprobando(true);
     try {
       await mandarAlCliente(pieza, ids.length > 1 ? ids : ids[0], cliente, user?.uid ?? "");
