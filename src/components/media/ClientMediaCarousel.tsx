@@ -49,6 +49,9 @@ export function ClientMediaCarousel({
   const [index, setIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [hiResReady, setHiResReady] = useState(false);
+  // Video: se reproduce ahí mismo (vertical, como un Reel); la miniatura de Drive a veces no está (se oculta).
+  const [reproduciendo, setReproduciendo] = useState<string | null>(null);
+  const [sinMiniatura, setSinMiniatura] = useState<Set<string>>(new Set());
   const touchStartX = useRef<number | null>(null);
 
   useEffect(() => {
@@ -184,28 +187,42 @@ export function ClientMediaCarousel({
             </span>
           </button>
         ) : isVideo(current.mime_type) ? (
-          <button
-            type="button"
-            className="relative block w-full aspect-video cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            onClick={openLightbox}
-            aria-label="Reproducir video"
-          >
-            <img
-              src={thumbUrl(current.drive_file_id, 1200)}
-              alt={current.name}
-              referrerPolicy="no-referrer"
-              decoding="async"
-              className="absolute inset-0 m-auto max-w-full max-h-full w-auto h-auto object-contain bg-black/40"
-            />
-            <span className="absolute inset-0 flex items-center justify-center bg-black/25">
-              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/95 text-black shadow-lg">
-                <Play className="h-7 w-7 fill-current ml-0.5" />
-              </span>
-            </span>
-            <span className="absolute bottom-2 right-2 rounded-full bg-black/55 text-white text-[11px] font-medium px-2.5 py-1">
-              Ver video
-            </span>
-          </button>
+          <div className="mx-auto aspect-[9/16] w-full max-w-[min(100%,calc(62dvh*9/16))] overflow-hidden rounded-2xl bg-black">
+            {reproduciendo === current.drive_file_id ? (
+              <DriveVideoPlayer fileId={current.drive_file_id} mimeType={current.mime_type} autoPlay className="h-full w-full object-contain" />
+            ) : (
+              <button
+                type="button"
+                className="relative block h-full w-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                onClick={() => setReproduciendo(current.drive_file_id)}
+                aria-label="Reproducir video"
+              >
+                {sinMiniatura.has(current.drive_file_id) ? (
+                  <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-primary/40 via-fuchsia-500/20 to-black px-4 text-center">
+                    <VideoIcon className="h-8 w-8 text-white/70" />
+                    <span className="line-clamp-2 text-xs font-medium text-white/80">{current.name}</span>
+                  </span>
+                ) : (
+                  <img
+                    src={thumbUrl(current.drive_file_id, 1200)}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    decoding="async"
+                    onError={() => setSinMiniatura((s) => new Set(s).add(current.drive_file_id))}
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                )}
+                <span className="absolute inset-0 flex items-center justify-center bg-black/20">
+                  <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/95 text-black shadow-xl transition-transform active:scale-95">
+                    <Play className="ml-1 h-8 w-8 fill-current" />
+                  </span>
+                </span>
+                <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-3 pt-8 text-left text-sm font-semibold text-white">
+                  Tocá para verlo
+                </span>
+              </button>
+            )}
+          </div>
         ) : (
           <div className="aspect-video flex flex-col items-center justify-center text-muted-foreground p-4 space-y-2">
             <VideoIcon className="w-8 h-8 opacity-50" />
