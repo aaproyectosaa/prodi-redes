@@ -5,6 +5,7 @@ import {
   Banknote,
   Check,
   ChevronDown,
+  Clock,
   Eye,
   FileSpreadsheet,
   Loader2,
@@ -16,6 +17,7 @@ import {
   Send,
   Trash2,
   Undo2,
+  Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -33,7 +35,8 @@ import { ClienteTag } from "@/components/redes/ClienteTag";
 import { BoletaDialog } from "@/components/redes/admin/BoletaDialog";
 import { DatosFacturacionDialog, EditarFacturaDialog, MesNav } from "@/components/redes/admin/FacturaPartes";
 import { PagoParcialDialog } from "@/components/redes/admin/PagoParcialDialog";
-import { Morosos } from "@/components/redes/admin/Morosos";
+import { Morosos, useMorosos } from "@/components/redes/admin/Morosos";
+import { ComoFunciona, FilaKpis, Kpi, Pestanias, Vacio as VacioAdmin, type Pestania } from "@/components/redes/admin/AdminUI";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { armarFactura, facturaId } from "../../../api/_lib/facturacion";
 import { doc, getDoc } from "@/lib/db";
@@ -70,7 +73,7 @@ import { DATOS_COBRO_DEFAULT } from "@/lib/redes/types";
 import { cn } from "@/lib/utils";
 
 const err = (e: unknown) => toast.error(e instanceof Error ? e.message : "Algo salió mal");
-type Paso = 1 | 2;
+type Paso = "emitir" | "cobrar" | "cobradas" | "morosos";
 
 /**
  * Cobros a clientes, en dos pasos: 1) elegir a quién emitirle la boleta del mes (le llega a su panel
@@ -136,7 +139,8 @@ export default function Cobros() {
     return filas.sort((a, b) => a.f.cliente.localeCompare(b.f.cliente));
   }, [borradores, clientes, facturas, planes, settings.iva_pct, settings.dia_vencimiento, mes, hoy]);
 
-  const sugerido: Paso = !porEmitir.length && pendientes.length ? 2 : 1;
+  const morosos = useMorosos(delAnio);
+  const sugerido: Paso = porEmitir.length ? "emitir" : pendientes.length ? "cobrar" : morosos.filas.length ? "morosos" : "cobradas";
   const [paso, setPaso] = useState<Paso>(sugerido);
   const [tocado, setTocado] = useState(false);
   useEffect(() => {
@@ -176,25 +180,19 @@ export default function Cobros() {
     }
   };
 
-  const pasos: { n: Paso; titulo: string; detalle: string; listo: boolean }[] = [
-    {
-      n: 1,
-      titulo: "Emitir",
-      detalle: porEmitir.length ? `${porEmitir.length} sin emitir` : vivas.length ? "Todas emitidas" : "—",
-      listo: vivas.length > 0 && porEmitir.length === 0,
-    },
-    {
-      n: 2,
-      titulo: "Cobrar",
-      detalle: pendientes.length ? `${pendientes.length} por cobrar` : cobradas.length ? "Todo cobrado" : "—",
-      listo: vivas.length > 0 && pendientes.length === 0 && porEmitir.length === 0,
-    },
+  const vencidoBoletas = pendientes.filter((f) => f.vencimiento < hoy);
+  const pestanias: Pestania<Paso>[] = [
+    { k: "emitir", label: "Emitir", n: porEmitir.length, listo: vivas.length > 0 && porEmitir.length === 0 },
+    { k: "cobrar", label: "Por cobrar", n: pendientes.length, alerta: vencidoBoletas.length > 0, listo: vivas.length > 0 && !pendientes.length && !porEmitir.length },
+    { k: "cobradas", label: "Cobradas", n: cobradas.length },
+    { k: "morosos", label: "Morosos", n: morosos.filas.length, alerta: morosos.filas.length > 0 },
   ];
+  const periodo = mesLabel(periodoDe(mes)).split(" ")[0].toLowerCase();
 
   return (
     <PageShell
-      title="Cobros a clientes"
-      subtitle={`Mes vencido: el 27 de ${mesLabel(mes).split(" ")[0].toLowerCase()} se emiten las boletas de ${mesLabel(periodoDe(mes)).split(" ")[0].toLowerCase()} y se pagan del 1 al ${settings.dia_vencimiento ?? DIA_VENCIMIENTO} de ${mesLabel(sumarMeses(mes, 1)).toLowerCase()} (salvo los clientes con otro plazo). A los de mes adelantado se les factura ${mesLabel(sumarMeses(mes, 1)).split(" ")[0].toLowerCase()}. Después corre un 0,5% de interés por día.`}
+      title="Cobros"
+      subtitle={`Boletas de ${periodo}: emitilas, marcá lo que entra y seguí a los que deben.`}
       actions={
         <>
           {vivas.length > 0 && (
@@ -213,52 +211,32 @@ export default function Cobros() {
         </div>
       ) : (
         <div className="space-y-5">
-          <Morosos facturas={delAnio} />
-          {total > 0 && (
-            <div className="rounded-2xl border bg-card p-4">
-              <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-                <span>
-                  Cobrado <b className="text-lg tabular-nums">{formatARS(cobrado)}</b> <span className="text-muted-foreground">de {formatARS(total)} emitidos</span>
-                </span>
-                <span className="text-muted-foreground">Falta {formatARS(total - cobrado)}</span>
-              </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-                <div className="h-full rounded-full bg-emerald-500 transition-all duration-700" style={{ width: `${Math.round((cobrado / total) * 100)}%` }} />
-              </div>
-            </div>
-          )}
+          <FilaKpis>
+            <Kpi icono={Receipt} label="Emitido" valor={formatARS(total)} sub={porEmitir.length ? `${porEmitir.length} por emitir` : "Todas emitidas"} tono="violeta" onClick={() => ir("emitir")} />
+            <Kpi
+              icono={Wallet}
+              label="Cobrado"
+              valor={formatARS(cobrado)}
+              avance={total ? cobrado / total : 0}
+              sub={total ? `${Math.round((cobrado / total) * 100)}% de lo emitido` : "—"}
+              tono="verde"
+              onClick={() => ir("cobradas")}
+            />
+            <Kpi icono={Clock} label="Falta cobrar" valor={formatARS(Math.max(0, total - cobrado))} sub={`${pendientes.length} boleta${pendientes.length === 1 ? "" : "s"}`} tono="ambar" onClick={() => ir("cobrar")} />
+            <Kpi
+              icono={AlertTriangle}
+              label="Atrasado (con interés)"
+              valor={formatARS(morosos.total)}
+              sub={morosos.filas.length ? `${morosos.filas.length} cliente${morosos.filas.length === 1 ? "" : "s"}` : "Nadie atrasado"}
+              tono={morosos.filas.length ? "rojo" : "gris"}
+              onClick={() => ir("morosos")}
+            />
+          </FilaKpis>
 
-          <ol className="grid grid-cols-2 gap-2">
-            {pasos.map((p) => (
-              <li key={p.n}>
-                <button
-                  type="button"
-                  onClick={() => ir(p.n)}
-                  aria-current={paso === p.n ? "step" : undefined}
-                  className={cn(
-                    "flex h-full w-full items-center gap-3 rounded-2xl border p-3 text-left transition-all",
-                    paso === p.n ? "border-primary bg-primary/[0.07] shadow-sm" : "hover:border-primary/40"
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold",
-                      p.listo ? "bg-emerald-500 text-white" : paso === p.n ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                    )}
-                  >
-                    {p.listo ? <Check className="h-4 w-4" /> : p.n}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold leading-tight">{p.titulo}</span>
-                    <span className="block text-[11px] text-muted-foreground">{p.detalle}</span>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ol>
+          <Pestanias items={pestanias} valor={paso} onChange={ir} />
 
           <div key={`${mes}-${paso}`} className="animate-in fade-in slide-in-from-bottom-1 duration-200 motion-reduce:animate-none">
-            {paso === 1 && (
+            {paso === "emitir" && (
               <PasoEmitir
                 mes={mes}
                 lista={porEmitir}
@@ -267,18 +245,13 @@ export default function Cobros() {
                 onEditar={(r) => void editarFila(r)}
                 editando={editarPid}
                 onDatos={setDatosDe}
-                onEmitidas={() => ir(2)}
+                onEmitidas={() => ir("cobrar")}
               />
             )}
-            {paso === 2 && <PasoCobrar lista={pendientes} hoy={hoy} cobro={cobro} onVer={abrir} />}
-          </div>
-
-          {cobradas.length > 0 && (
-            <details className="rounded-2xl border bg-card px-4 py-3">
-              <summary className="cursor-pointer select-none text-sm font-semibold">
-                Cobradas ({cobradas.length}) · {formatARS(cobrado)}
-              </summary>
-              <div className="mt-3 divide-y">
+            {paso === "cobrar" && <PasoCobrar lista={pendientes} hoy={hoy} cobro={cobro} onVer={abrir} />}
+            {paso === "cobradas" &&
+              (cobradas.length ? (
+                <div className="divide-y rounded-2xl border bg-card px-4">
                 {cobradas.map((f) => (
                   <div key={f.id} className="flex items-center gap-3 py-2 text-sm">
                     <span className="min-w-0 flex-1 truncate">{f.cliente}</span>
@@ -319,8 +292,25 @@ export default function Cobros() {
                   </div>
                 ))}
               </div>
-            </details>
-          )}
+              ) : (
+                <VacioAdmin icono={Wallet} titulo="Todavía no se cobró nada este mes" texto="Cuando marques una boleta como cobrada (o pague por Mercado Pago) aparece acá." />
+              ))}
+            {paso === "morosos" &&
+              (morosos.filas.length ? <Morosos facturas={delAnio} embebido /> : <VacioAdmin icono={Check} titulo="Nadie está atrasado" texto="Todos los clientes están al día con sus boletas." />)}
+          </div>
+
+          <ComoFunciona>
+            <p>
+              <b>Mes vencido</b>: el 27 de cada mes se arman solas las boletas de ese mes. Las revisás y las <b>emitís</b>: al cliente le llega a su panel con un aviso
+              y una copia por mail. Se pagan del 1 al {settings.dia_vencimiento ?? DIA_VENCIMIENTO} del mes siguiente (salvo los clientes con otro plazo). A los de
+              <b> mes adelantado</b> se les factura el mes que viene.
+            </p>
+            <p>
+              Después del vencimiento corre un <b>0,5% de interés por día</b> y se le recuerda solo. Si se sigue atrasando entra en <b>mora</b>: primero se le frenan
+              los extras y después la producción (los días se cambian en Ajustes → Mora).
+            </p>
+            <p>Los que pagan con débito automático se marcan solos cuando Mercado Pago cobra.</p>
+          </ComoFunciona>
         </div>
       )}
 
@@ -425,7 +415,7 @@ function PasoEmitir({
       ) : (
         <>
           <Ayuda>
-            Tildá a quién le querés emitir la boleta de {mesLabel(periodoDe(mes)).toLowerCase()} y tocá <b>Emitir</b>. Le llega a su panel con un aviso y una copia por mail. Tocá <b>Ver</b> para mirarla antes.
+            Tildá y tocá <b>Emitir</b>: le llega al panel y por mail. Con <b>Ver</b> la mirás antes.
           </Ayuda>
           <div className="flex flex-wrap items-center justify-between gap-2 px-1">
             <label className="flex cursor-pointer items-center gap-2.5 text-xs text-muted-foreground">
@@ -601,8 +591,7 @@ function PasoCobrar({ lista, hoy, cobro, onVer }: { lista: FacturaDoc[]; hoy: st
     <div className="space-y-3">
       {dialogoParcial}
       <Ayuda>
-        Cuando te paguen, tocá <b>Cobrada</b> y elegí cómo pagó. Las vencidas aparecen primero, con el interés del 0,5% por día a hoy (queda
-        guardado lo que se cobró al marcarla). A los que deben les mandamos un recordatorio solo (2 días antes y a los 1, 7 y 15 días de vencida).
+        Cuando te paguen, tocá <b>Cobrada</b>. Las vencidas van primero, con el interés a hoy.
       </Ayuda>
       <Seleccion lista={lista} sel={sel} setSel={setSel}>
         {elegidas.length > 0 && <MenuCobrar label={`Cobradas (${elegidas.length})`} onElegir={(m) => void cobrar(elegidas, m)} />}
@@ -781,7 +770,7 @@ function Fila({
 }
 
 function Ayuda({ children }: { children: ReactNode }) {
-  return <p className="rounded-xl bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">{children}</p>;
+  return <p className="px-1 text-xs text-muted-foreground">{children}</p>;
 }
 
 function Vacio({ texto, accion }: { texto: string; accion?: ReactNode }) {

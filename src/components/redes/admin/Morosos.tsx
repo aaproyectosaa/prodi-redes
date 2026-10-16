@@ -31,8 +31,9 @@ const fechaCorta = (f: string) => `${Number(f.slice(8, 10))}/${Number(f.slice(5,
  * Panel de morosos (Cobros): los clientes con boletas vencidas, del más atrasado al menos, con lo que deben y el
  * interés a hoy, en qué escalón están y qué se puede hacer: recordarle, escribirle o darle unos días de tregua.
  */
-export function Morosos({ facturas }: { facturas: FacturaDoc[] }) {
-  const { clientes, settings, chats } = useRedes();
+/** Los clientes con boletas vencidas (del más atrasado al menos), con su estado de mora a hoy. */
+export function useMorosos(facturas: FacturaDoc[]) {
+  const { clientes, settings } = useRedes();
   const cfg = leerConfigMora(settings as unknown as Record<string, unknown>);
   const hoy = hoyISO();
   const filas = useMemo(
@@ -53,11 +54,17 @@ export function Morosos({ facturas }: { facturas: FacturaDoc[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [clientes, facturas, hoy, cfg.activo, cfg.aviso, cfg.extras, cfg.pausa]
   );
-  if (!filas.length) return null;
   const total = filas.reduce((a, x) => a + x.e.deuda + x.e.interes, 0);
+  return { filas, total, cfg };
+}
+
+export function Morosos({ facturas, embebido }: { facturas: FacturaDoc[]; embebido?: boolean }) {
+  const { chats } = useRedes();
+  const { filas, total, cfg } = useMorosos(facturas);
+  if (!filas.length) return null;
 
   return (
-    <section id="morosos" className="space-y-3 rounded-3xl border border-red-500/30 bg-gradient-to-br from-red-500/[0.07] via-card to-card p-4">
+    <section id="morosos" className={cn("space-y-3", !embebido && "rounded-3xl border border-red-500/30 bg-gradient-to-br from-red-500/[0.07] via-card to-card p-4")}>
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h2 className="flex items-center gap-2 text-lg font-bold">
