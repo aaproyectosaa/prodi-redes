@@ -116,7 +116,7 @@ const Titulo: React.FC<{ texto: string; sub?: string; c: Colores; dur: number }>
   const { frame, entra, sale } = usePop(dur);
   const subEntra = interpolate(frame, [6, 14], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   return (
-    <AbsoluteFill style={{ alignItems: "center", paddingTop: 170, gap: 18, opacity: sale }}>
+    <AbsoluteFill style={{ alignItems: "center", paddingTop: 280, gap: 18, opacity: sale }}>
       <div style={{ ...caja(c.fuerte, "white"), fontSize: 78, transform: `translateY(${interpolate(entra, [0, 1], [-260, 0])}px) rotate(-2deg)` }}>{texto}</div>
       {sub ? (
         <div style={{ ...caja("white", c.fuerte), fontSize: 44, opacity: subEntra, transform: `scale(${interpolate(subEntra, [0, 1], [0.7, 1])}) rotate(1.5deg)` }}>{sub}</div>
