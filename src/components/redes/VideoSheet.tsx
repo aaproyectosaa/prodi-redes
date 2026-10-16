@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AvisoPausaEquipo } from "@/components/redes/MoraAvisos";
 import { useSearchParams } from "react-router-dom";
 import {
   Undo2,
@@ -382,6 +383,11 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
           </MediaPanel>
         )}
 
+        {!isCliente && cliente?.mora?.nivel === "pausa" && (
+          <div className="px-4 pt-2 lg:col-start-2 lg:px-7">
+            <AvisoPausaEquipo cliente={cliente} />
+          </div>
+        )}
         {!isCliente && (
           <div className="sticky top-0 z-10 border-b bg-background/95 px-4 py-2 backdrop-blur [.teclado-abierto_&]:hidden lg:static lg:col-start-2 lg:row-start-2 lg:border-b lg:bg-transparent lg:px-7 lg:pb-3 lg:pt-2 lg:backdrop-blur-none">
             {/* Todas entran siempre: grilla pareja, ícono arriba y nombre abajo. */}

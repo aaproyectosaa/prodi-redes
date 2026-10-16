@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { MoraAjustes } from "@/components/redes/MoraAvisos";
 import { addDoc, collection, deleteDoc, doc, onSnapshot, setDoc, updateDoc } from "@/lib/db";
 import { CheckCircle2, FlaskConical, HardDrive, Loader2, Moon, Plus, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -197,6 +198,24 @@ export default function Ajustes() {
                   // Se reemplaza entero (si se borra el precio de una localidad, que no quede el viejo).
                   await updateDoc(doc(db, "app_settings", "redes"), { viaticos: v, promo_jornada_pct: promo });
                   toast.success("Viáticos guardados");
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "No se pudo guardar");
+                }
+              }}
+            />
+          </Section>
+
+          <Section
+            title="Mora"
+            description="Según los días de atraso de su boleta vencida más vieja, el cliente pasa por escalones. Además corre el 0,5% de interés por día. Desde Cobros → Morosos le podés dar 7 días de tregua a un cliente."
+          >
+            <MoraAjustes
+              actual={settings.mora as Record<string, unknown> | undefined}
+              onGuardar={async (m) => {
+                try {
+                  assertEditable();
+                  await updateDoc(doc(db, "app_settings", "redes"), { mora: m });
+                  toast.success("Mora guardada (se aplica en el próximo cálculo, todos los días a la mañana)");
                 } catch (err) {
                   toast.error(err instanceof Error ? err.message : "No se pudo guardar");
                 }

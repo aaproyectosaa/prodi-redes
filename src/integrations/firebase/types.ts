@@ -243,6 +243,12 @@ export interface Project {
   creditos_extra?: Record<string, number>;
   /** Correos que reciben el informe mensual. */
   contacto_emails?: string[];
+  /** Mora (la calcula el servidor, api/_lib/mora.ts): escalón, días de atraso y lo que debe. */
+  mora?: import("../../../api/_lib/mora-calc").EstadoMora | null;
+  /** Tregua del admin: hasta esa fecha (YYYY-MM-DD) no se le frenan extras ni producción. */
+  mora_tregua_hasta?: string | null;
+  /** Último "Recordarle" desde el panel de morosos. */
+  mora_recordado_at?: string | null;
   /** Contexto de marca para la IA (copys y piezas). */
   marca?: {
     rubro?: string;

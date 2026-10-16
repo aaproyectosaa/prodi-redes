@@ -51,6 +51,7 @@ import { hoyAR, mesAR, sumarMeses } from "../_lib/fecha";
 import { autorizarFactura, estadoArca } from "../_lib/arca";
 import { viajeYaPago, viaticoDe, type ViaticoVideo } from "../_lib/viaticos";
 import { cuentaJornada, MAX_VIDEOS_JORNADA, promoJornada } from "../_lib/jornada";
+import { actualizarMora, moraBloquea } from "../_lib/mora";
 
 export const config = { maxDuration: 30 };
 
@@ -246,12 +247,18 @@ async function procesarWebhook(req: VercelRequest) {
     const pid = await proyectoDeSuscripcion(c.preapproval_id, sus?.external_reference);
     if (!pid || !c.payment?.id) return { ok: true, ignorado: "sin pago" };
     const pago = await obtenerPago(String(c.payment.id));
-    return { ok: true, estado: await registrarAbono(datosAbono(pid, pago), base) };
+    const estadoAbono = await registrarAbono(datosAbono(pid, pago), base);
+    // Si pagó lo que debía, sale de la mora al toque.
+    await actualizarMora(pid, base).catch(() => undefined);
+    return { ok: true, estado: estadoAbono };
   }
 
   const pago = await obtenerPago(id);
   if (pago.external_reference?.startsWith("abono:")) {
-    return { ok: true, estado: await registrarAbono(datosAbono(pago.external_reference.slice(6), pago), base) };
+    const pidAbono = pago.external_reference.slice(6);
+    const estadoAbono = await registrarAbono(datosAbono(pidAbono, pago), base);
+    await actualizarMora(pidAbono, base).catch(() => undefined);
+    return { ok: true, estado: estadoAbono };
   }
   const estado = await aplicarPago(pago, base);
   // Cuánto entra de verdad (sin la comisión) y cuándo se libera: para repartir el cobro.
@@ -534,6 +541,48 @@ async function crearSiHayCupo(o: {
  * El cliente pide una pieza gráfica. Si le quedan piezas del plan este mes, se crea y le llega
  * a diseño; si no, queda pendiente de pago y se devuelve el link de Mercado Pago.
  */
+/** Mora: un cliente atrasado no puede pedir extras (desde "sin extras") ni nada (en "pausa"). El equipo sí. */
+async function moraCliente(caller: { role: string }, pid: string, extra: boolean) {
+  if (caller.role !== "cliente") return;
+  const msg = await moraBloquea(pid, extra);
+  if (msg) throw new HttpError(402, msg);
+}
+
+/** Recalcula la mora de un cliente (después de registrar un pago, editar una boleta o dar una tregua). */
+async function moraRecalcular(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "administracion"]);
+  const { proyecto_id } = body<{ proyecto_id?: string }>(req);
+  if (!proyecto_id) throw new HttpError(400, "Falta el cliente");
+  await assertProjectAccess(caller, proyecto_id);
+  return { mora: await actualizarMora(proyecto_id, appUrl(req)) };
+}
+
+/** Panel de morosos: "Recordar ahora" le manda al cliente (app y mail) lo que debe con el interés a hoy. */
+async function moraRecordar(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "administracion"]);
+  const { proyecto_id } = body<{ proyecto_id?: string }>(req);
+  if (!proyecto_id) throw new HttpError(400, "Falta el cliente");
+  await assertProjectAccess(caller, proyecto_id);
+  const e = await actualizarMora(proyecto_id, null);
+  if (!e || e.dias <= 0) throw new HttpError(400, "Ese cliente no tiene pagos vencidos");
+  const ars = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n || 0);
+  const clientes = await destinatariosDe(proyecto_id, ["cliente"], false);
+  if (!clientes.length) throw new HttpError(400, "Ese cliente no tiene usuarios para avisarle");
+  await enviarAviso(
+    {
+      destinatarios: clientes,
+      titulo: "Tenés un pago atrasado",
+      cuerpo: `Hace ${e.dias} día${e.dias === 1 ? "" : "s"} que venció. Hoy son ${ars(e.deuda + e.interes)} con el interés (0,5% por día). Si ya lo pagaste, avisanos y lo marcamos.`,
+      link: "/cliente?tab=plan",
+      clave: `mora-recordar:${proyecto_id}:${new Date().toISOString().slice(0, 10)}`,
+      proyectoId: proyecto_id,
+    },
+    appUrl(req)
+  );
+  await adminDb().collection("projects").doc(proyecto_id).update({ mora_recordado_at: new Date().toISOString() });
+  return { ok: true };
+}
+
 async function pedirPieza(req: VercelRequest) {
   const caller = await requireCaller(req, ["cliente", "admin", "productor"]);
   const b = body<Record<string, unknown>>(req);
@@ -542,6 +591,7 @@ async function pedirPieza(req: VercelRequest) {
   await assertProjectAccess(caller, pid);
   const pedido = leerPedidoPieza(b);
   if (typeof pedido === "string") throw new HttpError(400, pedido);
+  await moraCliente(caller, pid, false);
   const db = adminDb();
   const proj = (await db.collection("projects").doc(pid).get()).data() ?? {};
   let incluidas = Number(proj.plan_redes_override?.piezas_mes ?? NaN);
@@ -638,7 +688,8 @@ async function pedirPieza(req: VercelRequest) {
   if (!(monto > 0)) throw new HttpError(409, "El precio de las piezas no está configurado. Escribinos y lo vemos.");
   await ref.set(piezaDocDe(false, monto));
   const concepto = `Pieza gráfica · ${FORMATOS_PIEZA[pedido.formato].label}`;
-  const cobroRef = db.collection("cobros").doc();
+  await moraCliente(caller, pid, true);
+    const cobroRef = db.collection("cobros").doc();
   const now = new Date().toISOString();
   await cobroRef.set({
     proyecto_id: pid,
@@ -829,6 +880,7 @@ async function pedirVideo(req: VercelRequest) {
   }
   if (!b.proyecto_id || !/^\d{4}-\d{2}$/.test(String(b.mes))) throw new HttpError(400, "Datos incompletos");
   if (String(b.mes) < mesActual || String(b.mes) > mesTope) throw new HttpError(400, "Elegí este mes o uno de los próximos 3");
+  await moraCliente(caller, String(b.proyecto_id), false);
   await assertProjectAccess(caller, b.proyecto_id);
   const titulo = String(b.titulo ?? "").trim().slice(0, 120);
   if (titulo.length < 3) throw new HttpError(400, "Contanos de qué se trata el video");
@@ -952,6 +1004,7 @@ async function pedirVideo(req: VercelRequest) {
     // Hay algo para pagar (extras y/o viaje): un solo pago; los videos se crean cuando se acredita.
     const [y, m] = mes.split("-").map(Number);
     const concepto = `Filmación de ${pedidos.length} videos · ${MESES[m - 1]} ${y}${viaje ? ` + viaje a ${viatico!.localidad}` : ""}: ${titulos}`.slice(0, 120);
+    await moraCliente(caller, String(b.proyecto_id), true);
     const cobroRef = db.collection("cobros").doc();
     await cobroRef.set({
       proyecto_id: pid,
@@ -1059,7 +1112,8 @@ async function pedirVideo(req: VercelRequest) {
   if (b.sube_cliente === true) pedido.sube_cliente = true;
   const total = precioVideo + (conViaje ? Number(viatico!.monto) : 0);
   const concepto = `Video extra${soloEdicion ? " solo edición" : ""}${plataforma === "meta" ? "" : ` (${PLATAFORMA_NOMBRE[plataforma]})`} · ${MESES[m - 1]} ${y}: ${titulo}${conViaje ? ` + viáticos a ${viatico!.localidad}` : ""}`.slice(0, 120);
-  const cobroRef = db.collection("cobros").doc();
+  await moraCliente(caller, String(b.proyecto_id), true);
+    const cobroRef = db.collection("cobros").doc();
   await cobroRef.set({
     proyecto_id: b.proyecto_id,
     tipo: "video_extra",
@@ -1107,6 +1161,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "arca-estado") res.status(200).json(await arcaEstado(req));
     else if (accion === "mp-detalle") res.status(200).json(await mpDetalle(req));
     else if (accion === "pieza-idea") res.status(200).json(await piezaIdea(req));
+    else if (accion === "mora-recalcular") res.status(200).json(await moraRecalcular(req));
+    else if (accion === "mora-recordar") res.status(200).json(await moraRecordar(req));
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {
     // Si falla el webhook respondemos error: Mercado Pago lo reintenta solo.

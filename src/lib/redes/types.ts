@@ -419,6 +419,8 @@ export interface DatosCobro {
 }
 
 export interface RedesSettings {
+  /** Mora: escalones por días de atraso (ver api/_lib/mora-calc.ts). */
+  mora?: { activo?: boolean; aviso?: number; extras?: number; pausa?: number };
   /** Precio de cada pieza gráfica para redes fuera del plan (ARS). */
   precio_pieza_ia: number;
   /** Precio de cada pieza para imprimir (afiche, cartel, banner) fuera del plan. */

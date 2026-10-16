@@ -78,6 +78,13 @@ function soloSuReaccion(antes: unknown, despues: unknown, uid: string): boolean 
   return true;
 }
 
+/** Cliente con la producción pausada por mora (projects.mora, lo calcula api/_lib/mora.ts). */
+async function enPausa(c: Contexto, pid: unknown): Promise<boolean> {
+  if (typeof pid !== "string") return false;
+  const p = await leerDoc(c.ex, "projects", pid);
+  return (p?.mora as { nivel?: string } | null | undefined)?.nivel === "pausa";
+}
+
 async function miembroDelChat(c: Contexto, chatId: string): Promise<boolean> {
   if (!c.chats.has(chatId)) c.chats.set(chatId, await leerDoc(c.ex, "chats", chatId));
   const chat = c.chats.get(chatId);
@@ -432,15 +439,19 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       return (
         esAdmin(c) ||
         (c.role === "productor" && equipoDe(c, id) && soloCambia(antes, despues, ["marca", "redes", "meta", "produccion"])) ||
-        (esFinanzas(c) && soloCambia(antes, despues, ["facturacion"]))
+        (esFinanzas(c) && soloCambia(antes, despues, ["facturacion", "mora_tregua_hasta"]))
       );
     case "videos":
       // El cliente aprueba o pide cambios solo por /api/publico/video-cliente (el servidor valida etapa, ronda e historial).
+      // Mora: con la producción pausada no se agenda ni se manda a edición nada nuevo (el admin sí puede).
+      if (!esAdmin(c) && despues && ["agendado", "edicion"].includes(String(despues.etapa)) && despues.etapa !== antes?.etapa && (await enPausa(c, despues.proyecto_id)))
+        return false;
       if (crea) return produceEn(c, despues!.proyecto_id);
       if (borra) return produceEn(c, antes!.proyecto_id);
       if (!esAdmin(c) && tocaAlguna(antes, despues, ["proyecto_id", "extra", "created_by", "pedido_cliente"])) return false;
       return equipoDe(c, antes!.proyecto_id) && equipoDe(c, despues!.proyecto_id);
     case "rodajes":
+      if (crea && !esAdmin(c) && (await enPausa(c, despues!.proyecto_id))) return false;
       return (crea || produceEn(c, antes!.proyecto_id)) && (borra || produceEn(c, despues!.proyecto_id));
     case "programados": {
       // Se crea uno propio para un chat del que es miembro (texto y hora); se puede editar (texto y hora) o borrar (cancelar).

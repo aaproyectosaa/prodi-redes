@@ -33,6 +33,7 @@ import { ClienteTag } from "@/components/redes/ClienteTag";
 import { BoletaDialog } from "@/components/redes/admin/BoletaDialog";
 import { DatosFacturacionDialog, EditarFacturaDialog, MesNav } from "@/components/redes/admin/FacturaPartes";
 import { PagoParcialDialog } from "@/components/redes/admin/PagoParcialDialog";
+import { Morosos } from "@/components/redes/admin/Morosos";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { armarFactura, facturaId } from "../../../api/_lib/facturacion";
 import { doc, getDoc } from "@/lib/db";
@@ -87,6 +88,8 @@ export default function Cobros() {
   }, []);
   const { clientes, planes, settings } = useRedes();
   const { facturas: todas, loading } = useFacturas(mes);
+  // Morosos: las vencidas pueden ser de meses anteriores.
+  const { facturas: delAnio } = useFacturas(sumarMeses(mesActual(), -12));
   const facturas = useMemo(() => todas.filter((f) => f.mes === mes).sort((a, b) => a.cliente.localeCompare(b.cliente)), [todas, mes]);
   const cobro = { ...DATOS_COBRO_DEFAULT, ...(settings.cobro ?? {}) };
   const hoy = hoyISO();
@@ -210,6 +213,7 @@ export default function Cobros() {
         </div>
       ) : (
         <div className="space-y-5">
+          <Morosos facturas={delAnio} />
           {total > 0 && (
             <div className="rounded-2xl border bg-card p-4">
               <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">

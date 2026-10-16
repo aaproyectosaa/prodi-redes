@@ -182,6 +182,11 @@ export const numeroArca = (a: NonNullable<Factura["arca"]>) =>
   `Factura ${a.tipo} ${String(a.punto_venta).padStart(4, "0")}-${String(a.numero).padStart(8, "0")}`;
 
 /** Queda cobrada con el interés por mora de hoy (se guarda fijo en `interes_cobrado`). */
+/** La mora del cliente se recalcula en el servidor (sale de la mora al toque si pagó). No frena si falla. */
+export function recalcularMora(proyectoId: string) {
+  return callApi("/api/pagos/mora-recalcular", { proyecto_id: proyectoId }).catch(() => undefined);
+}
+
 export async function marcarCobrada(f: FacturaDoc, medio: MedioCobro) {
   assertEditable();
   await updateDoc(doc(db, "facturas", f.id), {
@@ -191,6 +196,7 @@ export async function marcarCobrada(f: FacturaDoc, medio: MedioCobro) {
     emitida_at: f.emitida_at ?? new Date().toISOString(),
     interes_cobrado: interesMora(f, hoyAR()).interes,
   });
+  void recalcularMora(f.proyecto_id);
 }
 
 /**
@@ -212,12 +218,14 @@ export async function registrarPago(f: FacturaDoc, monto: number, medio: MedioCo
       ? { estado: "cobrada", medio, cobrado_at: ahora, emitida_at: f.emitida_at ?? ahora, interes_cobrado: interesMora(f, hoyAR()).interes }
       : {}),
   });
+  void recalcularMora(f.proyecto_id);
   return { completa, saldo: Math.max(0, saldoAntes - m) };
 }
 
 export async function volverAPendiente(f: FacturaDoc) {
   assertEditable();
   await updateDoc(doc(db, "facturas", f.id), { estado: "pendiente", medio: null, cobrado_at: null, interes_cobrado: null });
+  void recalcularMora(f.proyecto_id);
 }
 
 /** Se marcó "ya pagó" sin habérsela emitido (o en el mes equivocado): vuelve a "Emitir", como si nada. */
@@ -235,6 +243,7 @@ export async function reactivarFactura(f: FacturaDoc) {
 export async function anularFactura(f: FacturaDoc) {
   assertEditable();
   await updateDoc(doc(db, "facturas", f.id), { estado: "anulada" });
+  void recalcularMora(f.proyecto_id);
 }
 
 export function descargarPlanilla(lista: Factura[], mes: string) {

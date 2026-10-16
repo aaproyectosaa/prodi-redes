@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AvisoPausaEquipo } from "@/components/redes/MoraAvisos";
 import { es } from "date-fns/locale";
 import { Building2, CalendarDays, Check, ChevronDown, Clapperboard, Film, History, Loader2, MapPin, Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -287,6 +288,7 @@ export function RodajeDialog({
 
         {/* Lo único que scrollea: así el botón de abajo siempre se ve (también en el celular). */}
         <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-6 pb-6">
+          <AvisoPausaEquipo cliente={cliente} />
           {!rodaje && autoDe && (
             <div className="flex items-start gap-2.5 rounded-2xl border border-primary/30 bg-primary/[0.08] px-3.5 py-2.5 text-sm">
               <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />

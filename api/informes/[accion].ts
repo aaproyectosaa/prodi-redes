@@ -7,6 +7,7 @@
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { adminDb, getPool } from "../_lib/db";
+import { moraTodos } from "../_lib/mora";
 import { appUrl, body, HttpError, requireCaller, sendError } from "../_lib/http";
 import { construirInforme, enviarMail, mesAnteriorAR } from "../_lib/informe";
 import { sincronizarTodoMeta, sincronizarVideoMeta } from "../_lib/meta";
@@ -74,11 +75,13 @@ async function diario(req: VercelRequest) {
     recordatoriosTareas(base).catch((err) => `error: ${err}`),
     recordatoriosEdicion(base).catch((err) => `error: ${err}`),
   ]);
+  // Mora: escalón de cada cliente según sus días de atraso (después de los recordatorios de cobro).
+  const mora = await moraTodos(base).catch((err) => `error: ${err}`);
   // Lo que les llegó al equipo mientras descansaban: un solo aviso de buenos días.
   const manana = await enviarRetenidos(base).catch((err) => `error: ${err}`);
   // Lo borrado se anota unos días para que las pantallas abiertas se enteren; después se limpia.
   await getPool().query("delete from borrados where borrado < now() - interval '7 days'").catch(() => undefined);
-  return { ok: true, meta: metaRes, recordatorios_rodaje: rodajes, recordatorios_aprobar: aprobar, recordatorios_plan: planes, facturacion, vencimientos, recordatorios_cobro: cobros, aprendizaje_chats: chats, tareas, entregas_edicion: edicion, resumen_manana: manana };
+  return { ok: true, meta: metaRes, recordatorios_rodaje: rodajes, recordatorios_aprobar: aprobar, recordatorios_plan: planes, facturacion, vencimientos, recordatorios_cobro: cobros, mora, aprendizaje_chats: chats, tareas, entregas_edicion: edicion, resumen_manana: manana };
 }
 
 async function cron(req: VercelRequest) {

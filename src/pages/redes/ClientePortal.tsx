@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AvisoMoraCliente } from "@/components/redes/MoraAvisos";
 import { useSearchParams } from "react-router-dom";
 import { HelpCircle, Loader2, Mail, Minus, Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -247,6 +248,8 @@ export default function ClientePortal() {
         soloEdicion={soloEdicion}
       />
       <PlanMesCliente proyectoId={cliente.id} mes={planAbierto} open={!!planAbierto} onOpenChange={(o) => !o && setPlanAbierto(null)} />
+      {/* Pagos atrasados: lo que debe y qué se le frena (arriba de todo, en cualquier sección). */}
+      <AvisoMoraCliente cliente={cliente} onPagar={tab === "plan" ? undefined : () => setTab("plan")} />
       {/* Las secciones se eligen desde el menú: sin pestañas repetidas. */}
       <Tabs value={tab} onValueChange={setTab}>
 
