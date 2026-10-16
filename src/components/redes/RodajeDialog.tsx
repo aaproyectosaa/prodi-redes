@@ -32,6 +32,46 @@ const iniciales = (n: string) =>
     .join("");
 
 /** Agenda (o edita) una jornada de filmación con varios videos. */
+/**
+ * Lo que se puede sacar del pedido del cliente para el rodaje: el lugar (localidad del viático), el día (unos días
+ * antes de cuando lo quiere publicado, respetando si prefiere fines de semana), la hora (mañana o tarde) y una nota.
+ */
+function desdePedido(v: Video): { fecha: string; hora: string; lugar: string | null; notas: string } {
+  const manana = sumarDias(hoyISO(), 1);
+  const pref = v.material_base?.preferencia ?? null;
+  // 3 días antes de publicar (para editar), nunca antes de mañana.
+  let fecha = v.fecha_deseada ? sumarDias(v.fecha_deseada, -3) : manana;
+  if (fecha < manana) fecha = manana;
+  const dia = (f: string) => new Date(`${f}T12:00:00`).getDay();
+  if (pref === "Fines de semana") {
+    // El sábado más cercano (antes de la fecha si se puede).
+    let s = fecha;
+    while (dia(s) !== 6 && s > manana) s = sumarDias(s, -1);
+    if (dia(s) !== 6) {
+      s = fecha;
+      while (dia(s) !== 6) s = sumarDias(s, 1);
+    }
+    fecha = s;
+  } else if (dia(fecha) === 0) {
+    // Domingo no: el viernes antes (o el lunes si ya no da).
+    fecha = sumarDias(fecha, -2) >= manana ? sumarDias(fecha, -2) : sumarDias(fecha, 1);
+  }
+  const hora = pref === "Tardes" ? "16:00" : "10:00";
+  const lugar = v.viatico?.localidad ?? null;
+  const fechaPub = v.fecha_deseada
+    ? new Date(`${v.fecha_deseada}T12:00:00`).toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" }).replace(/[.,]/g, "")
+    : null;
+  const notas = [
+    "Pedido del cliente",
+    pref ? `prefiere ${pref.toLowerCase()}` : null,
+    fechaPub ? `lo quiere publicado el ${fechaPub}` : null,
+    v.viatico?.km != null ? `${v.viatico.localidad} (${v.viatico.km} km)` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return { fecha, hora, lugar, notas };
+}
+
 export function RodajeDialog({
   open,
   onOpenChange,
@@ -59,6 +99,8 @@ export function RodajeDialog({
   const [calAbierto, setCalAbierto] = useState(false);
   const [verOtra, setVerOtra] = useState(false);
   const [detalles, setDetalles] = useState(false);
+  // Si viene de un pedido del cliente: con qué se completó (para avisarlo arriba).
+  const [autoDe, setAutoDe] = useState<string | null>(null);
   const tira = useRef<HTMLDivElement>(null);
   // Video nuevo cargado desde acá (si el cliente no tiene nada planificado).
   const [nuevo, setNuevo] = useState("");
@@ -82,15 +124,21 @@ export function RodajeDialog({
       setSel(new Set(rodaje.video_ids));
     } else {
       setClienteId(clienteInicial ?? "");
-      setFecha(sumarDias(hoyISO(), 1));
-      setHora("10:00");
-      setLugar("");
-      setNotas("");
       setPreparar("");
       setSel(new Set(preseleccion ?? []));
+      // Pedido del cliente: se completa con lo que pidió (lugar, día, hora y notas). Todo se puede cambiar.
+      const pedido = videos.find((v) => preseleccion?.includes(v.id) && v.pedido_cliente);
+      const auto = pedido ? desdePedido(pedido) : null;
+      const ultimo = rodajes.filter((r) => r.proyecto_id === clienteInicial && r.lugar).sort((a, b) => b.fecha.localeCompare(a.fecha))[0]?.lugar ?? "";
+      setFecha(auto?.fecha ?? sumarDias(hoyISO(), 1));
+      setHora(auto?.hora ?? "10:00");
+      setLugar(auto?.lugar ?? ultimo);
+      setNotas(auto?.notas ?? "");
+      setAutoDe(auto ? pedido!.titulo : null);
+      if (auto?.notas) setDetalles(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, rodaje?.id, clienteInicial]);
+  }, [open, rodaje?.id, clienteInicial, (preseleccion ?? []).join(",")]);
 
   const cliente = clientes.find((c) => c.id === clienteId);
   const candidatos = useMemo(
@@ -234,6 +282,14 @@ export function RodajeDialog({
         </div>
 
         <div className="max-h-[calc(94dvh-190px)] space-y-6 overflow-y-auto px-6 pb-6">
+          {!rodaje && autoDe && (
+            <div className="flex items-start gap-2.5 rounded-2xl border border-primary/30 bg-primary/[0.08] px-3.5 py-2.5 text-sm">
+              <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              <p>
+                <b>Ya lo completamos con el pedido</b> «{autoDe}»: lugar, día y hora. Revisalo y cambiá lo que haga falta.
+              </p>
+            </div>
+          )}
           {/* Cliente */}
           <Select
             value={clienteId}
