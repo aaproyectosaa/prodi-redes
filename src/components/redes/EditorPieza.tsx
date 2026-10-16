@@ -185,7 +185,7 @@ export function EditorPieza({ v, titulo, piezaId, onClose }: { v: Version | null
 
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
           {/* Lienzo */}
-          <div className="relative min-h-[45vh] flex-1 overflow-hidden bg-[#0f0f12]">
+          <div className="relative min-h-[50dvh] flex-1 overflow-hidden bg-[#0f0f12]">
             <div
               className={cn("absolute inset-0 flex touch-none select-none items-center justify-center", herramienta === "zona" ? "cursor-crosshair" : zoom > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-default")}
               onPointerDown={bajar}
@@ -201,7 +201,7 @@ export function EditorPieza({ v, titulo, piezaId, onClose }: { v: Version | null
                 <Loader2 className="h-7 w-7 animate-spin text-white/60" />
               ) : (
                 <div className="relative" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transition: arrastre.current ? "none" : "transform 120ms ease-out" }}>
-                  <img ref={imgRef} src={url} alt={v?.name} draggable={false} className="block max-h-[calc(100dvh-9rem)] max-w-[min(100vw,calc(100vw-24rem))] object-contain shadow-2xl" />
+                  <img ref={imgRef} src={url} alt={v?.name} draggable={false} className="block max-h-[calc(50dvh-5rem)] max-w-[calc(100vw-1.5rem)] object-contain shadow-2xl md:max-h-[calc(100dvh-9rem)] md:max-w-[calc(100vw-25rem)]" />
                   {zona && (
                     <div
                       className="pointer-events-none absolute rounded-sm border-2 border-[#ff3b6b] bg-[#ff3b6b]/15 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]"
