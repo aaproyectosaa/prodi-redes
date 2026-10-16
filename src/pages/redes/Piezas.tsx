@@ -33,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageShell, EmptyState } from "@/components/redes/PageShell";
 import { BotonMiDia } from "@/components/redes/MiDia";
+import { useBorrarPiezas } from "@/components/redes/BorrarPiezas";
 import { ClienteTag } from "@/components/redes/ClienteTag";
 import { EnfoqueBadge, EstadoPiezaBadge, FormatoBadge, VerVersion, VersionImg, driveThumb } from "@/components/redes/PiezaDialogs";
 import { NotaDialog } from "@/components/redes/PautaDialogs";
@@ -153,6 +154,8 @@ export default function Piezas() {
   const filtros = useFiltrosTablero(`piezas-${role}`);
   const { cliente: filtroCliente, orden } = filtros;
   const piezas = useMemo(() => (filtroCliente === "todos" ? todas : todas.filter((p) => p.proyecto_id === filtroCliente)), [todas, filtroCliente]);
+  // Borrar piezas desde el tablero (solo el super admin, como las reglas del servidor).
+  const borrar = useBorrarPiezas(piezas);
   const [params, setParams] = useSearchParams();
   const [abierta, setAbierta] = useState<string | null>(null);
   // "Nueva pieza" la cargan vos y la productora (con las fotos para usar).
@@ -305,6 +308,7 @@ export default function Piezas() {
         <>
           <FiltrosTablero {...filtros} clientes={clientes} conOrden={vista === "kanban"} />
           {todas.length > 0 && <SelectorVista vista={vista} onChange={setVista} />}
+          {role === "admin" && vista === "kanban" && todas.length > 0 && borrar.boton}
           {enHistorial.length > 0 && (
             <Button variant="outline" onClick={() => setHistorial(true)}>
               <History className="mr-2 h-4 w-4" /> Historial ({enHistorial.length})
@@ -391,7 +395,7 @@ export default function Piezas() {
                       {items.map((p, i) => (
                         <div
                           key={p.id}
-                          draggable={arrastra}
+                          draggable={arrastra && !borrar.modo}
                           onDragStart={(ev) => {
                             ev.dataTransfer.setData("text/pieza-id", p.id);
                             ev.dataTransfer.effectAllowed = "move";
@@ -407,7 +411,7 @@ export default function Piezas() {
                           onContextMenu={arrastra ? (ev) => ev.preventDefault() : undefined}
                           className={cn("min-w-0", arrastra && "cursor-grab select-none active:cursor-grabbing [-webkit-touch-callout:none]", arrastrando === p.id && "opacity-40")}
                         >
-                          <PiezaCard pieza={p} i={i} cliente={clienteById(p.proyecto_id)?.nombre} onClick={() => Date.now() - recienSoltada.current > 500 && setAbierta(p.id)} />
+                          {borrar.envolver(p, <PiezaCard pieza={p} i={i} cliente={clienteById(p.proyecto_id)?.nombre} onClick={() => Date.now() - recienSoltada.current > 500 && setAbierta(p.id)} />)}
                           {col.id === "listas" && user && (
                             <button
                               type="button"
@@ -461,6 +465,7 @@ export default function Piezas() {
       <PiezaTrabajo pieza={pieza} onClose={() => setAbierta(null)} />
       <HistorialPiezas open={historial} onOpenChange={setHistorial} piezas={enHistorial} onAbrir={(id) => setAbierta(id)} />
       <NuevaPiezaEquipo open={nueva} onOpenChange={setNueva} onCreada={(id) => setAbierta(id)} />
+      {borrar.barra}
     </PageShell>
   );
 }
@@ -791,17 +796,17 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
   const enviadaN = versiones.findIndex((v) => v.id === pieza.version_enviada_id) + 1;
   const aprobadaV = versiones.find((v) => v.id === pieza.version_aprobada_id) ?? null;
   const pasos = [
-    { n: 1, t: "Leé el pedido", listo: true },
-    { n: 2, t: "Creá la pieza", listo: versiones.length > 0 },
-    { n: 3, t: "Elegí una versión", listo: !!elegida || ["revision_interna", "para_aprobar", "entregada"].includes(pieza.estado) },
-    { n: 4, t: directo ? "Entregá al cliente" : "Entregá a revisión", listo: ["revision_interna", "para_aprobar", "entregada"].includes(pieza.estado) },
+    { n: 1, t: "Leé el pedido", c: "Leer", listo: true },
+    { n: 2, t: "Creá la pieza", c: "Crear", listo: versiones.length > 0 },
+    { n: 3, t: "Elegí una versión", c: "Elegir", listo: !!elegida || ["revision_interna", "para_aprobar", "entregada"].includes(pieza.estado) },
+    { n: 4, t: directo ? "Entregá al cliente" : "Entregá a revisión", c: "Entregar", listo: ["revision_interna", "para_aprobar", "entregada"].includes(pieza.estado) },
   ];
 
   return (
     <Dialog open={!!pieza} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-5xl gap-0 overflow-hidden rounded-2xl p-0 sm:max-h-[94dvh]">
+      <DialogContent className="flex max-h-[94dvh] w-[calc(100vw-1.5rem)] max-w-5xl flex-col gap-0 overflow-hidden rounded-2xl p-0">
         {/* Encabezado: qué pieza es y en qué paso va */}
-        <div className="border-b bg-gradient-to-r from-primary/[0.07] via-background to-fuchsia-500/[0.06] px-5 pb-3 pt-4">
+        <div className="shrink-0 border-b bg-gradient-to-r from-primary/[0.07] via-background to-fuchsia-500/[0.06] px-5 pb-3 pt-4">
           <DialogHeader className="space-y-1 text-left">
             <DialogTitle className="flex flex-wrap items-center gap-2 pr-6 text-lg">
               {cliente?.nombre}
@@ -829,14 +834,16 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                   <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold", p.listo ? "bg-emerald-500 text-white" : actual ? "bg-white/25" : "bg-background")}>
                     {p.listo ? <Check className="h-3 w-3" /> : p.n}
                   </span>
-                  <span className="truncate">{p.t}</span>
+                  {/* En el celular, la palabra corta (entra siempre); en la compu, completo. */}
+                  <span className="truncate sm:hidden">{p.c}</span>
+                  <span className="hidden truncate sm:inline">{p.t}</span>
                 </li>
               );
             })}
           </ol>
         </div>
 
-        <div className="grid max-h-[calc(94dvh-150px)] gap-0 overflow-y-auto md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.4fr)] md:overflow-hidden">
+        <div className="grid min-h-0 flex-1 gap-0 overflow-y-auto md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.4fr)] md:overflow-hidden">
           {/* 1. Lo que pidió el cliente */}
           <div className="space-y-3 border-b p-4 text-sm md:max-h-[calc(94dvh-150px)] md:overflow-y-auto md:border-b-0 md:border-r">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">1 · Lo que pidió</p>
