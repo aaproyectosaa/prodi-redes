@@ -5,6 +5,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   CalendarClock,
+  Clapperboard,
+  Copy,
+  Mic,
   ChevronDown,
   ChevronUp,
   Clock,
@@ -903,5 +906,77 @@ export function ProgramarMensaje({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Guion compartido desde un rodaje o un video: se muestra como tarjeta, no como texto suelto.
+
+/** ¿Es un guion mandado con "Mandar el guion"? (texto "🎬 *Título*…" con la tarjeta del video). */
+export const esMensajeGuion = (m: { texto?: string; referencia?: { tipo: string; detalle?: string | null } | null }) =>
+  m.referencia?.tipo === "video" && m.referencia.detalle === "Guion" && /^🎬 \*/.test(m.texto ?? "");
+
+/** Título y renglones del guion (sirve también para los mandados antes, que traían las tomas: se dejan afuera). */
+function leerGuion(texto: string): { titulo: string; lineas: string[]; esIdea: boolean } {
+  const [primera, ...resto] = texto.split("\n");
+  const titulo = primera.replace(/^🎬\s*\*?/, "").replace(/\*\s*$/, "").trim();
+  let cuerpo = resto.join("\n");
+  cuerpo = cuerpo.split(/\n\s*Tomas:\s*\n/)[0];
+  cuerpo = cuerpo.replace(/^\s*🎤[^\n]*\n/, "");
+  const esIdea = /^\s*Idea:/.test(cuerpo);
+  cuerpo = cuerpo.replace(/^\s*Idea:\s*/, "");
+  const lineas = cuerpo
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  return { titulo, lineas, esIdea };
+}
+
+export function GuionMensaje({ texto }: { texto: string }) {
+  const { titulo, lineas, esIdea } = leerGuion(texto);
+  const palabras = lineas.join(" ").split(/\s+/).filter(Boolean).length;
+  // Se habla a unas 2,5 palabras por segundo.
+  const segundos = Math.max(5, Math.round(palabras / 2.5 / 5) * 5);
+  const copiar = async () => {
+    try {
+      await navigator.clipboard.writeText(lineas.join("\n"));
+      toast.success("Guion copiado");
+    } catch {
+      toast.error("No se pudo copiar");
+    }
+  };
+  return (
+    <div className="-mx-1 w-[min(20rem,calc(100vw-7rem))] overflow-hidden rounded-xl bg-background text-foreground shadow-sm ring-1 ring-black/5">
+      <div className="flex items-center gap-2.5 bg-gradient-to-r from-[#6F40FC] to-[#E040A0] px-3 py-2.5 text-white">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/20">
+          <Clapperboard className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-white/80">{esIdea ? "Idea del video" : "Guion"}</p>
+          <p className="truncate text-sm font-bold leading-tight">{titulo}</p>
+        </div>
+        {!esIdea && <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold">≈ {segundos} s</span>}
+      </div>
+      {!esIdea && (
+        <p className="flex items-center gap-1.5 px-3 pt-2.5 text-[10px] font-bold uppercase tracking-wide text-primary">
+          <Mic className="h-3 w-3" /> Lo que se dice a cámara
+        </p>
+      )}
+      <ol className="space-y-1.5 px-3 py-2.5">
+        {lineas.map((l, i) => (
+          <li key={i} className="flex gap-2 text-[14px] leading-snug">
+            {!esIdea && lineas.length > 1 && (
+              <span className="mt-[3px] flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[9px] font-bold tabular-nums text-primary">{i + 1}</span>
+            )}
+            <span className="min-w-0 break-words [overflow-wrap:anywhere]">{l}</span>
+          </li>
+        ))}
+      </ol>
+      <div className="flex justify-end border-t px-2 py-1">
+        <button type="button" onClick={copiar} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary/10">
+          <Copy className="h-3 w-3" /> Copiar
+        </button>
+      </div>
+    </div>
   );
 }

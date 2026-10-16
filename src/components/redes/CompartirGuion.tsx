@@ -23,12 +23,11 @@ const normal = (s: string) =>
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 
-/** El texto que se manda: título, guion y tomas. */
-export function textoGuion(v: Pick<Video, "titulo" | "idea" | "guion" | "tomas">): string {
+/** El texto que se manda: el título y lo que dice la persona a cámara (las tomas son del equipo, no se mandan). */
+export function textoGuion(v: Pick<Video, "titulo" | "idea" | "guion">): string {
   const partes = [`🎬 *${v.titulo}*`];
-  if (v.guion?.trim()) partes.push(v.guion.trim());
+  if (v.guion?.trim()) partes.push(`🎤 Lo que vas a decir a cámara:\n${v.guion.trim()}`);
   else if (v.idea?.trim()) partes.push(`Idea: ${v.idea.trim()}`);
-  if (v.tomas?.length) partes.push(`Tomas:\n${v.tomas.map((t) => `- ${t}`).join("\n")}`);
   return partes.join("\n\n");
 }
 
@@ -126,7 +125,7 @@ export function CompartirGuion({
             <FileText className="h-5 w-5 text-primary" /> {videos.length === 1 ? "Mandar el guion" : `Mandar ${videos.length} guiones`}
           </DialogTitle>
           <DialogDescription>
-            {videos.length === 1 ? `“${videos[0].titulo}”` : videos.map((v) => v.titulo).join(" · ")}: guion y tomas, con la tarjeta del video.
+            {videos.length === 1 ? `“${videos[0].titulo}”` : videos.map((v) => v.titulo).join(" · ")}: lo que va a decir a cámara, con la tarjeta del video (las tomas no se mandan).
           </DialogDescription>
         </DialogHeader>
         <div className="relative">

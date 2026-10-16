@@ -37,7 +37,9 @@ import {
   BuscarEnChat,
   CrearEncuesta,
   EncuestaMensaje,
+  esMensajeGuion,
   FijadosChat,
+  GuionMensaje,
   GaleriaChat,
   ProgramadosChat,
   ProgramarMensaje,
@@ -1053,8 +1055,10 @@ export function ChatConversacion({
                           {m.reenviado ? "Reenviado" : "Programado"}
                         </p>
                       )}
-                      {m.referencia && <TarjetaReferencia r={m.referencia} mio={mio} />}
-                      {m.tipo === "encuesta" && m.encuesta ? (
+                      {m.referencia && !esMensajeGuion(m) && <TarjetaReferencia r={m.referencia} mio={mio} />}
+                      {esMensajeGuion(m) ? (
+                        <GuionMensaje texto={m.texto} />
+                      ) : m.tipo === "encuesta" && m.encuesta ? (
                         <EncuestaMensaje chat={chat} m={m} uid={uid} mio={mio} nombreDe={(u) => nombreDe(u)} />
                       ) : m.tipo === "archivo" && m.archivo ? (
                         <div className="space-y-1">

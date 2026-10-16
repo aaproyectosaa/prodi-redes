@@ -19,8 +19,8 @@ import { cn } from "@/lib/utils";
 import type { Rodaje, Video } from "@/lib/redes/types";
 
 const SIN_EDITAR = ["planificado", "agendado"];
-/** Videos que tienen algo para mandar (guion, idea o tomas). */
-const conGuionDe = (vs: Video[]) => vs.filter((v) => v.guion?.trim() || v.idea?.trim() || v.tomas?.length);
+/** Videos que tienen algo para mandar al cliente (el guion, o la idea si todavía no hay guion). */
+const conGuionDe = (vs: Video[]) => vs.filter((v) => v.guion?.trim() || v.idea?.trim());
 
 export function RodajeRow({
   rodaje,
@@ -122,7 +122,7 @@ export function RodajeRow({
                 <span className="block text-sm font-semibold">
                   {conGuionDe(vids).length === 1 ? "Mandar el guion al cliente" : `Mandar los ${conGuionDe(vids).length} guiones al cliente`}
                 </span>
-                <span className="block text-[11px] text-muted-foreground">Por el grupo o por privado, con las tomas</span>
+                <span className="block text-[11px] text-muted-foreground">Lo que va a decir a cámara, por el grupo o por privado</span>
               </span>
               <Send className="h-4 w-4 shrink-0 text-primary" />
             </button>
@@ -242,7 +242,7 @@ function HojaRodaje({
               <div key={v.id} className="space-y-2 rounded-xl border p-3">
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm font-semibold">{v.titulo}</p>
-                  {(v.guion?.trim() || v.idea?.trim() || v.tomas?.length) && (
+                  {(v.guion?.trim() || v.idea?.trim()) && (
                     <button
                       type="button"
                       onClick={() => setCompartir([v])}
