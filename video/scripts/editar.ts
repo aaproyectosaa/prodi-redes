@@ -5,7 +5,7 @@
 //   pnpm editar todo <video>                         preparar + reel con el tramo que elige solo
 //   pnpm editar unir <nombre> a.mov:0-8.3 b.mov:4.9-16.3 c.mov   empalma partes de varios videos en trabajo/<nombre>.mp4
 //                                                    (vertical 1080×1920, voz limpia, colores realzados); después: preparar trabajo/<nombre>.mp4
-//                                                    --sin-mejorar  deja sonido y color como vienen
+//                                                    --sin-mejorar  deja sonido y color como vienen; --voz-original  no filtra la voz (solo empareja el volumen)
 //                                                    a.mov:2-5:mudo  usa solo la imagen de esa parte (audio en silencio)
 //
 // Opciones de reel/todo:
@@ -320,7 +320,7 @@ function unir(nombre: string, partes: string[]) {
   });
   const n = partes.length;
   filtros.push(partes.map((_, i) => `[v${i}][a${i}]`).join("") + `concat=n=${n}:v=1:a=1[v][ac]`);
-  filtros.push(`[ac]${mejorar ? `${VOZ},` : ""}loudnorm=I=-14:TP=-1.5:LRA=11[a]`);
+  filtros.push(`[ac]${mejorar && !opts["voz-original"] ? `${VOZ},` : ""}loudnorm=I=-14:TP=-1.5:LRA=11[a]`);
   fs.mkdirSync(TRABAJO, { recursive: true });
   const salida = path.join(TRABAJO, `${slug(nombre)}.mp4`);
   correr(FFMPEG, ["-y", ...entradas, "-filter_complex", filtros.join(";"), "-map", "[v]", "-map", "[a]", ...CODIFICAR, salida]);

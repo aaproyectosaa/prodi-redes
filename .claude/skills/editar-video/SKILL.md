@@ -78,7 +78,7 @@ Barra de progreso arriba automática. Colores de la marca; subtítulos con `--co
 
 **Voz del camarógrafo** ("3, 2, 1, va"): whisper suele no transcribirla y además corre los tiempos de las primeras palabras. Para cada toma, medir el nivel cada 0,1 s del principio (`asetnsamples=4800,astats=metadata=1:reset=1`) y cortar donde arranca la voz fuerte de quien habla a cámara; después verificar transcribiendo el arranque de cada empalme del video final.
 
-`unir` ya limpia la voz (filtro de ruido, compresión, presencia) y realza el color; `--sin-mejorar` lo saltea.
+`unir` realza el color y por defecto también filtra la voz; **Lucas prefiere la voz original**: usar siempre `--voz-original` (solo empareja el volumen). `--sin-mejorar` saltea color y voz.
 
 ## Ajustes finos
 
