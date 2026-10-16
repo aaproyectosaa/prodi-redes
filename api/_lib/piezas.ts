@@ -61,6 +61,13 @@ export interface PedidoPieza {
   placas?: number | null;
 }
 
+/**
+ * Estados en los que todavía se puede cambiar la idea (el pedido): antes de que diseño empiece.
+ * "pendiente_pago" (falta el pago) y "pagada" (para hacer). Desde "en_proceso" (diseñando) en adelante, queda fija.
+ * Lo usan el servidor (api/pagos pieza-idea) y la pantalla (src/components/redes/EditarIdeaPieza.tsx).
+ */
+export const ESTADOS_IDEA_EDITABLE = ["pendiente_pago", "pagada"];
+
 const t = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
 
 /** Valida y limpia lo que manda el navegador. Devuelve un mensaje de error o el pedido. */

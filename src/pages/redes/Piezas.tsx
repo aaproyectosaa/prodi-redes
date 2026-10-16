@@ -34,6 +34,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { PageShell, EmptyState } from "@/components/redes/PageShell";
 import { BotonMiDia } from "@/components/redes/MiDia";
 import { useBorrarPiezas } from "@/components/redes/BorrarPiezas";
+import { EditarIdeaPieza } from "@/components/redes/EditarIdeaPieza";
 import { ClienteTag } from "@/components/redes/ClienteTag";
 import { EnfoqueBadge, EstadoPiezaBadge, FormatoBadge, VerVersion, VersionImg, driveThumb } from "@/components/redes/PiezaDialogs";
 import { NotaDialog } from "@/components/redes/PautaDialogs";
@@ -885,7 +886,8 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                   <span className="text-muted-foreground">Llamado:</span> {pieza.cta}
                 </p>
               )}
-              {pieza.pedido && <p className="whitespace-pre-wrap leading-relaxed">{pieza.pedido}</p>}
+              {/* La idea: la cambian la productora o el admin mientras no se empezó a diseñar. */}
+              <EditarIdeaPieza pieza={pieza} puede={revisa} />
               {pieza.texto_en_pieza && (
                 <div className="rounded-lg bg-muted/60 p-2 text-xs">
                   <p className="mb-0.5 font-semibold text-muted-foreground">Texto que va en la pieza, tal cual:</p>

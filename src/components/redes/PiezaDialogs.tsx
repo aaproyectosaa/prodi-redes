@@ -58,6 +58,8 @@ import {
 import { formatARS, fechaCorta, hoyISO, mesActual } from "@/lib/redes/format";
 import type { EnfoquePieza, FormatoPieza, PiezaIA, VersionPieza } from "@/lib/redes/types";
 import type { Project } from "@/integrations/firebase/types";
+import { EditarIdeaPieza } from "@/components/redes/EditarIdeaPieza";
+import { ESTADOS_IDEA_EDITABLE } from "../../../api/_lib/piezas";
 import { asset } from "@/lib/asset";
 
 // Los ids "demo/…" son imágenes locales de la demo navegable.
@@ -288,7 +290,9 @@ export function PiezaClienteCard({ pieza, onAbrir }: { pieza: PiezaIA; onAbrir?:
           <FormatoBadge formato={pieza.formato} placas={pieza.placas} />
           {pieza.incluida ? "del plan" : ""}
         </p>
-        <p className="line-clamp-2 text-sm">{pieza.producto || pieza.pedido}</p>
+        {pieza.producto && <p className="line-clamp-2 text-sm">{pieza.producto}</p>}
+        {/* La idea: el cliente la puede cambiar mientras no la empezamos a diseñar. */}
+        <EditarIdeaPieza pieza={pieza} puede={ESTADOS_IDEA_EDITABLE.includes(pieza.estado)} className="text-sm [&>p]:line-clamp-3" />
         {pieza.estado === "pendiente_pago" && (
           <Button className="w-full" size="sm" onClick={pagar} disabled={paying}>
             {paying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

@@ -14,6 +14,7 @@
 // POST /api/pagos/arca-estado    (admin) → prueba la conexión con ARCA
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { FieldValue } from "../_lib/db";
 import { adminDb, aplicarEscritura, ejecutarConsulta, enTransaccion, leerDoc, type Data, type DocRef, type Query } from "../_lib/db";
 import { appUrl, assertProjectAccess, body, HttpError, requireCaller, sendError } from "../_lib/http";
 import {
@@ -32,7 +33,7 @@ import {
 } from "../_lib/mercadopago";
 import { aplicarPago, estadoSuscripcion, precioAbono, proyectoDeSuscripcion, registrarAbono } from "../_lib/cobros";
 import { destinatariosDe, disenadorasDe, enviarAviso } from "../_lib/notify";
-import { FORMATOS_PIEZA, cupoPieza, leerPedidoPieza, piezaDoc, precioPieza } from "../_lib/piezas";
+import { ESTADOS_IDEA_EDITABLE, FORMATOS_PIEZA, cupoPieza, leerPedidoPieza, piezaDoc, precioPieza } from "../_lib/piezas";
 import { prepararFacturacion } from "../_lib/facturar";
 import { asuntoFactura, facturaId, mailFacturaHtml, periodoFactura, saldoDe, pagoUnaParte, type Factura } from "../_lib/facturacion";
 import { enviarMail } from "../_lib/informe";
@@ -344,6 +345,57 @@ async function suscripcion(req: VercelRequest) {
     return { ok: true, monto };
   }
   throw new HttpError(400, "Acción inválida");
+}
+
+/**
+ * Cambiar la idea (el pedido) de una pieza antes de que diseño la empiece: el cliente, la productora del cliente o el
+ * admin. Queda en el historial (quién, cuándo y el texto anterior) y, si el cliente tiene diseñadora, se le avisa.
+ */
+async function piezaIdea(req: VercelRequest) {
+  const caller = await requireCaller(req, ["cliente", "productor", "admin"]);
+  const b = body<{ pieza_id?: string; pedido?: string }>(req);
+  if (!b.pieza_id) throw new HttpError(400, "Falta la pieza");
+  const nuevo = String(b.pedido ?? "").trim().slice(0, 2000);
+  if (nuevo.length < 10) throw new HttpError(400, "Contanos un poco más (al menos 10 letras)");
+  const db = adminDb();
+  const ref = db.collection("piezas_ia").doc(b.pieza_id);
+  const pz = (await ref.get()).data();
+  if (!pz) throw new HttpError(404, "La pieza ya no existe");
+  await assertProjectAccess(caller, pz.proyecto_id);
+  const team = ((await db.collection("projects").doc(String(pz.proyecto_id)).get()).data()?.team_roles ?? {}) as Record<string, string[]>;
+  // Del equipo: solo el admin o la productora de ese cliente (diseño y edición no la cambian).
+  const esAdmin = caller.role === "admin";
+  const esCliente = caller.role === "cliente" && (team.cliente ?? []).includes(caller.uid);
+  const esProductora = caller.roles.includes("productor") && (team.productor ?? []).includes(caller.uid);
+  if (!esAdmin && !esCliente && !esProductora) throw new HttpError(403, "No podés cambiar esta pieza");
+  if (!ESTADOS_IDEA_EDITABLE.includes(String(pz.estado))) throw new HttpError(409, "Ya la está diseñando: la idea no se puede cambiar. Escribile al equipo por el chat.");
+  const anterior = String(pz.pedido ?? "");
+  if (anterior.trim() === nuevo) return { ok: true, sinCambios: true };
+  const now = new Date().toISOString();
+  await ref.update({
+    pedido: nuevo,
+    updated_at: now,
+    historial: FieldValue.arrayUnion({ at: now, by: caller.uid, accion: "Cambió la idea", nota: `Antes: ${anterior}`.slice(0, 2000) }),
+  });
+  // Si el cliente ya tiene diseñadora asignada, se le avisa (aviso interno + push, como el resto de los avisos de piezas).
+  if ((team.diseno ?? []).length > 0) {
+    const destinatarios = (await disenadorasDe(pz.proyecto_id)).filter((id) => id !== caller.uid);
+    if (destinatarios.length) {
+      const proj = (await db.collection("projects").doc(String(pz.proyecto_id)).get()).data() ?? {};
+      await enviarAviso(
+        {
+          destinatarios,
+          titulo: "Cambió la idea de una pieza",
+          cuerpo: `${proj.nombre ?? "Cliente"}: ${nuevo.slice(0, 160)}`,
+          link: `/piezas?pieza=${b.pieza_id}`,
+          clave: `pieza_idea:${b.pieza_id}:${now}`,
+          proyectoId: pz.proyecto_id,
+        },
+        appUrl(req)
+      ).catch((e) => console.warn("[pieza-idea] aviso", e));
+    }
+  }
+  return { ok: true };
 }
 
 async function verificar(req: VercelRequest) {
@@ -1054,6 +1106,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "arca-autorizar") res.status(200).json(await arcaAutorizar(req));
     else if (accion === "arca-estado") res.status(200).json(await arcaEstado(req));
     else if (accion === "mp-detalle") res.status(200).json(await mpDetalle(req));
+    else if (accion === "pieza-idea") res.status(200).json(await piezaIdea(req));
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {
     // Si falla el webhook respondemos error: Mercado Pago lo reintenta solo.
