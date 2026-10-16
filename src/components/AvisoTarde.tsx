@@ -20,14 +20,15 @@ const ultimoCierre = () => {
 /**
  * Si alguien del equipo sigue usando la app de noche, a las 21 le recordamos que ya es tarde (y que los avisos están
  * en pausa hasta la mañana). Si sigue, el cartel vuelve a salir cada una hora hasta que termina el descanso.
- * No aplica al super admin ni a los clientes.
+ * También al super admin; no a los clientes.
  */
 export function AvisoTarde() {
   const { settings } = useRedes();
   const { realRole, roles, viewingAs } = useUserProfileContext();
   const [ver, setVer] = useState(false);
   const d = leerDescanso(settings);
-  const delEquipo = realRole !== "admin" && !viewingAs && (roles ?? [realRole]).some((r) => ROLES_CON_DESCANSO.includes(String(r)));
+  // El equipo y también el super admin (a todos les toca descansar).
+  const delEquipo = !viewingAs && (realRole === "admin" || (roles ?? [realRole]).some((r) => ROLES_CON_DESCANSO.includes(String(r))));
 
   useEffect(() => {
     if (!delEquipo || !d.activo) return;
