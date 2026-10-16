@@ -118,9 +118,24 @@ export function EditorPieza({ v, titulo, piezaId, onClose }: { v: Version | null
     return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) };
   };
 
+  // Dedos apoyados (para pellizcar y hacer zoom en el celular).
+  const dedos = useRef(new Map<number, { x: number; y: number }>());
+  const pellizco = useRef<{ d0: number; z0: number } | null>(null);
+  const distancia = () => {
+    const [a, b] = [...dedos.current.values()];
+    return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+  };
+
   const bajar = (e: PE<HTMLDivElement>) => {
     if (trabajando || !url) return;
     e.currentTarget.setPointerCapture?.(e.pointerId);
+    dedos.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // Dos dedos: pellizcar para acercar o alejar (deja de mover o marcar).
+    if (dedos.current.size === 2) {
+      pellizco.current = { d0: distancia() || 1, z0: zoom };
+      arrastre.current = null;
+      return;
+    }
     if (herramienta === "zona") {
       const p = enImagen(e);
       arrastre.current = { tipo: "zona", x0: p.x, y0: p.y, px: 0, py: 0 };
@@ -128,6 +143,12 @@ export function EditorPieza({ v, titulo, piezaId, onClose }: { v: Version | null
     } else arrastre.current = { tipo: "mover", x0: e.clientX, y0: e.clientY, px: pan.x, py: pan.y };
   };
   const mover = (e: PE<HTMLDivElement>) => {
+    if (dedos.current.has(e.pointerId)) dedos.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pellizco.current && dedos.current.size >= 2) {
+      const { d0, z0 } = pellizco.current;
+      setZoom(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z0 * (distancia() / d0) * 100) / 100)));
+      return;
+    }
     const a = arrastre.current;
     if (!a) return;
     if (a.tipo === "zona") {
@@ -135,7 +156,9 @@ export function EditorPieza({ v, titulo, piezaId, onClose }: { v: Version | null
       setZona({ x: Math.min(a.x0, p.x), y: Math.min(a.y0, p.y), w: Math.abs(p.x - a.x0), h: Math.abs(p.y - a.y0) });
     } else setPan({ x: a.px + (e.clientX - a.x0), y: a.py + (e.clientY - a.y0) });
   };
-  const soltar = () => {
+  const soltar = (e?: PE<HTMLDivElement>) => {
+    if (e) dedos.current.delete(e.pointerId);
+    if (dedos.current.size < 2) pellizco.current = null;
     if (arrastre.current?.tipo === "zona") {
       setZona((z) => (z && z.w > 0.02 && z.h > 0.02 ? z : null));
       setHerramienta("mover");
@@ -185,7 +208,7 @@ export function EditorPieza({ v, titulo, piezaId, onClose }: { v: Version | null
 
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
           {/* Lienzo */}
-          <div className="relative min-h-[50dvh] flex-1 overflow-hidden bg-[#0f0f12]">
+          <div className="relative h-[50dvh] shrink-0 overflow-hidden bg-[#0f0f12] md:h-auto md:flex-1">
             <div
               className={cn("absolute inset-0 flex touch-none select-none items-center justify-center", herramienta === "zona" ? "cursor-crosshair" : zoom > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-default")}
               onPointerDown={bajar}
@@ -247,7 +270,7 @@ export function EditorPieza({ v, titulo, piezaId, onClose }: { v: Version | null
           </div>
 
           {/* Panel de IA */}
-          <aside className="flex w-full shrink-0 flex-col gap-5 overflow-y-auto border-t bg-background p-4 md:w-96 md:border-l md:border-t-0">
+          <aside className="flex min-h-0 w-full flex-1 flex-col gap-5 overflow-y-auto overscroll-contain border-t bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:w-96 md:flex-none md:border-l md:border-t-0">
             <div>
               <p className="flex items-center gap-2 font-semibold">
                 <Sparkles className="h-4 w-4 text-primary" /> Editar con IA
