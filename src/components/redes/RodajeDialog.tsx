@@ -180,7 +180,11 @@ export function RodajeDialog({
   };
 
   const save = async () => {
-    if (!cliente || !user) return;
+    if (!user) return;
+    if (!cliente) {
+      toast.error("Elegí el cliente");
+      return;
+    }
     if (!fecha) {
       toast.error("Poné la fecha del rodaje");
       return;
@@ -265,9 +269,9 @@ export function RodajeDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl gap-0 overflow-hidden rounded-3xl border-white/10 p-0 sm:max-h-[94dvh]">
+      <DialogContent className="flex max-h-[92dvh] max-w-xl flex-col gap-0 overflow-hidden rounded-3xl border-white/10 p-0 sm:max-h-[94dvh]">
         {/* Encabezado */}
-        <div className="relative overflow-hidden px-6 pb-5 pt-6">
+        <div className="relative shrink-0 overflow-hidden px-6 pb-5 pt-6">
           <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-primary/25 blur-3xl" />
           <div className="pointer-events-none absolute -left-10 top-6 h-32 w-32 rounded-full bg-fuchsia-500/15 blur-3xl" />
           <DialogHeader className="relative space-y-1 text-left">
@@ -281,7 +285,8 @@ export function RodajeDialog({
           </DialogHeader>
         </div>
 
-        <div className="max-h-[calc(94dvh-190px)] space-y-6 overflow-y-auto px-6 pb-6">
+        {/* Lo único que scrollea: así el botón de abajo siempre se ve (también en el celular). */}
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-6 pb-6">
           {!rodaje && autoDe && (
             <div className="flex items-start gap-2.5 rounded-2xl border border-primary/30 bg-primary/[0.08] px-3.5 py-2.5 text-sm">
               <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
@@ -586,7 +591,7 @@ export function RodajeDialog({
         </div>
 
         {/* Resumen + guardar */}
-        <div className="flex items-center gap-3 border-t border-white/10 bg-muted/20 px-6 py-4">
+        <div className="flex shrink-0 items-center gap-3 border-t border-white/10 bg-muted/20 px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {fecha && (
               <span className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-background shadow-sm ring-1 ring-white/10">
@@ -601,12 +606,13 @@ export function RodajeDialog({
                 {fecha ? new Date(`${fecha}T12:00:00`).toLocaleDateString("es-AR", { weekday: "long" }) : "Sin día"}
                 {hora ? ` · ${hora} h` : ""}
               </p>
-              <p className="truncate text-muted-foreground">{cliente?.nombre ?? "Elegí un cliente"}</p>
+              <p className="truncate text-muted-foreground">{!cliente ? "Elegí un cliente" : !fecha ? "Falta elegir el día" : cantidad === 0 ? "Falta elegir los videos" : cliente.nombre}</p>
             </div>
           </div>
           <Button
             onClick={save}
-            disabled={saving || !listo}
+            // Se puede tocar aunque falte algo: así dice qué falta (día, cliente o videos) en vez de quedar gris sin explicar.
+            disabled={saving}
             className="h-11 shrink-0 rounded-xl bg-gradient-to-r from-[#6F40FC] to-[#E040A0] px-5 font-semibold text-white shadow-lg shadow-primary/30 transition-transform hover:-translate-y-0.5 hover:opacity-95 disabled:shadow-none"
           >
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
