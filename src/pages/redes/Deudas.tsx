@@ -1,28 +1,15 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  BellRing,
-  CalendarClock,
-  Check,
-  Landmark,
-  Loader2,
-  Pencil,
-  Plus,
-  Receipt,
-  Scale,
-  Trash2,
-  Undo2,
-} from "lucide-react";
+import { AlertTriangle, ArrowLeft, CalendarClock, Check, ChevronRight, HandCoins, Landmark, ListChecks, Loader2, Pencil, Plus, Receipt, Scale, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InputNumero } from "@/components/ui/input-numero";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { EmptyState, PageShell, Section, StatCard } from "@/components/redes/PageShell";
+import { PageShell } from "@/components/redes/PageShell";
 import { DeudasClientes } from "@/components/redes/admin/DeudasClientes";
+import { ComoFunciona, FilaKpis, Kpi, Pestanias, Vacio, type Pestania } from "@/components/redes/admin/AdminUI";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { sumarDias } from "@/lib/fecha";
 import { formatARS, hoyISO, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
@@ -38,6 +25,8 @@ import {
   guardarCuotas,
   pagarCuota,
   resumenObligacion,
+  saldoDeudaCliente,
+  useDeudasClientes,
   useObligaciones,
   vencimientos,
   type Cuota,
@@ -53,11 +42,25 @@ const ddmmaa = (f: string) => f.split("-").reverse().join("/");
 const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
 const ICONO: Record<TipoObligacion, React.ElementType> = { credito: Landmark, arca: Scale, impuesto: Receipt };
-const TIPOS: TipoObligacion[] = ["credito", "arca", "impuesto"];
+// Orden en pantalla: primero lo de todos los meses (impuestos), después créditos y ARCA.
+const TIPOS: TipoObligacion[] = ["impuesto", "credito", "arca"];
+// Cada tipo con su color, para reconocerlo de un vistazo.
+const COLOR: Record<TipoObligacion, { pill: string; icono: string; barra: string; corto: string }> = {
+  impuesto: { pill: "bg-sky-500/15 text-sky-700 dark:text-sky-300", icono: "from-sky-400 to-blue-600", barra: "bg-sky-500", corto: "Impuesto" },
+  credito: { pill: "bg-violet-500/15 text-violet-700 dark:text-violet-300", icono: "from-[#6F40FC] to-[#E040A0]", barra: "bg-violet-500", corto: "Crédito" },
+  arca: { pill: "bg-amber-500/15 text-amber-700 dark:text-amber-300", icono: "from-amber-400 to-orange-500", barra: "bg-amber-500", corto: "ARCA" },
+};
 
-/** Créditos del banco, convenios con ARCA e impuestos: cuotas, vencimientos y avisos. */
+type Vista = "pagar" | "proximos" | "nosdeben";
+
+function PillTipo({ t }: { t: TipoObligacion }) {
+  return <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold", COLOR[t].pill)}>{COLOR[t].corto}</span>;
+}
+
+/** Lo que debemos pagar (créditos del banco, convenios con ARCA, impuestos) y lo que nos deben los clientes. */
 export default function Deudas() {
   const lista = useObligaciones();
+  const deudasClientes = useDeudasClientes();
   const hoy = hoyISO();
   const mes = mesActual();
   const [params] = useSearchParams();
@@ -67,6 +70,7 @@ export default function Deudas() {
 
   const proximos = vencimientos(lista, sumarDias(hoy, 35));
   const vencidas = proximos.filter((v) => v.c.vence < hoy);
+  const totalVencido = vencidas.reduce((a, v) => a + v.c.monto, 0);
   const delMes = cuotasDelMes(lista, mes);
   const faltaMes = delMes.filter((v) => !v.c.pagada).reduce((a, v) => a + v.c.monto, 0);
   const pagadoMes = delMes.filter((v) => v.c.pagada).reduce((a, v) => a + v.c.monto, 0);
@@ -74,66 +78,128 @@ export default function Deudas() {
   const prox = proximos.find((v) => v.c.vence >= hoy);
   const detalle = lista.find((o) => o.id === abierta) ?? null;
 
+  // Lo que nos deben los clientes (sin las incobrables).
+  const clientesActivos = deudasClientes.filter((d) => !d.incobrable && saldoDeudaCliente(d) > 0);
+  const nosDeben = clientesActivos.reduce((a, d) => a + saldoDeudaCliente(d), 0);
+  const clientesVencidos = clientesActivos.filter((d) => d.cuotas.some((c) => !c.pagada && c.vence < hoy)).length;
+
+  // Si hay algo vencido arrancamos en "Próximos vencimientos"; si no, en "Para pagar". Si tocás una pestaña, queda la tuya.
+  const sugerida: Vista = vencidas.length ? "proximos" : "pagar";
+  const [vista, setVista] = useState<Vista>(sugerida);
+  const [tocado, setTocado] = useState(false);
+  useEffect(() => {
+    if (!tocado) setVista(sugerida);
+  }, [sugerida, tocado]);
+  const ir = (v: Vista) => {
+    setTocado(true);
+    setVista(v);
+  };
+
+  const pestanias: Pestania<Vista>[] = [
+    { k: "pagar", label: "Para pagar", n: lista.length },
+    { k: "proximos", label: "Próximos vencimientos", n: proximos.length, alerta: vencidas.length > 0 },
+    { k: "nosdeben", label: "Nos deben", n: clientesActivos.length, alerta: clientesVencidos > 0 },
+  ];
+  const mesCorto = mesLabel(mes).split(" ")[0].toLowerCase();
+
   return (
     <PageShell
       title="Deudas e impuestos"
-      subtitle="Créditos, convenios con ARCA e impuestos. Te avisamos 3 días antes de cada vencimiento y lo que pagás pasa solo al libro del mes."
+      subtitle="Lo que debemos pagar (créditos, ARCA, impuestos) y lo que nos deben los clientes."
       actions={
         <Button onClick={() => setNuevo(true)}>
-          <Plus className="mr-1.5 h-4 w-4" /> Agregar
+          <Plus className="mr-1.5 h-4 w-4" /> Nueva deuda o impuesto
         </Button>
       }
     >
-      {lista.length === 0 ? (
-        <EmptyState
-          icon={Landmark}
-          title="Todavía no cargaste nada"
-          description="Cargá los créditos, el convenio con ARCA y los impuestos que pagás todos los meses. Después solo tenés que tocar “Pagar” cuando los pagás."
-          action={
-            <Button onClick={() => setNuevo(true)}>
-              <Plus className="mr-1.5 h-4 w-4" /> Agregar el primero
-            </Button>
-          }
-        />
-      ) : (
-        <div className="space-y-8">
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatCard label="Deuda que queda" value={formatARS(deuda)} icon={Landmark} hint="Créditos y convenios, sin impuestos" />
-            <StatCard
-              label={`Para pagar en ${mesLabel(mes).split(" ")[0].toLowerCase()}`}
-              value={formatARS(faltaMes)}
-              icon={CalendarClock}
-              tone={faltaMes > 0 ? "primary" : "success"}
-              hint={pagadoMes ? `Ya pagaste ${formatARS(pagadoMes)}` : "Cuotas e impuestos del mes"}
-            />
-            <StatCard
-              label="Vencido sin pagar"
-              value={formatARS(vencidas.reduce((a, v) => a + v.c.monto, 0))}
-              icon={AlertTriangle}
-              tone={vencidas.length ? "danger" : "default"}
-              hint={vencidas.length ? `${vencidas.length} ${vencidas.length === 1 ? "cuota" : "cuotas"}` : "Nada vencido"}
-            />
-            <StatCard
-              label="Próximo vencimiento"
-              value={prox ? ddmm(prox.c.vence) : "—"}
-              icon={BellRing}
-              hint={prox ? `${prox.o.nombre} · ${formatARS(prox.c.monto)}` : "Sin vencimientos cerca"}
-            />
-          </div>
+      <div className="space-y-5">
+        <FilaKpis>
+          <Kpi
+            icono={CalendarClock}
+            label="Vence este mes"
+            valor={formatARS(faltaMes)}
+            sub={pagadoMes ? `Ya pagaste ${formatARS(pagadoMes)} en ${mesCorto}` : faltaMes ? `Falta pagar en ${mesCorto}` : `Nada pendiente en ${mesCorto}`}
+            avance={faltaMes + pagadoMes ? pagadoMes / (faltaMes + pagadoMes) : undefined}
+            tono={faltaMes ? "violeta" : "verde"}
+            onClick={() => ir("proximos")}
+          />
+          <Kpi
+            icono={AlertTriangle}
+            label="Vencido sin pagar"
+            valor={formatARS(totalVencido)}
+            sub={vencidas.length ? `${vencidas.length} ${vencidas.length === 1 ? "cuota" : "cuotas"}` : "Nada vencido"}
+            tono={totalVencido > 0 ? "rojo" : "gris"}
+            onClick={() => ir("proximos")}
+          />
+          <Kpi
+            icono={Landmark}
+            label="Deuda total"
+            valor={formatARS(deuda)}
+            sub={prox ? `Próximo: ${ddmm(prox.c.vence)} · ${prox.o.nombre}` : "Créditos y ARCA"}
+            tono="azul"
+            onClick={() => ir("pagar")}
+          />
+          <Kpi
+            icono={HandCoins}
+            label="Nos deben los clientes"
+            valor={formatARS(nosDeben)}
+            sub={clientesActivos.length ? `${clientesActivos.length} cliente${clientesActivos.length === 1 ? "" : "s"}${clientesVencidos ? ` · ${clientesVencidos} con atraso` : ""}` : "Nadie nos debe"}
+            tono={clientesVencidos ? "ambar" : "verde"}
+            onClick={() => ir("nosdeben")}
+          />
+        </FilaKpis>
 
-          <Section title="Lo que viene" description="Lo vencido y lo que vence en las próximas 5 semanas. Tocá “Pagar” cuando lo pagues.">
-            {proximos.length === 0 ? (
-              <div className="flex items-center gap-2 rounded-2xl border bg-card px-4 py-5 text-sm text-muted-foreground">
-                <Check className="h-4 w-4 text-emerald-500" /> Nada para pagar en las próximas semanas.
+        <Pestanias items={pestanias} valor={vista} onChange={ir} />
+
+        <div key={vista} className="animate-in fade-in slide-in-from-bottom-1 duration-200 motion-reduce:animate-none">
+          {vista === "pagar" &&
+            (lista.length === 0 ? (
+              <div className="space-y-3">
+                <Vacio icono={Landmark} titulo="Todavía no cargaste nada" texto="Cargá los créditos, el convenio con ARCA y los impuestos de todos los meses. Después solo tocás “Pagar”." />
+                <div className="flex justify-center">
+                  <Button onClick={() => setNuevo(true)}>
+                    <Plus className="mr-1.5 h-4 w-4" /> Cargar la primera
+                  </Button>
+                </div>
               </div>
+            ) : (
+              <div className="space-y-6">
+                {TIPOS.map((t) => {
+                  const items = lista.filter((o) => o.tipo === t);
+                  if (!items.length) return null;
+                  const Icono = ICONO[t];
+                  return (
+                    <section key={t} className="space-y-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className={cn("flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br text-white", COLOR[t].icono)}>
+                          <Icono className="h-3.5 w-3.5" />
+                        </span>
+                        <h2 className="text-sm font-semibold">{TIPOS_OBLIGACION[t].plural}</h2>
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          {t === "impuesto" ? "Todos los meses" : `Quedan ${formatARS(deudaRestante(lista, t))}`}
+                        </span>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {items.map((o) => (
+                          <TarjetaObligacion key={o.id} o={o} hoy={hoy} onAbrir={() => setAbierta(o.id)} onPagar={(c) => setPagar({ o, c })} />
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            ))}
+
+          {vista === "proximos" &&
+            (proximos.length === 0 ? (
+              <Vacio icono={Check} titulo="Nada para pagar en las próximas semanas" texto="No hay cuotas vencidas ni por vencer en las próximas 5 semanas." />
             ) : (
               <div className="divide-y overflow-hidden rounded-2xl border bg-card">
                 {proximos.map(({ o, c }) => {
                   const vencida = c.vence < hoy;
                   const pronto = !vencida && c.vence <= sumarDias(hoy, 3);
-                  const Icono = ICONO[o.tipo];
                   return (
-                    <div key={`${o.id}-${c.n}`} className="flex items-center gap-3 px-3 py-3 sm:px-4">
+                    <div key={`${o.id}-${c.n}`} className={cn("flex items-center gap-3 px-3 py-3 sm:px-4", vencida && "bg-red-500/[0.04]")}>
                       <div
                         className={cn(
                           "flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl border text-center leading-none",
@@ -144,11 +210,12 @@ export default function Deudas() {
                         <span className="text-[10px] uppercase">{MESES_CORTOS[Number(c.vence.slice(5, 7)) - 1]}</span>
                       </div>
                       <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setAbierta(o.id)}>
-                        <p className="flex items-center gap-1.5 truncate text-sm font-medium">
-                          <Icono className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> {o.nombre}
+                        <p className="flex items-center gap-1.5">
+                          <span className="truncate text-sm font-medium">{o.nombre}</span>
+                          <PillTipo t={o.tipo} />
                         </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {o.tipo === "impuesto" ? `${TIPOS_OBLIGACION.impuesto.label} de ${mesLabel(c.vence.slice(0, 7)).toLowerCase()}` : `Cuota ${c.n} de ${o.cuotas.length}`}
+                        <p className={cn("truncate text-xs", vencida ? "font-medium text-destructive" : "text-muted-foreground")}>
+                          {o.tipo === "impuesto" ? mesLabel(c.vence.slice(0, 7)) : `Cuota ${c.n} de ${o.cuotas.length}`}
                           {vencida ? " · vencida" : pronto ? " · vence pronto" : ""}
                         </p>
                       </button>
@@ -160,31 +227,26 @@ export default function Deudas() {
                   );
                 })}
               </div>
-            )}
-          </Section>
+            ))}
 
-          {TIPOS.map((t) => {
-            const items = lista.filter((o) => o.tipo === t);
-            if (!items.length) return null;
-            return (
-              <Section
-                key={t}
-                title={TIPOS_OBLIGACION[t].plural}
-                description={t === "impuesto" ? "Se pagan todos los meses. Si el monto cambia, lo corregís al pagarlo." : `Quedan ${formatARS(deudaRestante(lista, t))} por pagar.`}
-              >
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {items.map((o) => (
-                    <TarjetaObligacion key={o.id} o={o} hoy={hoy} mes={mes} onAbrir={() => setAbierta(o.id)} />
-                  ))}
-                </div>
-              </Section>
-            );
-          })}
+          {vista === "nosdeben" && <DeudasClientes />}
         </div>
-      )}
 
-      <div className="mt-8">
-        <DeudasClientes />
+        <ComoFunciona>
+          <p>
+            Cargás cada <b>crédito del banco</b>, <b>convenio con ARCA</b> o <b>impuesto</b> una sola vez (con el botón de arriba) y armamos las cuotas solas. Cuando
+            pagás una, tocás <b>Pagar</b>: el pago pasa solo al libro del mes.
+          </p>
+          <p>Te avisamos 3 días antes de cada vencimiento. Lo vencido sin pagar aparece en rojo en “Próximos vencimientos”.</p>
+          <p>
+            Los <b>impuestos</b> se pagan todos los meses: si un mes viene distinto, corregís el monto al pagarlo. Tocando una tarjeta ves todas las cuotas, podés
+            cambiar montos, sumar meses o cuotas, deshacer un pago o borrarla.
+          </p>
+          <p>
+            La <b>deuda total</b> cuenta créditos y convenios con ARCA (sin impuestos). En <b>Nos deben</b> cargás lo que un cliente quedó debiendo fuera de las
+            boletas, con recargo y en cuotas si hace falta, y marcás cada cuota cuando la cobrás.
+          </p>
+        </ComoFunciona>
       </div>
 
       {nuevo && <NuevaObligacion onClose={() => setNuevo(false)} />}
@@ -194,64 +256,81 @@ export default function Deudas() {
   );
 }
 
-function TarjetaObligacion({ o, hoy, mes, onAbrir }: { o: Obligacion; hoy: string; mes: string; onAbrir: () => void }) {
+/** Tarjeta de cada deuda o impuesto: qué es, cuánto y cuándo vence lo próximo, el avance y el botón para pagar. */
+function TarjetaObligacion({ o, hoy, onAbrir, onPagar }: { o: Obligacion; hoy: string; onAbrir: () => void; onPagar: (c: Cuota) => void }) {
   const r = resumenObligacion(o, hoy);
   const Icono = ICONO[o.tipo];
   const pct = r.total ? Math.round((r.pagadas / r.total) * 100) : 0;
-  const esteMes = o.cuotas.find((c) => c.vence.startsWith(mes));
+  const proxima = r.proxima;
+  const vencida = !!proxima && proxima.vence < hoy;
+  const ultima = [...o.cuotas].sort((a, b) => a.vence.localeCompare(b.vence)).at(-1)?.vence ?? hoy;
   return (
-    <button
-      type="button"
-      onClick={onAbrir}
-      className="flex flex-col gap-3 rounded-2xl border bg-card p-4 text-left transition-colors hover:border-primary/50"
-    >
-      <div className="flex items-start gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+    <div className={cn("flex flex-col gap-3 rounded-2xl border bg-card p-4 transition-colors hover:border-primary/40", r.vencidas.length > 0 && "border-red-500/40")}>
+      <button type="button" onClick={onAbrir} className="flex items-start gap-3 text-left">
+        <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-sm", COLOR[o.tipo].icono)}>
           <Icono className="h-4 w-4" />
         </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold">{o.nombre}</p>
-          <p className="truncate text-xs text-muted-foreground">{o.entidad || TIPOS_OBLIGACION[o.tipo].label}</p>
-        </div>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1.5">
+            <span className="truncate font-semibold">{o.nombre}</span>
+            <PillTipo t={o.tipo} />
+          </span>
+          <span className="block truncate text-xs text-muted-foreground">{o.entidad || TIPOS_OBLIGACION[o.tipo].label}</span>
+        </span>
         {r.vencidas.length > 0 && (
-          <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-[11px] font-medium text-destructive">
+          <span className="shrink-0 rounded-full bg-destructive/15 px-2 py-0.5 text-[11px] font-medium text-destructive">
             {r.vencidas.length} vencida{r.vencidas.length > 1 ? "s" : ""}
           </span>
         )}
-      </div>
-      {o.tipo === "impuesto" ? (
-        <div className="text-sm">
-          {esteMes ? (
-            <p>
-              Este mes: <b className="tabular-nums">{formatARS(esteMes.monto)}</b>{" "}
-              <span className={esteMes.pagada ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}>
-                {esteMes.pagada ? "· pagado" : `· vence el ${ddmm(esteMes.vence)}`}
-              </span>
-            </p>
-          ) : (
-            <p className="text-muted-foreground">No hay cuota cargada este mes.</p>
-          )}
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Cargado hasta {mesLabel(([...o.cuotas].sort((a, b) => a.vence.localeCompare(b.vence)).at(-1)?.vence ?? hoy).slice(0, 7)).toLowerCase()}
+      </button>
+
+      {r.proxima ? (
+        <div>
+          <p className={cn("text-xs", vencida ? "font-medium text-destructive" : "text-muted-foreground")}>
+            {vencida ? "Venció el" : "Vence el"} {ddmmaa(r.proxima.vence)}
+            {o.tipo === "impuesto" ? ` · ${mesLabel(r.proxima.vence.slice(0, 7)).toLowerCase()}` : ""}
           </p>
+          <p className={cn("text-2xl font-bold tabular-nums tracking-tight", vencida && "text-destructive")}>{formatARS(r.proxima.monto)}</p>
         </div>
       ) : (
+        <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-400">
+          <Check className="h-4 w-4" /> {o.tipo === "impuesto" ? "Todo pagado" : "¡Terminada!"}
+        </p>
+      )}
+
+      {o.tipo === "impuesto" ? (
+        <p className="text-xs text-muted-foreground">Cargado hasta {mesLabel(ultima.slice(0, 7)).toLowerCase()}</p>
+      ) : (
         <div>
-          <div className="flex items-baseline justify-between text-sm">
+          <div className="flex items-baseline justify-between text-xs">
             <span>
-              <b className="tabular-nums">{r.pagadas}</b> de {r.total} cuotas
+              {r.proxima ? (
+                <>
+                  Cuota <b className="tabular-nums">{r.proxima.n}</b> de {r.total}
+                </>
+              ) : (
+                `${r.total} de ${r.total} cuotas pagadas`
+              )}
             </span>
-            <span className="text-xs text-muted-foreground">Quedan {formatARS(r.restante)}</span>
+            <span className="text-muted-foreground">Quedan {formatARS(r.restante)}</span>
           </div>
           <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${pct}%` }} />
+            <div className={cn("h-full rounded-full transition-all duration-700", COLOR[o.tipo].barra)} style={{ width: `${pct}%` }} />
           </div>
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            {r.proxima ? `Próxima: ${ddmmaa(r.proxima.vence)} · ${formatARS(r.proxima.monto)}` : "¡Terminada!"}
-          </p>
         </div>
       )}
-    </button>
+
+      <div className="mt-auto flex gap-2">
+        {proxima && (
+          <Button size="sm" className="flex-1" variant={vencida ? "destructive" : "default"} onClick={() => onPagar(proxima)}>
+            Pagar {formatARS(proxima.monto)}
+          </Button>
+        )}
+        <Button size="sm" variant="outline" className={cn(!proxima && "flex-1")} onClick={onAbrir}>
+          <ListChecks className="mr-1 h-4 w-4" /> Cuotas <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
   );
 }
 
