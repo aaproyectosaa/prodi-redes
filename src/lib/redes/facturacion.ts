@@ -1011,6 +1011,42 @@ export function useDeudasClientes(enabled = true): DeudaCliente[] {
   return lista;
 }
 
+/**
+ * Carga una deuda de un cliente (algo que quedó debiendo fuera de las boletas): el monto, un recargo opcional
+ * (ej. 5%) y en cuántas cuotas se paga desde una fecha.
+ */
+export async function crearDeudaCliente(o: {
+  cliente: string;
+  proyecto_id: string | null;
+  detalle: string | null;
+  base: number;
+  recargoPct: number;
+  cuotas: number;
+  primera: string;
+  by: string;
+}) {
+  assertEditable();
+  const total = Math.round(o.base * (1 + (o.recargoPct || 0) / 100));
+  const n = Math.max(1, Math.min(24, Math.round(o.cuotas) || 1));
+  // Cuotas parejas; la última absorbe el redondeo.
+  const parte = Math.floor(total / n);
+  const cuotas = generarCuotas(o.primera, n, parte).map((c, i) => (i === n - 1 ? { ...c, monto: total - parte * (n - 1) } : c));
+  await addDoc(collection(db, "deudas_clientes"), {
+    cliente: o.cliente,
+    proyecto_id: o.proyecto_id,
+    detalle: o.detalle,
+    base: Math.round(o.base),
+    interes: o.recargoPct ? `${String(o.recargoPct).replace(".", ",")}% de recargo` : null,
+    cuotas,
+    incobrable: false,
+    activa: true,
+    nota: null,
+    created_at: new Date().toISOString(),
+    created_by: o.by,
+  });
+  return total;
+}
+
 /** Marca una cuota como cobrada (o la vuelve a pendiente). */
 export async function cobrarCuotaCliente(d: DeudaCliente, n: number, cobrada: boolean, medio: MedioCobro | null = null) {
   assertEditable();

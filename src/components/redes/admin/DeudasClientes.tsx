@@ -1,9 +1,15 @@
 import { useState } from "react";
-import { Check, HandCoins, Loader2, Undo2 } from "lucide-react";
+import { Check, HandCoins, Loader2, Plus, Undo2 } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useRedes } from "@/contexts/redes-data-context";
+import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Section } from "@/components/redes/PageShell";
-import { cobrarCuotaCliente, marcarIncobrable, saldoDeudaCliente, useDeudasClientes, type DeudaCliente } from "@/lib/redes/facturacion";
+import { cobrarCuotaCliente, crearDeudaCliente, marcarIncobrable, saldoDeudaCliente, useDeudasClientes, type DeudaCliente } from "@/lib/redes/facturacion";
 import { formatARS, hoyISO } from "@/lib/redes/format";
 import { cn } from "@/lib/utils";
 
@@ -13,7 +19,18 @@ const ddmmaa = (f: string) => f.split("-").reverse().map((x, i) => (i === 2 ? x.
 export function DeudasClientes() {
   const lista = useDeudasClientes();
   const hoy = hoyISO();
-  if (!lista.length) return null;
+  const [nueva, setNueva] = useState(false);
+  const boton = (
+    <Button size="sm" onClick={() => setNueva(true)}>
+      <Plus className="mr-1.5 h-4 w-4" /> Cargar deuda
+    </Button>
+  );
+  if (!lista.length)
+    return (
+      <Section title="Te deben los clientes" description="Deudas fuera de las boletas: lo que quedó debiendo un cliente, con recargo y en cuotas si hace falta." actions={boton}>
+        <NuevaDeuda open={nueva} onOpenChange={setNueva} />
+      </Section>
+    );
   const activas = lista.filter((d) => !d.incobrable);
   const incobrables = lista.filter((d) => d.incobrable);
   const total = activas.reduce((a, d) => a + saldoDeudaCliente(d), 0);
@@ -22,7 +39,9 @@ export function DeudasClientes() {
     <Section
       title="Te deben los clientes"
       description={`Planes de pago y deudas viejas. Falta cobrar ${formatARS(total)}${vencido ? `, ${formatARS(vencido)} ya vencido` : ""}.`}
+      actions={boton}
     >
+      <NuevaDeuda open={nueva} onOpenChange={setNueva} />
       <div className="grid gap-3 lg:grid-cols-2">
         {activas.map((d) => (
           <Tarjeta key={d.id} d={d} hoy={hoy} />
@@ -46,6 +65,125 @@ export function DeudasClientes() {
         </div>
       )}
     </Section>
+  );
+}
+
+const OTRO = "__otro";
+
+/** Cargar una deuda: cliente, de qué es, monto, recargo (%), en cuántas cuotas y desde cuándo. */
+function NuevaDeuda({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { clientes } = useRedes();
+  const { user } = useUserProfileContext();
+  const [clienteId, setClienteId] = useState("");
+  const [otro, setOtro] = useState("");
+  const [detalle, setDetalle] = useState("");
+  const [monto, setMonto] = useState("");
+  const [recargo, setRecargo] = useState("");
+  const [cuotas, setCuotas] = useState("1");
+  const [vence, setVence] = useState(hoyISO());
+  const [guardando, setGuardando] = useState(false);
+  const base = Number(monto.replace(/\D/g, "")) || 0;
+  const pct = Number(recargo.replace(",", ".")) || 0;
+  const total = Math.round(base * (1 + pct / 100));
+  const n = Math.max(1, Number(cuotas) || 1);
+  const cliente = clientes.find((c) => c.id === clienteId);
+  const nombre = clienteId === OTRO ? otro.trim() : cliente?.nombre ?? "";
+  const listo = !!nombre && base > 0 && !!vence;
+
+  const guardar = async () => {
+    if (!listo || !user) return;
+    setGuardando(true);
+    try {
+      const t = await crearDeudaCliente({
+        cliente: nombre,
+        proyecto_id: clienteId === OTRO ? null : clienteId,
+        detalle: detalle.trim() || null,
+        base,
+        recargoPct: pct,
+        cuotas: n,
+        primera: vence,
+        by: user.uid,
+      });
+      toast.success(`Deuda de ${nombre} cargada: ${formatARS(t)}`);
+      setClienteId("");
+      setOtro("");
+      setDetalle("");
+      setMonto("");
+      setRecargo("");
+      setCuotas("1");
+      setVence(hoyISO());
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo guardar");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md rounded-2xl">
+        <DialogHeader className="text-left">
+          <DialogTitle>Cargar deuda de un cliente</DialogTitle>
+          <DialogDescription>Lo que quedó debiendo fuera de las boletas. Si lleva recargo, se suma al total.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Cliente</Label>
+            <Select value={clienteId} onValueChange={setClienteId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Elegí el cliente" />
+              </SelectTrigger>
+              <SelectContent>
+                {[...clientes]
+                  .sort((a, b) => a.nombre.localeCompare(b.nombre))
+                  .map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.nombre}
+                    </SelectItem>
+                  ))}
+                <SelectItem value={OTRO}>Otro (no está cargado)</SelectItem>
+              </SelectContent>
+            </Select>
+            {clienteId === OTRO && <Input value={otro} onChange={(e) => setOtro(e.target.value)} placeholder="Nombre del cliente" />}
+          </div>
+          <div className="space-y-1.5">
+            <Label>¿De qué es?</Label>
+            <Input value={detalle} onChange={(e) => setDetalle(e.target.value)} placeholder="Ej.: septiembre y octubre" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Monto</Label>
+              <Input inputMode="numeric" value={monto ? Number(monto.replace(/\D/g, "")).toLocaleString("es-AR") : ""} onChange={(e) => setMonto(e.target.value.replace(/\D/g, ""))} placeholder="250.000" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Recargo (%)</Label>
+              <Input inputMode="decimal" value={recargo} onChange={(e) => setRecargo(e.target.value.replace(/[^\d.,]/g, "").slice(0, 5))} placeholder="5" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Cuotas</Label>
+              <Input inputMode="numeric" value={cuotas} onChange={(e) => setCuotas(e.target.value.replace(/\D/g, "").slice(0, 2))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{n > 1 ? "1ª cuota vence" : "Vence"}</Label>
+              <Input type="date" value={vence} onChange={(e) => setVence(e.target.value)} />
+            </div>
+          </div>
+          {base > 0 && (
+            <div className="rounded-xl bg-muted/60 px-3 py-2.5 text-sm">
+              {formatARS(base)}
+              {pct ? ` + ${String(pct).replace(".", ",")}% = ` : " = "}
+              <b className="text-base">{formatARS(total)}</b>
+              {n > 1 && <span className="text-muted-foreground"> · {n} cuotas de {formatARS(Math.floor(total / n))}</span>}
+            </div>
+          )}
+          <Button className="w-full" onClick={guardar} disabled={!listo || guardando}>
+            {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Guardar deuda
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
