@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="es" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face { font-family: "Gothic"; src: url("assets/fonts/GOTHIC.TTF"); font-weight: 300 400; }
+      @font-face { font-family: "Gothic"; src: url("assets/fonts/GOTHICB.TTF"); font-weight: 600 900; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #0b0b0b; }
+      #root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: "Gothic", sans-serif; color: #fff; }
+      .esc { position: absolute; inset: 0; overflow: hidden; }
+      .full { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+      .l { display: inline-block; }
+      .cam { position: absolute; inset: 0; perspective: 1700px; perspective-origin: 50% 42%; }
+      .mundo { position: absolute; left: 540px; top: 900px; width: 0; height: 0; transform-style: preserve-3d; }
+      .obj, .anillo, .porta { position: absolute; left: 0; top: 0; transform-style: preserve-3d; }
+      .tira { position: absolute; top: 0; overflow: hidden; backface-visibility: hidden; }
+      .tira img, .tira .spec { position: absolute; top: 0; }
+      .tira .spec { background: #fff; opacity: 0; }
+      .sombra { position: absolute; left: -200px; top: -40px; width: 400px; height: 80px; border-radius: 50%; background: radial-gradient(closest-side, rgba(0,0,0,0.45), transparent); }
+
+      /* 1. gancho */
+      #s1 { background: #000; }
+      #pelo { object-position: 50% 30%; filter: brightness(0.55); }
+      #gancho { position: absolute; left: 0; right: 0; top: 1080px; text-align: center; perspective: 900px; }
+      #gancho div { font-size: 150px; font-weight: 700; line-height: 1.05; text-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+
+      /* 2. logo 3D */
+      #s2 { background: radial-gradient(60% 40% at 50% 42%, #3a3632 0%, #0b0b0b 75%); }
+      .p3d { position: absolute; left: -150px; top: -191px; width: 300px; height: 382px; transform-style: preserve-3d; }
+      .p3d img { position: absolute; inset: 0; width: 100%; height: 100%; }
+      .marca { position: absolute; left: 0; right: 0; text-align: center; font-size: 104px; letter-spacing: 0.18em; text-indent: 0.18em; }
+      .bajada { position: absolute; left: 0; right: 0; text-align: center; font-size: 34px; letter-spacing: 0.5em; text-indent: 0.5em; color: rgba(255,255,255,0.75); }
+
+      /* 3. carrusel */
+      .fondo { position: absolute; inset: 0; opacity: 0; }
+      .palabra { position: absolute; left: 0; right: 0; top: 290px; text-align: center; font-size: 140px; font-weight: 700; line-height: 1; opacity: 0; }
+      .palabra.chica { font-size: 104px; }
+      .piso { position: absolute; left: 50%; top: 1290px; width: 1200px; height: 300px; margin-left: -600px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255,255,255,0.35), transparent); }
+
+      /* 4. aminofusión */
+      #s4 { background: #0a0510; }
+      .mancha { position: absolute; width: 1100px; height: 1100px; border-radius: 50%; filter: blur(140px); opacity: 0.85; }
+      #m1 { left: -380px; top: 150px; background: #e0218a; }
+      #m2 { left: 420px; top: 850px; background: #5b2ee8; }
+      #amino-tit { position: absolute; left: 0; right: 0; top: 280px; text-align: center; font-size: 140px; line-height: 1; text-shadow: 0 0 40px rgba(224,33,138,0.8); }
+      #amino-tit b { font-weight: 700; } #amino-tit i { font-style: normal; font-weight: 300; }
+      .num { position: absolute; left: -60px; top: -80px; width: 120px; text-align: center; font-size: 150px; font-weight: 700; line-height: 1; color: #fff; text-shadow: 0 0 30px #e0218a, 0 0 70px #b01ad6; }
+      #pasos-txt { position: absolute; left: 0; right: 0; top: 1360px; text-align: center; font-size: 64px; font-weight: 700; }
+
+      /* 5. blondifix */
+      #s5 { background: #6f7275; }
+      #polvo-foto { object-position: 50% 40%; filter: brightness(0.6) blur(6px); transform: scale(1.1); }
+      .polvo { position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; border-radius: 50%; background: #c9f1f3; box-shadow: 0 0 18px #9fe2e6; }
+      #cont { position: absolute; left: 0; right: 0; top: 270px; text-align: center; }
+      #cont .a { font-size: 50px; letter-spacing: 0.2em; text-indent: 0.2em; }
+      #cont .n { display: inline-block; font-size: 300px; font-weight: 700; line-height: 0.95; }
+      #cont .b { font-size: 70px; font-weight: 700; letter-spacing: 0.25em; text-indent: 0.25em; margin-top: -10px; }
+      #blond-nom { position: absolute; left: 0; right: 0; top: 1380px; text-align: center; font-size: 96px; font-weight: 700; letter-spacing: 0.06em; }
+
+      /* 6. cierre */
+      #s6 { background: radial-gradient(80% 55% at 50% 40%, #2a2724 0%, #0b0b0b 70%); }
+      #web { position: absolute; left: 0; right: 0; top: 820px; text-align: center; font-size: 44px; }
+      #web b { font-weight: 700; }
+
+      #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+      #negro { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="15.6" data-width="1080" data-height="1920">
+      <audio id="mezcla" src="assets/mezcla.m4a" data-start="0" data-duration="15.6" data-track-index="9"></audio>
+
+      <!-- 1. gancho -->
+      <div id="s1" class="esc clip" data-start="0" data-duration="1.75" data-track-index="0" data-layout-ignore>
+        <img id="pelo" class="full" src="assets/p03_0.png" />
+        <div id="gancho"><div>¿Tu pelo</div><div>pide más?</div></div>
+      </div>
+
+      <!-- 2. logo 3D -->
+      <div id="s2" class="esc clip" data-start="1.75" data-duration="1.0" data-track-index="0" data-layout-ignore>
+        <div class="cam"><div class="mundo" style="top: 760px"><div class="p3d" id="p-a"></div></div></div>
+        <div class="marca" id="marca-a" style="top: 1010px">PROTENAT</div>
+        <div class="bajada" id="bajada-a" style="top: 1160px">PROFESSIONAL CARE</div>
+      </div>
+
+      <!-- 3. carrusel de cuidados -->
+      <div id="s3" class="esc clip" data-start="2.75" data-duration="2.95" data-track-index="0" data-layout-ignore>
+        <div class="fondo" style="background: radial-gradient(70% 50% at 50% 50%, #e3d4f7, #b49ad6)"></div>
+        <div class="fondo" style="background: radial-gradient(70% 50% at 50% 50%, #ffd2b8, #f08a5d)"></div>
+        <div class="fondo" style="background: radial-gradient(70% 50% at 50% 50%, #cff0ee, #6cc5c2)"></div>
+        <div class="fondo" style="background: radial-gradient(70% 50% at 50% 50%, #ffeaa8, #f5bb3a)"></div>
+        <div class="piso"></div>
+        <div class="palabra" style="color:#5b3a99">Color</div>
+        <div class="palabra" style="color:#c63d12">Nutrición</div>
+        <div class="palabra" style="color:#16807b">Fuerza</div>
+        <div class="palabra chica" style="color:#c25e10">Keratina &amp; Argán</div>
+        <div class="cam"><div class="mundo" id="mundo3" style="top: 940px"></div></div>
+      </div>
+
+      <!-- 4. aminofusión -->
+      <div id="s4" class="esc clip" data-start="5.7" data-duration="3.1" data-track-index="0" data-layout-ignore>
+        <div id="m1" class="mancha"></div><div id="m2" class="mancha"></div>
+        <div id="amino-tit"><b>amino</b><i>fusión</i></div>
+        <div class="cam"><div class="mundo" id="mundo4" style="top: 960px"></div></div>
+        <div id="pasos-txt">Repara en 4 pasos</div>
+      </div>
+
+      <!-- 5. blondifix -->
+      <div id="s5" class="esc clip" data-start="8.8" data-duration="3.25" data-track-index="0" data-layout-ignore>
+        <img id="polvo-foto" class="full" src="assets/p21_0.png" />
+        <div class="cam"><div class="mundo" id="mundo5" style="top: 1060px"></div></div>
+        <div id="cont"><div class="a">ACLARA HASTA</div><div class="n" id="num">1</div><div class="b">NIVELES</div></div>
+        <div id="blond-nom">BLONDIFIX</div>
+      </div>
+
+      <!-- 6. cierre -->
+      <div id="s6" class="esc clip" data-start="12.05" data-duration="3.55" data-track-index="0" data-layout-ignore>
+        <div class="cam"><div class="mundo" style="top: 470px"><div class="p3d" id="p-b" style="transform: scale(0.75)"></div></div></div>
+        <div class="marca" id="marca-b" style="top: 640px">PROTENAT</div>
+        <div class="bajada" id="bajada-b" style="top: 770px">CUIDADO PROFESIONAL</div>
+        <div id="web">www.<b>protenat</b>.com.ar</div>
+        <div class="cam"><div class="mundo" id="mundo6" style="top: 1220px"></div></div>
+      </div>
+
+      <div id="flash" class="clip" data-start="0" data-duration="15.6" data-track-index="2" data-layout-ignore></div>
+      <div id="negro" class="clip" data-start="0" data-duration="15.6" data-track-index="3" data-layout-ignore></div>
+    </div>
+
+    <script>
+      // tiempos (se ajustan a la voz)
+      const T = { logo: 1.75, cuid: 2.75, lineas: [2.75, 3.62, 4.68, 5.2], amino: 5.7, pasos: 7.0, blond: 8.8, nueve: 10.8, fin: 12.05, total: 15.6 };
+
+      const tl = gsap.timeline({ paused: true });
+      const t3 = gsap.timeline(); // estados de los objetos 3D (se pintan después, en cada cuadro)
+      const $ = (s, r = document) => r.querySelector(s);
+      const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+      const letras = (el) => { el.innerHTML = [...el.textContent].map((c) => `<span class="l">${c === " " ? "&nbsp;" : c}</span>`).join(""); return $$(".l", el); };
+      const flash = (t, o = 0.75) => tl.fromTo("#flash", { opacity: o }, { opacity: 0, duration: 0.22, ease: "power2.out", immediateRender: false }, t);
+      const rad = (g) => (g * Math.PI) / 180;
+
+      // ---------- frascos 3D: la foto envuelta en un cilindro hecho de tiras ----------
+      const OBJS = [];
+      function frasco(padre, src, w, h, n = 30) {
+        const el = document.createElement("div"); el.className = "obj";
+        const r = w / 2, paso = 180 / n, tiras = [];
+        for (const mitad of [0, 180]) {
+          for (let i = 0; i < n; i++) {
+            const a = -90 + i * paso, b = a + paso, xa = r * Math.sin(rad(a)) + r, xb = r * Math.sin(rad(b)) + r;
+            const cuerda = 2 * r * Math.sin(rad(paso / 2)), k = cuerda / (xb - xa), ang = (a + b) / 2 + mitad;
+            const t = document.createElement("div"); t.className = "tira";
+            Object.assign(t.style, { left: `${-cuerda / 2 - 0.5}px`, top: `${-h / 2}px`, width: `${cuerda + 1}px`, height: `${h}px`, transform: `rotateY(${ang}deg) translateZ(${r * Math.cos(rad(paso / 2)) - 0.5}px)` });
+            const im = document.createElement("img"); im.src = src;
+            Object.assign(im.style, { width: `${w * k}px`, height: `${h}px`, left: `${-xa * k}px` });
+            const sp = document.createElement("div"); sp.className = "spec";
+            Object.assign(sp.style, { width: `${w * k}px`, height: `${h}px`, left: `${-xa * k}px`, webkitMaskImage: `url(${src})`, maskImage: `url(${src})`, webkitMaskSize: "100% 100%", maskSize: "100% 100%" });
+            t.append(im, sp); el.appendChild(t); tiras.push({ ang, im, sp });
+          }
+        }
+        const sombra = document.createElement("div"); sombra.className = "sombra";
+        Object.assign(sombra.style, { transform: `translateY(${h / 2}px) rotateX(90deg) scale(${w / 300})` });
+        el.appendChild(sombra);
+        padre.appendChild(el);
+        const o = { el, tiras, s: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, sc: 1, o: 1 }, base: () => 0 };
+        OBJS.push(o); return o;
+      }
+      function pintarObj(o) {
+        const s = o.s;
+        o.el.style.transform = `translate3d(${s.x}px,${s.y}px,${s.z}px) rotateX(${s.rx}deg) rotateY(${s.ry}deg) rotateZ(${s.rz}deg) scale(${s.sc})`;
+        o.el.style.opacity = s.o;
+        const giro = s.ry + o.base();
+        for (const t of o.tiras) {
+          const c = Math.cos(rad(t.ang + giro + 18));
+          t.im.style.filter = `brightness(${(0.5 + 0.62 * Math.max(0, c)).toFixed(3)})`;
+          t.sp.style.opacity = (Math.pow(Math.max(0, Math.cos(rad(t.ang + giro + 32))), 24) * 0.55).toFixed(3);
+        }
+      }
+      // logo P con volumen: capas apiladas
+      function pe(el) {
+        for (let i = 13; i >= 0; i--) {
+          const im = document.createElement("img"); im.src = "assets/logo-p.png";
+          Object.assign(im.style, { transform: `translateZ(${-i * 2.6}px)`, filter: `brightness(${i === 0 ? 1.15 : 0.32 + 0.02 * (13 - i)})` });
+          el.appendChild(im);
+        }
+      }
+      pe($("#p-a")); pe($("#p-b"));
+
+      // ---------- 1. gancho ----------
+      tl.fromTo("#pelo", { scale: 1.3 }, { scale: 1.08, duration: 1.75, ease: "power2.out" }, 0);
+      $$("#gancho div").forEach((d, i) => tl.fromTo(letras(d), { opacity: 0, rotationX: -100, y: 60 }, { opacity: 1, rotationX: 0, y: 0, duration: 0.4, stagger: 0.03, ease: "back.out(2)" }, 0.1 + i * 0.35));
+
+      // ---------- 2. logo ----------
+      flash(T.logo, 0.9);
+      tl.fromTo("#p-a", { rotationY: -200, z: -900 }, { rotationY: 0, z: 0, duration: 0.8, ease: "expo.out" }, T.logo)
+        .fromTo("#p-a", { rotationY: 0 }, { rotationY: 22, duration: 0.2, ease: "sine.inOut", immediateRender: false }, T.logo + 0.8)
+        .fromTo(letras($("#marca-a")), { opacity: 0, z: 400, rotationY: 60, transformPerspective: 800 }, { opacity: 1, z: 0, rotationY: 0, duration: 0.4, stagger: 0.04, ease: "expo.out" }, T.logo + 0.25)
+        .fromTo("#bajada-a", { opacity: 0, scaleX: 1.35 }, { opacity: 1, scaleX: 1, duration: 0.5, ease: "expo.out" }, T.logo + 0.6);
+
+      // ---------- 3. carrusel ----------
+      const anillo3 = document.createElement("div"); anillo3.className = "anillo"; $("#mundo3").appendChild(anillo3);
+      const ANI = { ry: 0 }, R = 400;
+      ["p07_3", "p09_3", "p11_1", "p13_1"].forEach((f, i) => {
+        const porta = document.createElement("div"); porta.className = "porta";
+        porta.style.transform = `rotateY(${i * 90}deg) translateZ(${R}px)`; anillo3.appendChild(porta);
+        const o = frasco(porta, `assets/${f}.png`, 236, 800);
+        o.base = () => i * 90 + ANI.ry;
+      });
+      const pintarAnillo = () => { anillo3.style.transform = `translateZ(${-R}px) rotateY(${ANI.ry}deg)`; };
+      t3.fromTo(ANI, { ry: 140 }, { ry: 0, duration: 0.55, ease: "expo.out" }, T.cuid);
+      T.lineas.forEach((t, i) => {
+        if (i > 0) t3.to(ANI, { ry: -90 * i, duration: 0.45, ease: "back.inOut(1.3)" }, t - 0.2);
+        const f = $$("#s3 .fondo")[i], p = $$("#s3 .palabra")[i];
+        tl.fromTo(f, { opacity: 0 }, { opacity: 1, duration: 0.3 }, t - 0.1)
+          .fromTo(p, { opacity: 0, scale: 0.5, z: -300 }, { opacity: 1, scale: 1, z: 0, duration: 0.35, ease: "back.out(2)" }, t);
+        if (i < 3) tl.to(p, { opacity: 0, y: -60, duration: 0.15 }, T.lineas[i + 1] - 0.15);
+      });
+      flash(T.cuid, 0.6);
+
+      // ---------- 4. aminofusión ----------
+      flash(T.amino, 0.85);
+      const amino = frasco($("#mundo4"), "assets/p19_1.png", 262, 830, 36);
+      t3.fromTo(amino.s, { ry: -260, z: -1200, y: 200 }, { ry: 0, z: 0, y: 0, duration: 0.9, ease: "expo.out" }, T.amino)
+        .fromTo(amino.s, { ry: 0 }, { ry: 50, duration: T.blond - T.amino - 0.9, ease: "sine.inOut", immediateRender: false }, T.amino + 0.9);
+      tl.fromTo("#m1", { x: 0, y: 0 }, { x: 260, y: 180, duration: 3.1, ease: "sine.inOut" }, T.amino)
+        .fromTo("#m2", { x: 0, y: 0 }, { x: -300, y: -260, duration: 3.1, ease: "sine.inOut" }, T.amino)
+        .fromTo("#amino-tit", { opacity: 0, scale: 1.5, filter: "blur(18px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 0.5, ease: "expo.out" }, T.amino + 0.1);
+      // los 4 pasos orbitan alrededor del frasco
+      const orbita = document.createElement("div"); orbita.className = "anillo"; $("#mundo4").appendChild(orbita);
+      const ORB = { ry: 0 };
+      const nums = [1, 2, 3, 4].map((n, i) => {
+        const p = document.createElement("div"); p.className = "porta"; p.style.transform = `rotateY(${i * 90}deg) translateZ(330px)`;
+        const d = document.createElement("div"); d.className = "num"; d.textContent = n; p.appendChild(d); orbita.appendChild(p); return d;
+      });
+      const pintarOrbita = () => { orbita.style.transform = `translateY(120px) rotateX(-12deg) rotateY(${ORB.ry}deg)`; };
+      t3.fromTo(ORB, { ry: 0 }, { ry: -300, duration: T.blond - T.pasos, ease: "power1.inOut" }, T.pasos);
+      tl.fromTo(nums, { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.3, stagger: 0.12, ease: "back.out(2.5)" }, T.pasos)
+        .fromTo("#pasos-txt", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.35, ease: "expo.out" }, T.pasos + 0.1);
+
+      // ---------- 5. blondifix ----------
+      flash(T.blond, 0.9);
+      const blond = frasco($("#mundo5"), "assets/p22_0.png", 440, 529, 36);
+      t3.fromTo(blond.s, { ry: 300, rx: 25, z: -1400, y: -300 }, { ry: -20, rx: 0, z: 0, y: 0, duration: 0.9, ease: "expo.out" }, T.blond)
+        .fromTo(blond.s, { ry: -20 }, { ry: 25, duration: 2.35, ease: "sine.inOut", immediateRender: false }, T.blond + 0.9);
+      let semilla = 7; const azar = () => ((semilla = (semilla * 9301 + 49297) % 233280) / 233280);
+      for (let i = 0; i < 60; i++) {
+        const d = document.createElement("div"); d.className = "polvo"; $("#mundo5").appendChild(d);
+        const ang = azar() * Math.PI * 2, dist = 250 + azar() * 700, zf = -600 + azar() * 1400, tam = 0.4 + azar() * 1.8;
+        tl.fromTo(d, { x: 0, y: 0, z: 0, scale: tam, opacity: 1 }, { x: Math.cos(ang) * dist, y: Math.sin(ang) * dist * 0.8, z: zf, opacity: 0, duration: 1.0 + azar() * 0.7, ease: "expo.out" }, T.blond + 0.25 + azar() * 0.1);
+      }
+      const num = { n: 1 };
+      tl.fromTo("#cont", { opacity: 0, y: -40 }, { opacity: 1, y: 0, duration: 0.3 }, T.nueve - 0.6)
+        .fromTo(num, { n: 1 }, { n: 9, duration: 0.6, ease: "power1.in", onUpdate: () => { $("#num").textContent = Math.round(num.n); } }, T.nueve - 0.6)
+        .fromTo("#cont .n", { scale: 1 }, { scale: 1.3, duration: 0.12, yoyo: true, repeat: 1, ease: "power2.out", immediateRender: false }, T.nueve)
+        .fromTo(letras($("#blond-nom")), { opacity: 0, z: 300, transformPerspective: 800 }, { opacity: 1, z: 0, duration: 0.3, stagger: 0.04, ease: "expo.out" }, T.blond + 0.5);
+      flash(T.nueve, 0.4);
+
+      // ---------- 6. cierre: logo + productos en abanico 3D ----------
+      flash(T.fin, 0.8);
+      tl.fromTo("#p-b", { rotationY: 180, scale: 0.3 }, { rotationY: 0, scale: 0.75, duration: 0.7, ease: "expo.out" }, T.fin)
+        .fromTo(letras($("#marca-b")), { opacity: 0, z: 400, rotationY: 60, transformPerspective: 800 }, { opacity: 1, z: 0, rotationY: 0, duration: 0.4, stagger: 0.04, ease: "expo.out" }, T.fin + 0.2)
+        .fromTo("#bajada-b", { opacity: 0, scaleX: 1.35 }, { opacity: 1, scaleX: 1, duration: 0.5, ease: "expo.out" }, T.fin + 0.55)
+        .fromTo("#web", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: "expo.out" }, T.fin + 0.8);
+      const abanico = document.createElement("div"); abanico.className = "anillo"; $("#mundo6").appendChild(abanico);
+      const ABA = { ry: 0 };
+      [["p07_3", 150, 510], ["p09_3", 150, 510], ["p19_1", 150, 475], ["p11_1", 150, 510], ["p13_1", 150, 510]].forEach(([f, w, h], i) => {
+        const a = (i - 2) * 11, porta = document.createElement("div"); porta.className = "porta";
+        porta.style.transform = `rotateY(${a}deg) translateZ(900px)`; abanico.appendChild(porta);
+        const o = frasco(porta, `assets/${f}.png`, w, h, 20); o.base = () => a + ABA.ry;
+        t3.fromTo(o.s, { y: 900, o: 0 }, { y: 0, o: 1, duration: 0.6, ease: "back.out(1.4)" }, T.fin + 0.3 + i * 0.08);
+      });
+      const pintarAbanico = () => { abanico.style.transform = `translateZ(-1100px) rotateY(${ABA.ry}deg)`; };
+      t3.fromTo(ABA, { ry: -7 }, { ry: 7, duration: T.total - T.fin, ease: "sine.inOut" }, T.fin);
+      tl.fromTo("#p-b", { rotationY: 0 }, { rotationY: -25, duration: 2.2, ease: "sine.inOut", immediateRender: false }, T.fin + 0.7)
+        .to("#negro", { opacity: 1, duration: 0.4 }, T.total - 0.4);
+
+      // pinta todo lo 3D después de que t3 actualizó los estados
+      const pintar = () => { pintarAnillo(); pintarOrbita(); pintarAbanico(); OBJS.forEach(pintarObj); };
+      tl.add(t3, 0);
+      const reloj = { v: 0 };
+      tl.fromTo(reloj, { v: 0 }, { v: 1, duration: T.total, ease: "none", onUpdate: pintar }, 0);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0); pintar();
+    </script>
+  </body>
+</html>
