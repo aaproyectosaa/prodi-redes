@@ -36,6 +36,9 @@ import { QuienSubeDialog } from "@/components/redes/QuienSubeDialog";
 import { ClientesViejos } from "@/components/redes/admin/HistorialFacturas";
 import { formatARS, hoyISO, mesActual } from "@/lib/redes/format";
 import { planDe, usoPlan } from "@/lib/redes/planes";
+import { useFacturas } from "@/lib/redes/facturacion";
+import { calcularRiesgo } from "@/lib/redes/riesgo";
+import { sumarMeses } from "@/lib/fecha";
 
 /** Dirección de la app para el mensaje de bienvenida (VITE_APP_URL o la de esta pestaña). */
 const urlApp = () => (import.meta.env.VITE_APP_URL || window.location.origin).replace(/\/$/, "");
@@ -69,6 +72,12 @@ export default function Clientes() {
     });
   }, [busqueda, clientes, profiles]);
   const isAdmin = role === "admin";
+  // Riesgo de que se vaya (solo lo ve el super admin: usa boletas y accesos).
+  const { facturas } = useFacturas(sumarMeses(mes, -11), isAdmin);
+  const riesgos = useMemo(
+    () => (isAdmin ? calcularRiesgo({ clientes, videos, planes, profiles, facturas }) : null),
+    [isAdmin, clientes, videos, planes, profiles, facturas]
+  );
 
   return (
     <PageShell
@@ -169,6 +178,23 @@ export default function Clientes() {
                           Sube el cliente
                         </span>
                       )}
+                      {(() => {
+                        const r = riesgos?.get(c.id);
+                        if (!r || r.nivel === "ok") return null;
+                        const alto = r.nivel === "alto";
+                        return (
+                          <span
+                            title={r.motivos.map((m) => `• ${m.texto}`).join("\n")}
+                            aria-label={`Riesgo ${r.nivel}: ${r.motivos.map((m) => m.texto).join(", ")}`}
+                            className={cn(
+                              "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                              alto ? "bg-destructive/12 text-destructive" : "bg-warning/15 text-warning"
+                            )}
+                          >
+                            Riesgo {r.nivel}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>

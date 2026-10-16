@@ -6,6 +6,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageShell, EmptyState } from "@/components/redes/PageShell";
 import { RodajeDialog } from "@/components/redes/RodajeDialog";
 import { RodajeRow } from "@/components/redes/RodajeRow";
+import { RodajesPorZona } from "@/components/redes/RodajesPorZona";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { formatearFecha } from "@/lib/fecha";
@@ -29,8 +30,8 @@ function semanaLabel(fecha: string): string {
 export default function Rodajes() {
   const { rodajes, videos } = useRedes();
   const { role, user } = useUserProfileContext();
-  const [tab, setTab] = useState<"proximos" | "pasados">("proximos");
-  const [dlg, setDlg] = useState<{ open: boolean; rodaje?: Rodaje | null }>({ open: false });
+  const [tab, setTab] = useState<"proximos" | "pasados" | "zona">("proximos");
+  const [dlg, setDlg] = useState<{ open: boolean; rodaje?: Rodaje | null; clienteId?: string; preseleccion?: string[] }>({ open: false });
   const hoy = hoyISO();
   const puede = canManageProduction(role);
 
@@ -66,10 +67,13 @@ export default function Rodajes() {
         <TabsList>
           <TabsTrigger value="proximos">Próximos</TabsTrigger>
           <TabsTrigger value="pasados">Realizados</TabsTrigger>
+          {puede && <TabsTrigger value="zona">Por zona</TabsTrigger>}
         </TabsList>
       </Tabs>
 
-      {lista.length === 0 ? (
+      {tab === "zona" ? (
+        <RodajesPorZona puede={puede} onAgendar={(a) => setDlg({ open: true, ...a })} />
+      ) : lista.length === 0 ? (
         <EmptyState icon={CalendarDays} title={tab === "proximos" ? "No hay rodajes agendados" : "Todavía no hay rodajes realizados"} />
       ) : (
         <div className="space-y-6">
@@ -111,7 +115,10 @@ export default function Rodajes() {
         </div>
       )}
 
-      <RodajeDialog open={dlg.open} onOpenChange={(o) => setDlg((p) => ({ ...p, open: o }))} rodaje={dlg.rodaje} />
+      <RodajeDialog open={dlg.open} onOpenChange={(o) => setDlg((p) => ({ ...p, open: o }))} rodaje={dlg.rodaje}
+        clienteId={dlg.clienteId}
+        preseleccion={dlg.preseleccion}
+      />
     </PageShell>
   );
 }

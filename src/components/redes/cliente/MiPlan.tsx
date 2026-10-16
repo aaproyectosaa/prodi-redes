@@ -15,6 +15,7 @@ import { cupoPiezas, iniciarPago } from "@/lib/redes/piezas";
 import { DIA_PAGO_DESDE, DIA_VENCIMIENTO, diaPago, interesMora, nombrePeriodo, textoMora, textoPlazoPago, totalMensual, useFacturasCliente, type FacturaDoc } from "@/lib/redes/facturacion";
 import { DATOS_COBRO_DEFAULT } from "@/lib/redes/types";
 import type { Project } from "@/integrations/firebase/types";
+import { PautaClienteDialog, pautaDelCliente } from "@/components/redes/cliente/PautaCliente";
 import { cn } from "@/lib/utils";
 
 const nombreMes = (m: string) => mesLabel(m).split(" ")[0].toLowerCase();
@@ -37,8 +38,11 @@ export function MiPlan({
   onPedirVideo,
   onPedirSoloEdicion,
   onPedirPieza,
+  onCompletarPerfil,
 }: {
   cliente: Project;
+  /** Ir a "Mi negocio" (para completar el perfil antes de definir la publicidad). */
+  onCompletarPerfil?: () => void;
   email?: string;
   onPedirVideo: () => void;
   /** Pedir un video "solo edición" (el cliente sube las tomas, 30% menos). */
@@ -46,6 +50,8 @@ export function MiPlan({
   onPedirPieza: () => void;
 }) {
   const { planes, videos, piezas, cobros, settings } = useRedes();
+  const [pautaOpen, setPautaOpen] = useState(false);
+  const pautaCliente = pautaDelCliente(cliente);
   const mes = mesActual();
   const hoy = hoyISO();
   const plan = planDe(cliente, planes);
@@ -202,14 +208,22 @@ export function MiPlan({
                 )}
                 {plan.pauta?.incluida && (
                   <Incluye i={1} icono={Megaphone} color="from-amber-500/20 to-amber-500/5 text-amber-600 dark:text-amber-300" titulo="Publicidad">
-                    {plan.pauta.monto ? (
+                    {(pautaCliente?.monto ?? plan.pauta.monto) ? (
                       <>
-                        <span className="block text-lg font-bold tabular-nums text-foreground">{formatARS(plan.pauta.monto)}</span>
+                        <span className="block text-lg font-bold tabular-nums text-foreground">{formatARS(pautaCliente?.monto ?? plan.pauta.monto)}</span>
                         <span>por mes invertidos en tus anuncios</span>
                       </>
                     ) : (
                       "Armamos y manejamos tus anuncios"
                     )}
+                    {/* Lo decide el cliente (la IA le sugiere); con el perfil completo. */}
+                    <button
+                      type="button"
+                      onClick={() => setPautaOpen(true)}
+                      className="mt-2 block text-xs font-semibold text-primary hover:underline"
+                    >
+                      {pautaCliente?.monto ? "Cambiar mi inversión" : "Definir cuánto invertir"}
+                    </button>
                   </Incluye>
                 )}
                 {plan.administracionRedes && (
@@ -253,6 +267,7 @@ export function MiPlan({
         <DebitoCliente cliente={cliente} monto={totalBoleta} comision={settings.comision_mp_pct} email={email} />
         <ComprarExtras clienteId={cliente.id} plan={plan} onSoloEdicion={onPedirSoloEdicion} />
       </div>
+      <PautaClienteDialog key={pautaOpen ? "abierto" : "cerrado"} cliente={cliente} open={pautaOpen} onOpenChange={setPautaOpen} onCompletarPerfil={onCompletarPerfil} />
 
       {/* 4. Boletas */}
       <Section title="Tus boletas" description="Tocá una para verla o descargarla en PDF. También te llegan por mail.">

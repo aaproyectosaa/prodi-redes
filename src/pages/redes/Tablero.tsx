@@ -5,12 +5,14 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Banknote,
+  ChevronRight,
   CircleDollarSign,
   Clapperboard,
   Image as ImageIcon,
   Lightbulb,
   PiggyBank,
   Receipt,
+  ShieldAlert,
   ShoppingBag,
   Users,
 } from "lucide-react";
@@ -43,6 +45,7 @@ import {
 } from "@/lib/redes/facturacion";
 import { EstadisticasAnio } from "@/components/redes/admin/EstadisticasAnio";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
+import { calcularRiesgo, clientesEnRiesgo } from "@/lib/redes/riesgo";
 import { cn } from "@/lib/utils";
 
 /**
@@ -184,6 +187,12 @@ export default function Tablero() {
   for (const f of esMesActual ? vencidas.slice(0, 3) : [])
     oportunidades.unshift({ tipo: "riesgo", ir: "/cobros", texto: `${f.cliente} tiene vencida la ${f.tipo} de ${nombrePeriodo(f)} (${formatARS(interesMora(f, hoy).totalConInteres)} con interés).` });
 
+  // Clientes que se pueden ir (siempre con los datos de hoy, no del mes que se está mirando).
+  const enRiesgo = useMemo(
+    () => clientesEnRiesgo(calcularRiesgo({ clientes, videos, planes, profiles, facturas })),
+    [clientes, videos, planes, profiles, facturas]
+  );
+
   const faltan27 = esMesActual && dia <= 27 ? 27 - dia : null;
   const paraRevisar = delMes.filter((f) => f.estado === "borrador").length;
   const faltaCobrar = delMes.filter((f) => f.estado === "pendiente").length;
@@ -233,6 +242,57 @@ export default function Tablero() {
       <div className="mb-10">
         <EstadisticasAnio equipoActual={costoEquipo} />
       </div>
+
+      {enRiesgo.length > 0 && (
+        <div className="mb-10">
+          <Section
+            title="Clientes en riesgo"
+            description="Señales de que un cliente se puede ir: videos sin aprobar, que no entra al sistema, menos pauta, boletas vencidas o débito cortado."
+          >
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {enRiesgo.map((r) => {
+                const c = clientes.find((x) => x.id === r.clienteId);
+                if (!c) return null;
+                const alto = r.nivel === "alto";
+                return (
+                  <div
+                    key={r.clienteId}
+                    className={cn(
+                      "flex flex-col gap-3 rounded-2xl border p-4",
+                      alto ? "border-destructive/30 bg-destructive/[0.05]" : "border-warning/30 bg-warning/[0.06]"
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <ClienteTag cliente={c} size="md" className="min-w-0 truncate font-semibold text-foreground" />
+                      <span
+                        className={cn(
+                          "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                          alto ? "bg-destructive/15 text-destructive" : "bg-warning/15 text-warning"
+                        )}
+                      >
+                        <ShieldAlert className="h-3 w-3" />
+                        Riesgo {r.nivel}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {r.motivos.map((m) => (
+                        <span key={m.clave} className="rounded-full bg-muted/60 px-2.5 py-1 text-xs text-foreground/80">
+                          {m.texto}
+                        </span>
+                      ))}
+                    </div>
+                    {esAdmin && (
+                      <Button variant="ghost" size="sm" className="mt-auto self-start rounded-xl px-2" onClick={() => navigate(`/clientes/${c.id}`)}>
+                        Abrir cliente <ChevronRight className="ml-1 h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </Section>
+        </div>
+      )}
 
       <div className="grid gap-8 xl:grid-cols-[1.6fr_1fr]">
         <div className="space-y-8">

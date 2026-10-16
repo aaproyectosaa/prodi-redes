@@ -310,6 +310,8 @@ export interface Project {
   /** filma: quién filma · publica: quién sube los videos a las redes (cliente = se le entrega el video aprobado y lo sube él). */
   /** servicio: completo (filmamos/editamos y pautamos) o solo_pauta (nos manda los videos terminados). */
   produccion?: { filma?: QuienFilma; publica?: QuienPublica; servicio?: ServicioCliente } | null;
+  /** Pasos del arranque del cliente que se tildaron a mano (los que el sistema no detecta solo). Lo escribe el super admin. */
+  arranque_manual?: Record<string, boolean> | null;
 }
 
 export type QuienPublica = "prodi" | "cliente";

@@ -379,6 +379,7 @@ export default function ClientePortal() {
               setPedirVideo(true);
             }}
             onPedirPieza={() => setPiezaOpen(true)}
+            onCompletarPerfil={() => setTab("negocio")}
           />
         </TabsContent>
 

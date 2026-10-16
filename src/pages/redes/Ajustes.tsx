@@ -709,7 +709,7 @@ function RepartoExtras({ settings }: { settings: RedesSettings }) {
             <div key={k} className="space-y-1.5">
               <Label>{l}</Label>
               <div className="relative">
-                <InputNumero value={p[k]} onChange={(v) => setP({ ...p, [k]: Math.max(0, Math.min(100, Number(v) || 0)) })} className="pr-8" />
+                <InputNumero value={p[k]} onChange={(e) => setP({ ...p, [k]: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })} className="pr-8" />
                 <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
               </div>
             </div>

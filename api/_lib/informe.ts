@@ -2,7 +2,7 @@
 // Informe mensual del cliente: datos + HTML de mail (compatible con Gmail/Outlook).
 
 import { adminDb } from "./db";
-import { renderInformeHtml } from "./informe-html";
+import { mejorVideo, renderInformeHtml, tieneResultados, type ResumenAnterior } from "./informe-html";
 import { mesAR, sumarMeses } from "./fecha";
 
 const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
@@ -33,6 +33,14 @@ export interface Informe {
     reproducciones: number;
     mensajes: number;
     gasto: number;
+    impresiones?: number;
+    clics?: number;
+    /** Cuántos de los publicados tienen resultados cargados. */
+    con_resultados?: number;
+    /** Gasto total / mensajes totales (redondeado), o null. */
+    costo_mensaje?: number | null;
+    mejor_video?: { id: string; titulo: string; criterio: "mensajes" | "alcance"; mensajes: number; alcance: number } | null;
+    anterior?: ResumenAnterior | null;
   };
 }
 
@@ -52,7 +60,9 @@ export async function construirInforme(proyectoId: string, mes: string, baseUrl:
   }
   cupo += Number(p.creditos_extra?.[mes] ?? 0);
 
-  const sum = (k: string) => publicados.reduce((a, v) => a + Number(v.resultados?.[k] ?? 0), 0);
+  const sumDe = (lista: any[]) => (k: string) => lista.reduce((a, v) => a + (Number(v.resultados?.[k] ?? 0) || 0), 0);
+  const sum = sumDe(publicados);
+  const mejor = mejorVideo(publicados);
   const resumen = {
     publicados: publicados.length,
     planificados: videos.filter((v) => !v.extra).length,
@@ -61,8 +71,35 @@ export async function construirInforme(proyectoId: string, mes: string, baseUrl:
     reproducciones: sum("reproducciones"),
     mensajes: sum("mensajes"),
     gasto: sum("gasto"),
+    impresiones: sum("impresiones"),
+    clics: sum("clics"),
+    con_resultados: publicados.filter(tieneResultados).length,
+    costo_mensaje: sum("mensajes") > 0 && sum("gasto") > 0 ? Math.round(sum("gasto") / sum("mensajes")) : null,
+    mejor_video: mejor ? { id: mejor.id, titulo: mejor.titulo, criterio: mejor.criterio, mensajes: mejor.mensajes, alcance: mejor.alcance } : null,
+    anterior: null as ResumenAnterior | null,
   };
-  const html = renderInformeHtml({ nombre: String(p.nombre ?? ""), label: mesLabel(mes), baseUrl, resumen, publicados });
+
+  // Mes anterior, con la misma cuenta, para comparar (↑/↓). Si falla, el informe sale igual sin flechas.
+  const mesAnt = sumarMeses(mes, -1);
+  try {
+    const aSnap = await db.collection("videos").where("proyecto_id", "==", proyectoId).where("mes", "==", mesAnt).get();
+    const aPub = aSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as any).filter((v) => v.etapa === "publicado");
+    const sa = sumDe(aPub);
+    resumen.anterior = {
+      mes: mesAnt,
+      label: mesLabel(mesAnt),
+      publicados: aPub.length,
+      con_resultados: aPub.filter(tieneResultados).length,
+      alcance: sa("alcance"),
+      reproducciones: sa("reproducciones"),
+      mensajes: sa("mensajes"),
+      gasto: sa("gasto"),
+    };
+  } catch (err) {
+    console.warn("[informe] no se pudo leer el mes anterior", err);
+  }
+
+  const html = renderInformeHtml({ nombre: String(p.nombre ?? ""), label: mesLabel(mes), baseUrl, resumen, publicados, anterior: resumen.anterior });
   return {
     proyectoId,
     nombre: String(p.nombre ?? ""),

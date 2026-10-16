@@ -51,6 +51,7 @@ import { asistenteDueno } from "../_lib/dueno";
 import { linksDeMensaje } from "../_lib/chat-links";
 import { crearTarea } from "../_lib/tareas";
 import { logosParaPieza, marcaTexto } from "../_lib/marca";
+import { itemsPerfil } from "../_lib/perfil-cliente";
 import { controlarTopeIA } from "../_lib/tope-ia";
 import {
   comercialTexto,
@@ -1214,6 +1215,112 @@ async function comercialGuardar(req: VercelRequest) {
 }
 
 /** Solo la parte comercial (el cliente no ve lo que aprendió la IA ni las notas del equipo). */
+// ---------------------------------------------------------------------------
+// Inversión en publicidad que define el cliente (Mi plan): la IA le sugiere cuánto según sus objetivos, su plan y
+// lo que rindieron sus anuncios; solo con el perfil completo (si no, no hay con qué sugerir ni armar buenos anuncios).
+// ---------------------------------------------------------------------------
+
+async function datosPauta(proyectoId: string) {
+  const db = adminDb();
+  const proj = (await db.collection("projects").doc(proyectoId).get()).data() ?? {};
+  const comercial = ((await db.collection("ia_memoria").doc(proyectoId).get()).data()?.comercial ?? {}) as Record<string, unknown>;
+  return { db, proj, comercial };
+}
+
+function exigirPerfil(proj: Data, comercial: Record<string, unknown>) {
+  const faltan = itemsPerfil(proj, comercial).filter((i) => !i.listo);
+  if (faltan.length) throw new HttpError(409, `Completá tu perfil para definir la publicidad. Falta: ${faltan.map((i) => i.titulo.toLowerCase()).join(", ")}.`);
+}
+
+async function pautaSugerir(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "pauta", "productor", "cliente"]);
+  const b = body<{ proyecto_id?: string }>(req);
+  if (!b.proyecto_id) throw new HttpError(400, "Falta el cliente");
+  await assertProjectAccess(caller, b.proyecto_id);
+  const { db, proj, comercial } = await datosPauta(b.proyecto_id);
+  exigirPerfil(proj, comercial);
+  // Plan: cuántos videos por mes.
+  let videosMes = Number(proj.plan_redes_override?.videos_mes ?? NaN);
+  if (isNaN(videosMes) && proj.plan_redes_id) videosMes = Number((await db.collection("planes_redes").doc(String(proj.plan_redes_id)).get()).data()?.videos_mes ?? 0);
+  // Lo que rindieron sus anuncios en los últimos 3 meses.
+  const desde = sumarDias(fechaAR(), -95);
+  const vids = (await db.collection("videos").where("proyecto_id", "==", b.proyecto_id).get()).docs
+    .map((d) => d.data())
+    .filter((v) => v.resultados && String(v.resultados.actualizado_at ?? v.updated_at ?? "") >= desde);
+  const gasto = vids.reduce((a, v) => a + (Number(v.resultados?.gasto) || 0), 0);
+  const mensajes = vids.reduce((a, v) => a + (Number(v.resultados?.mensajes) || 0), 0);
+  const alcance = vids.reduce((a, v) => a + (Number(v.resultados?.alcance) || 0), 0);
+  const m = (proj.marca ?? {}) as Record<string, unknown>;
+  const productos = Array.isArray(comercial.productos) ? (comercial.productos as { nombre?: string; precio?: unknown }[]).slice(0, 12).map((x) => `${x.nombre ?? ""}${x.precio ? ` (${x.precio})` : ""}`).join(", ") : "";
+  const prompt = `Sos especialista en publicidad en Meta (Instagram y Facebook) para comercios y pymes de Reconquista y alrededores (Santa Fe, Argentina).
+Sugerí cuánto conviene invertir por mes en anuncios para este cliente, en pesos argentinos, realista para su tamaño, y cómo repartirlo.
+
+Cliente: ${proj.nombre ?? ""}
+Rubro: ${m.rubro ?? ""} · ${m.descripcion ?? ""}
+Público: ${m.publico ?? ""}
+Objetivo con las redes: ${comercial.objetivo ?? comercial.enfoque ?? ""}
+Productos o servicios: ${productos}
+Videos por mes en su plan: ${videosMes || "sin dato"}
+Resultados de sus anuncios en los últimos 3 meses: ${vids.length ? `${vids.length} videos pautados, ${Math.round(gasto)} invertidos, ${mensajes} mensajes, ${alcance} personas alcanzadas${mensajes ? `, costo por mensaje ${Math.round(gasto / mensajes)}` : ""}` : "todavía no pautó con nosotros"}
+
+Devolvé un monto mensual recomendado (redondeado a miles), uno mínimo y uno para crecer, cuánto por video, una explicación corta y simple (2 o 3 oraciones, voseo, sin tecnicismos) y lo que puede esperar (rango de mensajes por mes) solo si hay resultados anteriores para estimarlo; si no, null.`;
+  const r = await generarJSON<{ recomendado: number; minimo: number; crecer: number; por_video: number; explicacion: string; mensajes_estimados: string | null }>(
+    prompt,
+    {
+      type: "object",
+      properties: {
+        recomendado: { type: "number" },
+        minimo: { type: "number" },
+        crecer: { type: "number" },
+        por_video: { type: "number" },
+        explicacion: { type: "string" },
+        mensajes_estimados: { type: "string", nullable: true },
+      },
+      required: ["recomendado", "minimo", "crecer", "por_video", "explicacion", "mensajes_estimados"],
+    },
+    0.4
+  );
+  const redondo = (n: unknown) => Math.max(0, Math.round((Number(n) || 0) / 1000) * 1000);
+  return {
+    recomendado: redondo(r.recomendado),
+    minimo: redondo(r.minimo),
+    crecer: redondo(r.crecer),
+    por_video: redondo(r.por_video),
+    explicacion: String(r.explicacion ?? "").slice(0, 600),
+    mensajes_estimados: r.mensajes_estimados ? String(r.mensajes_estimados).slice(0, 120) : null,
+  };
+}
+
+async function pautaGuardar(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "cliente"]);
+  const b = body<{ proyecto_id?: string; monto?: number; sugerido?: number | null }>(req);
+  if (!b.proyecto_id) throw new HttpError(400, "Falta el cliente");
+  await assertProjectAccess(caller, b.proyecto_id);
+  const monto = Math.round(Number(b.monto));
+  if (!Number.isFinite(monto) || monto < 0 || monto > 100_000_000) throw new HttpError(400, "Poné un monto válido");
+  const { db, proj, comercial } = await datosPauta(b.proyecto_id);
+  // El cliente necesita el perfil completo; el admin puede cargarlo igual.
+  if (caller.role === "cliente") exigirPerfil(proj, comercial);
+  const now = new Date().toISOString();
+  await db.collection("projects").doc(b.proyecto_id).update({
+    pauta_cliente: { monto, sugerido: Number(b.sugerido) || null, at: now, por: caller.uid },
+  });
+  // A pauta (y al admin) le llega para tenerlo en cuenta al armar los anuncios.
+  const team = (proj.team_roles ?? {}) as Record<string, string[]>;
+  await enviarAviso(
+    {
+      destinatarios: [...new Set([...(team.pauta ?? []), ...(team.productor ?? [])])].filter((id) => id !== caller.uid),
+      titulo: "El cliente definió su inversión en publicidad",
+      cuerpo: `${proj.nombre ?? "Cliente"}: ${monto.toLocaleString("es-AR")} por mes`,
+      link: `/clientes/${b.proyecto_id}`,
+      clave: `pauta_cliente:${b.proyecto_id}:${now.slice(0, 10)}`,
+      proyectoId: b.proyecto_id,
+    },
+    appUrl(req)
+  ).catch(() => undefined);
+  return { ok: true, monto };
+}
+
 async function comercialVer(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "productor", "diseno", "cliente"]);
   const b = body<{ proyecto_id?: string }>(req);
@@ -1309,6 +1416,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "comercial-guardar") res.status(200).json(await comercialGuardar(req));
     else if (accion === "marca-colores") res.status(200).json(await marcaColores(req));
     else if (accion === "comercial-ver") res.status(200).json(await comercialVer(req));
+    else if (accion === "pauta-sugerir") res.status(200).json(await pautaSugerir(req));
+    else if (accion === "pauta-guardar") res.status(200).json(await pautaGuardar(req));
     else if (accion === "chat-asistente") res.status(200).json(await chatAsistente(req));
     else if (accion === "dueno") res.status(200).json(await dueno(req));
     else if (accion === "links-chat") res.status(200).json(await linksChat(req));

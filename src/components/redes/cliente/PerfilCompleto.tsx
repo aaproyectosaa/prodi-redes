@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { callApi } from "@/lib/redes/api";
 import type { Project } from "@/integrations/firebase/types";
 import type { ContextoComercial } from "@/lib/redes/types";
+import { itemsPerfil } from "../../../../api/_lib/perfil-cliente";
 import { cn } from "@/lib/utils";
 
 export interface ItemPerfil {
@@ -61,18 +62,8 @@ function useComercialCliente(proyectoId: string | undefined): ContextoComercial 
 /** Qué tiene completo el cliente de su perfil y el porcentaje. */
 export function usePerfilCliente(cliente: Project | undefined): { pct: number; items: ItemPerfil[]; cargando: boolean } {
   const comercial = useComercialCliente(cliente?.id);
-  const m = (cliente?.marca ?? {}) as Record<string, unknown>;
-  const lleno = (v: unknown, min = 2) => typeof v === "string" && v.trim().length >= min;
-  const items: ItemPerfil[] = [
-    { clave: "logo", titulo: "Tu logo", para: "Para que las piezas y los videos lleven tu marca", listo: !!cliente?.marca_archivos?.logo },
-    { clave: "colores", titulo: "Tus colores", para: "Así todo sale con tu identidad", listo: (Array.isArray(m.paleta) && m.paleta.length > 0) || lleno(m.colores) },
-    { clave: "rubro", titulo: "A qué te dedicás", para: "Qué vendés y qué te hace distinto", listo: lleno(m.rubro) && lleno(m.descripcion, 10) },
-    { clave: "publico", titulo: "A quién le vendés", para: "Para hablarle a la gente correcta", listo: lleno(m.publico) },
-    { clave: "tono", titulo: "Cómo hablás", para: "Formal, cercano, con humor…", listo: lleno(m.tono) },
-    { clave: "instagram", titulo: "Tu Instagram", para: "Para mirar lo que ya publicaste", listo: lleno((cliente?.redes as Record<string, unknown> | undefined)?.instagram) },
-    { clave: "productos", titulo: "Tus productos o servicios", para: "Los videos muestran lo que vendés de verdad", listo: (comercial?.productos?.length ?? 0) > 0 },
-    { clave: "negocio", titulo: "Tu negocio en pocas palabras", para: "Qué querés lograr con las redes", listo: lleno(comercial?.enfoque, 5) || lleno(comercial?.objetivo, 5) },
-  ];
+  // Misma regla que el servidor (api/_lib/perfil-cliente.ts).
+  const items: ItemPerfil[] = itemsPerfil(cliente as unknown as Record<string, unknown> | undefined, comercial as Record<string, unknown> | undefined) as ItemPerfil[];
   const hechos = items.filter((i) => i.listo).length;
   return { pct: Math.round((hechos / items.length) * 100), items, cargando: comercial === undefined };
 }

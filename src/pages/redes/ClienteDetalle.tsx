@@ -44,6 +44,7 @@ import { CONDICIONES_IVA, type CondicionIva, type Project, type ProjectTeamRole,
 import { COLORES } from "./Clientes";
 import { MarcaArchivos } from "@/components/redes/MarcaArchivos";
 import { ContactosCliente } from "@/components/redes/ContactosCliente";
+import { ArranqueCliente } from "@/components/redes/ArranqueCliente";
 import { LogoCliente } from "@/components/redes/LogoCliente";
 import { DebitoAdmin } from "@/components/redes/Debito";
 import { cn } from "@/lib/utils";
@@ -135,6 +136,7 @@ export default function ClienteDetalle() {
         </>
       }
     >
+      <ArranqueCliente cliente={cliente} onTab={setTab} />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="mb-6 flex h-auto w-full justify-start overflow-x-auto sm:inline-flex sm:w-auto">
           <TabsTrigger value="resumen">Videos</TabsTrigger>
