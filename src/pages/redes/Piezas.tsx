@@ -302,7 +302,6 @@ export default function Piezas() {
   return (
     <PageShell
       title="Piezas gráficas"
-      subtitle="Posteos, historias, afiches, carteles y banners que piden los clientes. La IA te ayuda; vos decidís qué sale."
       className="max-w-none"
       actions={
         <>
