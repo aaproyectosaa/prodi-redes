@@ -266,6 +266,7 @@ export type FormatoPieza =
   // Redes
   | "cuadrado"
   | "posteo_vertical"
+  | "carrusel"
   | "vertical"
   | "horizontal"
   // Impresión y cartelería
@@ -307,6 +308,8 @@ export interface PiezaIA {
   solicitado_por: string;
   /** La pidió el cliente desde su panel (no la cargó el equipo). Las viejas no lo tienen. */
   pedido_cliente?: boolean;
+  /** Carrusel: cuántas imágenes lleva. */
+  placas?: number | null;
   /** Resumen corto del pedido hecho por la IA (bandeja "Pedidos"). */
   resumen_ia?: { texto: string; at: string } | null;
   /** Fotos para usar que cargó el equipo con el pedido (producto, local, persona). */

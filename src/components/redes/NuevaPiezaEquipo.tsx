@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CantidadPlacas } from "@/components/redes/PiezaDialogs";
 import { AccionTile } from "@/components/redes/AccionesTablero";
 import { Check, ChevronDown, Gift, ImagePlus, Loader2, Megaphone, Receipt, Search, ShoppingBag, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
@@ -44,6 +45,7 @@ export function NuevaPiezaEquipo({
   const [busca, setBusca] = useState("");
   const [fotos, setFotos] = useState<{ file: File; url: string }[]>([]);
   const [formato, setFormato] = useState<FormatoPieza>("posteo_vertical");
+  const [placas, setPlacas] = useState(5);
   const [enfoque, setEnfoque] = useState<EnfoquePieza>("comercial");
   const [pedido, setPedido] = useState("");
   const [texto, setTexto] = useState("");
@@ -114,6 +116,7 @@ export function NuevaPiezaEquipo({
         oferta: oferta.trim() || null,
         cta: cta.trim() || null,
         fecha_deseada: fecha || null,
+        ...(formato === "carrusel" ? { placas } : {}),
       };
       const r = await pedirPiezaEquipo(cliente.id, datos, entra ? undefined : fuera);
       if (r.estado === "sin_cupo") {
@@ -254,6 +257,11 @@ export function NuevaPiezaEquipo({
                 );
               })}
             </div>
+            {formato === "carrusel" && (
+              <div className="mt-3">
+                <CantidadPlacas valor={placas} onChange={setPlacas} />
+              </div>
+            )}
             <div className="mt-3 grid grid-cols-2 gap-1.5 rounded-xl bg-muted/60 p-1">
               {(
                 [

@@ -34,7 +34,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { PageShell, EmptyState } from "@/components/redes/PageShell";
 import { BotonMiDia } from "@/components/redes/MiDia";
 import { ClienteTag } from "@/components/redes/ClienteTag";
-import { EnfoqueBadge, EstadoPiezaBadge, VerVersion, VersionImg, driveThumb } from "@/components/redes/PiezaDialogs";
+import { EnfoqueBadge, EstadoPiezaBadge, FormatoBadge, VerVersion, VersionImg, driveThumb } from "@/components/redes/PiezaDialogs";
 import { NotaDialog } from "@/components/redes/PautaDialogs";
 import { DelSistemaAnterior } from "@/components/redes/DelSistemaAnterior";
 import { useRedes } from "@/contexts/redes-data-context";
@@ -548,6 +548,7 @@ function PiezaCard({ pieza: p, cliente, onClick, i }: { pieza: PiezaIA; cliente?
         {portada ? <VersionImg v={portada} className="object-cover" /> : <ImageIcon className="h-6 w-6 text-muted-foreground/40" />}
       </span>
       <span className="min-w-0 flex-1 space-y-1">
+        <FormatoBadge formato={p.formato} placas={p.placas} />
         <ClienteTag cliente={clienteById(p.proyecto_id)} />
         <span className="block truncate text-sm font-medium">{p.producto || p.pedido}</span>
         {atraso > 0 && (
@@ -556,7 +557,6 @@ function PiezaCard({ pieza: p, cliente, onClick, i }: { pieza: PiezaIA; cliente?
           </span>
         )}
         <span className="flex flex-wrap items-center gap-1">
-          <span className="text-[11px] text-muted-foreground">{info.label}</span>
           <EnfoqueBadge enfoque={p.enfoque} />
         </span>
         <span className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
@@ -804,7 +804,8 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
         <div className="border-b bg-gradient-to-r from-primary/[0.07] via-background to-fuchsia-500/[0.06] px-5 pb-3 pt-4">
           <DialogHeader className="space-y-1 text-left">
             <DialogTitle className="flex flex-wrap items-center gap-2 pr-6 text-lg">
-              {cliente?.nombre} · {info.label}
+              {cliente?.nombre}
+              <FormatoBadge formato={pieza.formato} placas={pieza.placas} grande />
               <EnfoqueBadge enfoque={pieza.enfoque} />
             </DialogTitle>
             <DialogDescription className="flex flex-wrap items-center gap-2 text-xs">

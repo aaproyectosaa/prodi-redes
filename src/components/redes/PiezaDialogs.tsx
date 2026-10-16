@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { useRedes } from "@/contexts/redes-data-context";
 import {
+  COLOR_FORMATO,
   ENFOQUES,
   ESTADO_PIEZA_CLIENTE,
   ESTADO_PIEZA_LABEL,
@@ -141,6 +142,34 @@ export function EnfoqueBadge({ enfoque }: { enfoque?: EnfoquePieza }) {
 }
 
 /** Dibujito del formato con un ejemplo adentro (título, foto y botón). */
+/**
+ * El formato de la pieza bien a la vista (para diseño): color propio, dibujito con la forma real y la medida.
+ * Carrusel: muestra cuántas imágenes lleva.
+ */
+export function FormatoBadge({ formato, placas, grande }: { formato: FormatoPieza; placas?: number | null; grande?: boolean }) {
+  const f = formatoInfo(formato);
+  const { width, height } = iconoFormato(f.ratio, grande ? 18 : 14);
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full font-semibold ring-1",
+        grande ? "px-2.5 py-1 text-xs" : "px-2 py-0.5 text-[11px]",
+        COLOR_FORMATO[formato] ?? COLOR_FORMATO.cuadrado
+      )}
+      title={`${f.label} · ${f.medida}`}
+    >
+      <span
+        className="shrink-0 rounded-[2px] border-[1.5px] border-current"
+        style={{ width, height, ...(formato === "carrusel" ? { boxShadow: "3px -3px 0 -1.5px currentColor" } : {}) }}
+        aria-hidden
+      />
+      {f.label}
+      {formato === "carrusel" && placas ? ` · ${placas} imágenes` : ""}
+      <span className="font-normal opacity-70">{f.ratio}</span>
+    </span>
+  );
+}
+
 function MiniFormato({ f, activo }: { f: FormatoInfo; activo: boolean }) {
   const { width, height } = iconoFormato(f.ratio, 56);
   const apaisado = width > height;
@@ -151,7 +180,8 @@ function MiniFormato({ f, activo }: { f: FormatoInfo; activo: boolean }) {
         apaisado ? "flex-row gap-1" : "flex-col gap-0.5",
         activo ? "border-primary" : "border-muted-foreground/40"
       )}
-      style={{ width, height }}
+      // Carrusel: una "hoja" atrás, como varias imágenes apiladas.
+      style={{ width, height, ...(f.value === "carrusel" ? { boxShadow: "5px -5px 0 -2px hsl(var(--background)), 5px -5px 0 0 currentColor" } : {}) }}
       aria-hidden
     >
       <span className={cn("rounded-sm", activo ? "bg-primary/30" : "bg-muted-foreground/20", apaisado ? "h-full w-2/5" : "h-1/2 w-full")} />
@@ -161,6 +191,27 @@ function MiniFormato({ f, activo }: { f: FormatoInfo; activo: boolean }) {
         <span className={cn("mt-0.5 h-1 w-2/5 rounded-full", activo ? "bg-emerald-500" : "bg-muted-foreground/40")} />
       </span>
     </span>
+  );
+}
+
+/** Carrusel: cuántas imágenes lleva (2 a 10). */
+export function CantidadPlacas({ valor, onChange }: { valor: number; onChange: (n: number) => void }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.07] px-3 py-2.5">
+      <span className="text-sm">
+        <b>¿Cuántas imágenes?</b>
+        <span className="block text-xs text-muted-foreground">Las que se deslizan en el carrusel</span>
+      </span>
+      <span className="flex items-center gap-1.5">
+        <button type="button" onClick={() => onChange(Math.max(2, valor - 1))} className="h-8 w-8 rounded-full border bg-background text-lg font-bold" aria-label="Menos">
+          −
+        </button>
+        <span className="w-6 text-center text-lg font-bold tabular-nums">{valor}</span>
+        <button type="button" onClick={() => onChange(Math.min(10, valor + 1))} className="h-8 w-8 rounded-full border bg-background text-lg font-bold" aria-label="Más">
+          +
+        </button>
+      </span>
+    </div>
   );
 }
 
@@ -233,9 +284,9 @@ export function PiezaClienteCard({ pieza, onAbrir }: { pieza: PiezaIA; onAbrir?:
           <EstadoPiezaBadge estado={pieza.estado} />
           <span className="text-[11px] text-muted-foreground">{fechaCorta(pieza.created_at)}</span>
         </div>
-        <p className="text-[11px] text-muted-foreground">
-          {info.label}
-          {pieza.incluida ? " · del plan" : ""}
+        <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+          <FormatoBadge formato={pieza.formato} placas={pieza.placas} />
+          {pieza.incluida ? "del plan" : ""}
         </p>
         <p className="line-clamp-2 text-sm">{pieza.producto || pieza.pedido}</p>
         {pieza.estado === "pendiente_pago" && (
@@ -548,6 +599,7 @@ export function PedirPiezaDialog({
   const [fecha, setFecha] = useState("");
   // Extra: la publicamos nosotros o se la pasamos para que la suba él.
   const [subeCliente, setSubeCliente] = useState(false);
+  const [placas, setPlacas] = useState(5);
   const [intentado, setIntentado] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -603,6 +655,7 @@ export function PedirPiezaDialog({
         oferta: enfoque === "comercial" ? oferta.trim() || null : null,
         cta: enfoque === "comercial" ? cta : null,
         fecha_deseada: fecha || null,
+        ...(formato === "carrusel" ? { placas } : {}),
         ...(!entra ? { sube_cliente: subeCliente } : {}),
       });
       if (r.estado === "pago") {
@@ -703,6 +756,7 @@ export function PedirPiezaDialog({
                   </div>
                 </div>
               ))}
+              {formato === "carrusel" && <CantidadPlacas valor={placas} onChange={setPlacas} />}
             </div>
           )}
 

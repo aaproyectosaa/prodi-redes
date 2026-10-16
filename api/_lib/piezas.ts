@@ -9,6 +9,7 @@ export type Ratio = "1:1" | "4:5" | "9:16" | "16:9" | "2:3" | "3:4" | "21:9";
 export const FORMATOS_PIEZA: Record<string, { label: string; ratio: Ratio; uso: string; impresion: boolean }> = {
   cuadrado: { label: "Posteo cuadrado", ratio: "1:1", uso: "posteo cuadrado de Instagram/Facebook", impresion: false },
   posteo_vertical: { label: "Posteo vertical", ratio: "4:5", uso: "posteo vertical de Instagram", impresion: false },
+  carrusel: { label: "Carrusel", ratio: "4:5", uso: "carrusel de Instagram (varias imágenes que se deslizan)", impresion: false },
   vertical: { label: "Historia", ratio: "9:16", uso: "historia o reel de Instagram", impresion: false },
   horizontal: { label: "Pantalla o portada", ratio: "16:9", uso: "pantalla del local, portada o video horizontal", impresion: false },
   afiche: { label: "Afiche o flyer", ratio: "2:3", uso: "afiche o flyer impreso (A4/A3)", impresion: true },
@@ -32,7 +33,7 @@ export function precioPieza(settings: Record<string, unknown>, formato: string):
 }
 
 /** Lo que entra en el plan, si no se cambió en Ajustes: los posteos e historias de Instagram y Facebook. */
-export const EN_PLAN_DEFAULT = ["cuadrado", "posteo_vertical", "vertical"];
+export const EN_PLAN_DEFAULT = ["cuadrado", "posteo_vertical", "carrusel", "vertical"];
 
 /**
  * Cuántas piezas del plan ocupa ese tipo (no es lo mismo un posteo que un banner). 0 = no entra en el plan,
@@ -56,6 +57,8 @@ export interface PedidoPieza {
   fecha_deseada?: string | null;
   /** Extra: "pasámela y la subo yo" (no la publicamos nosotros). Solo cuenta si no entra en el plan. */
   sube_cliente?: boolean;
+  /** Carrusel: cuántas imágenes (2 a 10). */
+  placas?: number | null;
 }
 
 const t = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
@@ -75,6 +78,7 @@ export function leerPedidoPieza(b: Record<string, unknown>): PedidoPieza | strin
     cta: t(b.cta, 120) || null,
     fecha_deseada: /^\d{4}-\d{2}-\d{2}$/.test(String(b.fecha_deseada ?? "")) ? String(b.fecha_deseada) : null,
     sube_cliente: b.sube_cliente === true,
+    placas: formato === "carrusel" ? Math.min(10, Math.max(2, Math.round(Number(b.placas) || 5))) : null,
   };
   if (enfoque === "comercial" && !p.producto && p.pedido.length < 10) return "Contanos qué producto o servicio querés vender";
   if (enfoque === "institucional" && p.pedido.length < 10) return "Contanos qué querés comunicar";
@@ -119,6 +123,8 @@ export function briefPieza(pz: Record<string, unknown>): string {
     pz.oferta && `Precio / promo: ${pz.oferta}`,
     pz.cta && `Llamado a la acción: ${pz.cta}`,
     pz.pedido && `Pedido del cliente: ${pz.pedido}`,
+    pz.formato === "carrusel" &&
+      `Es un CARRUSEL de ${Number(pz.placas) || 5} imágenes: esta es la PORTADA (la primera). Que enganche e invite a deslizar ("Deslizá →"); el resto de la info va en las imágenes siguientes.`,
     pz.feedback_cliente && `Cambios que pidió el cliente sobre la versión anterior: ${pz.feedback_cliente}`,
   ];
   return lineas.filter(Boolean).join("\n");

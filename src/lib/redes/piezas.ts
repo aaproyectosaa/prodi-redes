@@ -23,8 +23,9 @@ export interface FormatoInfo {
 }
 
 export const FORMATOS: FormatoInfo[] = [
-  { value: "cuadrado", label: "Posteo", medida: "1080 × 1080", ejemplo: "Para el feed de Instagram y Facebook", ratio: "1:1", grupo: "redes" },
+  { value: "cuadrado", label: "Posteo cuadrado", medida: "1080 × 1080", ejemplo: "Para el feed de Instagram y Facebook", ratio: "1:1", grupo: "redes" },
   { value: "posteo_vertical", label: "Posteo vertical", medida: "1080 × 1350", ejemplo: "Ocupa más pantalla en el feed", ratio: "4:5", grupo: "redes" },
+  { value: "carrusel", label: "Carrusel", medida: "1080 × 1350 · varias", ejemplo: "Varias imágenes que se deslizan", ratio: "4:5", grupo: "redes" },
   { value: "vertical", label: "Historia", medida: "1080 × 1920", ejemplo: "Historias de Instagram y estados de WhatsApp", ratio: "9:16", grupo: "redes" },
   { value: "horizontal", label: "Pantalla o portada", medida: "16:9", ejemplo: "TV del local, portada de Facebook o web", ratio: "16:9", grupo: "redes" },
   { value: "afiche", label: "Afiche o flyer", medida: "A4 / A3 / volante", ejemplo: "Para pegar o repartir", ratio: "2:3", grupo: "impresion" },
@@ -158,7 +159,21 @@ export interface DatosPedidoPieza {
   fecha_deseada?: string | null;
   /** Extra: "pasámela y la subo yo" (no la publicamos nosotros). */
   sube_cliente?: boolean;
+  /** Carrusel: cuántas imágenes (2 a 10). */
+  placas?: number;
 }
+
+/** Color y nombre corto de cada formato, para distinguirlos de un vistazo (tarjetas de diseño). */
+export const COLOR_FORMATO: Record<FormatoPieza, string> = {
+  cuadrado: "bg-sky-500/15 text-sky-700 ring-sky-500/30 dark:text-sky-300",
+  posteo_vertical: "bg-violet-500/15 text-violet-700 ring-violet-500/30 dark:text-violet-300",
+  carrusel: "bg-amber-500/15 text-amber-700 ring-amber-500/30 dark:text-amber-300",
+  vertical: "bg-pink-500/15 text-pink-700 ring-pink-500/30 dark:text-pink-300",
+  horizontal: "bg-teal-500/15 text-teal-700 ring-teal-500/30 dark:text-teal-300",
+  afiche: "bg-orange-500/15 text-orange-700 ring-orange-500/30 dark:text-orange-300",
+  vidriera: "bg-lime-500/15 text-lime-700 ring-lime-500/30 dark:text-lime-300",
+  banner: "bg-slate-500/15 text-slate-700 ring-slate-500/30 dark:text-slate-300",
+};
 
 /** El cliente pide la pieza: si entra en el plan se crea; si no, devuelve el link de pago. */
 export function pedirPieza(proyectoId: string, datos: DatosPedidoPieza) {
