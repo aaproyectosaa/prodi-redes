@@ -7,3 +7,4 @@ hyperframes/renders
 .venv-tts
 sfx
 motion/*/assets/*.mp4
+motion/*/assets/fonts/
