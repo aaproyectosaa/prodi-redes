@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="es" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root { --violeta: #6f40fc; --lila: #b9a4ff; --gris: #8e8a99; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #07060b; }
+      #root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: Inter, sans-serif; color: #fff; background: radial-gradient(80% 50% at 50% 45%, #150d2e 0%, #07060b 70%); }
+      .esc { position: absolute; inset: 0; overflow: hidden; }
+      .l { display: inline-block; }
+      .frase { position: absolute; left: 80px; right: 80px; top: 1250px; text-align: center; font-size: 62px; font-weight: 900; letter-spacing: -0.03em; line-height: 1.08; text-shadow: 0 6px 30px rgba(0,0,0,0.9); }
+      .frase em { font-style: normal; color: var(--lila); }
+      .frase s { text-decoration: none; position: relative; color: var(--gris); }
+      #polvo { position: absolute; inset: 0; }
+      #polvo i { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: rgba(185,164,255,0.5); }
+
+      /* A: el celular y el posteo */
+      #celu { position: absolute; left: 300px; top: 300px; width: 480px; height: 960px; border-radius: 62px; background: #0e0c14; border: 12px solid #1b1824; box-shadow: 0 0 0 2px rgba(255,255,255,0.12), 0 60px 120px rgba(0,0,0,0.8), 0 0 120px rgba(111,64,252,0.25); }
+      #pant { position: absolute; left: 12px; top: 12px; right: 12px; bottom: 12px; border-radius: 48px; overflow: hidden; background: #f4f2f8; }
+      #pant .cab { display: flex; align-items: center; gap: 16px; padding: 70px 26px 20px; }
+      #pant .ava { width: 58px; height: 58px; border-radius: 50%; background: linear-gradient(135deg, #6f40fc, #b9a4ff); }
+      #pant .nom { width: 170px; height: 18px; border-radius: 9px; background: #2a2635; }
+      #pant .img { margin: 0 0 0 0; height: 430px; background: linear-gradient(160deg, #6f40fc 0%, #2b1670 60%, #120a2c 100%); position: relative; overflow: hidden; }
+      #pant .img b { position: absolute; border-radius: 50%; background: rgba(255,255,255,0.18); }
+      #pant .acc { display: flex; gap: 22px; padding: 22px 26px; }
+      #pant .acc i { width: 40px; height: 40px; border-radius: 12px; background: #2a2635; }
+      #pant .lin { height: 16px; border-radius: 8px; background: #cfcbd8; margin: 12px 26px; }
+      #btn { position: absolute; left: 36px; right: 36px; bottom: 50px; height: 92px; border-radius: 46px; background: var(--violeta); display: flex; align-items: center; justify-content: center; font-size: 38px; font-weight: 900; letter-spacing: 0.04em; color: #fff; }
+      #cursor { position: absolute; left: 0; top: 0; width: 70px; height: 70px; border-radius: 50%; background: rgba(255,255,255,0.85); box-shadow: 0 0 30px rgba(255,255,255,0.6); }
+      #sello { position: absolute; left: 0; right: 0; top: 640px; text-align: center; font-size: 150px; font-weight: 900; letter-spacing: -0.02em; color: #fff; text-shadow: 0 0 30px #fff, 0 0 80px rgba(185,164,255,0.9), 0 0 160px rgba(111,64,252,0.9); }
+      #apagado { position: absolute; left: 540px; top: 780px; width: 456px; height: 936px; margin: -468px 0 0 -228px; border-radius: 48px; background: #000; }
+      #chispa { position: absolute; left: 540px; top: 780px; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; background: #fff; box-shadow: 0 0 40px 16px rgba(255,255,255,0.9), 0 0 120px 40px rgba(111,64,252,0.9); }
+      .aro { position: absolute; left: 540px; top: 780px; width: 300px; height: 300px; margin: -150px 0 0 -150px; border-radius: 50%; border: 4px solid var(--lila); }
+      #red { position: absolute; inset: 0; }
+
+      /* B: ideas al azar */
+      .idea { position: absolute; left: 0; top: 0; width: 150px; height: 150px; border-radius: 30px; background: rgba(255,255,255,0.06); border: 2px solid rgba(255,255,255,0.18); display: flex; align-items: center; justify-content: center; }
+      .idea svg { width: 70px; height: 70px; }
+
+      /* C: negocio, público, objetivo */
+      .nodo { position: absolute; width: 230px; display: flex; flex-direction: column; align-items: center; gap: 22px; }
+      .nodo .c { width: 200px; height: 200px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #8f6bff, #4a22c9 70%); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 60px rgba(111,64,252,0.7); }
+      .nodo .c svg { width: 96px; height: 96px; }
+      .nodo span { font-size: 38px; font-weight: 900; letter-spacing: 0.14em; text-indent: 0.14em; }
+      #n1 { left: 425px; top: 330px; } #n2 { left: 115px; top: 820px; } #n3 { left: 735px; top: 820px; }
+      #tri { position: absolute; inset: 0; }
+
+      /* D: ideas, contenido, publicidad → personas */
+      .post { position: absolute; left: 190px; width: 700px; height: 190px; border-radius: 34px; background: rgba(22,16,40,0.95); border: 2px solid rgba(185,164,255,0.45); display: flex; align-items: center; gap: 34px; padding: 0 44px; box-shadow: 0 30px 70px rgba(0,0,0,0.6); }
+      .post .ic { width: 110px; height: 110px; border-radius: 28px; background: var(--violeta); display: flex; align-items: center; justify-content: center; flex: none; }
+      .post .ic svg { width: 62px; height: 62px; }
+      .post b { font-size: 54px; font-weight: 900; letter-spacing: 0.06em; }
+      #p1 { top: 420px; } #p2 { top: 650px; } #p3 { top: 880px; }
+      #gente { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; }
+      .per { position: absolute; width: 56px; height: 76px; }
+      .per i { position: absolute; left: 14px; top: 0; width: 28px; height: 28px; border-radius: 50%; background: #3a3550; }
+      .per u { position: absolute; left: 0; top: 34px; width: 56px; height: 42px; border-radius: 28px 28px 10px 10px; background: #3a3550; }
+
+      /* F: tablero de resultados */
+      #tablero { position: absolute; left: 90px; top: 330px; width: 900px; height: 900px; border-radius: 44px; background: rgba(18,13,34,0.92); border: 2px solid rgba(185,164,255,0.3); box-shadow: 0 50px 120px rgba(0,0,0,0.7); }
+      #tablero h3 { position: absolute; left: 56px; top: 50px; font-size: 40px; font-weight: 900; letter-spacing: 0.02em; color: rgba(255,255,255,0.9); }
+      #tablero .sub { position: absolute; left: 56px; top: 108px; width: 300px; height: 14px; border-radius: 7px; background: rgba(255,255,255,0.15); }
+      #grafico { position: absolute; left: 40px; top: 170px; width: 820px; height: 380px; }
+      .barra { position: absolute; bottom: 70px; width: 70px; border-radius: 14px 14px 6px 6px; background: rgba(185,164,255,0.25); transform-origin: 50% 100%; }
+      .chip { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 18px; padding: 20px 34px 20px 22px; border-radius: 999px; background: #1d1533; border: 2px solid rgba(185,164,255,0.6); font-size: 40px; font-weight: 900; white-space: nowrap; box-shadow: 0 20px 50px rgba(0,0,0,0.6); }
+      .chip svg { width: 46px; height: 46px; flex: none; }
+
+      /* G: el ciclo y la espiral */
+      #ciclo { position: absolute; inset: 0; }
+      .etq { position: absolute; left: 0; top: 0; padding: 12px 24px; border-radius: 999px; background: rgba(111,64,252,0.9); font-size: 30px; font-weight: 900; letter-spacing: 0.04em; white-space: nowrap; box-shadow: 0 0 30px rgba(111,64,252,0.7); }
+      #titulo { position: absolute; left: 60px; right: 60px; top: 290px; text-align: center; font-size: 92px; font-weight: 900; letter-spacing: -0.03em; line-height: 1.02; text-shadow: 0 0 40px rgba(111,64,252,0.6); }
+      #titulo em { font-style: normal; color: var(--lila); }
+
+      /* H: cierre */
+      #violeta { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: var(--violeta); }
+      #s-logo { background: radial-gradient(70% 45% at 50% 46%, #1a0f3d 0%, #000 70%); }
+      #logo { position: absolute; left: 50%; top: 740px; width: 880px; margin-left: -440px; }
+      #redes { position: absolute; left: 0; right: 0; top: 1035px; display: flex; justify-content: center; }
+      #redes span { padding: 14px 44px; border-radius: 999px; background: var(--violeta); font-size: 46px; font-weight: 900; letter-spacing: 0.32em; text-indent: 0.32em; }
+      #lema { position: absolute; left: 0; right: 0; top: 1200px; text-align: center; font-size: 42px; font-weight: 800; letter-spacing: 0.08em; text-indent: 0.08em; color: rgba(255,255,255,0.88); }
+      #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="48.9" data-width="1080" data-height="1920">
+      <audio id="mezcla" src="assets/mezcla.m4a" data-start="0" data-duration="48.9" data-track-index="9"></audio>
+      <div id="polvo" class="clip" data-start="0" data-duration="43.6" data-track-index="0" data-layout-ignore></div>
+
+      <!-- A. ¿Y después de publicar, qué? / Muchos creen que ahí termina / Para nosotros, ahí empieza -->
+      <div id="s-a" class="esc clip" data-start="0" data-duration="8.75" data-track-index="1" data-layout-ignore>
+        <div id="red"></div>
+        <div id="celu">
+          <div id="pant">
+            <div class="cab"><div class="ava"></div><div class="nom"></div></div>
+            <div class="img"><b style="left:60px;top:80px;width:180px;height:180px"></b><b style="left:250px;top:220px;width:120px;height:120px"></b><b style="left:120px;top:300px;width:60px;height:60px"></b></div>
+            <div class="acc"><i></i><i></i><i></i></div>
+            <div class="lin" style="width:330px"></div><div class="lin" style="width:250px"></div>
+            <div id="btn">PUBLICAR</div>
+          </div>
+        </div>
+        <div id="apagado"></div>
+        <div id="cursor"></div>
+        <div id="sello">PUBLICADO</div>
+        <div class="aro"></div><div class="aro"></div><div class="aro"></div>
+        <div id="chispa"></div>
+      </div>
+      <div id="f1" class="frase clip" data-start="0.5" data-duration="2.2" data-track-index="3">¿Y después de <em>publicar,</em> qué?</div>
+      <div id="f2" class="frase clip" data-start="2.85" data-duration="2.1" data-track-index="4">Muchos creen que ahí <s>termina</s> el trabajo.</div>
+      <div id="f3" class="frase clip" data-start="5.1" data-duration="3.55" data-track-index="3">Para nosotros, ahí <em>empieza</em> una de las partes más importantes.</div>
+
+      <!-- B. no nace de una idea al azar -->
+      <div id="s-b" class="esc clip" data-start="8.75" data-duration="3.15" data-track-index="1" data-layout-ignore></div>
+      <div id="f4" class="frase clip" data-start="8.75" data-duration="3.05" data-track-index="4">Una buena campaña no nace de una idea <s>al azar.</s></div>
+
+      <!-- C. negocio, público, objetivo -->
+      <div id="s-c" class="esc clip" data-start="11.85" data-duration="5.2" data-track-index="1" data-layout-ignore>
+        <svg id="tri" viewBox="0 0 1080 1920"><g fill="none" stroke="#b9a4ff" stroke-width="5" stroke-linecap="round">
+          <line id="t1" x1="540" y1="430" x2="230" y2="920" /><line id="t2" x1="230" y1="920" x2="850" y2="920" /><line id="t3" x1="850" y1="920" x2="540" y2="430" />
+        </g><circle id="centro" cx="540" cy="757" r="26" fill="#fff" /></svg>
+        <div id="n1" class="nodo"><div class="c"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1.5-5h15L21 9" /><path d="M3 9h18v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z" /><path d="M5 13v7h14v-7" /><path d="M10 20v-4h4v4" /></svg></div><span>NEGOCIO</span></div>
+        <div id="n2" class="nodo"><div class="c"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0" /><circle cx="17" cy="9" r="2.6" /><path d="M16 14.2a5.5 5.5 0 0 1 5.5 5.8" /></svg></div><span>PÚBLICO</span></div>
+        <div id="n3" class="nodo"><div class="c"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.4" fill="#fff" /></svg></div><span>OBJETIVO</span></div>
+      </div>
+      <div id="f5" class="frase clip" data-start="11.85" data-duration="5.0" data-track-index="3">Nace de entender <em>tu negocio,</em> a quién querés llegar y qué querés conseguir.</div>
+
+      <!-- D. ideas, contenido y publicidad → personas correctas -->
+      <div id="s-d" class="esc clip" data-start="16.85" data-duration="6.15" data-track-index="1" data-layout-ignore>
+        <div id="gente"></div>
+        <div id="p1" class="post"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6" /><path d="M10 21h4" /><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z" /></svg></div><b>IDEAS</b></div>
+        <div id="p2" class="post"><div class="ic"><svg viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z" /></svg></div><b>CONTENIDO</b></div>
+        <div id="p3" class="post"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v3a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1z" /><path d="M17 8.5a5 5 0 0 1 0 7" /><path d="M19.5 6a8.5 8.5 0 0 1 0 12" /></svg></div><b>PUBLICIDAD</b></div>
+      </div>
+      <div id="f6" class="frase clip" data-start="16.85" data-duration="2.0" data-track-index="4">Después, transformamos todo eso</div>
+      <div id="f6b" class="frase clip" data-start="18.9" data-duration="3.95" data-track-index="3">en contenido que llega a las <em>personas correctas.</em></div>
+      <div id="f7" class="frase clip" data-start="22.9" data-duration="1.7" data-track-index="4">Pero no nos quedamos <em>ahí.</em></div>
+
+      <!-- F. observamos y decidimos -->
+      <div id="s-f" class="esc clip" data-start="22.9" data-duration="10.0" data-track-index="2" data-layout-ignore>
+        <div id="tablero">
+          <h3>Así le fue a la campaña</h3><div class="sub"></div>
+          <svg id="grafico" viewBox="0 0 820 380"><defs><linearGradient id="gg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6f40fc" stop-opacity="0.55" /><stop offset="1" stop-color="#6f40fc" stop-opacity="0" /></linearGradient></defs>
+            <g stroke="rgba(255,255,255,0.08)" stroke-width="2"><line x1="20" y1="80" x2="800" y2="80" /><line x1="20" y1="180" x2="800" y2="180" /><line x1="20" y1="280" x2="800" y2="280" /></g>
+            <path id="area" d="M20 300 C120 290 170 250 250 240 S380 260 450 190 S600 120 660 110 S760 60 800 50 L800 360 L20 360 Z" fill="url(#gg)" />
+            <path id="curva" d="M20 300 C120 290 170 250 250 240 S380 260 450 190 S600 120 660 110 S760 60 800 50" fill="none" stroke="#b9a4ff" stroke-width="7" stroke-linecap="round" />
+            <circle id="punta" r="14" fill="#fff" />
+          </svg>
+        </div>
+        <div id="ch1" class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="#b9a4ff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" /><circle cx="12" cy="12" r="3" /></svg>Qué pasó</div>
+        <div id="ch2" class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="#b9a4ff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5" /></svg>Qué funcionó</div>
+        <div id="ch3" class="chip"><svg viewBox="0 0 24 24" fill="#ff5c8a"><path d="M12 21s-7.5-4.6-10-9.3C.4 8.4 2.3 4 6.3 4c2.2 0 3.6 1.2 4.4 2.4h2.6C14.1 5.2 15.5 4 17.7 4c4 0 5.9 4.4 4.3 7.7C19.5 16.4 12 21 12 21z" /></svg>Qué despertó interés</div>
+        <div id="ch4" class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="#b9a4ff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6 4 4 7-8" /><path d="M15 7h6v6" /></svg>Qué podemos mejorar</div>
+        <div id="nucleo" style="position:absolute;left:540px;top:860px;width:60px;height:60px;margin:-30px 0 0 -30px;border-radius:50%;background:#fff;box-shadow:0 0 50px 18px rgba(185,164,255,0.85)"></div>
+      </div>
+      <div id="f8" class="frase clip" data-start="24.65" data-duration="4.85" data-track-index="3">Observamos qué pasó, qué funcionó y qué podemos <em>mejorar.</em></div>
+      <div id="f9" class="frase clip" data-start="29.65" data-duration="3.0" data-track-index="4">Con esa información, tomamos <em>nuevas decisiones.</em></div>
+
+      <!-- G. el ciclo que no vuelve al mismo punto -->
+      <div id="s-g" class="esc clip" data-start="32.7" data-duration="11.1" data-track-index="1" data-layout-ignore>
+        <svg id="ciclo" viewBox="0 0 1080 1920">
+          <defs><filter id="brillo" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="7" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs>
+          <g id="anillo-g" style="transform-origin: 540px 860px"><circle id="anillo" cx="540" cy="860" r="300" fill="none" stroke="#b9a4ff" stroke-width="8" filter="url(#brillo)" transform="rotate(-90 540 860)" /></g>
+          <path id="espiral" fill="none" stroke="#b9a4ff" stroke-width="7" stroke-linecap="round" filter="url(#brillo)" />
+          <circle id="cabeza" r="20" fill="#fff" filter="url(#brillo)" />
+        </svg>
+        <div id="e1" class="etq">+ datos</div><div id="e2" class="etq">+ aprendizaje</div><div id="e3" class="etq">+ claridad</div><div id="e4" class="etq">+ experiencia</div>
+        <div id="titulo">Nunca volvemos<br /><em>al mismo punto.</em></div>
+      </div>
+      <div id="f10" class="frase clip" data-start="32.8" data-duration="2.85" data-track-index="3">Y cuando una campaña termina, <em>empieza otra.</em></div>
+      <div id="f11" class="frase clip" data-start="35.75" data-duration="2.0" data-track-index="4">Pero hay una diferencia…</div>
+      <div id="f13" class="frase clip" data-start="40.03" data-duration="3.4" data-track-index="3">Porque cada vuelta nos deja algo que <em>antes no teníamos.</em></div>
+
+      <!-- H. cierre -->
+      <div id="capa-violeta" class="clip" data-start="43.0" data-duration="0.75" data-track-index="6" data-layout-ignore><div id="violeta"></div></div>
+      <div id="s-logo" class="esc clip" data-start="43.6" data-duration="5.3" data-track-index="1" data-layout-ignore>
+        <img id="logo" src="assets/logo-horizontal-blanco.png" />
+        <div id="redes"><span>REDES</span></div>
+        <div id="lema">NO EMPEZAMOS DE CERO.</div>
+      </div>
+      <div id="flash" class="clip" data-start="0" data-duration="48.9" data-track-index="8" data-layout-ignore></div>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      const $ = (s, r = document) => r.querySelector(s);
+      const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+      const palabras = (el) => { el.innerHTML = el.innerHTML.split(/(<br \/>|<br>|<em>|<\/em>|<s>|<\/s>)/).map((p) => /^<\/?(br|em|s)>?/.test(p) ? p : p.split(" ").filter(Boolean).map((w) => `<span class="l">${w}</span>`).join(" ")).join(" "); return $$(".l", el); };
+      const entra = (sel, t, st = 0.07) => tl.fromTo(palabras($(sel)), { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.3, stagger: st, ease: "expo.out" }, t);
+      const sale = (sel, t) => tl.to(sel, { opacity: 0, duration: 0.2 }, t);
+      const flash = (t, o = 0.3) => tl.fromTo("#flash", { opacity: o }, { opacity: 0, duration: 0.3, ease: "power2.out", immediateRender: false }, t);
+      let semilla = 11; const azar = () => ((semilla = (semilla * 16807) % 2147483647) / 2147483647);
+      const NS = "http://www.w3.org/2000/svg";
+
+      // polvo de fondo que flota lento
+      for (let i = 0; i < 60; i++) {
+        const p = document.createElement("i"); $("#polvo").appendChild(p);
+        const x = azar() * 1080, y = azar() * 1920;
+        tl.fromTo(p, { x, y, opacity: 0.15 + azar() * 0.5 }, { x: x + (azar() - 0.5) * 120, y: y - 120 - azar() * 200, duration: 43.6, ease: "none" }, 0);
+      }
+
+      // A. el posteo se publica
+      tl.fromTo("#celu", { y: 120, opacity: 0, rotationX: 18, transformPerspective: 1600 }, { y: 0, opacity: 1, rotationX: 0, duration: 0.8, ease: "expo.out" }, 0)
+        .fromTo("#apagado", { opacity: 0 }, { opacity: 0, duration: 0.01 }, 0)
+        .fromTo("#cursor", { x: 820, y: 1500, opacity: 0, scale: 1 }, { x: 505, y: 1120, opacity: 1, duration: 0.6, ease: "power3.out" }, 0.35)
+        .to("#cursor", { scale: 0.7, duration: 0.1, yoyo: true, repeat: 1 }, 0.95)
+        .to("#btn", { scale: 0.94, duration: 0.1, yoyo: true, repeat: 1 }, 0.95)
+        .to("#cursor", { opacity: 0, duration: 0.3 }, 1.3)
+        .fromTo("#sello", { opacity: 0, scale: 1.6 }, { opacity: 1, scale: 1, duration: 0.45, ease: "expo.out" }, 1.15)
+        .to("#sello", { opacity: 0, scale: 0.94, duration: 0.4 }, 2.6);
+      flash(1.15, 0.45);
+      entra("#f1", 0.5, 0.09); sale("#f1", 2.55);
+      // "ahí termina": la pantalla se apaga como un televisor viejo
+      entra("#f2", 2.85, 0.08); sale("#f2", 4.75);
+      tl.to("#pant", { filter: "grayscale(1) brightness(0.55)", duration: 0.8 }, 3.0)
+        .to("#celu", { boxShadow: "0 0 0 2px rgba(255,255,255,0.06), 0 60px 120px rgba(0,0,0,0.8), 0 0 0 rgba(111,64,252,0)", duration: 0.8 }, 3.0)
+        .fromTo("#apagado", { opacity: 0, scaleY: 1, scaleX: 1 }, { opacity: 1, duration: 0.15, immediateRender: false }, 4.1)
+        .to("#celu", { scaleY: 0.01, duration: 0.25, ease: "power3.in" }, 4.25)
+        .to("#apagado", { scaleY: 0.004, duration: 0.25, ease: "power3.in" }, 4.25)
+        .to(["#celu", "#apagado"], { scaleX: 0, opacity: 0, duration: 0.2, ease: "power3.in" }, 4.5)
+        .fromTo("#chispa", { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.2 }, 4.55)
+        .to("#chispa", { scale: 0.5, duration: 0.5, yoyo: true, repeat: 1, ease: "sine.inOut" }, 4.8);
+      // "ahí empieza": la chispa explota en una red
+      entra("#f3", 5.1, 0.06);
+      tl.to("#chispa", { scale: 2.4, duration: 0.25, ease: "expo.out" }, 5.95)
+        .fromTo(".aro", { scale: 0.2, opacity: 0.9 }, { scale: 4.2, opacity: 0, duration: 1.4, stagger: 0.25, ease: "power2.out" }, 6.0);
+      flash(6.0, 0.4);
+      const red = document.createElementNS(NS, "svg"); red.setAttribute("viewBox", "0 0 1080 1920"); red.style.cssText = "position:absolute;inset:0;width:1080px;height:1920px"; $("#red").appendChild(red);
+      for (let i = 0; i < 26; i++) {
+        const a = (i / 26) * Math.PI * 2 + azar() * 0.2, r = 330 + azar() * 380;
+        const x = 540 + Math.cos(a) * r, y = 780 + Math.sin(a) * r * 1.15;
+        const ln = document.createElementNS(NS, "line"); ln.setAttribute("x1", 540); ln.setAttribute("y1", 780); ln.setAttribute("x2", x); ln.setAttribute("y2", y);
+        ln.setAttribute("stroke", "rgba(185,164,255,0.55)"); ln.setAttribute("stroke-width", "2.5"); const L = Math.hypot(x - 540, y - 780);
+        ln.setAttribute("stroke-dasharray", L); red.appendChild(ln);
+        const c = document.createElementNS(NS, "circle"); c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("r", 7 + azar() * 9); c.setAttribute("fill", azar() > 0.6 ? "#fff" : "#6f40fc"); red.appendChild(c);
+        const t = 6.05 + azar() * 0.6;
+        tl.fromTo(ln, { strokeDashoffset: L }, { strokeDashoffset: 0, duration: 0.7, ease: "power2.out" }, t)
+          .fromTo(c, { scale: 0, transformOrigin: `${x}px ${y}px` }, { scale: 1, duration: 0.4, ease: "back.out(3)" }, t + 0.5);
+      }
+      tl.fromTo("#red", { scale: 1, rotation: 0 }, { scale: 1.12, rotation: 8, duration: 2.6, ease: "none" }, 6.1);
+      sale("#f3", 8.45);
+
+      // B. ideas sueltas, al azar, que se apagan
+      const bulbo = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>';
+      const ideas = [];
+      for (let i = 0; i < 14; i++) {
+        const d = document.createElement("div"); d.className = "idea"; d.innerHTML = bulbo; $("#s-b").appendChild(d); ideas.push(d);
+        const x = 80 + azar() * 770, y = 300 + azar() * 900;
+        tl.fromTo(d, { x: 540 - 75, y: 780 - 75, scale: 0, rotation: 0, opacity: 1 }, { x, y, scale: 0.7 + azar() * 0.5, rotation: (azar() - 0.5) * 60, duration: 0.7, ease: "expo.out" }, 8.75 + i * 0.04)
+          .to(d, { x: x + (azar() - 0.5) * 140, y: y + (azar() - 0.5) * 140, rotation: (azar() - 0.5) * 120, duration: 2.2, ease: "sine.inOut" }, 9.5);
+      }
+      entra("#f4", 8.75, 0.06);
+      tl.to(ideas, { opacity: 0.18, filter: "grayscale(1)", duration: 0.4, stagger: 0.02 }, 10.4)
+        .to(ideas, { scale: 0, duration: 0.3, ease: "power3.in", stagger: 0.01 }, 11.55);
+      sale("#f4", 11.6);
+
+      // C. negocio → público → objetivo
+      const linea = (sel, t) => { const el = $(sel); const L = Math.hypot(el.x2.baseVal.value - el.x1.baseVal.value, el.y2.baseVal.value - el.y1.baseVal.value); el.setAttribute("stroke-dasharray", L); tl.fromTo(el, { strokeDashoffset: L }, { strokeDashoffset: 0, duration: 0.6, ease: "power2.inOut" }, t); };
+      tl.fromTo("#centro", { scale: 0, transformOrigin: "540px 757px" }, { scale: 1, duration: 0.4, ease: "back.out(3)" }, 11.85)
+        .fromTo("#n1", { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: "back.out(2)" }, 12.3)
+        .fromTo("#n2", { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: "back.out(2)" }, 14.2)
+        .fromTo("#n3", { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: "back.out(2)" }, 15.2);
+      linea("#t1", 13.8); linea("#t2", 14.7); linea("#t3", 15.6);
+      tl.to("#centro", { scale: 1.8, duration: 0.25, yoyo: true, repeat: 1 }, 16.2);
+      entra("#f5", 11.85, 0.06); sale("#f5", 16.6);
+
+      // D. todo eso se vuelve ideas, contenido y publicidad
+      flash(16.85, 0.3);
+      tl.fromTo(["#p1", "#p2", "#p3"], { opacity: 0, x: 120, scale: 0.9 }, { opacity: 1, x: 0, scale: 1, duration: 0.5, ease: "expo.out", stagger: 0.6 }, 17.4);
+      entra("#f6", 16.85, 0.08); sale("#f6", 18.7);
+      entra("#f6b", 18.9, 0.07);
+      // las tres piezas bajan hacia la gente
+      tl.to(["#p1", "#p2", "#p3"], { y: 260, scale: 0.4, opacity: 0, duration: 0.5, ease: "power3.in", stagger: 0.06 }, 19.9);
+      const gente = $("#gente"); const per = []; const elegidos = [];
+      for (let f = 0; f < 9; f++) for (let c = 0; c < 9; c++) {
+        const d = document.createElement("div"); d.className = "per"; d.innerHTML = "<i></i><u></u>"; gente.appendChild(d);
+        d.style.left = 90 + c * 104 + (f % 2) * 40 + "px"; d.style.top = 330 + f * 110 + "px"; per.push(d);
+        if ([[1, 2], [2, 6], [3, 3], [4, 7], [5, 1], [6, 5], [7, 3], [3, 0], [6, 8]].some(([a, b]) => a === f && b === c)) elegidos.push(d);
+      }
+      tl.fromTo(per, { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.35, stagger: { each: 0.004, from: "center" } }, 20.1)
+        .to(elegidos.map((d) => $$("i,u", d)).flat(), { background: "#b9a4ff", boxShadow: "0 0 24px rgba(185,164,255,0.95)", duration: 0.35, stagger: 0.05 }, 20.9)
+        .to(per.filter((d) => !elegidos.includes(d)), { opacity: 0.35, duration: 0.4 }, 20.9);
+      sale("#f6b", 22.7);
+      // "pero no nos quedamos ahí": nos alejamos de la gente
+      tl.to("#gente", { scale: 0.55, opacity: 0, transformOrigin: "540px 760px", duration: 0.8, ease: "power2.in" }, 22.9);
+      entra("#f7", 22.9, 0.09); sale("#f7", 24.4);
+
+      // F. tablero: observamos
+      tl.fromTo("#tablero", { opacity: 0, scale: 0.85, y: 80 }, { opacity: 1, scale: 1, y: 0, duration: 0.7, ease: "expo.out" }, 23.5);
+      const curva = $("#curva"); const CL = curva.getTotalLength(); curva.setAttribute("stroke-dasharray", CL);
+      const pr = { k: 0 };
+      const punta = () => { const p = curva.getPointAtLength(pr.k * CL); $("#punta").setAttribute("cx", p.x); $("#punta").setAttribute("cy", p.y); curva.setAttribute("stroke-dashoffset", CL * (1 - pr.k)); };
+      punta();
+      tl.fromTo(pr, { k: 0 }, { k: 1, duration: 3.2, ease: "power1.inOut", onUpdate: punta }, 24.65)
+        .fromTo("#area", { opacity: 0 }, { opacity: 1, duration: 2.5 }, 25.2);
+      [["#ch1", 25.3, 130, 900], ["#ch2", 26.05, 490, 900], ["#ch3", 26.8, 130, 1010], ["#ch4", 27.95, 130, 1120]].forEach(([c, t, x, y]) => {
+        tl.fromTo(c, { x, y: y + 40, opacity: 0, scale: 0.7 }, { y, opacity: 1, scale: 1, duration: 0.4, ease: "back.out(2)" }, t);
+      });
+      entra("#f8", 24.65, 0.06); sale("#f8", 29.3);
+      // decisiones: todo se concentra en un punto de luz
+      tl.to("#tablero", { scale: 0.9, opacity: 0.25, duration: 0.6 }, 29.65)
+        .to(["#ch1", "#ch2", "#ch3", "#ch4"], { x: 380, y: 830, scale: 0.2, opacity: 0, duration: 0.7, ease: "power3.in", stagger: 0.08 }, 30.1)
+        .fromTo("#nucleo", { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.4, ease: "back.out(3)" }, 30.8)
+        .to("#tablero", { opacity: 0, duration: 0.5 }, 31.5)
+        .to("#nucleo", { scale: 0.6, duration: 0.6, yoyo: true, repeat: 1, ease: "sine.inOut" }, 31.4);
+      entra("#f9", 29.65, 0.07); sale("#f9", 32.45);
+
+      // G. el ciclo
+      const anillo = $("#anillo"); const AL = 2 * Math.PI * 300; anillo.setAttribute("stroke-dasharray", AL);
+      const ang = { a: 0 };
+      const cab = (x, y) => { $("#cabeza").setAttribute("cx", x); $("#cabeza").setAttribute("cy", y); };
+      const enAnillo = () => { anillo.setAttribute("stroke-dashoffset", AL * (1 - Math.min(ang.a, 1))); const t = ang.a * Math.PI * 2 - Math.PI / 2; cab(540 + 300 * Math.cos(t), 860 + 300 * Math.sin(t)); };
+      enAnillo();
+      tl.fromTo(ang, { a: 0 }, { a: 1, duration: 1.9, ease: "power1.inOut", onUpdate: enAnillo }, 32.8)
+        .fromTo(ang, { a: 1 }, { a: 1.999, duration: 1.4, ease: "power1.inOut", onUpdate: enAnillo, immediateRender: false }, 34.7)
+        .fromTo("#cabeza", { scale: 1, transformOrigin: "540px 560px" }, { scale: 1.8, duration: 0.3, yoyo: true, repeat: 3, ease: "sine.inOut", immediateRender: false }, 36.0);
+      entra("#f10", 32.8, 0.07); sale("#f10", 35.5);
+      entra("#f11", 35.75, 0.1); sale("#f11", 37.6);
+      // "nunca volvemos al mismo punto": el anillo se acuesta y se vuelve espiral que sube
+      const VUEL = 4, R = 300, BASE = 860, SUBE = 150, PL = 0.32;
+      const pts = []; for (let i = 0; i <= VUEL * 90; i++) { const t = (i / 90) * Math.PI * 2; pts.push([540 - R * Math.sin(t), BASE - (t / (Math.PI * 2)) * SUBE - R * PL * Math.cos(t)]); }
+      const esp = $("#espiral"); esp.setAttribute("d", "M" + pts.map((p) => p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" L"));
+      const EL = esp.getTotalLength(); esp.setAttribute("stroke-dasharray", EL); esp.setAttribute("stroke-dashoffset", EL);
+      const sp = { k: 0 };
+      const enEsp = () => { esp.setAttribute("stroke-dashoffset", EL * (1 - sp.k)); const p = esp.getPointAtLength(sp.k * EL); cab(p.x, p.y); };
+      tl.to("#anillo-g", { scaleY: PL, svgOrigin: "540 860", duration: 0.5, ease: "power2.inOut" }, 37.9).to("#cabeza", { attr: { cy: 860 - R * PL }, duration: 0.5, ease: "power2.inOut" }, 37.9)
+        .to("#anillo-g", { opacity: 0, duration: 0.3 }, 38.45)
+        .fromTo(sp, { k: 0 }, { k: 1, duration: 5.0, ease: "power1.inOut", onUpdate: enEsp, immediateRender: false }, 38.4)
+        .fromTo("#titulo", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5, ease: "expo.out" }, 37.95)
+        .to("#titulo", { opacity: 0, duration: 0.3 }, 39.85);
+      flash(37.9, 0.3);
+      // cada vuelta deja algo: una etiqueta al completar cada giro
+      [["#e1", 1], ["#e2", 2], ["#e3", 3], ["#e4", 4]].forEach(([e, v]) => {
+        const p = pts[v * 90 - 1]; const t = 38.4 + 5.0 * (v / VUEL) * 0.98;
+        tl.fromTo(e, { x: p[0] + 40, y: p[1] - 30, opacity: 0, scale: 0.5 }, { opacity: 1, scale: 1, duration: 0.35, ease: "back.out(2.5)" }, Math.min(t, 43.0));
+      });
+      tl.to("#ciclo", { y: 330, duration: 5, ease: "power1.inOut" }, 38.4)
+        .to(["#e1", "#e2", "#e3", "#e4"], { y: "+=330", duration: 5, ease: "power1.inOut" }, 38.4);
+      entra("#f13", 40.03, 0.06); sale("#f13", 42.9);
+
+      // H. cierre
+      tl.fromTo("#violeta", { scale: 0, opacity: 1 }, { scale: 120, duration: 0.6, ease: "expo.in" }, 43.05);
+      tl.fromTo("#logo", { opacity: 0, scale: 0.85, filter: "blur(12px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 0.55, ease: "expo.out" }, 43.65)
+        .fromTo("#redes span", { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.4, ease: "back.out(2.2)" }, 44.1)
+        .fromTo("#lema", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.4, ease: "expo.out" }, 45.15);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
