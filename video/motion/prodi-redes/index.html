@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="es" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root { --violeta: #6f40fc; --lila: #b9a4ff; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+      #root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: Inter, sans-serif; color: #fff; }
+      .toma { position: absolute; inset: 0; width: 1080px; height: 1920px; object-fit: cover; }
+      .esc { position: absolute; inset: 0; overflow: hidden; }
+      .l { display: inline-block; }
+
+      /* 1. tipografía inicial */
+      #s-tipo { background: #000; }
+      #tipo { position: absolute; left: 0; right: 0; top: 760px; text-align: center; font-weight: 900; letter-spacing: -0.045em; line-height: 0.92; }
+      #tipo .a { font-size: 132px; }
+      #tipo .b { font-size: 132px; margin-top: 10px; }
+      #anillo { display: inline-block; width: 98px; height: 112px; margin: 0 4px; border: 22px solid #fff; border-radius: 50%; vertical-align: -6px; transform-origin: 50% 50%; }
+
+      /* textos sobre tomas */
+      .frase { position: absolute; left: 70px; right: 70px; text-align: center; font-weight: 900; letter-spacing: -0.04em; line-height: 0.95; text-shadow: 0 6px 40px rgba(0,0,0,0.6); }
+      #f-facil { top: 780px; font-size: 112px; padding: 30px 0; background: radial-gradient(closest-side, rgba(0,0,0,0.85), rgba(0,0,0,0)); }
+      #f-importe { top: 1240px; font-size: 92px; }
+      #f-importe em { font-style: normal; color: var(--lila); }
+
+      /* congelamiento */
+      #s-freeze { background: #000; }
+      #freeze-cam { position: absolute; inset: 0; transform-origin: 50% 46%; }
+      #freeze-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+      #freeze-velo { position: absolute; inset: 0; background: #000; opacity: 0; }
+      #tarjeta { position: absolute; left: 50%; top: 46%; width: 150px; height: 266px; margin: -133px 0 0 -75px; border-radius: 10px; background: var(--violeta); box-shadow: 0 0 60px var(--violeta), 0 0 160px rgba(111,64,252,0.7); opacity: 0; }
+
+      /* palabras de cada mundo */
+      .pilar { position: absolute; left: 0; right: 0; top: 1300px; text-align: center; font-size: 96px; font-weight: 900; letter-spacing: 0.06em; text-indent: 0.06em; text-shadow: 0 4px 30px rgba(0,0,0,0.7); }
+      .pilar::after { content: ""; display: block; width: 120px; height: 8px; margin: 22px auto 0; background: var(--violeta); box-shadow: 0 0 20px var(--violeta); }
+
+      /* anillo de cierre y logo */
+      #s-logo { background: radial-gradient(70% 45% at 50% 46%, #1a0f3d 0%, #000 70%); }
+      #anillo-fin { position: absolute; left: 50%; top: 46%; width: 300px; height: 300px; margin: -150px 0 0 -150px; border: 26px solid var(--violeta); border-radius: 50%; box-shadow: 0 0 60px var(--violeta); }
+      #logo { position: absolute; left: 50%; top: 740px; width: 880px; margin-left: -440px; }
+      #redes { position: absolute; left: 0; right: 0; top: 1035px; display: flex; justify-content: center; }
+      #redes span { padding: 14px 44px; border-radius: 999px; background: var(--violeta); font-size: 46px; font-weight: 900; letter-spacing: 0.32em; text-indent: 0.32em; box-shadow: 0 0 40px rgba(111,64,252,0.7); }
+      #lema { position: absolute; left: 0; right: 0; top: 1200px; text-align: center; font-size: 42px; font-weight: 800; letter-spacing: 0.08em; text-indent: 0.08em; color: rgba(255,255,255,0.85); }
+
+      #montaje-anillo { position: absolute; left: 50%; top: 46%; width: 300px; height: 300px; margin: -150px 0 0 -150px; border: 26px solid var(--violeta); border-radius: 50%; box-shadow: 0 0 60px var(--violeta); opacity: 0; }
+      #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+      #flash-v { position: absolute; inset: 0; background: var(--violeta); opacity: 0; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="30" data-width="1080" data-height="1920">
+      <audio id="mezcla" src="assets/mezcla.m4a" data-start="0" data-duration="30" data-track-index="9"></audio>
+
+      <!-- 1. negro + NO EMPEZAMOS DE CERO -->
+      <div id="s-tipo" class="esc clip" data-start="0" data-duration="2.25" data-track-index="0" data-layout-ignore>
+        <div id="tipo"><div class="a" id="t1">NO EMPEZAMOS</div><div class="b"><span id="t2">DE CER</span><span id="anillo"></span><span id="t3">.</span></div></div>
+      </div>
+
+      <!-- 2. el portal y los fragmentos -->
+      <video id="v-a" class="toma clip" src="assets/a.mp4" muted data-start="2.2" data-duration="2.8" data-track-index="0"></video>
+      <!-- 3. idea, historia, imagen -->
+      <video id="v-b" class="toma clip" src="assets/b.mp4" muted data-start="5.0" data-duration="1.0" data-track-index="0"></video>
+      <video id="v-c" class="toma clip" src="assets/c.mp4" muted data-start="6.0" data-duration="1.0" data-track-index="0"></video>
+      <video id="v-d" class="toma clip" src="assets/d.mp4" muted data-start="7.0" data-duration="1.0" data-track-index="0"></video>
+      <!-- 4. saturación -->
+      <video id="v-e" class="toma clip" src="assets/e.mp4" muted data-start="8.0" data-duration="3.0" data-track-index="0"></video>
+      <div id="f-facil" class="frase clip" data-start="9.6" data-duration="2.0" data-track-index="1"><div class="ln">PUBLICAR</div><div class="ln">ES FÁCIL.</div></div>
+
+      <!-- 5. congelamiento: todo queda suspendido y un rectángulo se enciende -->
+      <div id="s-freeze" class="esc clip" data-start="11.0" data-duration="3.7" data-track-index="0" data-layout-ignore>
+        <div id="freeze-cam"><img id="freeze-img" src="assets/e-congelado.png" /><div id="freeze-velo"></div><div id="tarjeta"></div></div>
+      </div>
+      <div id="f-importe" class="frase clip" data-start="11.8" data-duration="2.7" data-track-index="1"><div class="ln">HACER QUE</div><div class="ln"><em class="ln">IMPORTE</em><span class="ln">, NO.</span></div></div>
+
+      <!-- 6. los cuatro mundos -->
+      <video id="v-f" class="toma clip" src="assets/f.mp4" muted data-start="14.6" data-duration="2.4" data-track-index="0"></video>
+      <video id="v-g" class="toma clip" src="assets/g.mp4" muted data-start="17.0" data-duration="2.0" data-track-index="0"></video>
+      <video id="v-h" class="toma clip" src="assets/h.mp4" muted data-start="19.0" data-duration="2.0" data-track-index="0"></video>
+      <video id="v-i" class="toma clip" src="assets/i.mp4" muted data-start="21.0" data-duration="2.5" data-track-index="0"></video>
+      <div id="p-est" class="pilar clip" data-start="15.0" data-duration="2.0" data-track-index="1">ESTRATEGIA</div>
+      <div id="p-cre" class="pilar clip" data-start="17.0" data-duration="2.0" data-track-index="1">CREATIVIDAD</div>
+      <div id="p-con" class="pilar clip" data-start="19.0" data-duration="2.0" data-track-index="1">CONTENIDO</div>
+      <div id="p-pub" class="pilar clip" data-start="21.0" data-duration="2.5" data-track-index="1">PUBLICIDAD</div>
+
+      <!-- 7. montaje en reversa: todo vuelve al anillo -->
+      <video id="rev-I" class="toma clip rev" src="assets/rI.mp4" muted data-start="23.5" data-duration="0.28" data-track-index="0"></video>
+      <video id="rev-H" class="toma clip rev" src="assets/rH.mp4" muted data-start="23.78" data-duration="0.28" data-track-index="0"></video>
+      <video id="rev-G" class="toma clip rev" src="assets/rG.mp4" muted data-start="24.06" data-duration="0.28" data-track-index="0"></video>
+      <video id="rev-F" class="toma clip rev" src="assets/rF.mp4" muted data-start="24.34" data-duration="0.28" data-track-index="0"></video>
+      <video id="rev-E" class="toma clip rev" src="assets/rE.mp4" muted data-start="24.62" data-duration="0.28" data-track-index="0"></video>
+      <video id="rev-D" class="toma clip rev" src="assets/rD.mp4" muted data-start="24.9" data-duration="0.28" data-track-index="0"></video>
+      <video id="rev-C" class="toma clip rev" src="assets/rC.mp4" muted data-start="25.18" data-duration="0.28" data-track-index="0"></video>
+      <video id="rev-B" class="toma clip rev" src="assets/rB.mp4" muted data-start="25.46" data-duration="0.27" data-track-index="0"></video>
+      <video id="rev-A" class="toma clip rev" src="assets/rA.mp4" muted data-start="25.73" data-duration="0.27" data-track-index="0"></video>
+      <div id="montaje-anillo" class="clip" data-start="23.5" data-duration="2.5" data-track-index="2" data-layout-ignore></div>
+
+      <!-- 8. logo oficial -->
+      <div id="s-logo" class="esc clip" data-start="26.0" data-duration="4.0" data-track-index="0" data-layout-ignore>
+        <div id="anillo-fin"></div>
+        <img id="logo" src="assets/logo-horizontal-blanco.png" />
+        <div id="redes"><span>REDES</span></div>
+        <div id="lema">NO EMPEZAMOS DE CERO.</div>
+      </div>
+
+      <div id="flash" class="clip" data-start="0" data-duration="30" data-track-index="3" data-layout-ignore></div>
+      <div id="flash-v" class="clip" data-start="0" data-duration="30" data-track-index="4" data-layout-ignore></div>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      const $ = (s, r = document) => r.querySelector(s);
+      const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+      const letras = (el) => { el.innerHTML = [...el.textContent].map((c) => `<span class="l">${c === " " ? "&nbsp;" : c}</span>`).join(""); return $$(".l", el); };
+      const flash = (t, o = 0.7, sel = "#flash") => tl.fromTo(sel, { opacity: o }, { opacity: 0, duration: 0.25, ease: "power2.out", immediateRender: false }, t);
+
+      // 1. tipografía: cae palabra por palabra, la O se suelta y se vuelve el portal
+      tl.fromTo("#t1", { opacity: 0, y: -40, scale: 1.15 }, { opacity: 1, y: 0, scale: 1, duration: 0.25, ease: "expo.out" }, 0.6)
+        .fromTo(["#t2", "#anillo", "#t3"], { opacity: 0, y: 40, scale: 1.15 }, { opacity: 1, y: 0, scale: 1, duration: 0.25, ease: "expo.out" }, 0.95)
+        .to(["#t1", "#t2", "#t3"], { opacity: 0, duration: 0.3, ease: "power2.in" }, 1.55)
+        .to("#anillo", { borderColor: "#6f40fc", boxShadow: "0 0 40px #6f40fc", duration: 0.2 }, 1.55)
+        .to("#anillo", { x: -170, y: -150, duration: 0.25, ease: "power2.inOut" }, 1.6)
+        .to("#anillo", { scale: 22, duration: 0.4, ease: "expo.in" }, 1.85);
+      flash(2.2, 0.55, "#flash-v");
+
+      // 2–3. portal y micro-mundos: golpes de escala en cada corte
+      [["#v-a", 2.2], ["#v-b", 5.0], ["#v-c", 6.0], ["#v-d", 7.0], ["#v-e", 8.0]].forEach(([v, t], i) => {
+        tl.fromTo(v, { scale: 1.25 }, { scale: 1.0, duration: 0.45, ease: "expo.out" }, t);
+        if (i > 0) flash(t, 0.35);
+      });
+
+      // 4. saturación
+      tl.fromTo($$("#f-facil .ln").flatMap(letras), { opacity: 0, y: 50 }, { opacity: 1, y: 0, duration: 0.25, stagger: 0.025, ease: "expo.out" }, 9.6)
+        .fromTo("#v-e", { scale: 1 }, { scale: 1.12, duration: 2.6, ease: "power1.in", immediateRender: false }, 8.4);
+
+      // 5. congelamiento (11.0): quieto, silencio; en 11.6 se enciende uno y la cámara entra
+      tl.fromTo("#freeze-cam", { scale: 1.12 }, { scale: 1.15, duration: 0.6, ease: "none" }, 11.0)
+        .to("#f-facil", { opacity: 0, duration: 0.2 }, 11.4)
+        .fromTo("#freeze-velo", { opacity: 0 }, { opacity: 0.72, duration: 0.5, ease: "power2.out" }, 11.6)
+        .fromTo("#tarjeta", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.35, ease: "back.out(2)" }, 11.6)
+        .fromTo("#freeze-cam", { scale: 1.15 }, { scale: 9, duration: 3.0, ease: "power3.in", immediateRender: false }, 11.6)
+        .fromTo([$$("#f-importe .ln")[0], $("#f-importe em"), $("#f-importe span.ln")].flatMap(letras), { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.25, stagger: 0.025, ease: "expo.out" }, 11.85);
+      flash(14.6, 0.9, "#flash-v");
+
+      // 6. cuatro mundos
+      [["#v-f", "#p-est", 14.6, 15.0], ["#v-g", "#p-cre", 17.0, 17.0], ["#v-h", "#p-con", 19.0, 19.0], ["#v-i", "#p-pub", 21.0, 21.0]].forEach(([v, p, t, tp], i) => {
+        tl.fromTo(v, { scale: 1.2 }, { scale: 1.0, duration: 0.5, ease: "expo.out" }, t)
+          .fromTo(letras($(p)), { opacity: 0, y: 60, rotationX: -90 }, { opacity: 1, y: 0, rotationX: 0, duration: 0.3, stagger: 0.025, ease: "back.out(2)" }, tp + 0.05);
+        if (i > 0) flash(t, 0.3);
+      });
+
+      // 7. montaje en reversa: cada plano se hunde hacia el centro, el anillo se cierra
+      $$(".rev").forEach((v) => {
+        const a = +v.dataset.start, d = +v.dataset.duration;
+        tl.fromTo(v, { scale: 1.3 }, { scale: 0.85, duration: d, ease: "power2.in" }, a);
+      });
+      tl.fromTo("#montaje-anillo", { opacity: 0, scale: 8 }, { opacity: 1, scale: 1, duration: 2.5, ease: "power2.in" }, 23.5);
+
+      // 8. logo: el anillo se contrae y aparece el logo oficial
+      tl.fromTo("#anillo-fin", { scale: 1, opacity: 1 }, { scale: 0, opacity: 0, duration: 0.35, ease: "back.in(2)" }, 26.0)
+        .fromTo("#logo", { opacity: 0, scale: 0.8, filter: "blur(14px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 0.55, ease: "expo.out" }, 26.3)
+        .fromTo("#redes span", { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.4, ease: "back.out(2.2)" }, 26.7)
+        .fromTo(letras($("#lema")), { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.3, stagger: 0.02, ease: "expo.out" }, 27.0);
+      flash(26.3, 0.5, "#flash-v");
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
