@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="es" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root { --violeta: #6f40fc; --brasa: #ffb15c; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+      #root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: Inter, sans-serif; color: #fff; }
+      .toma { position: absolute; inset: 0; width: 1080px; height: 1920px; object-fit: cover; }
+      .esc { position: absolute; inset: 0; overflow: hidden; background: #000; }
+      .foto { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+      .l { display: inline-block; }
+      .velo { position: absolute; left: 0; right: 0; bottom: 0; height: 900px; background: linear-gradient(180deg, transparent, rgba(0,0,0,0.82)); pointer-events: none; }
+      .frase { position: absolute; left: 80px; right: 80px; top: 1390px; text-align: center; font-size: 74px; font-weight: 900; letter-spacing: -0.03em; line-height: 1.05; text-shadow: 0 6px 30px rgba(0,0,0,0.9); }
+      .frase em { font-style: normal; color: var(--brasa); }
+      /* tapa los subtítulos quemados del reel cuando habla Malena encima */
+      .tapa { position: absolute; left: 40px; right: 40px; top: 1190px; padding: 30px 40px; border-radius: 28px; background: rgba(12,9,7,0.94); text-align: center; font-size: 60px; font-weight: 900; letter-spacing: -0.02em; line-height: 1.08; }
+      .tapa em { font-style: normal; color: var(--brasa); }
+      .chispa { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: #ffcf7a; box-shadow: 0 0 12px 4px rgba(255,140,40,0.85); }
+
+      /* 1: la llanta y el horno */
+      #s-llanta img { transform-origin: 540px 840px; }
+      #s-horno { background: #000; }
+      #fondo-taller { position: absolute; inset: -40px; width: 1160px; height: 2000px; object-fit: cover; filter: blur(14px) brightness(0.35) saturate(1.2); }
+      #halo { position: absolute; left: 540px; top: 900px; width: 1100px; height: 1100px; margin: -550px 0 0 -550px; border-radius: 50%; background: radial-gradient(circle, rgba(255,150,60,0.45) 0%, rgba(255,120,40,0.12) 40%, transparent 70%); }
+      #horno-wrap { position: absolute; left: -90px; top: 220px; width: 1400px; height: 1400px; transform-origin: 630px 620px; }
+      #horno-wrap img { width: 1400px; height: 1400px; filter: drop-shadow(0 40px 60px rgba(0,0,0,0.8)); }
+      #f-llanta { top: 1460px; }
+      #f-horno { top: 1460px; }
+
+      /* detalle */
+      #s-det .foto { filter: brightness(0.75) contrast(1.08) saturate(0.9); }
+
+      /* tarjetas */
+      #mesa { position: absolute; inset: 0; pointer-events: none; }
+      .tarjeta { position: absolute; left: 340px; top: 0; width: 400px; height: 230px; border-radius: 10px; background: #f3ead8; color: #2a1b10; box-shadow: 0 14px 30px rgba(0,0,0,0.45); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; }
+      .tarjeta b { font-size: 46px; font-weight: 900; letter-spacing: 0.12em; text-indent: 0.12em; }
+      .tarjeta span { font-size: 24px; font-weight: 700; letter-spacing: 0.2em; text-indent: 0.2em; color: #8a5a2e; }
+
+      /* celular */
+      #s-celu { background: radial-gradient(60% 40% at 50% 52%, #2b1a0e 0%, #000 75%); }
+      #celu { position: absolute; left: 290px; top: 470px; width: 500px; height: 980px; border-radius: 64px; border: 14px solid #15110e; box-shadow: 0 0 0 3px rgba(255,255,255,0.18), 0 50px 120px rgba(0,0,0,0.85); }
+      .pantalla { position: absolute; left: 304px; top: 484px; width: 472px; height: 952px; border-radius: 50px; object-fit: cover; }
+      .onda { position: absolute; left: 540px; top: 960px; width: 560px; height: 560px; margin: -280px 0 0 -280px; border-radius: 50%; border: 6px solid var(--brasa); opacity: 0; }
+      .fc { top: 210px; font-size: 64px; }
+      .fc2 { top: 1520px; font-size: 64px; }
+      .chip { position: absolute; left: 50%; display: flex; align-items: center; gap: 18px; padding: 20px 36px 20px 24px; border-radius: 999px; background: rgba(20,14,10,0.92); border: 2px solid rgba(255,177,92,0.6); font-size: 46px; font-weight: 900; white-space: nowrap; box-shadow: 0 20px 50px rgba(0,0,0,0.6); }
+      .chip svg { width: 52px; height: 52px; }
+      #c1 { top: 560px; } #c2 { top: 820px; } #c3 { top: 1080px; }
+      .corazon { position: absolute; width: 54px; height: 54px; }
+
+      /* galería */
+      #s-gal { background: radial-gradient(70% 50% at 50% 50%, #24170d 0%, #000 75%); }
+      #tira { position: absolute; left: 0; top: 520px; height: 820px; display: flex; gap: 40px; padding-left: 140px; }
+      #tira .g { flex: none; width: 520px; height: 820px; border-radius: 26px; overflow: hidden; background: #1a120b; box-shadow: 0 30px 70px rgba(0,0,0,0.7); }
+      #tira .g img { width: 100%; height: 100%; object-fit: cover; }
+      #tira .g.rec { background: radial-gradient(circle at 50% 55%, #4a2c15 0%, #120c07 75%); }
+      #tira .g.rec img { object-fit: contain; padding: 40px; }
+      #f-gal { top: 1440px; font-size: 66px; }
+      #f-fin { top: 1430px; font-size: 64px; }
+
+      /* cierre */
+      #violeta { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: var(--violeta); opacity: 0; }
+      #s-logo { background: radial-gradient(70% 45% at 50% 46%, #1a0f3d 0%, #000 70%); }
+      #logo { position: absolute; left: 50%; top: 740px; width: 880px; margin-left: -440px; }
+      #redes { position: absolute; left: 0; right: 0; top: 1035px; display: flex; justify-content: center; }
+      #redes span { padding: 14px 44px; border-radius: 999px; background: var(--violeta); font-size: 46px; font-weight: 900; letter-spacing: 0.32em; text-indent: 0.32em; }
+      #lema { position: absolute; left: 0; right: 0; top: 1200px; text-align: center; font-size: 42px; font-weight: 800; letter-spacing: 0.08em; text-indent: 0.08em; color: rgba(255,255,255,0.88); }
+      #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+      #brasa-flash { position: absolute; inset: 0; background: #ff9a3c; opacity: 0; pointer-events: none; mix-blend-mode: screen; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="62" data-width="1080" data-height="1920">
+      <audio id="mezcla" src="assets/mezcla.m4a" data-start="0" data-duration="62" data-track-index="9"></audio>
+
+      <!-- 1. Vos ves una llanta vieja. / Él vio su primer horno. -->
+      <div id="s-llanta" class="esc clip" data-start="0" data-duration="2.3" data-track-index="0" data-layout-ignore>
+        <img class="foto" src="assets/llanta.jpg" />
+        <div id="chispas1"></div>
+      </div>
+      <div id="s-horno" class="esc clip" data-start="2.0" data-duration="1.25" data-track-index="1" data-layout-ignore>
+        <img id="fondo-taller" src="assets/llanta.jpg" />
+        <div id="halo"></div>
+        <div id="horno-wrap"><img src="assets/empotrar.png" /></div>
+      </div>
+      <div class="velo clip" data-start="0" data-duration="3.25" data-track-index="2"></div>
+      <div id="f-llanta" class="frase clip" data-start="0.3" data-duration="1.6" data-track-index="3">Vos ves una <em>llanta vieja.</em></div>
+      <div id="f-horno" class="frase clip" data-start="1.9" data-duration="1.35" data-track-index="4">Él vio su <em>primer horno.</em></div>
+
+      <!-- 2. El fundador cuenta cómo empezó -->
+      <video id="v-t1" class="toma clip" src="assets/t1.mp4" muted data-start="3.25" data-duration="5.37" data-track-index="0"></video>
+      <video id="v-t1b" class="toma clip" src="assets/t1b.mp4" muted data-start="8.62" data-duration="4.73" data-track-index="0"></video>
+
+      <!-- 3. No fue fácil -->
+      <div id="s-det" class="esc clip" data-start="13.35" data-duration="3.4" data-track-index="0" data-layout-ignore>
+        <img id="det1" class="foto" src="assets/h/03.jpg" />
+        <img id="det2" class="foto" src="assets/h/02.jpg" />
+        <div id="chispas2"></div>
+      </div>
+      <div class="velo clip" data-start="13.35" data-duration="3.4" data-track-index="2"></div>
+      <div id="f-b1" class="frase clip" data-start="13.5" data-duration="1.5" data-track-index="3">Lo que vino después <em>no fue fácil.</em></div>
+      <div id="f-b2" class="frase clip" data-start="15.0" data-duration="1.75" data-track-index="4">Hubo que <em>animarse.</em></div>
+      <video id="v-t3" class="toma clip" src="assets/t3.mp4" muted data-start="16.75" data-duration="1.8" data-track-index="0"></video>
+
+      <!-- 4. La familia -->
+      <video id="v-ancho" class="toma clip" src="assets/ancho.mp4" muted data-start="18.55" data-duration="2.25" data-track-index="0"></video>
+      <div id="tapa-c" class="tapa clip" data-start="18.55" data-duration="2.25" data-track-index="3">Y una familia que lo empujó<br />a <em>dar el paso.</em></div>
+      <video id="v-t2" class="toma clip" src="assets/t2.mp4" muted data-start="20.8" data-duration="10.35" data-track-index="0"></video>
+
+      <!-- 5. Las tarjetitas -->
+      <video id="v-t4" class="toma clip" src="assets/t4.mp4" muted data-start="31.15" data-duration="5.22" data-track-index="0"></video>
+      <div id="mesa" class="clip" data-start="32.6" data-duration="4.6" data-track-index="5" data-layout-ignore></div>
+
+      <!-- 6. La historia ya estaba ahí -->
+      <div id="s-celu" class="esc clip" data-start="36.37" data-duration="7.25" data-track-index="0" data-layout-ignore>
+        <div id="celu"></div>
+        <div class="onda"></div><div class="onda"></div><div class="onda"></div>
+      </div>
+      <video id="v-pant1" class="pantalla clip" src="assets/reel.mp4" muted data-start="36.6" data-duration="7.0" data-track-index="1"></video>
+      <div id="f-d1" class="frase fc clip" data-start="36.5" data-duration="2.8" data-track-index="3">Cuando conocimos a <em>Hornos Cian,</em> nos dimos cuenta de algo.</div>
+      <div id="f-d2" class="frase fc2 clip" data-start="39.3" data-duration="1.55" data-track-index="4">La mejor historia <em>ya estaba ahí.</em></div>
+      <div id="f-d3" class="frase fc2 clip" data-start="40.85" data-duration="1.2" data-track-index="3">No había que inventarla.</div>
+      <div id="f-d4" class="frase fc2 clip" data-start="42.05" data-duration="1.55" data-track-index="4">Había que hacer que <em>se escuchara.</em></div>
+
+      <!-- 7. Mostramos los hornos, sí. Pero sobre todo... -->
+      <img id="g1" class="toma clip" src="assets/h/01.jpg" data-start="43.6" data-duration="0.42" data-track-index="0" />
+      <img id="g2" class="toma clip" src="assets/h/04.jpg" data-start="44.02" data-duration="0.42" data-track-index="0" />
+      <img id="g3" class="toma clip" src="assets/h/05.jpg" data-start="44.44" data-duration="0.42" data-track-index="0" />
+      <img id="g4" class="toma clip" src="assets/h/06.jpg" data-start="44.86" data-duration="0.44" data-track-index="0" />
+      <div class="velo clip" data-start="43.6" data-duration="1.7" data-track-index="2"></div>
+      <div id="f-e1" class="frase clip" data-start="43.8" data-duration="1.5" data-track-index="3">Mostramos <em>los hornos,</em> sí.</div>
+      <video id="v-cara" class="toma clip" src="assets/cara.mp4" muted data-start="45.3" data-duration="2.8" data-track-index="0"></video>
+      <div id="tapa-e" class="tapa clip" data-start="45.3" data-duration="2.8" data-track-index="3">Pero sobre todo, mostramos<br />a <em>quien estaba detrás.</em></div>
+
+      <!-- 8. Lo que empezó a llegar -->
+      <div id="s-celu2" class="esc clip" data-start="48.1" data-duration="4.1" data-track-index="0" data-layout-ignore style="background: radial-gradient(60% 40% at 50% 52%, #2b1a0e 0%, #000 75%)">
+        <div id="celu2" style="position:absolute;left:290px;top:470px;width:500px;height:980px;border-radius:64px;border:14px solid #15110e;box-shadow:0 0 0 3px rgba(255,255,255,0.18),0 50px 120px rgba(0,0,0,0.85)"></div>
+      </div>
+      <video id="v-pant2" class="pantalla clip" src="assets/reel.mp4" muted data-start="48.1" data-duration="4.1" data-track-index="1"></video>
+      <div id="capa-chips" class="clip" data-start="48.1" data-duration="4.1" data-track-index="5" data-layout-ignore>
+        <div id="corazones"></div>
+        <div id="c1" class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="#ffb15c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" /><circle cx="12" cy="12" r="3" /></svg>más visualizaciones</div>
+        <div id="c2" class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="#ffb15c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" /></svg>más consultas</div>
+        <div id="c3" class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="#ffb15c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.6" /><circle cx="18" cy="20" r="1.6" /><path d="M1 2h4l2.7 12.4a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 2-1.6L22 6H6" /></svg>más ventas</div>
+      </div>
+
+      <!-- 9. Nosotros no fabricamos ni uno de esos hornos -->
+      <div id="s-gal" class="esc clip" data-start="52.2" data-duration="2.1" data-track-index="0" data-layout-ignore>
+        <div id="tira">
+          <div class="g rec"><img src="assets/empotrar.png" /></div>
+          <div class="g"><img src="assets/h/04.jpg" /></div>
+          <div class="g rec"><img src="assets/redondo.png" /></div>
+          <div class="g"><img src="assets/h/01.jpg" /></div>
+          <div class="g"><img src="assets/h/06.jpg" /></div>
+        </div>
+      </div>
+      <div id="f-gal" class="frase clip" data-start="52.3" data-duration="2.0" data-track-index="3">Nosotros no fabricamos <em>ni uno</em> de esos hornos.</div>
+
+      <!-- 10. ...al hombre que los fabrica -->
+      <video id="v-fin" class="toma clip" src="assets/fin.mp4" muted data-start="54.3" data-duration="1.93" data-track-index="0"></video>
+      <img id="fin-foto" class="toma clip" src="assets/fin.jpg" data-start="56.2" data-duration="1.9" data-track-index="0" />
+      <div class="velo clip" data-start="54.3" data-duration="3.8" data-track-index="2"></div>
+      <div id="f-fin" class="frase clip" data-start="54.4" data-duration="3.7" data-track-index="3">Pero ayudamos a que mucha más gente conociera <em>al hombre que los fabrica.</em></div>
+      <div id="capa-violeta" class="clip" data-start="57.6" data-duration="0.6" data-track-index="6" data-layout-ignore><div id="violeta"></div></div>
+
+      <!-- 11. Cierre -->
+      <div id="s-logo" class="esc clip" data-start="58.1" data-duration="3.9" data-track-index="0" data-layout-ignore>
+        <img id="logo" src="assets/logo-horizontal-blanco.png" />
+        <div id="redes"><span>REDES</span></div>
+        <div id="lema">NO EMPEZAMOS DE CERO.</div>
+      </div>
+
+      <div id="brasa-flash" class="clip" data-start="0" data-duration="62" data-track-index="7" data-layout-ignore></div>
+      <div id="flash" class="clip" data-start="0" data-duration="62" data-track-index="8" data-layout-ignore></div>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      const $ = (s, r = document) => r.querySelector(s);
+      const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+      const palabras = (el) => { el.innerHTML = el.innerHTML.split(/(<br \/>|<br>|<em>|<\/em>)/).map((p) => /^<\/?(br|em)/.test(p) ? p : p.split(" ").filter(Boolean).map((w) => `<span class="l">${w}</span>`).join(" ")).join(" "); return $$(".l", el); };
+      const entra = (sel, t, st = 0.08) => tl.fromTo(palabras($(sel)), { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.3, stagger: st, ease: "expo.out" }, t);
+      const sale = (sel, t) => tl.to(sel, { opacity: 0, duration: 0.2 }, t);
+      const flash = (t, o = 0.35, sel = "#flash") => tl.fromTo(sel, { opacity: o }, { opacity: 0, duration: 0.3, ease: "power2.out", immediateRender: false }, t);
+      // azar fijo para que cada render sea igual
+      let semilla = 7; const azar = () => ((semilla = (semilla * 16807) % 2147483647) / 2147483647);
+      const chispas = (sel, t0, dur, n) => {
+        const caja = $(sel);
+        for (let i = 0; i < n; i++) {
+          const c = document.createElement("i"); c.className = "chispa"; caja.appendChild(c);
+          const x = 200 + azar() * 680, y = 1500 + azar() * 400, d = 1.2 + azar() * 1.4, s = 0.4 + azar() * 0.9;
+          tl.fromTo(c, { x, y, opacity: 0, scale: s }, { x: x + (azar() - 0.5) * 260, y: y - 700 - azar() * 600, opacity: 0, duration: d, ease: "power1.out", keyframes: { opacity: [0, 1, 1, 0] } }, t0 + azar() * Math.max(dur - d, 0.2));
+        }
+      };
+
+      // 1. llanta → horno real (match de círculos)
+      tl.fromTo("#s-llanta img", { scale: 1.0 }, { scale: 1.16, duration: 2.3, ease: "power1.in" }, 0);
+      chispas("#chispas1", 0, 2.3, 26);
+      entra("#f-llanta", 0.3, 0.1); sale("#f-llanta", 1.75);
+      tl.fromTo("#s-horno", { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.out" }, 2.0)
+        .fromTo("#horno-wrap", { scale: 2.5 }, { scale: 0.78, y: -60, duration: 1.25, ease: "expo.out" }, 2.0)
+        .fromTo("#halo", { scale: 0.5, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.8, ease: "power2.out" }, 2.1);
+      flash(2.0, 0.55, "#brasa-flash");
+      entra("#f-horno", 1.95, 0.1);
+
+      // 2. fundador
+      flash(3.25, 0.25);
+      tl.fromTo("#v-t1", { scale: 1.06 }, { scale: 1.0, duration: 5.3, ease: "none" }, 3.25)
+        .fromTo("#v-t1b", { scale: 1.0 }, { scale: 1.06, duration: 4.7, ease: "none" }, 8.62);
+
+      // 3. no fue fácil
+      flash(13.35, 0.4, "#brasa-flash");
+      tl.fromTo("#det1", { scale: 1.15 }, { scale: 1.0, duration: 1.7, ease: "power1.out" }, 13.35)
+        .fromTo("#det2", { opacity: 0, scale: 1.12 }, { opacity: 1, scale: 1.0, duration: 1.75, ease: "power1.out" }, 15.0);
+      chispas("#chispas2", 13.35, 3.4, 22);
+      entra("#f-b1", 13.5); sale("#f-b1", 14.85);
+      entra("#f-b2", 15.05, 0.12);
+      tl.fromTo("#v-t3", { scale: 1.1 }, { scale: 1.0, duration: 1.8, ease: "power2.out" }, 16.75);
+
+      // 4. familia
+      tl.fromTo("#v-ancho", { scale: 1.0 }, { scale: 1.08, duration: 2.25, ease: "none" }, 18.55)
+        .fromTo("#tapa-c", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.3, ease: "expo.out" }, 18.6)
+        .fromTo("#v-t2", { scale: 1.0 }, { scale: 1.05, duration: 10.3, ease: "none" }, 20.8);
+      flash(20.8, 0.2);
+
+      // 5. tarjetitas: caen de a montones sobre la imagen
+      const mesa = $("#mesa"); const tarjetas = [];
+      for (let i = 0; i < 16; i++) {
+        const c = document.createElement("div"); c.className = "tarjeta"; c.innerHTML = "<b>HORNOS CIAN</b><span>HORNOS A LEÑA</span>"; mesa.appendChild(c); tarjetas.push(c);
+        const x = (azar() - 0.5) * 640, y = 380 + azar() * 1100, r = (azar() - 0.5) * 70;
+        tl.fromTo(c, { x: x * 0.4, y: -400, rotation: r * 3, opacity: 1 }, { x, y, rotation: r, duration: 0.7, ease: "power3.out" }, 32.7 + i * 0.2);
+      }
+      // juntan en el centro y se convierten en el celular
+      tl.to(tarjetas, { x: 0, y: 800, rotation: 0, scale: 0.6, duration: 0.45, ease: "power3.in", stagger: 0.012 }, 36.15)
+        .to(tarjetas, { opacity: 0, duration: 0.15 }, 36.6);
+
+      // 6. celular con su historia
+      tl.fromTo("#celu", { scale: 0.4, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: "expo.out" }, 36.4)
+        .fromTo("#v-pant1", { scale: 0.4, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: "expo.out" }, 36.6);
+      entra("#f-d1", 36.5, 0.07); sale("#f-d1", 39.1);
+      entra("#f-d2", 39.3); sale("#f-d2", 40.7);
+      entra("#f-d3", 40.85); sale("#f-d3", 41.9);
+      entra("#f-d4", 42.05);
+      tl.fromTo(".onda", { scale: 0.9, opacity: 0.9 }, { scale: 2.3, opacity: 0, duration: 1.3, ease: "power2.out", stagger: 0.4 }, 42.2);
+
+      // 7. hornos en ráfaga y el hombre detrás
+      [["#g1", 43.6], ["#g2", 44.02], ["#g3", 44.44], ["#g4", 44.86]].forEach(([g, t]) => { tl.fromTo(g, { scale: 1.15 }, { scale: 1.0, duration: 0.45, ease: "expo.out" }, t); flash(t, 0.18); });
+      entra("#f-e1", 43.8, 0.1);
+      flash(45.3, 0.3, "#brasa-flash");
+      tl.fromTo("#v-cara", { scale: 1.0 }, { scale: 1.1, duration: 2.8, ease: "none" }, 45.3)
+        .fromTo("#tapa-e", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.3, ease: "expo.out" }, 45.4);
+
+      // 8. lo que empezó a llegar
+      tl.fromTo("#celu2", { scale: 0.85, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: "expo.out" }, 48.1)
+        .fromTo("#v-pant2", { scale: 0.85, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: "expo.out" }, 48.1);
+      [["#c1", 49.4], ["#c2", 50.7], ["#c3", 51.4]].forEach(([c, t], i) => {
+        tl.fromTo(c, { xPercent: -50, x: i % 2 ? 160 : -160, opacity: 0, scale: 0.6 }, { x: i % 2 ? 120 : -120, opacity: 1, scale: 1, duration: 0.4, ease: "back.out(2)" }, t);
+      });
+      const cor = $("#corazones");
+      for (let i = 0; i < 14; i++) {
+        const h = document.createElementNS("http://www.w3.org/2000/svg", "svg"); h.setAttribute("viewBox", "0 0 24 24"); h.setAttribute("class", "corazon");
+        h.innerHTML = '<path fill="#ff4d6d" d="M12 21s-7.5-4.6-10-9.3C.4 8.4 2.3 4 6.3 4c2.2 0 3.6 1.2 4.4 2.4h2.6C14.1 5.2 15.5 4 17.7 4c4 0 5.9 4.4 4.3 7.7C19.5 16.4 12 21 12 21z"/>';
+        cor.appendChild(h);
+        const x = 700 + azar() * 220, t = 48.6 + azar() * 3.2;
+        tl.fromTo(h, { x, y: 1400, opacity: 0, scale: 0.6 }, { x: x + (azar() - 0.5) * 160, y: 700, scale: 1.1, duration: 1.6, ease: "power1.out", keyframes: { opacity: [0, 1, 1, 0] } }, t);
+      }
+
+      // 9. galería de hornos reales
+      flash(52.2, 0.25);
+      tl.fromTo("#tira", { x: 300 }, { x: -1500, duration: 2.1, ease: "power1.inOut" }, 52.2);
+      entra("#f-gal", 52.3, 0.07);
+
+      // 10. el hombre que los fabrica
+      flash(54.3, 0.3, "#brasa-flash");
+      tl.fromTo("#fin-foto", { scale: 1.0 }, { scale: 1.08, duration: 1.9, ease: "none" }, 56.2);
+      entra("#f-fin", 54.45, 0.09);
+      tl.fromTo("#violeta", { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.15 }, 57.6)
+        .to("#violeta", { scale: 120, duration: 0.45, ease: "expo.in" }, 57.65);
+
+      // 11. cierre
+      tl.fromTo("#logo", { opacity: 0, scale: 0.85, filter: "blur(12px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 0.55, ease: "expo.out" }, 58.15)
+        .fromTo("#redes span", { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.4, ease: "back.out(2.2)" }, 58.6)
+        .fromTo("#lema", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.4, ease: "expo.out" }, 59.3);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
