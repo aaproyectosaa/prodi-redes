@@ -4,6 +4,7 @@ import type { Project } from "@/integrations/firebase/types";
 import { trabajaEnCliente } from "@/lib/roles";
 import { etapaInfo } from "./etapas";
 import { mesAR } from "@/lib/fecha";
+import { auditoriaPauta } from "./auditoriaPauta";
 
 export interface Evento {
   videoId: string;
@@ -137,7 +138,8 @@ export function reporteUsuario(
     }
     case "pauta": {
       const pubs = cuenta(PUBLICA);
-      const dem = prom(demoras(videos, uid, mes, APRUEBA_CLIENTE, PUBLICA));
+      // El mismo cálculo que el reporte a fondo (de aprobado por el cliente a publicado, de todos sus videos del mes).
+      const dem = auditoriaPauta(uid, videos, piezas, extra.clientes ?? [], mes, "").meses.at(-1)?.tarda ?? null;
       const suyos = videos.filter((v) => v.pauta_id === uid && v.mes === mes && v.etapa === "publicado");
       const gasto = suyos.reduce((a, v) => a + (v.resultados?.gasto ?? 0), 0);
       const mensajes = suyos.reduce((a, v) => a + (v.resultados?.mensajes ?? 0), 0);

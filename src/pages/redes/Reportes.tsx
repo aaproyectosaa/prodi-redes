@@ -23,6 +23,8 @@ import { eventos, reporteUsuario, type ReporteUsuario } from "@/lib/redes/report
 import { fechaHora, hace, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import { getRoleInfo } from "@/lib/roles";
 import { cn } from "@/lib/utils";
+import { ReportePauta } from "@/components/redes/ReportePauta";
+import { auditoriaPauta, DIAS_PARA_PUBLICAR } from "@/lib/redes/auditoriaPauta";
 import { callApi } from "@/lib/redes/api";
 
 type Uso = { uid: string; dias: number; entrada: number; salida: number; minutos: number; noches?: number; largos?: number };
@@ -73,6 +75,31 @@ function useUsoEquipo(mes: string) {
     };
   }, [mes]);
   return datos;
+}
+
+/** Quien sube y pauta (como rol principal o adicional). */
+const esPauta = (p: { role?: string | null; roles_extra?: string[] | null }) => p.role === "pauta" || (p.roles_extra ?? []).includes("pauta");
+
+/** En la tarjeta de la lista: lo que tiene atrasado (aprobados sin publicar, sin ID de Meta, publicados tarde). */
+function AlertaPauta({ perfil, mes }: { perfil: Parameters<typeof esPauta>[0] & { id: string; nombre?: string | null }; mes: string }) {
+  const { videos, piezas, clientes } = useRedes();
+  const a = useMemo(() => auditoriaPauta(perfil.id, videos, piezas, clientes, mes, perfil.nombre ?? ""), [perfil.id, perfil.nombre, videos, piezas, clientes, mes]);
+  const viejos = a.esperando.filter((x) => x.dias > DIAS_PARA_PUBLICAR).length;
+  const partes = [
+    viejos ? `${viejos} aprobado${viejos === 1 ? "" : "s"} sin publicar hace +${DIAS_PARA_PUBLICAR} días` : null,
+    a.tarde.length ? `${a.tarde.length} publicado${a.tarde.length === 1 ? "" : "s"} tarde` : null,
+    a.sinMeta.length ? `${a.sinMeta.length} sin ID de Meta` : null,
+    a.piezasSinPublicar.length ? `${a.piezasSinPublicar.length} pieza${a.piezasSinPublicar.length === 1 ? "" : "s"} sin publicar` : null,
+  ].filter(Boolean);
+  if (!partes.length) return null;
+  return (
+    <div className="flex items-start gap-2 rounded-lg bg-red-500/10 px-2.5 py-2 text-[11px] text-red-700 dark:text-red-300">
+      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <span>
+        <b>{partes.join(" · ")}</b>
+      </span>
+    </div>
+  );
 }
 
 /** Roles que aparecen en "Equipo". */
@@ -317,6 +344,7 @@ export default function Reportes() {
                   <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <UsoLinea datos={uso} uid={r.perfil.id} />
+                {esPauta(r.perfil) && <AlertaPauta perfil={r.perfil} mes={mes} />}
                 <KpiGrid r={r} />
                 <div className="flex items-end justify-between gap-3">
                   <div className="text-xs text-muted-foreground">
@@ -439,6 +467,12 @@ export function ReporteDetalle() {
       {realUser && perfil.role !== "cliente" && (
         <div className="mt-3">
           <UsoLinea datos={uso} uid={perfil.id} grande />
+        </div>
+      )}
+
+      {esPauta(perfil) && (
+        <div className="mt-8">
+          <ReportePauta perfil={perfil} mes={mes} />
         </div>
       )}
 
