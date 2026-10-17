@@ -831,6 +831,16 @@ Español rioplatense con voseo.`;
         out.push({ texto: "¿De qué cliente es el dato? Decime el nombre y lo anoto." });
         continue;
       }
+      // Un link de su web: va a la ficha (si estaba vacía) y a la memoria, aunque la IA lo haya mandado incompleto.
+      const web = /https?:\/\/[^\s<>"]+|\bwww\.[^\s<>"]+/i.exec(`${a.texto ?? ""} ${texto}`)?.[0]?.replace(/[.,;:!?)]+$/, "");
+      if (web && !/@/.test(web)) {
+        const pref = adminDb().collection("projects").doc(destino.id);
+        const actual = String(((await pref.get()).data()?.redes ?? {}).web ?? "").trim();
+        if (!actual) await pref.update({ "redes.web": web });
+        await guardarNotasChat(destino.id, cid, [`Página web de ${destino.nombre}: ${web}`], caller.uid);
+        out.push({ texto: actual && actual !== web ? `Anotado: la web de ${destino.nombre} es ${web} (en la ficha ya tenía ${actual}, no la cambié).` : `Listo, guardé la web de ${destino.nombre} en su ficha: ${web}` });
+        continue;
+      }
       const dato = limpiarHecho(a.texto);
       if (!dato) {
         // Un solo aviso aunque haya varios datos rechazados.
