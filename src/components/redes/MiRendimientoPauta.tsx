@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Check, ChevronRight, Clock, Gauge, ImageIcon, Link2Off, Loader2, RefreshCw, Target, TriangleAlert } from "lucide-react";
+import { ArrowRight, Check, Clock, Gauge, ImageIcon, Link2Off, Loader2, RefreshCw, Target, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -41,33 +41,76 @@ export function MiRendimientoPauta() {
   const todoBien = !a.faltas.total && !viejos && !a.sinMeta.length && !a.resultadosViejos.length;
   const aceptadas = !!profile?.metas_pauta_aceptadas_at;
 
+  // Una sola frase grande con lo más urgente, y abajo el resto en criollo.
+  const s = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
+  const pendientes = a.esperando.length + a.sinMeta.length + a.resultadosViejos.length + a.piezasSinPublicar.length;
+  const urgente: { texto: string; cuantos: number } | null = viejos
+    ? { texto: `Tenés ${s(viejos, "video aprobado", "videos aprobados")} hace más de ${DIAS_PARA_PUBLICAR * 24} h sin publicar`, cuantos: viejos }
+    : a.sinMeta.length
+      ? { texto: `Tenés ${s(a.sinMeta.length, "pautado", "pautados")} sin el ID de Meta cargado`, cuantos: a.sinMeta.length }
+      : a.resultadosViejos.length
+        ? { texto: `Tenés ${s(a.resultadosViejos.length, "pauta", "pautas")} con resultados sin actualizar`, cuantos: a.resultadosViejos.length }
+        : a.piezasSinPublicar.length
+          ? { texto: `Tenés ${s(a.piezasSinPublicar.length, "pieza aprobada", "piezas aprobadas")} sin publicar`, cuantos: a.piezasSinPublicar.length }
+          : null;
+  const enTiempo = !urgente && a.esperando.length > 0;
+  const color = urgente ? "rojo" : enTiempo ? "ambar" : "verde";
+  const detalleFaltas = [
+    a.faltas.esperando ? `${a.faltas.esperando} atrasado${a.faltas.esperando === 1 ? "" : "s"}` : null,
+    a.faltas.lentos ? `${a.faltas.lentos} publicado${a.faltas.lentos === 1 ? "" : "s"} tarde` : null,
+    a.faltas.sinMeta ? `${a.faltas.sinMeta} sin ID de Meta` : null,
+    a.faltas.resultados ? `${a.faltas.resultados} sin resultados` : null,
+  ].filter(Boolean);
+  const faltasTxt = `${s(a.faltas.total, "falta", "faltas")} este mes${detalleFaltas.length ? ` (${detalleFaltas.join(", ")})` : ""}`;
+  const resto = urgente ? pendientes - urgente.cuantos : 0;
+
   return (
     <>
       <button
         type="button"
         onClick={() => setAbierto(true)}
         className={cn(
-          "mb-4 flex w-full flex-wrap items-center gap-3 rounded-2xl border p-3 text-left transition-colors hover:border-primary/50 sm:p-4",
-          todoBien ? "border-emerald-500/30 bg-emerald-500/[0.05]" : "border-red-500/40 bg-red-500/[0.05]"
+          "group mb-4 flex w-full flex-wrap items-center gap-3 rounded-2xl border p-3.5 text-left transition-colors hover:border-primary/50 sm:flex-nowrap sm:p-4",
+          color === "rojo" ? "border-red-500/40 bg-red-500/[0.06]" : color === "ambar" ? "border-amber-500/40 bg-amber-500/[0.06]" : "border-emerald-500/30 bg-emerald-500/[0.05]"
         )}
       >
-        <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white", todoBien ? "from-emerald-400 to-teal-600" : "from-red-500 to-rose-600")}>
-          <Gauge className="h-5 w-5" />
+        <span
+          className={cn(
+            "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white",
+            color === "rojo" ? "from-red-500 to-rose-600" : color === "ambar" ? "from-amber-400 to-orange-500" : "from-emerald-400 to-teal-600"
+          )}
+        >
+          {color === "verde" ? <Check className="h-5 w-5" /> : <TriangleAlert className="h-5 w-5" />}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block font-semibold">Mi rendimiento · {mesLabel(mes).split(" ")[0]}</span>
-          <span className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-            <span className={viejos ? "font-semibold text-red-600 dark:text-red-400" : ""}>
-              {a.esperando.length} para publicar{viejos ? ` (${viejos} pasados de ${DIAS_PARA_PUBLICAR * 24} h)` : ""}
-            </span>
-            <span className={enMeta ? "" : "font-semibold text-red-600 dark:text-red-400"}>Tardás {fh(actual.tarda)} (meta {DIAS_PARA_PUBLICAR * 24} h)</span>
-            <span className={a.faltas.total ? "font-semibold text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}>
-              {a.faltas.total} falta{a.faltas.total === 1 ? "" : "s"} este mes
-            </span>
+          <span className="block text-base font-bold leading-snug">
+            {urgente ? urgente.texto : enTiempo ? `Tenés ${s(a.esperando.length, "video", "videos")} para publicar, en tiempo` : "Estás al día"}
+          </span>
+          <span className="mt-0.5 block text-sm text-muted-foreground">
+            {urgente ? (
+              <>
+                {resto > 0 && <>y {s(resto, "cosa más", "cosas más")} para hacer · </>}
+                <span className={a.faltas.total ? "font-semibold text-red-600 dark:text-red-400" : ""}>{faltasTxt}</span>
+              </>
+            ) : (
+              <>
+                Tardás {fh(actual.tarda)} en publicar (la meta es {DIAS_PARA_PUBLICAR * 24} h) ·{" "}
+                <span className={a.faltas.total ? "font-semibold text-red-600 dark:text-red-400" : ""}>{faltasTxt}</span>
+              </>
+            )}
           </span>
         </span>
-        {!aceptadas && <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-bold text-primary-foreground">Leé las metas</span>}
-        <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+        <span className="flex w-full shrink-0 items-center justify-between gap-2 sm:w-auto">
+          {!aceptadas && <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-bold text-primary-foreground">Leé las metas</span>}
+          <span
+            className={cn(
+              "ml-auto inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-semibold",
+              color === "verde" ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-primary text-primary-foreground"
+            )}
+          >
+            {color === "verde" ? "Mi rendimiento" : "Ver qué hacer"} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+          </span>
+        </span>
       </button>
 
       <Dialog open={abierto} onOpenChange={setAbierto}>
