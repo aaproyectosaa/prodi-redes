@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="es" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root { --violeta: #6f40fc; --lila: #b9a4ff; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+      #root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: Inter, sans-serif; color: #fff; }
+      .esc { position: absolute; inset: 0; overflow: hidden; }
+      .toma { position: absolute; inset: 0; width: 1080px; height: 1920px; object-fit: cover; }
+      .l { display: inline-block; }
+
+      /* 1. el ruido */
+      #s-ruido { background: #000; }
+      .cam { position: absolute; inset: 0; perspective: 1100px; perspective-origin: 50% 50%; }
+      #nube { position: absolute; left: 540px; top: 960px; width: 0; height: 0; transform-style: preserve-3d; }
+      .it { position: absolute; left: 0; top: 0; transform-style: preserve-3d; white-space: nowrap; }
+      .cor { width: 120px; height: 110px; }
+      .cor svg { width: 100%; height: 100%; display: block; }
+      .num { font-weight: 900; letter-spacing: -0.04em; font-size: 90px; font-variant-numeric: tabular-nums; }
+      .noti { display: flex; align-items: center; gap: 16px; padding: 18px 28px; border-radius: 26px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25); font-size: 34px; font-weight: 700; backdrop-filter: blur(4px); }
+      .noti i { width: 46px; height: 46px; border-radius: 50%; background: #fff; display: inline-block; }
+      .burbuja { width: 220px; height: 120px; border-radius: 60px 60px 60px 14px; border: 5px solid #fff; }
+      #uno { position: absolute; left: 0; right: 0; top: 860px; text-align: center; font-size: 120px; font-weight: 900; }
+      #uno svg { width: 110px; height: 100px; vertical-align: -10px; margin-right: 16px; }
+
+      /* 2. corazones huecos */
+      #s-huecos { background: #000; }
+      .hueco { position: absolute; width: 520px; height: 480px; left: 50%; top: 50%; margin: -240px 0 0 -260px; }
+      .hueco svg { width: 100%; height: 100%; overflow: visible; }
+      .polvo { position: absolute; left: 540px; top: 960px; width: 6px; height: 6px; border-radius: 50%; background: #fff; }
+      #niebla { position: absolute; inset: 0; background: radial-gradient(60% 40% at 50% 50%, rgba(255,255,255,0.25), transparent 70%); opacity: 0; }
+
+      /* textos */
+      .frase { position: absolute; left: 80px; right: 80px; text-align: center; font-weight: 900; letter-spacing: -0.04em; line-height: 0.95; text-shadow: 0 6px 40px rgba(0,0,0,0.8); }
+      #f-algo { top: 760px; font-size: 118px; padding: 60px 0; background: radial-gradient(closest-side, rgba(0,0,0,0.92), rgba(0,0,0,0)); }
+      #f-likes { top: 760px; font-size: 96px; padding: 60px 0; background: radial-gradient(closest-side, rgba(0,0,0,0.92), rgba(0,0,0,0)); }
+      #f-nada { top: 1300px; font-size: 84px; color: rgba(255,255,255,0.9); }
+      .velo { position: absolute; left: 0; right: 0; bottom: 0; height: 800px; background: linear-gradient(180deg, transparent, rgba(0,0,0,0.75)); }
+      .palabra { position: absolute; left: 0; right: 0; top: 1280px; text-align: center; font-size: 92px; font-weight: 900; letter-spacing: 0.08em; text-indent: 0.08em; text-shadow: 0 4px 30px rgba(0,0,0,0.9); }
+      .palabra::after { content: ""; display: block; width: 110px; height: 7px; margin: 20px auto 0; background: var(--violeta); box-shadow: 0 0 18px var(--violeta); }
+
+      /* 3. núcleo y logo */
+      #s-nucleo { background: #000; }
+      #nucleo { position: absolute; left: 50%; top: 50%; width: 360px; height: 330px; margin: -165px 0 0 -180px; filter: drop-shadow(0 0 60px rgba(111,64,252,0.9)); }
+      #nucleo svg { width: 100%; height: 100%; }
+      .rayo { position: absolute; left: 540px; top: 960px; width: 3px; height: 900px; margin-left: -1.5px; transform-origin: 50% 0; background: linear-gradient(180deg, rgba(185,164,255,0.9), transparent); }
+      #s-logo { background: radial-gradient(70% 45% at 50% 46%, #1a0f3d 0%, #000 70%); }
+      #logo { position: absolute; left: 50%; top: 740px; width: 880px; margin-left: -440px; }
+      #redes { position: absolute; left: 0; right: 0; top: 1035px; display: flex; justify-content: center; }
+      #redes span { padding: 14px 44px; border-radius: 999px; background: var(--violeta); font-size: 46px; font-weight: 900; letter-spacing: 0.32em; text-indent: 0.32em; }
+      #lema { position: absolute; left: 0; right: 0; top: 1200px; text-align: center; font-size: 42px; font-weight: 800; letter-spacing: 0.06em; text-indent: 0.06em; color: rgba(255,255,255,0.88); }
+
+      #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+      #flash-v { position: absolute; inset: 0; background: var(--violeta); opacity: 0; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="30" data-width="1080" data-height="1920">
+      <audio id="mezcla" src="assets/mezcla.m4a" data-start="0" data-duration="30" data-track-index="9"></audio>
+
+      <!-- 1. el ruido (0–3.4) -->
+      <div id="s-ruido" class="esc clip" data-start="0" data-duration="3.4" data-track-index="0" data-layout-ignore>
+        <div id="uno"></div>
+        <div class="cam"><div id="nube"></div></div>
+      </div>
+      <div id="f-algo" class="frase clip" data-start="0.6" data-duration="1.4" data-track-index="1">EL ALGORITMO<br />NO TE COMPRA.</div>
+
+      <!-- 2. corazones huecos (3.4–6.2) -->
+      <div id="s-huecos" class="esc clip" data-start="3.4" data-duration="4.3" data-track-index="0" data-layout-ignore>
+        <div class="hueco" id="h1"></div><div class="hueco" id="h2" style="width:260px; height:240px; margin:-640px 0 0 -390px"></div><div class="hueco" id="h3" style="width:312px; height:288px; margin:416px 0 0 124px"></div>
+        <div id="polvos"></div>
+        <div id="niebla"></div>
+      </div>
+      <div id="f-likes" class="frase clip" data-start="2.0" data-duration="1.4" data-track-index="2">Y LOS LIKES<br />TAMPOCO TE ELIGEN.</div>
+      <div id="f-nada" class="frase clip" data-start="6.3" data-duration="1.3" data-track-index="1">Y NO DEJAR NADA.</div>
+
+      <!-- 3–5. escenas con IA -->
+      <video id="v-a" class="toma clip" src="assets/a.mp4" muted data-start="7.6" data-duration="6.4" data-track-index="0"></video>
+      <video id="v-b" class="toma clip" src="assets/b.mp4" muted data-start="14.0" data-duration="3.2" data-track-index="0"></video>
+      <video id="v-c" class="toma clip" src="assets/c.mp4" muted data-start="17.2" data-duration="5.4" data-track-index="0"></video>
+      <div class="velo clip" data-start="17.2" data-duration="5.4" data-track-index="1"></div>
+      <div id="w1" class="palabra clip" data-start="17.3" data-duration="1.5" data-track-index="2">IDEAS</div>
+      <div id="w2" class="palabra clip" data-start="18.85" data-duration="1.3" data-track-index="2">MENSAJES</div>
+      <div id="w3" class="palabra clip" data-start="20.2" data-duration="2.4" data-track-index="2">ESTRATEGIA</div>
+
+      <!-- 6. núcleo (24–27) -->
+      <div id="s-nucleo" class="esc clip" data-start="22.6" data-duration="3.0" data-track-index="0" data-layout-ignore>
+        <div id="rayos"></div>
+        <div id="nucleo"></div>
+      </div>
+
+      <!-- 7. logo (27–30) -->
+      <div id="s-logo" class="esc clip" data-start="25.6" data-duration="4.4" data-track-index="0" data-layout-ignore>
+        <img id="logo" src="assets/logo-horizontal-blanco.png" />
+        <div id="redes"><span>REDES</span></div>
+        <div id="lema">EMPEZAMOS POR LO QUE IMPORTA.</div>
+      </div>
+
+      <div id="flash" class="clip" data-start="0" data-duration="30" data-track-index="4" data-layout-ignore></div>
+      <div id="flash-v" class="clip" data-start="0" data-duration="30" data-track-index="5" data-layout-ignore></div>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      const $ = (s, r = document) => r.querySelector(s);
+      const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+      const letras = (el) => { el.innerHTML = [...el.textContent].map((c) => `<span class="l">${c === " " ? "&nbsp;" : c}</span>`).join(""); return $$(".l", el); };
+      const flash = (t, o = 0.5, sel = "#flash") => tl.fromTo(sel, { opacity: o }, { opacity: 0, duration: 0.2, ease: "power2.out", immediateRender: false }, t);
+      let semilla = 11; const azar = () => ((semilla = (semilla * 9301 + 49297) % 233280) / 233280);
+      const CORAZON = (relleno, borde = 0) => `<svg viewBox="0 0 24 22"><path d="M12 21.3 10.6 20C5.4 15.4 2 12.3 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.8 4.5 2.1C13.1 3.8 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 3.8-3.4 6.9-8.6 11.5L12 21.3z" fill="${relleno}" stroke="#fff" stroke-width="${borde}"/></svg>`;
+
+      // ---------- 1. el ruido ----------
+      $("#uno").innerHTML = CORAZON("#fff") + "1";
+      const NUMS = ["12,4K", "98K", "1,2M", "+347", "4.812", "23K", "860", "+1.204", "55K", "2,7M", "999+", "18K"];
+      const NOTIS = ["le gustó tu foto", "comentó tu reel", "nuevo seguidor", "te mencionó", "compartió tu post", "vio tu historia"];
+      const nube = $("#nube");
+      const items = [];
+      for (let i = 0; i < 140; i++) {
+        const d = document.createElement("div"); d.className = "it";
+        const r = azar();
+        if (r < 0.45) { d.innerHTML = `<div class="cor">${CORAZON(azar() < 0.8 ? "#fff" : "#6f40fc")}</div>`; }
+        else if (r < 0.72) { d.className += " num"; d.textContent = NUMS[i % NUMS.length]; }
+        else if (r < 0.9) { d.innerHTML = `<div class="noti"><i></i>${NOTIS[i % NOTIS.length]}</div>`; }
+        else { d.innerHTML = `<div class="burbuja"></div>`; }
+        const x = (azar() - 0.5) * 1800, y = (azar() - 0.5) * 3000, z = -200 - azar() * 5200, s = 0.6 + azar() * 1.4;
+        d.style.transform = `translate3d(${x}px,${y}px,${z}px) scale(${s})`;
+        d.dataset.x = x; d.dataset.y = y; d.dataset.z = z; d.dataset.s = s;
+        nube.appendChild(d); items.push(d);
+      }
+      // el "1" aparece, se multiplica, la cámara vuela hacia adelante cada vez más rápido
+      tl.fromTo("#uno", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.15, ease: "back.out(3)" }, 0.05)
+        .to("#uno", { opacity: 0, scale: 3, duration: 0.15, ease: "power2.in" }, 0.32)
+        .fromTo(items, { opacity: 0 }, { opacity: 1, duration: 0.05, stagger: { each: 0.004, from: "random" } }, 0.3)
+        .fromTo("#nube", { z: -600 }, { z: 4800, duration: 2.3, ease: "power2.in" }, 0.3)
+        .fromTo("#nube", { rotationZ: -6 }, { rotationZ: 8, duration: 2.3, ease: "sine.inOut" }, 0.3);
+      // los contadores giran sin parar
+      $$(".num", nube).forEach((n, i) => {
+        const base = 100 + i * 37, o = { v: base };
+        tl.fromTo(o, { v: base }, { v: base * 40, duration: 2.3, ease: "power1.in", onUpdate: () => { n.textContent = Math.round(o.v).toLocaleString("es-AR"); } }, 0.3);
+      });
+      // 2.6: colapso, todo se cae
+      tl.to(items, { y: "+=2600", rotation: () => (azar() - 0.5) * 120, opacity: 0, duration: 0.7, ease: "power3.in", stagger: { each: 0.0015, from: "random" } }, 2.6);
+      flash(2.6, 0.35);
+      tl.fromTo(letras($("#f-algo")), { opacity: 0, y: 50 }, { opacity: 1, y: 0, duration: 0.2, stagger: 0.02, ease: "expo.out" }, 0.6);
+
+      // ---------- 2. corazones huecos que se deshacen ----------
+      ["#h1", "#h2", "#h3"].forEach((id) => { $(id).innerHTML = CORAZON("none", 0.35); });
+      tl.fromTo("#h1", { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.6, ease: "power2.out" }, 3.4)
+        .fromTo(["#h2", "#h3"], { opacity: 0 }, { opacity: 0.6, duration: 0.6 }, 3.5)
+        .to("#h1", { rotation: 6, y: -30, duration: 2.8, ease: "sine.inOut" }, 3.6)
+        .to(["#h2", "#h3"], { y: "-=60", opacity: 0, duration: 2.6, ease: "power1.in" }, 3.8)
+        .to("#h1", { opacity: 0, duration: 0.6, ease: "power2.in" }, 6.4)
+        .to("#h1", { scale: 3.2, duration: 1.2, ease: "power2.in" }, 6.4);
+      const polvos = $("#polvos");
+      for (let i = 0; i < 120; i++) {
+        const p = document.createElement("div"); p.className = "polvo"; polvos.appendChild(p);
+        const ang = azar() * Math.PI * 2, r0 = 120 + azar() * 160, dist = 300 + azar() * 900;
+        tl.fromTo(p, { x: Math.cos(ang) * r0, y: Math.sin(ang) * r0 - 40, opacity: 0, scale: 0.5 + azar() }, { x: Math.cos(ang) * dist, y: Math.sin(ang) * dist - 300, opacity: 0.9, duration: 1.2, ease: "power2.out" }, 6.3 + azar() * 0.3)
+          .to(p, { opacity: 0, duration: 0.4 }, 7.3);
+      }
+      tl.fromTo("#niebla", { opacity: 0 }, { opacity: 1, duration: 0.6 }, 7.0);
+      tl.to("#f-algo", { opacity: 0, duration: 0.15 }, 1.85)
+        .fromTo($$("#f-likes").concat([]), { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.25, ease: "expo.out" }, 2.0)
+        .fromTo(letras($("#f-nada")), { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.25, stagger: 0.02, ease: "expo.out" }, 6.3);
+
+      // ---------- 3–5. escenas IA ----------
+      tl.fromTo("#v-a", { opacity: 0 }, { opacity: 1, duration: 0.5 }, 7.6);
+      flash(14.0, 0.25, "#flash-v");
+      flash(17.2, 0.2);
+      ["#w1", "#w2", "#w3"].forEach((w) => {
+        const el = $(w), a = +el.dataset.start, d = +el.dataset.duration;
+        tl.fromTo(letras(el), { opacity: 0, y: 40, filter: "blur(8px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.3, stagger: 0.02, ease: "expo.out" }, a)
+          .to(el, { opacity: 0, duration: 0.15 }, a + d - 0.15);
+      });
+
+      // ---------- 6. núcleo: todo converge, late dos veces ----------
+      const rayos = $("#rayos");
+      for (let i = 0; i < 24; i++) {
+        const r = document.createElement("div"); r.className = "rayo"; r.style.transform = `rotate(${i * 15}deg)`; rayos.appendChild(r);
+      }
+      $("#nucleo").innerHTML = CORAZON("#6f40fc");
+      tl.fromTo(".rayo", { scaleY: 1, opacity: 0.9 }, { scaleY: 0, opacity: 0, duration: 0.7, ease: "power3.in", stagger: 0.01 }, 22.6)
+        .fromTo("#nucleo", { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: "back.out(2)" }, 23.2)
+        .to("#nucleo", { keyframes: [{ scale: 1.22, duration: 0.12 }, { scale: 1, duration: 0.25 }, { scale: 1.3, duration: 0.12 }, { scale: 1, duration: 0.3 }] }, 23.9)
+        .to("#nucleo", { scale: 9, opacity: 0, duration: 0.5, ease: "power3.in" }, 25.1);
+      flash(25.55, 0.7, "#flash-v");
+
+      // ---------- 7. logo ----------
+      tl.fromTo("#logo", { opacity: 0, scale: 0.85, filter: "blur(12px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 0.55, ease: "expo.out" }, 25.7)
+        .fromTo("#redes span", { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.4, ease: "back.out(2.2)" }, 26.0)
+        .fromTo(letras($("#lema")), { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.3, stagger: 0.018, ease: "expo.out" }, 26.3);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
