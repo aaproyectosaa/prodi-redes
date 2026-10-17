@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="es" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root { --violeta: #6f40fc; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+      #root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: Inter, sans-serif; color: #fff; }
+      .toma { position: absolute; inset: 0; width: 1080px; height: 1920px; object-fit: cover; }
+      .esc { position: absolute; inset: 0; overflow: hidden; background: #000; }
+      .l { display: inline-block; }
+      .velo { position: absolute; left: 0; right: 0; bottom: 0; height: 900px; background: linear-gradient(180deg, transparent, rgba(0,0,0,0.8)); pointer-events: none; }
+
+      /* contador de atención */
+      #contador { position: absolute; left: 70px; top: 270px; display: flex; align-items: center; gap: 18px; padding: 16px 30px 16px 22px; border-radius: 999px; background: rgba(0,0,0,0.55); border: 2px solid rgba(255,255,255,0.25); backdrop-filter: blur(8px); }
+      #contador .rec { width: 22px; height: 22px; border-radius: 50%; background: #ff3b3b; box-shadow: 0 0 14px #ff3b3b; }
+      #contador b { font-size: 46px; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+      #contador span { font-size: 32px; font-weight: 700; color: rgba(255,255,255,0.85); }
+
+      .frase { position: absolute; left: 80px; right: 80px; text-align: center; font-weight: 900; letter-spacing: -0.03em; line-height: 1.02; text-shadow: 0 6px 30px rgba(0,0,0,0.85); }
+      #f1 { top: 1340px; font-size: 80px; }
+      #f-idea { top: 1300px; font-size: 96px; }
+      #f-idea em { font-style: normal; color: #b9a4ff; }
+      #f2 { top: 1380px; font-size: 66px; }
+
+      /* idea: líneas sobre la bolsa congelada */
+      #idea-svg { position: absolute; inset: 0; width: 1080px; height: 1920px; }
+
+      /* el caso: celular 3D */
+      #s-caso { background: radial-gradient(70% 50% at 50% 45%, #1d1238 0%, #000 72%); }
+      #escena3d { position: absolute; inset: 0; perspective: 1600px; }
+      #cel { position: absolute; left: 50%; top: 220px; width: 520px; height: 1060px; margin-left: -260px; border-radius: 64px; background: #111; padding: 18px; box-shadow: 0 0 0 3px #2a2a2a, 0 40px 120px rgba(0,0,0,0.7), 0 0 80px rgba(111,64,252,0.35); transform-style: preserve-3d; }
+      #pantalla { position: relative; width: 100%; height: 100%; border-radius: 48px; overflow: hidden; background: #000; }
+      #pantalla video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+      #isla { position: absolute; left: 50%; top: 18px; width: 130px; height: 34px; margin-left: -65px; border-radius: 20px; background: #000; z-index: 2; }
+      #pol { position: absolute; left: 0; right: 0; top: 1360px; display: flex; align-items: center; justify-content: center; gap: 24px; }
+      #pol img { height: 86px; }
+      #pol span { font-size: 86px; font-weight: 900; letter-spacing: 0.12em; }
+      #chips { position: absolute; left: 0; right: 0; top: 1480px; display: flex; justify-content: center; gap: 14px; }
+      #chips span { padding: 10px 24px; border-radius: 999px; border: 2px solid rgba(255,255,255,0.5); font-size: 28px; font-weight: 800; letter-spacing: 0.08em; }
+
+      /* revelación */
+      #s-fin-agua { background: #000; }
+      #agua-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: 50% 52%; }
+      #violeta { position: absolute; inset: 0; background: var(--violeta); opacity: 0; }
+      #s-logo { background: radial-gradient(70% 45% at 50% 46%, #1a0f3d 0%, #000 70%); }
+      #logo { position: absolute; left: 50%; top: 740px; width: 880px; margin-left: -440px; }
+      #redes { position: absolute; left: 0; right: 0; top: 1035px; display: flex; justify-content: center; }
+      #redes span { padding: 14px 44px; border-radius: 999px; background: var(--violeta); font-size: 46px; font-weight: 900; letter-spacing: 0.32em; text-indent: 0.32em; }
+      #lema { position: absolute; left: 0; right: 0; top: 1200px; text-align: center; font-size: 42px; font-weight: 800; letter-spacing: 0.08em; text-indent: 0.08em; color: rgba(255,255,255,0.88); }
+      #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="30" data-width="1080" data-height="1920">
+      <audio id="mezcla" src="assets/mezcla.m4a" data-start="0" data-duration="30" data-track-index="9"></audio>
+
+      <!-- 1. gancho (material real) -->
+      <video id="v-g" class="toma clip" src="assets/gancho.mp4" muted data-start="0" data-duration="3.85" data-track-index="0"></video>
+      <!-- 2. cortes del reel -->
+      <video id="v-c1" class="toma clip" src="assets/c1.mp4" muted data-start="3.85" data-duration="1.55" data-track-index="0"></video>
+      <video id="v-c2" class="toma clip" src="assets/c2.mp4" muted data-start="5.4" data-duration="1.55" data-track-index="0"></video>
+      <video id="v-c3" class="toma clip" src="assets/c3.mp4" muted data-start="6.95" data-duration="1.65" data-track-index="0"></video>
+      <!-- 3. la idea: se congela -->
+      <div id="s-idea" class="esc clip" data-start="8.6" data-duration="4.6" data-track-index="0" data-layout-ignore>
+        <img id="cong" class="toma" src="assets/congelado.png" />
+        <svg id="idea-svg" viewBox="0 0 1080 1920"></svg>
+      </div>
+      <div class="velo clip" data-start="0" data-duration="13.2" data-track-index="1"></div>
+      <div id="f1" class="frase clip" data-start="0.5" data-duration="3.2" data-track-index="2">¿Quién miraría 30 segundos una bolsa?</div>
+      <div id="f-idea" class="frase clip" data-start="10.2" data-duration="3.0" data-track-index="2">¿Cuánto<br /><em>aguanta?</em></div>
+
+      <!-- 4. el caso: el reel en un celular 3D -->
+      <div id="s-caso" class="esc clip" data-start="13.2" data-duration="6.0" data-track-index="0" data-layout-ignore>
+        <div id="escena3d"><div id="cel"><div id="pantalla"><div id="isla"></div><video id="v-pieza" class="clip" src="assets/pieza.mp4" muted data-start="13.2" data-duration="6.0" data-track-index="6"></video></div></div></div>
+        <div id="pol"><img src="assets/polinea-isotipo.png" /><span>POLINEA</span></div>
+        <div id="chips"><span>CONTENIDO</span><span>ESTRATEGIA</span><span>RESULTADOS</span></div>
+      </div>
+
+      <!-- 5. el giro: el agua llena la bolsa -->
+      <video id="v-agua" class="toma clip" src="assets/agua.mp4" muted data-start="19.2" data-duration="4.4" data-track-index="0"></video>
+      <div id="s-fin-agua" class="esc clip" data-start="23.6" data-duration="2.4" data-track-index="0" data-layout-ignore>
+        <img id="agua-img" src="assets/agua-fin.png" />
+        <div id="violeta"></div>
+      </div>
+      <div class="velo clip" data-start="19.2" data-duration="6.4" data-track-index="1"></div>
+      <div id="f2" class="frase clip" data-start="23.8" data-duration="1.6" data-track-index="2">Te quedaste para saber cómo terminaba.</div>
+
+      <!-- contador encima de todo hasta el giro -->
+      <div id="contador" class="clip" data-start="0.3" data-duration="25.0" data-track-index="3"><i class="rec"></i><b id="seg">00:00</b><span>mirando una bolsa</span></div>
+
+      <!-- 6. logo -->
+      <div id="s-logo" class="esc clip" data-start="26.0" data-duration="4.0" data-track-index="0" data-layout-ignore>
+        <img id="logo" src="assets/logo-horizontal-blanco.png" />
+        <div id="redes"><span>REDES</span></div>
+        <div id="lema">NO EMPEZAMOS DE CERO.</div>
+      </div>
+      <div id="flash" class="clip" data-start="0" data-duration="30" data-track-index="4" data-layout-ignore></div>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      const $ = (s, r = document) => r.querySelector(s);
+      const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+      const palabras = (el) => { el.innerHTML = el.innerHTML.split(/(<br \/>|<br>)/).map((p) => p.startsWith("<br") ? p : p.split(" ").filter(Boolean).map((w) => `<span class="l">${w}</span>`).join(" ")).join(""); return $$(".l", el); };
+      const flash = (t, o = 0.35) => tl.fromTo("#flash", { opacity: o }, { opacity: 0, duration: 0.25, ease: "power2.out", immediateRender: false }, t);
+      const NS = "http://www.w3.org/2000/svg";
+
+      // contador: corre en tiempo real y se frena en 23
+      const cnt = { s: 0 };
+      tl.fromTo(cnt, { s: 0 }, { s: 23, duration: 23, ease: "none", onUpdate: () => { $("#seg").textContent = "00:" + String(Math.floor(cnt.s)).padStart(2, "0"); } }, 0.3)
+        .fromTo("#contador", { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.4, ease: "expo.out" }, 0.3)
+        .to("#contador .rec", { background: "#6f40fc", boxShadow: "0 0 18px #6f40fc", duration: 0.2 }, 23.3)
+        .to("#contador", { scale: 1.12, borderColor: "#6f40fc", duration: 0.25, yoyo: true, repeat: 1 }, 23.3)
+        .to("#contador", { opacity: 0, duration: 0.3 }, 25.0);
+      // el punto rojo late como cámara grabando
+      tl.to("#contador .rec", { opacity: 0.25, duration: 0.5, yoyo: true, repeat: 22, ease: "sine.inOut" }, 0.3);
+
+      // 1. gancho
+      tl.fromTo(palabras($("#f1")), { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.3, stagger: 0.12, ease: "expo.out" }, 0.5)
+        .to("#f1", { opacity: 0, duration: 0.3 }, 3.45)
+        .fromTo("#v-g", { scale: 1.1 }, { scale: 1, duration: 3.85, ease: "power1.out" }, 0);
+      [["#v-c1", 3.85], ["#v-c2", 5.4], ["#v-c3", 6.95]].forEach(([v, t]) => { tl.fromTo(v, { scale: 1.15 }, { scale: 1, duration: 0.5, ease: "expo.out" }, t); flash(t, 0.25); });
+
+      // 3. la idea: congelamiento + trazos
+      flash(8.6, 0.6);
+      const svg = $("#idea-svg");
+      const linea = (d, color, w) => { const p = document.createElementNS(NS, "path"); p.setAttribute("d", d); p.setAttribute("fill", "none"); p.setAttribute("stroke", color); p.setAttribute("stroke-width", w); p.setAttribute("stroke-linecap", "round"); svg.appendChild(p); p.style.strokeDasharray = 4000; p.style.strokeDashoffset = 4000; return p; };
+      const marco = linea("M 200 360 L 880 360 L 880 1220 L 200 1220 Z", "#ffffff", 4);
+      const esquinas = linea("M 160 330 L 160 280 L 210 280 M 920 330 L 920 280 L 870 280 M 160 1250 L 160 1300 L 210 1300 M 920 1250 L 920 1300 L 870 1300", "#ffffff", 6);
+      const trazo = linea("M 120 1760 C 380 1540, 240 1040, 540 900 S 900 520, 980 240", "#6f40fc", 9);
+      tl.fromTo("#cong", { scale: 1, filter: "brightness(1)" }, { scale: 1.06, filter: "brightness(0.55)", duration: 4.6, ease: "none" }, 8.6)
+        .to(esquinas, { strokeDashoffset: 0, duration: 0.8, ease: "power2.inOut" }, 9.0)
+        .to(marco, { strokeDashoffset: 0, duration: 1.2, ease: "power2.inOut" }, 9.3)
+        .to(trazo, { strokeDashoffset: 0, duration: 1.3, ease: "power2.inOut" }, 10.0)
+        .fromTo(palabras($("#f-idea")), { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.35, stagger: 0.15, ease: "expo.out" }, 10.4);
+
+      // 4. el caso: el reel en un celular que gira en 3D
+      flash(13.2, 0.3);
+      tl.fromTo("#cel", { rotationY: -70, rotationX: 12, z: -600, opacity: 0 }, { rotationY: -18, rotationX: 6, z: 0, opacity: 1, duration: 0.9, ease: "expo.out" }, 13.2)
+        .to("#cel", { rotationY: 20, rotationX: -4, duration: 5.1, ease: "sine.inOut" }, 14.1)
+        .fromTo("#pol", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.5, ease: "expo.out" }, 13.7);
+      $$("#chips span").forEach((c, i) => tl.fromTo(c, { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.3, ease: "expo.out" }, 13.9 + i * 1.1));
+      tl.to("#cel", { scale: 1.9, y: 260, duration: 0.6, ease: "power3.in" }, 18.6)
+        .to(["#pol", "#chips"], { opacity: 0, duration: 0.3 }, 18.6);
+
+      // 5. el giro
+      flash(19.2, 0.3);
+      tl.fromTo("#v-agua", { scale: 1.08 }, { scale: 1.0, duration: 4.4, ease: "none" }, 19.2);
+      // la bolsa de agua queda quieta y la cámara entra en ella hasta volverse violeta
+      tl.fromTo("#agua-img", { scale: 1 }, { scale: 4.5, duration: 2.0, ease: "power2.in" }, 23.8)
+        .fromTo("#violeta", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power2.in" }, 25.4);
+      tl.fromTo(palabras($("#f2")), { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.3, stagger: 0.08, ease: "expo.out" }, 23.8)
+        .to("#f2", { opacity: 0, duration: 0.2 }, 25.3);
+
+      // 6. logo
+      tl.fromTo("#logo", { opacity: 0, scale: 0.85, filter: "blur(12px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 0.55, ease: "expo.out" }, 26.15)
+        .fromTo("#redes span", { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.4, ease: "back.out(2.2)" }, 26.5)
+        .fromTo("#lema", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.4, ease: "expo.out" }, 26.8);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
