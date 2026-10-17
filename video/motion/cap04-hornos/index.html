@@ -22,11 +22,11 @@
       .chispa { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: #ffcf7a; box-shadow: 0 0 12px 4px rgba(255,140,40,0.85); }
 
       /* 1: la llanta y el horno */
-      #s-llanta img { transform-origin: 540px 840px; }
+      #s-llanta img { transform-origin: 560px 1096px; }
       #s-horno { background: #000; }
       #fondo-taller { position: absolute; inset: -40px; width: 1160px; height: 2000px; object-fit: cover; filter: blur(14px) brightness(0.35) saturate(1.2); }
       #halo { position: absolute; left: 540px; top: 900px; width: 1100px; height: 1100px; margin: -550px 0 0 -550px; border-radius: 50%; background: radial-gradient(circle, rgba(255,150,60,0.45) 0%, rgba(255,120,40,0.12) 40%, transparent 70%); }
-      #horno-wrap { position: absolute; left: -90px; top: 220px; width: 1400px; height: 1400px; transform-origin: 630px 620px; }
+      #horno-wrap { position: absolute; left: -70px; top: 476px; width: 1400px; height: 1400px; transform-origin: 630px 620px; }
       #horno-wrap img { width: 1400px; height: 1400px; filter: drop-shadow(0 40px 60px rgba(0,0,0,0.8)); }
       #f-llanta { top: 1460px; }
       #f-horno { top: 1460px; }
@@ -79,11 +79,11 @@
 
       <!-- 1. Vos ves una llanta vieja. / Él vio su primer horno. -->
       <div id="s-llanta" class="esc clip" data-start="0" data-duration="2.3" data-track-index="0" data-layout-ignore>
-        <img class="foto" src="assets/llanta.jpg" />
+        <img class="foto" src="assets/llanta-real.jpg" />
         <div id="chispas1"></div>
       </div>
       <div id="s-horno" class="esc clip" data-start="2.0" data-duration="1.25" data-track-index="1" data-layout-ignore>
-        <img id="fondo-taller" src="assets/llanta.jpg" />
+        <img id="fondo-taller" src="assets/llanta-real.jpg" />
         <div id="halo"></div>
         <div id="horno-wrap"><img src="assets/empotrar.png" /></div>
       </div>
@@ -202,7 +202,7 @@
       chispas("#chispas1", 0, 2.3, 26);
       entra("#f-llanta", 0.3, 0.1); sale("#f-llanta", 1.75);
       tl.fromTo("#s-horno", { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.out" }, 2.0)
-        .fromTo("#horno-wrap", { scale: 2.5 }, { scale: 0.78, y: -60, duration: 1.25, ease: "expo.out" }, 2.0)
+        .fromTo("#horno-wrap", { scale: 2.5 }, { scale: 0.78, y: -300, duration: 1.25, ease: "expo.out" }, 2.0)
         .fromTo("#halo", { scale: 0.5, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.8, ease: "power2.out" }, 2.1);
       flash(2.0, 0.55, "#brasa-flash");
       entra("#f-horno", 1.95, 0.1);
