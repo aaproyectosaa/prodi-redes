@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="es" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root { --violeta: #6f40fc; --lila: #b9a4ff; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+      #root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: Inter, sans-serif; color: #fff; }
+      .toma { position: absolute; inset: 0; width: 1080px; height: 1920px; object-fit: cover; }
+      .esc { position: absolute; inset: 0; overflow: hidden; }
+      .l { display: inline-block; }
+      .velo-abajo { position: absolute; left: 0; right: 0; bottom: 0; height: 900px; background: linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,0.75)); pointer-events: none; }
+
+      /* 1. tipografía inicial */
+      #s-tipo { background: #000; }
+      #tipo { position: absolute; left: 0; right: 0; top: 760px; text-align: center; font-weight: 900; letter-spacing: -0.045em; line-height: 0.92; }
+      #tipo .a, #tipo .b { font-size: 132px; }
+      #tipo .b { margin-top: 10px; }
+      #anillo { display: inline-block; width: 98px; height: 112px; margin: 0 4px; border: 22px solid #fff; border-radius: 50%; vertical-align: -6px; }
+
+      /* textos */
+      .frase { position: absolute; left: 70px; right: 70px; text-align: center; font-weight: 900; letter-spacing: -0.04em; line-height: 0.95; text-shadow: 0 6px 40px rgba(0,0,0,0.7); }
+      #f-facil { top: 800px; font-size: 112px; }
+      #f-importe { top: 1240px; font-size: 92px; }
+      #f-importe em { font-style: normal; color: var(--lila); }
+
+      /* muro de publicaciones */
+      #s-muro { background: #000; }
+      #muro-cont { position: absolute; inset: 0; visibility: hidden; opacity: 0; }
+      #muro { position: absolute; left: 60px; top: 0; width: 960px; display: grid; grid-template-columns: repeat(3, 300px); gap: 30px; }
+      #muro img { width: 300px; height: 533px; object-fit: cover; border-radius: 22px; display: block; }
+      #muro-velo { position: absolute; inset: 0; background: #000; opacity: 0; }
+      #elegida { position: absolute; left: 390px; top: 693px; width: 300px; height: 533px; border-radius: 22px; overflow: hidden; opacity: 0; box-shadow: 0 0 0 8px var(--violeta), 0 0 80px rgba(111,64,252,0.9); }
+      #elegida img { width: 100%; height: 100%; object-fit: cover; }
+
+      /* palabras de cada pilar */
+      .pilar { position: absolute; left: 0; right: 0; top: 1300px; text-align: center; font-size: 96px; font-weight: 900; letter-spacing: 0.06em; text-indent: 0.06em; text-shadow: 0 4px 30px rgba(0,0,0,0.8); }
+      .pilar::after { content: ""; display: block; width: 120px; height: 8px; margin: 22px auto 0; background: var(--violeta); box-shadow: 0 0 20px var(--violeta); }
+
+      /* logo */
+      #s-logo { background: radial-gradient(70% 45% at 50% 46%, #1a0f3d 0%, #000 70%); }
+      #logo { position: absolute; left: 50%; top: 740px; width: 880px; margin-left: -440px; }
+      #redes { position: absolute; left: 0; right: 0; top: 1035px; display: flex; justify-content: center; }
+      #redes span { padding: 14px 44px; border-radius: 999px; background: var(--violeta); font-size: 46px; font-weight: 900; letter-spacing: 0.32em; text-indent: 0.32em; box-shadow: 0 0 40px rgba(111,64,252,0.7); }
+      #lema { position: absolute; left: 0; right: 0; top: 1200px; text-align: center; font-size: 42px; font-weight: 800; letter-spacing: 0.08em; text-indent: 0.08em; color: rgba(255,255,255,0.85); }
+
+      #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+      #flash-v { position: absolute; inset: 0; background: var(--violeta); opacity: 0; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="30" data-width="1080" data-height="1920">
+      <audio id="mezcla" src="assets/mezcla.m4a" data-start="0" data-duration="30" data-track-index="9"></audio>
+
+      <!-- 1. NO EMPEZAMOS DE CERO -->
+      <div id="s-tipo" class="esc clip" data-start="0" data-duration="2.2" data-track-index="0" data-layout-ignore>
+        <div id="tipo"><div class="a" id="t1">NO EMPEZAMOS</div><div class="b"><span id="t2">DE CER</span><span id="anillo"></span><span id="t3">.</span></div></div>
+      </div>
+
+      <!-- 2. empezamos con todo lo aprendido: producciones reales -->
+      <video id="m1" class="toma clip corte" src="assets/m1.mp4" muted data-start="2.2" data-duration="0.5" data-track-index="0"></video>
+      <video id="m2" class="toma clip corte" src="assets/m2.mp4" muted data-start="2.7" data-duration="0.5" data-track-index="0"></video>
+      <video id="m3" class="toma clip corte" src="assets/m3.mp4" muted data-start="3.2" data-duration="0.5" data-track-index="0"></video>
+      <video id="m4" class="toma clip corte" src="assets/m4.mp4" muted data-start="3.7" data-duration="0.5" data-track-index="0"></video>
+      <video id="m5" class="toma clip corte" src="assets/m5.mp4" muted data-start="4.2" data-duration="0.5" data-track-index="0"></video>
+      <video id="m6" class="toma clip corte" src="assets/m6.mp4" muted data-start="4.7" data-duration="0.5" data-track-index="0"></video>
+      <!-- 3. cada idea, cada historia, cada imagen -->
+      <video id="v-idea" class="toma clip corte" src="assets/idea.mp4" muted data-start="5.2" data-duration="0.9" data-track-index="0"></video>
+      <video id="v-historia" class="toma clip corte" src="assets/historia.mp4" muted data-start="6.1" data-duration="0.9" data-track-index="0"></video>
+      <video id="v-imagen" class="toma clip corte" src="assets/imagen.mp4" muted data-start="7.0" data-duration="1.0" data-track-index="0"></video>
+
+      <!-- 4. el muro: publicar es fácil; 11.0 se congela; una sola importa -->
+      <div id="s-muro" class="esc clip" data-start="8.0" data-duration="4.6" data-track-index="0" data-layout-ignore>
+        <div id="muro-cont"><div id="muro"></div>
+        <div id="muro-velo"></div>
+        <div id="elegida"><img src="assets/t/17.jpg" /></div></div>
+      </div>
+      <div id="f-facil" class="frase clip" data-start="9.6" data-duration="1.9" data-track-index="1"><div class="ln">PUBLICAR</div><div class="ln">ES FÁCIL.</div></div>
+      <video id="v-heroe" class="toma clip" src="assets/heroe.mp4" muted data-start="12.6" data-duration="2.0" data-track-index="0"></video>
+      <div class="velo-abajo clip" data-start="11.8" data-duration="2.8" data-track-index="2"></div>
+      <div id="f-importe" class="frase clip" data-start="11.85" data-duration="2.75" data-track-index="3"><div class="ln">HACER QUE</div><div class="ln"><em>IMPORTE</em><span class="sp">, NO.</span></div></div>
+
+      <!-- 5. pilares -->
+      <video id="v-est" class="toma clip" src="assets/estrategia.mp4" muted data-start="14.6" data-duration="2.4" data-track-index="0"></video>
+      <video id="v-cre" class="toma clip" src="assets/creatividad.mp4" muted data-start="17.0" data-duration="2.0" data-track-index="0"></video>
+      <video id="v-con" class="toma clip" src="assets/contenido.mp4" muted data-start="19.0" data-duration="2.0" data-track-index="0"></video>
+      <video id="v-pub" class="toma clip" src="assets/publicidad.mp4" muted data-start="21.0" data-duration="2.5" data-track-index="0"></video>
+      <div class="velo-abajo clip" data-start="14.6" data-duration="8.9" data-track-index="1"></div>
+      <div id="p-est" class="pilar clip" data-start="15.0" data-duration="2.0" data-track-index="2">ESTRATEGIA</div>
+      <div id="p-cre" class="pilar clip" data-start="17.0" data-duration="2.0" data-track-index="2">CREATIVIDAD</div>
+      <div id="p-con" class="pilar clip" data-start="19.0" data-duration="2.0" data-track-index="2">CONTENIDO</div>
+      <div id="p-pub" class="pilar clip" data-start="21.0" data-duration="2.5" data-track-index="2">PUBLICIDAD</div>
+
+      <!-- 6. montaje final acelerado -->
+      <video id="r1" class="toma clip rev" src="assets/r1.mp4" muted data-start="23.5" data-duration="0.28" data-track-index="0"></video>
+      <video id="r2" class="toma clip rev" src="assets/r2.mp4" muted data-start="23.78" data-duration="0.28" data-track-index="0"></video>
+      <video id="r3" class="toma clip rev" src="assets/r3.mp4" muted data-start="24.06" data-duration="0.28" data-track-index="0"></video>
+      <video id="r4" class="toma clip rev" src="assets/r4.mp4" muted data-start="24.34" data-duration="0.28" data-track-index="0"></video>
+      <video id="r5" class="toma clip rev" src="assets/r5.mp4" muted data-start="24.62" data-duration="0.28" data-track-index="0"></video>
+      <video id="r6" class="toma clip rev" src="assets/r6.mp4" muted data-start="24.9" data-duration="0.28" data-track-index="0"></video>
+      <video id="r7" class="toma clip rev" src="assets/r7.mp4" muted data-start="25.18" data-duration="0.28" data-track-index="0"></video>
+      <video id="r8" class="toma clip rev" src="assets/r8.mp4" muted data-start="25.46" data-duration="0.27" data-track-index="0"></video>
+      <video id="r9" class="toma clip rev" src="assets/r9.mp4" muted data-start="25.73" data-duration="0.27" data-track-index="0"></video>
+
+      <!-- 7. logo oficial -->
+      <div id="s-logo" class="esc clip" data-start="26.0" data-duration="4.0" data-track-index="0" data-layout-ignore>
+        <img id="logo" src="assets/logo-horizontal-blanco.png" />
+        <div id="redes"><span>REDES</span></div>
+        <div id="lema">NO EMPEZAMOS DE CERO.</div>
+      </div>
+
+      <div id="flash" class="clip" data-start="0" data-duration="30" data-track-index="4" data-layout-ignore></div>
+      <div id="flash-v" class="clip" data-start="0" data-duration="30" data-track-index="5" data-layout-ignore></div>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      const $ = (s, r = document) => r.querySelector(s);
+      const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+      const letras = (el) => { el.innerHTML = [...el.textContent].map((c) => `<span class="l">${c === " " ? "&nbsp;" : c}</span>`).join(""); return $$(".l", el); };
+      const flash = (t, o = 0.5, sel = "#flash") => tl.fromTo(sel, { opacity: o }, { opacity: 0, duration: 0.2, ease: "power2.out", immediateRender: false }, t);
+
+      // muro de 24 publicaciones reales (3 x 8); la 17 es la que importa
+      $("#muro").innerHTML = Array.from({ length: 24 }, (_, i) => `<img src="assets/t/${String(i + 1).padStart(2, "0")}.jpg" />`).join("");
+
+      // 1. tipografía
+      tl.fromTo("#t1", { opacity: 0, y: -40, scale: 1.15 }, { opacity: 1, y: 0, scale: 1, duration: 0.25, ease: "expo.out" }, 0.6)
+        .fromTo(["#t2", "#anillo", "#t3"], { opacity: 0, y: 40, scale: 1.15 }, { opacity: 1, y: 0, scale: 1, duration: 0.25, ease: "expo.out" }, 0.95)
+        .to(["#t1", "#t2", "#t3"], { opacity: 0, duration: 0.3, ease: "power2.in" }, 1.55)
+        .to("#anillo", { borderColor: "#6f40fc", boxShadow: "0 0 40px #6f40fc", duration: 0.2 }, 1.55)
+        .to("#anillo", { x: -170, y: -150, duration: 0.25, ease: "power2.inOut" }, 1.6)
+        .to("#anillo", { scale: 22, duration: 0.35, ease: "expo.in" }, 1.85);
+      flash(2.2, 0.5, "#flash-v");
+
+      // 2–3. cortes con pequeño empuje de cámara
+      $$(".corte").forEach((v) => {
+        const a = +v.dataset.start, d = +v.dataset.duration;
+        tl.fromTo(v, { scale: 1.12 }, { scale: 1.0, duration: d, ease: "power2.out" }, a);
+      });
+
+      // 4. muro: sube cada vez más rápido y en 11.0 se frena en seco
+      tl.fromTo("#muro-cont", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.01 }, 8.0).to("#muro-cont", { autoAlpha: 0, duration: 0.01 }, 12.6);
+      tl.fromTo("#muro", { y: 60 }, { y: -2121, duration: 3.0, ease: "power3.in" }, 8.0)
+        .fromTo(letras($$("#f-facil .ln")[0]).concat(letras($$("#f-facil .ln")[1])), { opacity: 0, y: 50 }, { opacity: 1, y: 0, duration: 0.25, stagger: 0.025, ease: "expo.out" }, 9.6)
+        .to("#f-facil", { opacity: 0, duration: 0.2 }, 11.3)
+        .fromTo("#muro-velo", { opacity: 0 }, { opacity: 0.8, duration: 0.4 }, 11.6)
+        .fromTo("#elegida", { opacity: 0 }, { opacity: 1, duration: 0.01 }, 11.6)
+        .fromTo("#elegida", { scale: 1 }, { scale: 1.12, duration: 0.3, ease: "back.out(2)", immediateRender: false }, 11.6)
+        .to("#elegida", { scale: 3.62, borderRadius: 0, duration: 0.7, ease: "expo.in" }, 11.9);
+      const imp = [$$("#f-importe .ln")[0], $("#f-importe em"), $("#f-importe .sp")].flatMap(letras);
+      tl.fromTo(imp, { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.25, stagger: 0.025, ease: "expo.out" }, 11.85)
+        .fromTo("#v-heroe", { scale: 1.0 }, { scale: 1.1, duration: 2.0, ease: "none" }, 12.6);
+      flash(14.6, 0.6, "#flash-v");
+
+      // 5. pilares
+      [["#v-est", "#p-est", 14.6, 15.0], ["#v-cre", "#p-cre", 17.0, 17.0], ["#v-con", "#p-con", 19.0, 19.0], ["#v-pub", "#p-pub", 21.0, 21.0]].forEach(([v, p, t, tp], i) => {
+        tl.fromTo(v, { scale: 1.15 }, { scale: 1.0, duration: 0.6, ease: "expo.out" }, t)
+          .fromTo(letras($(p)), { opacity: 0, y: 60, rotationX: -90 }, { opacity: 1, y: 0, rotationX: 0, duration: 0.3, stagger: 0.025, ease: "back.out(2)" }, tp + 0.05);
+        if (i > 0) flash(t, 0.25);
+      });
+
+      // 6. montaje final
+      $$(".rev").forEach((v) => {
+        const a = +v.dataset.start, d = +v.dataset.duration;
+        tl.fromTo(v, { scale: 1.25 }, { scale: 1.0, duration: d, ease: "power2.out" }, a);
+      });
+
+      // 7. logo
+      flash(26.0, 0.6, "#flash-v");
+      tl.fromTo("#logo", { opacity: 0, scale: 0.8, filter: "blur(14px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 0.55, ease: "expo.out" }, 26.15)
+        .fromTo("#redes span", { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.4, ease: "back.out(2.2)" }, 26.6)
+        .fromTo(letras($("#lema")), { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.3, stagger: 0.02, ease: "expo.out" }, 27.0);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
