@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="es" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root { --violeta: #6f40fc; --lila: #b9a4ff; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+      #root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: Inter, sans-serif; color: #fff; }
+      .toma { position: absolute; inset: 0; width: 1080px; height: 1920px; object-fit: cover; }
+      .esc { position: absolute; inset: 0; overflow: hidden; background: #000; }
+      .l { display: inline-block; }
+      .velo { position: absolute; left: 0; right: 0; bottom: 0; height: 900px; background: linear-gradient(180deg, transparent, rgba(0,0,0,0.8)); pointer-events: none; }
+      .frase { position: absolute; left: 80px; right: 80px; text-align: center; font-weight: 900; letter-spacing: -0.03em; line-height: 1.02; text-shadow: 0 6px 30px rgba(0,0,0,0.85); }
+
+      /* contador chico */
+      #contador { position: absolute; left: 70px; top: 270px; display: flex; align-items: center; gap: 18px; padding: 16px 30px 16px 22px; border-radius: 999px; background: rgba(0,0,0,0.55); border: 2px solid rgba(255,255,255,0.25); }
+      #contador .rec { width: 22px; height: 22px; border-radius: 50%; background: #ff3b3b; box-shadow: 0 0 14px #ff3b3b; }
+      #contador b { font-size: 46px; font-weight: 900; font-variant-numeric: tabular-nums; }
+      #contador span { font-size: 32px; font-weight: 700; color: rgba(255,255,255,0.85); }
+
+      #f1 { top: 1340px; font-size: 84px; }
+      /* POLINEA */
+      #pol { position: absolute; left: 0; right: 0; top: 820px; display: flex; flex-direction: column; align-items: center; gap: 30px; }
+      #pol img { height: 230px; filter: drop-shadow(0 10px 40px rgba(0,0,0,0.6)); }
+      #pol span { font-size: 120px; font-weight: 900; letter-spacing: 0.14em; text-indent: 0.14em; text-shadow: 0 6px 30px rgba(0,0,0,0.8); }
+
+      /* antes / después */
+      #s-ad { background: transparent; }
+      #despues { position: absolute; inset: 0; }
+      #antes-wrap { position: absolute; inset: 0; overflow: hidden; }
+      #antes-in { position: absolute; inset: 0; }
+      #antes-in img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(1) contrast(0.85) brightness(0.8); }
+      #scan { position: absolute; left: 0; right: 0; top: 0; height: 10px; background: var(--violeta); box-shadow: 0 0 40px 10px rgba(111,64,252,0.9); opacity: 0; }
+      #fa { top: 1260px; font-size: 76px; }
+      #fb { top: 1260px; font-size: 76px; }
+      #fb em { font-style: normal; color: var(--lila); }
+
+      /* mosaico P */
+      #s-mos { background: #000; }
+      #grilla { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; transform-origin: 0 0; }
+      #grilla img { position: absolute; width: 41px; height: 76px; object-fit: cover; border-radius: 4px; }
+
+      /* giro: línea de tiempo */
+      #s-giro { background: radial-gradient(70% 45% at 50% 50%, #140b2c 0%, #000 75%); }
+      #cinta { position: absolute; left: 0; top: 760px; height: 360px; display: flex; gap: 14px; padding-left: 300px; }
+      #cinta .f { position: relative; width: 190px; height: 338px; flex: none; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 2px rgba(255,255,255,0.15); }
+      #cinta .f img { width: 100%; height: 100%; object-fit: cover; }
+      #cinta .m { position: absolute; left: 50%; top: -86px; width: 4px; height: 70px; margin-left: -2px; background: var(--violeta); box-shadow: 0 0 16px var(--violeta); border-radius: 2px; }
+      #cinta .m i { position: absolute; left: 50%; top: -14px; width: 22px; height: 22px; margin-left: -11px; border-radius: 50%; background: var(--violeta); box-shadow: 0 0 18px var(--violeta); }
+      #cabezal { position: absolute; left: 538px; top: 700px; width: 4px; height: 480px; background: #fff; box-shadow: 0 0 14px rgba(255,255,255,0.8); }
+      #regla { position: absolute; left: 80px; right: 80px; top: 1170px; height: 2px; background: rgba(255,255,255,0.3); }
+      #fg1 { top: 380px; font-size: 70px; }
+      #fg2 { top: 1300px; font-size: 64px; }
+      #fg2 em { font-style: normal; color: var(--lila); }
+
+      /* contador grande */
+      #s-cnt { background: #000; }
+      #big { position: absolute; left: 0; right: 0; top: 700px; text-align: center; font-size: 260px; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.04em; }
+      #big-sub { position: absolute; left: 0; right: 0; top: 1000px; text-align: center; font-size: 56px; font-weight: 700; color: rgba(255,255,255,0.75); }
+      #aca { position: absolute; left: 0; right: 0; top: 1150px; text-align: center; font-size: 100px; font-weight: 900; color: var(--lila); }
+
+      #s-bolsa { background: #000; }
+      #bolsa-img { position: absolute; left: 50%; top: 50%; width: 560px; margin: -500px 0 0 -280px; }
+      #violeta { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: var(--violeta); opacity: 0; }
+
+      #s-logo { background: radial-gradient(70% 45% at 50% 46%, #1a0f3d 0%, #000 70%); }
+      #logo { position: absolute; left: 50%; top: 740px; width: 880px; margin-left: -440px; }
+      #redes { position: absolute; left: 0; right: 0; top: 1035px; display: flex; justify-content: center; }
+      #redes span { padding: 14px 44px; border-radius: 999px; background: var(--violeta); font-size: 46px; font-weight: 900; letter-spacing: 0.32em; text-indent: 0.32em; }
+      #lema { position: absolute; left: 0; right: 0; top: 1200px; text-align: center; font-size: 42px; font-weight: 800; letter-spacing: 0.08em; text-indent: 0.08em; color: rgba(255,255,255,0.88); }
+      #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="48" data-width="1080" data-height="1920">
+      <audio id="mezcla" src="assets/mezcla.m4a" data-start="0" data-duration="48" data-track-index="9"></audio>
+
+      <!-- ACTO 1: curiosidad -->
+      <video id="v-a" class="toma clip" src="assets/a.mp4" muted data-start="0" data-duration="3.0" data-track-index="0"></video>
+      <video id="v-b" class="toma clip" src="assets/objeto.mp4" muted data-start="3.0" data-duration="3.0" data-track-index="0"></video>
+      <div id="f1" class="frase clip" data-start="0.6" data-duration="2.2" data-track-index="2">¿Quién se quedaría mirando una bolsa?</div>
+
+      <!-- ACTO 2: la historia real -->
+      <video id="v-fab" class="toma clip" src="assets/fab.mp4" muted data-start="6.0" data-duration="2.95" data-track-index="0"></video>
+      <video id="v-rollo" class="toma clip" src="assets/rollo.mp4" muted data-start="8.95" data-duration="1.65" data-track-index="0"></video>
+      <div id="pol" class="clip" data-start="8.95" data-duration="1.65" data-track-index="2"><img src="assets/polinea-isotipo.png" /><span>POLINEA</span></div>
+      <video id="v-k1" class="toma clip" src="assets/k1.mp4" muted data-start="10.6" data-duration="0.72" data-track-index="0"></video>
+      <video id="v-k2" class="toma clip" src="assets/k2.mp4" muted data-start="11.32" data-duration="0.72" data-track-index="0"></video>
+      <video id="v-k3" class="toma clip" src="assets/k3.mp4" muted data-start="12.04" data-duration="0.72" data-track-index="0"></video>
+      <video id="v-k4" class="toma clip" src="assets/k4.mp4" muted data-start="12.76" data-duration="0.74" data-track-index="0"></video>
+
+      <!-- No cambiamos lo que fabrican / cambiamos la forma de mostrarlo -->
+      <video id="v-pieza" class="toma clip" src="assets/pieza.mp4" muted data-start="13.5" data-duration="4.1" data-track-index="0"></video>
+      <div id="s-ad" class="esc clip" data-start="13.5" data-duration="4.1" data-track-index="6" data-layout-ignore>
+        <div id="antes-wrap"><div id="antes-in"><img src="assets/antes.png" /></div></div>
+        <div id="scan"></div>
+      </div>
+      <div class="velo clip" data-start="13.5" data-duration="4.1" data-track-index="1"></div>
+      <div id="fa" class="frase clip" data-start="13.6" data-duration="1.75" data-track-index="2">No cambiamos lo que fabrican.</div>
+      <div id="fb" class="frase clip" data-start="15.4" data-duration="2.2" data-track-index="2">Cambiamos la forma de <em>mostrarlo.</em></div>
+
+      <!-- ACTO 3: miles de personas, una marca -->
+      <div id="s-mos" class="esc clip" data-start="17.6" data-duration="4.8" data-track-index="0" data-layout-ignore><div id="grilla"></div></div>
+      <video id="v-agua" class="toma clip" src="assets/agua.mp4" muted data-start="22.4" data-duration="4.2" data-track-index="0"></video>
+
+      <!-- ACTO 4: el giro -->
+      <div id="s-giro" class="esc clip" data-start="26.6" data-duration="7.0" data-track-index="0" data-layout-ignore>
+        <div id="cinta"></div>
+        <div id="regla"></div>
+        <div id="cabezal"></div>
+      </div>
+      <div id="fg1" class="frase clip" data-start="26.7" data-duration="2.4" data-track-index="2">Pero hay algo que quizás no notaste…</div>
+      <div id="fg2" class="frase clip" data-start="29.2" data-duration="4.4" data-track-index="3">Cada pocos segundos,<br />una razón para <em>seguir mirando.</em></div>
+
+      <!-- ACTO 5: la revelación -->
+      <div id="s-cnt" class="esc clip" data-start="33.6" data-duration="5.2" data-track-index="0" data-layout-ignore>
+        <div id="big">00:34</div>
+        <div id="big-sub">mirando una bolsa</div>
+        <div id="aca">Y seguís acá.</div>
+      </div>
+      <div id="s-bolsa" class="esc clip" data-start="38.8" data-duration="5.0" data-track-index="0" data-layout-ignore>
+        <img id="bolsa-img" src="assets/bolsa.png" />
+        <div id="violeta"></div>
+      </div>
+      <div id="s-logo" class="esc clip" data-start="43.8" data-duration="4.2" data-track-index="0" data-layout-ignore>
+        <img id="logo" src="assets/logo-horizontal-blanco.png" />
+        <div id="redes"><span>REDES</span></div>
+        <div id="lema">NO EMPEZAMOS DE CERO.</div>
+      </div>
+
+      <div id="contador" class="clip" data-start="0.3" data-duration="26.1" data-track-index="5"><i class="rec"></i><b id="seg">00:00</b><span>mirando una bolsa</span></div>
+      <div id="flash" class="clip" data-start="0" data-duration="48" data-track-index="4" data-layout-ignore></div>
+    </div>
+
+    <script>
+      const P_CELDAS = [[7, 7], [7, 8], [7, 9], [7, 10], [7, 11], [7, 12], [7, 13], [7, 14], [7, 15], [7, 16], [7, 17], [7, 18], [7, 19], [7, 20], [8, 19], [8, 20], [8, 21], [9, 2], [9, 3], [9, 4], [9, 5], [9, 6], [9, 7], [9, 8], [9, 9], [9, 10], [9, 11], [9, 12], [9, 13], [9, 14], [9, 15], [9, 16], [9, 17], [9, 20], [9, 21], [9, 22], [10, 1], [10, 2], [10, 3], [10, 4], [10, 5], [10, 6], [10, 7], [10, 8], [10, 9], [10, 10], [10, 11], [10, 12], [10, 13], [10, 14], [10, 15], [10, 16], [10, 17], [10, 20], [10, 21], [10, 22], [11, 19], [11, 20], [11, 21], [12, 7], [12, 8], [12, 9], [12, 10], [12, 11], [12, 12], [12, 13], [12, 14], [12, 15], [12, 16], [12, 17], [12, 18], [12, 19], [12, 20], [13, 7], [13, 8], [14, 7], [14, 8], [15, 7], [15, 8]];
+      const tl = gsap.timeline({ paused: true });
+      const $ = (s, r = document) => r.querySelector(s);
+      const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+      const palabras = (el) => { el.innerHTML = el.innerHTML.split(/(<br \/>|<br>|<em>|<\/em>)/).map((p) => /^<\/?(br|em)/.test(p) ? p : p.split(" ").filter(Boolean).map((w) => `<span class="l">${w}</span>`).join(" ")).join(" "); return $$(".l", el); };
+      const entra = (sel, t, st = 0.1) => tl.fromTo(palabras($(sel)), { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.3, stagger: st, ease: "expo.out" }, t);
+      const flash = (t, o = 0.35) => tl.fromTo("#flash", { opacity: o }, { opacity: 0, duration: 0.25, ease: "power2.out", immediateRender: false }, t);
+      const mmss = (s) => "00:" + String(Math.floor(s)).padStart(2, "0");
+
+      // contador chico (0.3 → 26.4)
+      const cnt = { s: 0 };
+      tl.fromTo(cnt, { s: 0 }, { s: 26, duration: 26.1, ease: "none", onUpdate: () => { $("#seg").textContent = mmss(cnt.s); } }, 0.3)
+        .fromTo("#contador", { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.4, ease: "expo.out" }, 0.3)
+        .to("#contador .rec", { opacity: 0.25, duration: 0.5, yoyo: true, repeat: 24, ease: "sine.inOut" }, 0.3)
+        .to("#contador", { opacity: 0, duration: 0.3 }, 26.1);
+
+      // ACTO 1
+      entra("#f1", 0.6, 0.12);
+      tl.to("#f1", { opacity: 0, duration: 0.25 }, 2.55)
+        .fromTo("#v-a", { scale: 1 }, { scale: 1.1, duration: 3, ease: "none" }, 0)
+        .fromTo("#v-b", { scale: 1.12, filter: "grayscale(0.6)" }, { scale: 1, filter: "grayscale(0)", duration: 3, ease: "power1.out" }, 3.0);
+      flash(3.0, 0.3);
+      // del túnel de IA a la fábrica real: destello blanco
+      flash(6.0, 0.9);
+      tl.fromTo("#v-fab", { scale: 1.2 }, { scale: 1, duration: 2.95, ease: "power2.out" }, 6.0);
+
+      // ACTO 2: Polinea
+      flash(8.95, 0.5);
+      tl.fromTo("#v-rollo", { filter: "brightness(0.35)" }, { filter: "brightness(0.35)", duration: 0.01 }, 8.95)
+        .fromTo("#pol img", { opacity: 0, scale: 0.6, rotationY: 90, transformPerspective: 900 }, { opacity: 1, scale: 1, rotationY: 0, duration: 0.6, ease: "expo.out" }, 9.0)
+        .fromTo("#pol span", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.45, ease: "expo.out" }, 9.2);
+      [["#v-k1", 10.6], ["#v-k2", 11.32], ["#v-k3", 12.04], ["#v-k4", 12.76]].forEach(([v, t]) => { tl.fromTo(v, { scale: 1.18 }, { scale: 1, duration: 0.5, ease: "expo.out" }, t); flash(t, 0.2); });
+
+      // antes / después: barrido violeta que revela el contenido real
+      entra("#fa", 13.6, 0.1);
+      tl.to("#fa", { opacity: 0, duration: 0.2 }, 15.15)
+        .fromTo("#antes-in", { scale: 1.05 }, { scale: 1.0, duration: 1.8, ease: "none" }, 13.5)
+        .fromTo("#scan", { y: 0, opacity: 1 }, { y: 1920, opacity: 1, duration: 0.8, ease: "power2.inOut" }, 15.3)
+        .fromTo("#antes-wrap", { y: 0 }, { y: 1920, duration: 0.8, ease: "power2.inOut" }, 15.3)
+        .fromTo("#antes-in", { y: 0 }, { y: -1920, duration: 0.8, ease: "power2.inOut", immediateRender: false }, 15.3)
+        .to("#scan", { opacity: 0, duration: 0.2 }, 16.1);
+      entra("#fb", 15.45, 0.1);
+
+      // ACTO 3: mosaico de piezas reales que forma la P de Polinea
+      const celdas = new Set(P_CELDAS.map(([r, c]) => r * 24 + c));
+      const g = $("#grilla"); const tiles = [];
+      for (let r = 0; r < 24; r++) for (let c = 0; c < 24; c++) {
+        const im = document.createElement("img"); im.src = `assets/t/${String(((r * 7 + c * 3) % 16) + 1).padStart(2, "0")}.jpg`;
+        Object.assign(im.style, { left: c * 45 + 2 + "px", top: r * 80 + 2 + "px" }); g.appendChild(im);
+        tiles.push([im, celdas.has(r * 24 + c)]);
+      }
+      // arranca con una sola pieza a pantalla completa (celda 9,12) y se aleja
+      const fr = 9, fc = 12, Z = 24;
+      tl.fromTo("#grilla", { scale: Z, x: -(fc * 45 + 22) * Z + 540, y: -(fr * 80 + 40) * Z + 960 }, { scale: 1, x: 0, y: 0, duration: 2.6, ease: "power3.inOut" }, 17.6);
+      flash(17.6, 0.3);
+      tl.to(tiles.filter((t) => !t[1]).map((t) => t[0]), { opacity: 0.12, filter: "grayscale(1)", duration: 0.6, stagger: { each: 0.001, from: "random" } }, 20.2)
+        .to(tiles.filter((t) => t[1]).map((t) => t[0]), { boxShadow: "0 0 0 2px #ff2d8a, 0 0 18px rgba(255,45,138,0.8)", duration: 0.5 }, 20.4)
+        .to("#grilla", { scale: 1.06, x: -32, y: -58, duration: 2.2, ease: "none" }, 20.2);
+      // resultados reales: la bolsa con agua que aguanta
+      flash(22.4, 0.4);
+      tl.fromTo("#v-agua", { scale: 1.1 }, { scale: 1, duration: 3.0, ease: "power1.out" }, 22.4)
+        .to("#v-agua", { filter: "brightness(0.45) saturate(0.6)", duration: 1.0 }, 25.4);
+
+      // ACTO 4: el giro — todo el video era una construcción
+      const FR = ["01", "02", "03", "04", "05", "08", "06", "07"];
+      $("#cinta").innerHTML = FR.map((f) => `<div class="f"><img src="assets/f/${f}.jpg" /><div class="m"><i></i></div></div>`).join("");
+      tl.fromTo("#cinta", { scale: 2.2, x: -400, opacity: 0 }, { scale: 1, x: 0, opacity: 1, duration: 0.9, ease: "expo.out" }, 26.6)
+        .fromTo("#cinta", { x: 0 }, { x: -1100, duration: 6.2, ease: "power1.inOut", immediateRender: false }, 27.4)
+        .fromTo("#regla", { scaleX: 0 }, { scaleX: 1, duration: 0.8, ease: "expo.out" }, 26.9)
+        .fromTo("#cabezal", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 27.0);
+      entra("#fg1", 26.7, 0.08);
+      tl.to("#fg1", { opacity: 0, duration: 0.25 }, 28.85);
+      tl.fromTo("#cinta .m", { opacity: 0, scaleY: 0, transformOrigin: "50% 100%" }, { opacity: 1, scaleY: 1, duration: 0.3, stagger: 0.32, ease: "back.out(2.5)" }, 29.3);
+      entra("#fg2", 29.3, 0.08);
+      // "No fue casualidad": todas las marcas laten
+      tl.to("#cinta .m", { scaleY: 1.5, duration: 0.15, yoyo: true, repeat: 1, stagger: 0.03 }, 32.8);
+      flash(32.85, 0.25);
+
+      // ACTO 5: el contador vuelve, grande, y sigue corriendo
+      const big = { s: 34 };
+      tl.fromTo(big, { s: 34 }, { s: 39, duration: 5.2, ease: "none", onUpdate: () => { $("#big").textContent = mmss(big.s); } }, 33.6)
+        .fromTo("#big", { opacity: 0, scale: 1.4 }, { opacity: 1, scale: 1, duration: 0.5, ease: "expo.out" }, 33.6)
+        .fromTo("#big-sub", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 34.2)
+        .fromTo("#aca", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.4, ease: "expo.out" }, 37.6);
+      flash(38.8, 0.3);
+      tl.fromTo("#bolsa-img", { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.8, ease: "expo.out" }, 38.8)
+        .to("#bolsa-img", { scale: 1.08, rotation: 3, duration: 4.0, ease: "sine.inOut" }, 39.6)
+        .fromTo("#violeta", { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.25 }, 43.1)
+        .to("#violeta", { scale: 120, duration: 0.55, ease: "expo.in" }, 43.25);
+      tl.fromTo("#logo", { opacity: 0, scale: 0.85, filter: "blur(12px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 0.55, ease: "expo.out" }, 43.9)
+        .fromTo("#redes span", { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.4, ease: "back.out(2.2)" }, 44.3)
+        .fromTo("#lema", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.4, ease: "expo.out" }, 45.3);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
