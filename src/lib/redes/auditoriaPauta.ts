@@ -5,6 +5,7 @@
 import type { Project } from "@/integrations/firebase/types";
 import { mesAR } from "@/lib/fecha";
 import { mesLabel, sumarMeses } from "./format";
+import { loSubeElCliente } from "./extra";
 import type { PiezaIA, Video } from "./types";
 
 /** Días que puede esperar algo aprobado antes de marcarse en rojo. */
@@ -70,7 +71,8 @@ export interface AuditoriaPauta {
 }
 
 export function auditoriaPauta(uid: string, videos: Video[], piezas: PiezaIA[], clientes: Project[], mes: string, nombre: string): AuditoriaPauta {
-  const suyos = videos.filter((v) => v.pauta_id === uid);
+  // Lo que sube el cliente no es trabajo de pauta (no cuenta ni como publicado ni como pendiente).
+  const suyos = videos.filter((v) => v.pauta_id === uid && !loSubeElCliente(v));
   // Sus clientes: los que lo tienen en la ficha como pauta, o donde tiene videos.
   const ids = new Set([...clientes.filter((c) => (c.team_roles?.pauta ?? []).includes(uid)).map((c) => c.id), ...suyos.map((v) => v.proyecto_id)]);
   const susClientes = clientes.filter((c) => ids.has(c.id) && c.enabled !== false);

@@ -1,4 +1,5 @@
 import { AlertTriangle, ArrowRight, CalendarDays, Film, MessageSquareWarning, RotateCcw } from "lucide-react";
+import { esExtra, loSubeElCliente } from "@/lib/redes/extra";
 import { useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { EtapaBadge } from "./EtapaBadge";
@@ -104,7 +105,14 @@ export function VideoCard({
             <MessageSquareWarning className="h-3 w-3" /> con cambios
           </span>
         )}
-        {video.extra && <span className="text-primary">extra</span>}
+        {esExtra(video) && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
+            ★ Extra
+          </span>
+        )}
+        {vista === "equipo" && loSubeElCliente(video) && (
+          <span className="rounded-full bg-sky-500/15 px-1.5 py-0.5 font-medium text-sky-700 dark:text-sky-300">lo sube el cliente</span>
+        )}
         {video.pedido_cliente && vista === "equipo" && video.etapa === "planificado" && (
           <span className="rounded-full bg-primary/12 px-1.5 py-0.5 font-medium text-primary">pedido del cliente</span>
         )}

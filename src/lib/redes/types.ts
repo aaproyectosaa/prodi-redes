@@ -144,6 +144,8 @@ export interface Video {
   filma_cliente?: boolean;
   /** Extra que el cliente pidió "pasámelo": al aprobarlo se le entrega y no pasa por pauta (lo escribe el servidor). */
   sube_cliente?: boolean;
+  /** Video extra pagado aparte por el cliente (lo escribe el servidor al acreditarse el pago). */
+  extra_pagado?: boolean;
   /** Con qué material lo pidió el cliente (lo escribe el servidor; igual que api/_lib/pedidos.ts). */
   material_base?: MaterialBase | null;
   /** Filmación nueva pedida por el cliente: dónde se filma y los viáticos (lo escribe el servidor; ver api/_lib/viaticos.ts). */

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { esExtra, loSubeElCliente } from "@/lib/redes/extra";
 import { AvisoPausaEquipo } from "@/components/redes/MoraAvisos";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -334,9 +335,14 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
               <div className="flex flex-wrap items-center gap-2">
                 <EtapaBadge etapa={video.etapa} vista={isCliente ? "cliente" : "equipo"} />
                 {!isCliente && <EntregaChip video={video} />}
-                {!isCliente && video.sube_cliente && (
+                {!isCliente && esExtra(video) && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-2 py-0.5 text-[11px] font-bold text-white shadow-sm">
+                    ★ Video extra · pagado aparte
+                  </span>
+                )}
+                {!isCliente && loSubeElCliente(video) && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:text-sky-300">
-                    Lo sube el cliente
+                    Lo sube el cliente: no se publica ni se pauta
                   </span>
                 )}
                 {isProd && video.etapa === "edicion" && (
@@ -1520,7 +1526,11 @@ function ClienteActions({ video, onDone }: { video: Video; onDone: () => void })
     setSaving(true);
     try {
       await aprobarCliente(video, cliente, uid, rating || null);
-      toast.success("¡Gracias! Lo publicamos y te avisamos.");
+      toast.success(
+        loSubeElCliente(video) || cliente?.produccion?.publica === "cliente"
+          ? "¡Listo! Ya podés descargarlo desde «Material» y subirlo cuando quieras."
+          : "¡Gracias! Lo publicamos y te avisamos."
+      );
       onDone();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo aprobar");

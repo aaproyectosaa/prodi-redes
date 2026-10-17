@@ -1,4 +1,5 @@
 import type { UserRole } from "@/integrations/firebase/types";
+import { loSubeElCliente } from "./extra";
 import { hoyISO, mesActual } from "./format";
 import type { Video } from "./types";
 
@@ -92,7 +93,8 @@ const PAUTA: TableroRol = {
     if (vigente) return "activas";
     return v.mes === mesActual() ? "terminados" : null;
   },
-  esMio: (v, uid) => !v.pauta_id || v.pauta_id === uid,
+  // Lo que sube el cliente no pasa por pauta.
+  esMio: (v, uid) => (!v.pauta_id || v.pauta_id === uid) && !loSubeElCliente(v),
 };
 
 export function tableroDe(role: UserRole | undefined): TableroRol | null {

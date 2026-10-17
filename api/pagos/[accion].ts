@@ -1021,6 +1021,7 @@ async function pedirVideo(req: VercelRequest) {
         viatico: i === 0 && viaje > 0 ? { ...viatico!, estado: "pagado" } : viajeDe(i),
         // "Pasámelo": solo en los que son extra (los del plan siguen el circuito del cliente).
         ...(b.sube_cliente === true && !cuenta.items[i]?.plan ? { sube_cliente: true } : {}),
+        ...(!cuenta.items[i]?.plan ? { extra_pagado: true } : {}),
       })),
       detalle: cuenta,
       created_by: caller.uid,
@@ -1110,6 +1111,7 @@ async function pedirVideo(req: VercelRequest) {
   const conViaje = viatico?.estado === "pendiente" && Number(viatico.monto) > 0;
   if (conViaje) pedido.viatico = { ...viatico!, estado: "pagado" };
   if (b.sube_cliente === true) pedido.sube_cliente = true;
+  pedido.extra_pagado = true;
   const total = precioVideo + (conViaje ? Number(viatico!.monto) : 0);
   const concepto = `Video extra${soloEdicion ? " solo edición" : ""}${plataforma === "meta" ? "" : ` (${PLATAFORMA_NOMBRE[plataforma]})`} · ${MESES[m - 1]} ${y}: ${titulo}${conViaje ? ` + viáticos a ${viatico!.localidad}` : ""}`.slice(0, 120);
   await moraCliente(caller, String(b.proyecto_id), true);

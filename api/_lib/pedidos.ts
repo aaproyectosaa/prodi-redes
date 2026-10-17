@@ -30,6 +30,8 @@ export interface MaterialBase {
 }
 
 export interface PedidoVideo {
+  /** Video extra pagado aparte (fuera del plan): queda marcado para que el equipo lo vea. */
+  extra_pagado?: boolean;
   titulo: string;
   idea: string | null;
   objetivo: string | null;
@@ -176,6 +178,7 @@ export function videoDesdePedido(proyectoId: string, team: Record<string, string
     material_base: p.material_base ?? null,
     viatico: p.viatico ?? null,
     ...(p.sube_cliente ? { sube_cliente: true } : {}),
+    ...(p.extra_pagado ? { extra_pagado: true } : {}),
     historial: [
       {
         at: ts,

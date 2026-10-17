@@ -1,4 +1,5 @@
 import type { Profile } from "@/integrations/firebase/types";
+import { loSubeElCliente } from "./extra";
 import type { PiezaIA, Reunion, Rodaje, Video } from "./types";
 import type { Project } from "@/integrations/firebase/types";
 import { trabajaEnCliente } from "@/lib/roles";
@@ -140,7 +141,7 @@ export function reporteUsuario(
       const pubs = cuenta(PUBLICA);
       // El mismo cálculo que el reporte a fondo (de aprobado por el cliente a publicado, de todos sus videos del mes).
       const dem = auditoriaPauta(uid, videos, piezas, extra.clientes ?? [], mes, "").meses.at(-1)?.tarda ?? null;
-      const suyos = videos.filter((v) => v.pauta_id === uid && v.mes === mes && v.etapa === "publicado");
+      const suyos = videos.filter((v) => v.pauta_id === uid && v.mes === mes && v.etapa === "publicado" && !loSubeElCliente(v));
       const gasto = suyos.reduce((a, v) => a + (v.resultados?.gasto ?? 0), 0);
       const mensajes = suyos.reduce((a, v) => a + (v.resultados?.mensajes ?? 0), 0);
       const sinRes = suyos.filter((v) => !v.resultados).length;
@@ -255,7 +256,7 @@ export function reporteUsuario(
     if (resp !== perfil.role) return false;
     if (perfil.role === "productor") return v.productor_id === uid;
     if (perfil.role === "editor") return v.editor_id === uid;
-    if (perfil.role === "pauta") return v.pauta_id === uid;
+    if (perfil.role === "pauta") return v.pauta_id === uid && !loSubeElCliente(v);
     return false;
   });
 
