@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CrecimientoRedes } from "@/components/redes/CrecimientoRedes";
 import { AvisoMoraCliente } from "@/components/redes/MoraAvisos";
 import { useSearchParams } from "react-router-dom";
 import { HelpCircle, Loader2, Mail, Minus, Plus, Sparkles } from "lucide-react";
@@ -317,6 +318,7 @@ export default function ClientePortal() {
               </p>
             )}
           </div>
+          <CrecimientoRedes proyectoId={cliente.id} />
           <ResultadosMes
             resumen={resumen}
             grafico={<EvolucionMensajes videos={videos} proyectoId={cliente.id} mes={mesRes} onMes={setMesRes} />}

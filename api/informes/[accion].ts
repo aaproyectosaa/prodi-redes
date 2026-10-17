@@ -8,6 +8,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { adminDb, getPool } from "../_lib/db";
 import { moraTodos } from "../_lib/mora";
+import { chequeoMeta, fotoRedesTodos } from "../_lib/meta-redes";
 import { appUrl, body, HttpError, requireCaller, sendError } from "../_lib/http";
 import { construirInforme, enviarMail, mesAnteriorAR } from "../_lib/informe";
 import { sincronizarTodoMeta, sincronizarVideoMeta } from "../_lib/meta";
@@ -43,6 +44,16 @@ function assertCron(req: VercelRequest) {
   if (!secret || req.headers.authorization !== `Bearer ${secret}`) throw new HttpError(401, "No autorizado");
 }
 
+/** Ajustes → "Revisar conexión": qué clientes se pueden leer de Instagram/Facebook (y saca la foto del día). */
+async function metaRedes(req: VercelRequest) {
+  await requireCaller(req, ["admin"]);
+  try {
+    return await chequeoMeta();
+  } catch (err) {
+    throw new HttpError(502, err instanceof Error ? err.message : "Meta no respondió");
+  }
+}
+
 async function meta(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "productor", "pauta"]);
   const { video_id } = body<{ video_id?: string }>(req);
@@ -75,13 +86,15 @@ async function diario(req: VercelRequest) {
     recordatoriosTareas(base).catch((err) => `error: ${err}`),
     recordatoriosEdicion(base).catch((err) => `error: ${err}`),
   ]);
+  // Instagram y Facebook de los clientes: la foto del día (seguidores, alcance).
+  const redesMeta = await fotoRedesTodos().catch((err) => `error: ${err}`);
   // Mora: escalón de cada cliente según sus días de atraso (después de los recordatorios de cobro).
   const mora = await moraTodos(base).catch((err) => `error: ${err}`);
   // Lo que les llegó al equipo mientras descansaban: un solo aviso de buenos días.
   const manana = await enviarRetenidos(base).catch((err) => `error: ${err}`);
   // Lo borrado se anota unos días para que las pantallas abiertas se enteren; después se limpia.
   await getPool().query("delete from borrados where borrado < now() - interval '7 days'").catch(() => undefined);
-  return { ok: true, meta: metaRes, recordatorios_rodaje: rodajes, recordatorios_aprobar: aprobar, recordatorios_plan: planes, facturacion, vencimientos, recordatorios_cobro: cobros, mora, aprendizaje_chats: chats, tareas, entregas_edicion: edicion, resumen_manana: manana };
+  return { ok: true, meta: metaRes, recordatorios_rodaje: rodajes, recordatorios_aprobar: aprobar, recordatorios_plan: planes, facturacion, vencimientos, recordatorios_cobro: cobros, mora, redes_meta: redesMeta, aprendizaje_chats: chats, tareas, entregas_edicion: edicion, resumen_manana: manana };
 }
 
 async function cron(req: VercelRequest) {
@@ -128,6 +141,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (accion === "cron") res.status(200).json(await cron(req));
     else if (accion === "diario") res.status(200).json(await diario(req));
     else if (accion === "meta" && req.method === "POST") res.status(200).json(await meta(req));
+    else if (accion === "meta-redes" && req.method === "POST") res.status(200).json(await metaRedes(req));
     else if (accion === "enviar" && req.method === "POST") res.status(200).json(await enviar(req));
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {

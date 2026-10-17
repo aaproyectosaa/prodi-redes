@@ -21,6 +21,22 @@ Configuración (una sola vez):
 Para que un cliente nuevo entre en la sincronización, alcanza con que comparta su cuenta publicitaria con el
 Business Manager de Prodi y asignarla al usuario del sistema.
 
+## Seguidores e Instagram de los clientes (ya funciona)
+
+Todos los días (cron diario) el sistema lee las páginas de Facebook que el usuario del sistema tiene asignadas y el
+Instagram vinculado a cada una, y guarda una foto por cliente en `metricas_redes` (seguidores de IG y FB, alcance y
+visitas al perfil del día anterior). Con eso arma la curva de crecimiento (ficha del cliente → Resultados, y el panel
+del cliente). Ajustes → "Instagram y Facebook de los clientes" → *Revisar conexión* dice cliente por cliente si se lee
+o qué le falta, y completa solo `meta.page_id` / `meta.ig_user_id` cuando encuentra la página (por el ID cargado, el
+usuario de Instagram de la ficha o el nombre).
+
+Configuración (una sola vez):
+
+1. En el Business Manager de Prodi, asignarle al usuario del sistema las **páginas** de los clientes (y que cada
+   página tenga su Instagram profesional vinculado).
+2. Generar de nuevo el token agregando `instagram_basic`, `instagram_manage_insights` y `pages_read_engagement`
+   (además de `ads_read`) y reemplazar `META_ACCESS_TOKEN` en Vercel.
+
 ## Publicar y pautar desde el sistema (a futuro)
 
 Objetivo: que el equipo de pauta publique el video en Instagram/Facebook del cliente y cree la campaña sin

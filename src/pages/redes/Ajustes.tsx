@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ConexionMeta } from "@/components/redes/ConexionMeta";
 import { MoraAjustes } from "@/components/redes/MoraAvisos";
 import { addDoc, collection, deleteDoc, doc, onSnapshot, setDoc, updateDoc } from "@/lib/db";
 import { CheckCircle2, FlaskConical, HardDrive, Loader2, Moon, Plus, Trash2, XCircle } from "lucide-react";
@@ -203,6 +204,13 @@ export default function Ajustes() {
                 }
               }}
             />
+          </Section>
+
+          <Section
+            title="Instagram y Facebook de los clientes"
+            description="El sistema lee solo, todos los días, los seguidores y el alcance de cada cliente (con el mismo acceso a Meta de la pauta) y arma su curva de crecimiento."
+          >
+            <ConexionMeta />
           </Section>
 
           <Section

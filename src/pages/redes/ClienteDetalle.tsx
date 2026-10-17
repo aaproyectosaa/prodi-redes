@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { CrecimientoRedes } from "@/components/redes/CrecimientoRedes";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { doc, updateDoc } from "@/lib/db";
 import { ArrowLeft, Clapperboard, Eye, Loader2, Mail, MessageCircle, Plus, Send, X } from "lucide-react";
@@ -197,7 +198,8 @@ export default function ClienteDetalle() {
           )}
         </TabsContent>
 
-        <TabsContent value="resultados">
+        <TabsContent value="resultados" className="space-y-6">
+          <CrecimientoRedes proyectoId={cliente.id} equipo />
           <ResultadosMes resumen={resumen} grafico={<EvolucionMensajes videos={videos} proyectoId={cliente.id} mes={mes} />} />
         </TabsContent>
 
