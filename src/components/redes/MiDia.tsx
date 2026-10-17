@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { auditoriaPauta } from "@/lib/redes/auditoriaPauta";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, CalendarClock, ChevronDown, Sun, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -301,7 +302,7 @@ const EQUIPO = ["admin", "productor", "editor", "pauta", "diseno", "administraci
 export function MiDia() {
   const navigate = useNavigate();
   const { user, role, roles } = useUserProfileContext();
-  const { videos, piezas, reuniones } = useRedes();
+  const { videos, piezas, reuniones, clientes } = useRedes();
   const uid = user?.uid ?? "";
   const misRoles = useMemo(() => [...new Set([role, ...(roles ?? [])].filter(Boolean).map(String))], [role, roles]);
   const delEquipo = misRoles.some((r) => EQUIPO.includes(r));
@@ -331,6 +332,14 @@ export function MiDia() {
           onAbrir: () => navigate(`/videos?video=${v.id}`),
         });
       }
+    }
+    // Pauta: lo pautado sin ID de Meta y las pautas con resultados viejos (metas de "Mi rendimiento").
+    if (misRoles.includes("pauta")) {
+      const a = auditoriaPauta(uid, videos, piezas, clientes, mesActual(), "");
+      for (const v of a.sinMeta)
+        out.push({ id: `meta-${v.id}`, titulo: v.titulo, clienteId: v.proyecto_id, fecha: hoy, etiqueta: "Falta", tarea: "Cargar ID de Meta", onAbrir: () => navigate(`/videos?video=${v.id}`) });
+      for (const { video: v } of a.resultadosViejos)
+        out.push({ id: `res-${v.id}`, titulo: v.titulo, clienteId: v.proyecto_id, fecha: hoy, etiqueta: "Falta", tarea: "Actualizar resultados", onAbrir: () => navigate(`/videos?video=${v.id}`) });
     }
     // Diseño: piezas para hacer o corregir.
     if (misRoles.includes("diseno")) {
@@ -390,7 +399,7 @@ export function MiDia() {
       out.push({ id: r.id, titulo: r.titulo, clienteId: r.proyecto_id, sub: "Reunión", fecha: hoy, etiqueta: `Hoy ${hh}`, tarea: "Reunión", onAbrir: () => navigate(`/reuniones?r=${r.id}`) });
     }
     return out;
-  }, [delEquipo, uid, misRoles, videos, piezas, plata, facturas, obligaciones, mias, reuniones, navigate]);
+  }, [delEquipo, uid, misRoles, videos, piezas, clientes, plata, facturas, obligaciones, mias, reuniones, navigate]);
 
   if (!delEquipo) return null;
   return <MiDiaCartel items={items} />;

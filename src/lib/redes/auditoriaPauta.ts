@@ -60,6 +60,13 @@ export interface AuditoriaPauta {
   /** Promedio de los 3 meses anteriores (publicados) para comparar. */
   promedioAntes: number | null;
   resumen: string[];
+  /** Publicados este mes que tardaron más de la meta desde que el cliente aprobó. */
+  lentos: { video: Video; horas: number }[];
+  /**
+   * Faltas del mes (incumplimientos de las metas): publicados lentos, aprobados esperando más de la meta,
+   * pautados del mes sin ID de Meta y pautas vigentes con resultados viejos.
+   */
+  faltas: { total: number; lentos: number; esperando: number; sinMeta: number; resultados: number };
 }
 
 export function auditoriaPauta(uid: string, videos: Video[], piezas: PiezaIA[], clientes: Project[], mes: string, nombre: string): AuditoriaPauta {
@@ -160,5 +167,20 @@ export function auditoriaPauta(uid: string, videos: Video[], piezas: PiezaIA[], 
   const desat = filas.filter((f) => f.desatendido);
   if (desat.length) resumen.push(`Clientes desatendidos: ${desat.map((f) => f.cliente.nombre).join(", ")}.`);
 
-  return { esperando, tarde, sinMeta, resultadosViejos, piezasSinPublicar, meses, clientes: filas, promedioAntes, resumen };
+  const lentos = publicados
+    .filter((v) => mesAR(publicadoAt(v) ?? "") === mes)
+    .map((video) => ({ video, horas: (new Date(publicadoAt(video)!).getTime() - new Date(aprobadoAt(video)).getTime()) / 3_600_000 }))
+    .filter((x) => x.horas > DIAS_PARA_PUBLICAR * 24)
+    .sort((a, b) => b.horas - a.horas);
+  const faltas = {
+    lentos: lentos.length,
+    esperando: viejos.length,
+    sinMeta: actual.sinMeta,
+    resultados: resultadosViejos.length,
+    total: 0,
+  };
+  faltas.total = faltas.lentos + faltas.esperando + faltas.sinMeta + faltas.resultados;
+  if (faltas.total) resumen.push(`Faltas del mes (incumplimientos de las metas): ${faltas.total}.`);
+
+  return { esperando, tarde, sinMeta, resultadosViejos, piezasSinPublicar, meses, clientes: filas, promedioAntes, resumen, lentos, faltas };
 }

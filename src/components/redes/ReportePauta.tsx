@@ -62,6 +62,11 @@ export function ReportePauta({ perfil, mes }: { perfil: Profile; mes: string }) 
             <Copy className="mr-1.5 h-3.5 w-3.5" /> Copiar
           </Button>
         </div>
+        <p className="mb-2 text-xs text-muted-foreground">
+          {perfil.metas_pauta_aceptadas_at
+            ? `Aceptó las metas de "Mi rendimiento" el ${new Date(perfil.metas_pauta_aceptadas_at).toLocaleDateString("es-AR")}.`
+            : "Todavía no leyó ni aceptó las metas de “Mi rendimiento”."}
+        </p>
         <ul className="space-y-1 text-sm">
           {a.resumen.map((r, i) => (
             <li key={i} className="flex gap-2">

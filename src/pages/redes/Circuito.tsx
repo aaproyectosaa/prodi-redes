@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { MiRendimientoPauta } from "@/components/redes/MiRendimientoPauta";
 import { AccionTile, GrillaAcciones } from "@/components/redes/AccionesTablero";
 import { AlertTriangle, Building2, CalendarPlus, CalendarRange, Clapperboard, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -92,6 +93,7 @@ function TableroEquipo({ tablero }: { tablero: TableroRol }) {
     >
       {esProd && <PlanesAviso />}
       <BotonMiDia />
+      {tieneRol("pauta") && <MiRendimientoPauta />}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <SelectorVista vista={vista} onChange={setVista} />
         {esProd && vista === "kanban" && borrar.boton}

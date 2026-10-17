@@ -70,6 +70,8 @@ export interface Profile {
   bienvenida_at?: string | null;
   /** Novedades que ya vio (ids de src/lib/novedades.ts). */
   novedades_vistas?: string[];
+  /** Pauta: cuándo leyó y aceptó las metas de "Mi rendimiento". */
+  metas_pauta_aceptadas_at?: string | null;
   /** Contacto (solo chat): el cliente al que pertenece, cargo y teléfono. */
   proyecto_id?: string | null;
   cargo?: string | null;
