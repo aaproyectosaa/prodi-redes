@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="es" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root { --violeta: #6f40fc; --rosa: #ff2d8a; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+      #root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: Inter, sans-serif; color: #fff; }
+      .toma { position: absolute; inset: 0; width: 1080px; height: 1920px; object-fit: cover; }
+      .esc { position: absolute; inset: 0; overflow: hidden; background: #000; }
+      .l { display: inline-block; }
+
+      /* 3. la idea: la bolsa congelada y un mismo objeto contado de muchas maneras */
+      #idea-cont { position: absolute; inset: 0; }
+      #idea-bolsa { position: absolute; left: 50%; top: 50%; width: 560px; margin: -500px 0 0 -280px; }
+      #idea-svg { position: absolute; inset: 0; width: 1080px; height: 1920px; }
+      .geo { position: absolute; border-radius: 6px; }
+
+      /* 4. el caso: la bolsa como pieza que cambia de formato */
+      #caso-cont { position: absolute; inset: 0; }
+      #marco { position: absolute; left: 90px; top: 403px; width: 900px; height: 960px; border-radius: 28px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,0.6), 0 0 0 3px rgba(255,255,255,0.15); }
+      #marco video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: 50% 50%; }
+      #pol { position: absolute; left: 0; right: 0; top: 1390px; display: flex; align-items: center; justify-content: center; gap: 26px; }
+      #pol img { height: 92px; }
+      #pol span { font-size: 92px; font-weight: 900; letter-spacing: 0.12em; }
+      #chips { position: absolute; left: 0; right: 0; top: 300px; display: flex; justify-content: center; gap: 16px; }
+      #chips span { padding: 12px 26px; border-radius: 999px; border: 2px solid rgba(255,255,255,0.5); font-size: 30px; font-weight: 800; letter-spacing: 0.08em; }
+
+      /* textos de la voz */
+      .frase { position: absolute; left: 80px; right: 80px; text-align: center; font-weight: 900; letter-spacing: -0.03em; line-height: 1.02; text-shadow: 0 6px 30px rgba(0,0,0,0.85); }
+      #f1 { top: 1380px; font-size: 76px; }
+      #f2 { top: 1440px; font-size: 64px; }
+
+      /* 6. revelación */
+      #violeta { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: var(--violeta); opacity: 0; }
+      #s-logo { background: radial-gradient(70% 45% at 50% 46%, #1a0f3d 0%, #000 70%); }
+      #logo { position: absolute; left: 50%; top: 740px; width: 880px; margin-left: -440px; }
+      #redes { position: absolute; left: 0; right: 0; top: 1035px; display: flex; justify-content: center; }
+      #redes span { padding: 14px 44px; border-radius: 999px; background: var(--violeta); font-size: 46px; font-weight: 900; letter-spacing: 0.32em; text-indent: 0.32em; }
+      #lema { position: absolute; left: 0; right: 0; top: 1200px; text-align: center; font-size: 42px; font-weight: 800; letter-spacing: 0.08em; text-indent: 0.08em; color: rgba(255,255,255,0.88); }
+
+      #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="30" data-width="1080" data-height="1920">
+      <audio id="mezcla" src="assets/mezcla.m4a" data-start="0" data-duration="30" data-track-index="9"></audio>
+
+      <!-- 1. gancho -->
+      <video id="v-a" class="toma clip" src="assets/a.mp4" muted data-start="0" data-duration="3.9" data-track-index="0"></video>
+      <div id="f1" class="frase clip" data-start="0.5" data-duration="3.2" data-track-index="1">¿Quién miraría 30 segundos una bolsa?</div>
+
+      <!-- 2. la cámara entra en la bolsa -->
+      <video id="v-b" class="toma clip" src="assets/b.mp4" muted data-start="3.9" data-duration="4.7" data-track-index="0"></video>
+
+      <!-- 3. la idea (congelada) -->
+      <div id="s-idea" class="esc clip" data-start="8.6" data-duration="4.6" data-track-index="0" data-layout-ignore>
+        <div id="idea-cont">
+          <img id="idea-bolsa" src="assets/bolsa.png" />
+          <svg id="idea-svg" viewBox="0 0 1080 1920"></svg>
+        </div>
+      </div>
+
+      <!-- 4. el caso -->
+      <div id="s-caso" class="esc clip" data-start="13.2" data-duration="6.0" data-track-index="0" data-layout-ignore>
+        <div id="caso-cont">
+          <div id="chips"><span>CONTENIDO</span><span>ESTRATEGIA</span><span>RESULTADOS</span></div>
+          <div id="marco"><video id="v-loop" class="clip" src="assets/loop.mp4" muted data-start="13.2" data-duration="6.0" data-track-index="6"></video></div>
+          <div id="pol"><img src="assets/polinea-isotipo.png" /><span>POLINEA</span></div>
+        </div>
+      </div>
+
+      <!-- 5. el giro: todo estaba dentro de una bolsa -->
+      <video id="v-c" class="toma clip" src="assets/c.mp4" muted data-start="19.2" data-duration="6.6" data-track-index="0"></video>
+      <div id="f2" class="frase clip" data-start="23.8" data-duration="1.7" data-track-index="1">Te quedaste para saber cómo terminaba.</div>
+      <div id="violeta" class="clip" data-start="19.2" data-duration="6.8" data-track-index="2"></div>
+
+      <!-- 6. logo -->
+      <div id="s-logo" class="esc clip" data-start="26.0" data-duration="4.0" data-track-index="0" data-layout-ignore>
+        <img id="logo" src="assets/logo-horizontal-blanco.png" />
+        <div id="redes"><span>REDES</span></div>
+        <div id="lema">NO EMPEZAMOS DE CERO.</div>
+      </div>
+
+      <div id="flash" class="clip" data-start="0" data-duration="30" data-track-index="4" data-layout-ignore></div>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      const $ = (s, r = document) => r.querySelector(s);
+      const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+      const letras = (el) => { el.innerHTML = el.textContent.split(" ").map((w) => `<span class="l">${w}</span>`).join(" "); return $$(".l", el); };
+      const flash = (t, o = 0.4) => tl.fromTo("#flash", { opacity: o }, { opacity: 0, duration: 0.25, ease: "power2.out", immediateRender: false }, t);
+      const NS = "http://www.w3.org/2000/svg";
+
+      // 1. gancho: la pregunta palabra por palabra
+      tl.fromTo(letras($("#f1")), { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.3, stagger: 0.12, ease: "expo.out" }, 0.5)
+        .to("#f1", { opacity: 0, duration: 0.3 }, 3.4)
+        .fromTo("#v-a", { scale: 1 }, { scale: 1.08, duration: 3.9, ease: "none" }, 0);
+
+      // 2. dentro de la bolsa, la cámara nunca para
+      tl.fromTo("#v-b", { scale: 1.05 }, { scale: 1.25, duration: 4.7, ease: "power1.in" }, 3.9);
+
+      // 3. la idea: todo se detiene; se dibuja el troquel y aparecen otras formas de contar la bolsa
+      const svg = $("#idea-svg");
+      const linea = (d, color, w) => { const p = document.createElementNS(NS, "path"); p.setAttribute("d", d); p.setAttribute("fill", "none"); p.setAttribute("stroke", color); p.setAttribute("stroke-width", w); p.setAttribute("stroke-linecap", "round"); svg.appendChild(p); const L = p.getTotalLength ? 3000 : 3000; p.style.strokeDasharray = L; p.style.strokeDashoffset = L; return p; };
+      const troquel = linea("M 250 420 L 830 420 L 830 1440 L 250 1440 Z M 470 520 L 610 520 Q 640 520 640 550 Q 640 580 610 580 L 470 580 Q 440 580 440 550 Q 440 520 470 520 Z", "#ffffff", 4);
+      const guia = linea("M 120 300 L 960 300 M 120 1560 L 960 1560 M 160 260 L 160 1600 M 920 260 L 920 1600", "rgba(255,255,255,0.35)", 2);
+      const trazo = linea("M 140 1700 C 360 1500, 300 980, 540 930 S 860 520, 960 200", "#6f40fc", 8);
+      tl.fromTo("#idea-bolsa", { opacity: 1, scale: 1 }, { opacity: 1, scale: 1, duration: 0.01 }, 8.6);
+      flash(8.6, 0.6);
+      tl.to(guia, { strokeDashoffset: 0, duration: 1.2, ease: "power2.inOut" }, 9.1)
+        .to(troquel, { strokeDashoffset: 0, duration: 1.4, ease: "power2.inOut" }, 9.3)
+        .to("#idea-bolsa", { opacity: 0.35, duration: 0.8 }, 9.6)
+        .to(trazo, { strokeDashoffset: 0, duration: 1.2, ease: "power2.inOut" }, 10.4);
+      // formas geométricas de packaging alrededor
+      const geos = [[120, 620, 160, 160, "#ff2d8a", 0], [820, 700, 140, 140, "#ffffff", 50], [140, 1180, 200, 90, "#6f40fc", 0], [800, 1260, 160, 220, "#ff2d8a", 12], [460, 210, 160, 60, "#ffffff", 30]];
+      geos.forEach(([x, y, w, h, c, r], i) => {
+        const g = document.createElement("div"); g.className = "geo"; Object.assign(g.style, { left: x + "px", top: y + "px", width: w + "px", height: h + "px", background: c, borderRadius: r + "%" }); $("#idea-cont").appendChild(g);
+        tl.fromTo(g, { opacity: 0, scale: 0, rotation: -40 }, { opacity: 0.9, scale: 1, rotation: 0, duration: 0.4, ease: "back.out(2)" }, 10.9 + i * 0.12);
+      });
+      tl.to("#idea-cont", { scale: 0.92, duration: 4.6, ease: "none" }, 8.6);
+
+      // 4. el caso: la bolsa se vuelve pieza y cambia de formato
+      flash(13.2, 0.3);
+      const FMT = [[13.2, 0.6, 1], [14.8, 0.844, 0.792], [16.0, 0.711, 0.833], [17.2, 1, 0.527]];
+      tl.fromTo("#marco", { scaleX: 0.36, scaleY: 0.6, opacity: 0 }, { scaleX: 0.6, scaleY: 1, opacity: 1, duration: 0.5, ease: "expo.out" }, 13.2)
+        .fromTo("#v-loop", { scaleX: 1 / 0.6, scaleY: 1 }, { scaleX: 1 / 0.6, scaleY: 1, duration: 0.01 }, 13.2);
+      FMT.slice(1).forEach(([t, sx, sy]) => {
+        tl.to("#marco", { scaleX: sx, scaleY: sy, duration: 0.5, ease: "power3.inOut" }, t)
+          .to("#v-loop", { scaleX: 1 / sx, scaleY: 1 / sy, duration: 0.5, ease: "power3.inOut" }, t);
+      });
+      tl
+        .fromTo("#pol", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.5, ease: "expo.out" }, 13.6);
+      $$("#chips span").forEach((c, i) => tl.fromTo(c, { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.3, ease: "expo.out" }, 13.9 + i * 1.1));
+      // 19.0: todo se achica hacia el centro… y entra en la bolsa
+      tl.to("#caso-cont", { scale: 0.12, opacity: 0, duration: 0.55, ease: "power3.in" }, 18.7);
+
+      // 5. el giro: la cámara se aleja y la bolsa queda diminuta, quieta
+      tl.fromTo("#v-c", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 19.2);
+      tl.fromTo(letras($("#f2")), { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.3, stagger: 0.1, ease: "expo.out" }, 23.8)
+        .to("#f2", { opacity: 0, duration: 0.2 }, 25.3);
+
+      // 6. la bolsa se vuelve una superficie violeta que llena la pantalla
+      tl.fromTo("#violeta", { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.3 }, 25.0)
+        .to("#violeta", { scale: 120, duration: 0.6, ease: "expo.in" }, 25.3);
+      tl.fromTo("#logo", { opacity: 0, scale: 0.85, filter: "blur(12px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 0.55, ease: "expo.out" }, 26.15)
+        .fromTo("#redes span", { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.4, ease: "back.out(2.2)" }, 26.5)
+        .fromTo("#lema", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.4, ease: "expo.out" }, 26.8);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
