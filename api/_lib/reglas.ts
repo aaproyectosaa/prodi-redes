@@ -322,6 +322,10 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
     case "gastos":
     case "obligaciones":
       return esFinanzas(c);
+    // Reservas de la landing (módulo Web): solo el super admin. Se escriben solo por /api/web.
+    case "leads_web":
+    case "web_config":
+      return esAdmin(c);
     case "planes_redes":
     case "app_settings":
       // whatsapp_bot: configuración del bot de WhatsApp (eliminado), ya no se expone.
