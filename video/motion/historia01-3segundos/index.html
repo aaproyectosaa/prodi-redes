@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="es" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root { --violeta: #6f40fc; --lila: #b9a4ff; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+      #root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: Inter, sans-serif; color: #fff; background: #000; }
+      .esc { position: absolute; inset: 0; overflow: hidden; }
+
+      /* cuenta regresiva */
+      #s-cuenta { perspective: 1400px; }
+      #cam { position: absolute; inset: 0; transform-style: preserve-3d; }
+      .num { position: absolute; left: 0; right: 0; top: 330px; height: 1100px; text-align: center; font-size: 1100px; font-weight: 900; line-height: 1100px; letter-spacing: -0.06em; backface-visibility: hidden; }
+      .fant { position: absolute; left: 0; right: 0; top: 330px; height: 1100px; text-align: center; font-size: 1100px; font-weight: 900; line-height: 1100px; letter-spacing: -0.06em; opacity: 0; mix-blend-mode: screen; }
+      #n3 { color: #fff; } #n2 { color: #fff; }
+      #n1 { color: var(--violeta); text-shadow: 0 0 60px rgba(111,64,252,0.9), 0 0 160px rgba(111,64,252,0.6); }
+      #g3a, #g2a { color: var(--violeta); } #g3b, #g2b { color: #9ad8ff; }
+      #brillo1 { position: absolute; left: 540px; top: 880px; width: 1400px; height: 1400px; margin: -700px 0 0 -700px; border-radius: 50%; background: radial-gradient(circle, rgba(111,64,252,0.45) 0%, rgba(111,64,252,0.1) 35%, transparent 65%); opacity: 0; }
+      #pulso { position: absolute; inset: 0; background: radial-gradient(60% 40% at 50% 46%, rgba(255,255,255,0.12), transparent 70%); opacity: 0; }
+
+      /* túnel de publicaciones */
+      #s-tunel { perspective: 900px; background: radial-gradient(50% 35% at 50% 45%, #1a0f3d 0%, #000 70%); }
+      #mundo { position: absolute; left: 540px; top: 900px; width: 0; height: 0; transform-style: preserve-3d; }
+      .post { position: absolute; left: -170px; top: -230px; width: 340px; height: 460px; border-radius: 26px; background: #111018; border: 2px solid rgba(255,255,255,0.12); overflow: hidden; backface-visibility: hidden; }
+      .post .c { display: flex; gap: 12px; align-items: center; padding: 18px; }
+      .post .c i { width: 40px; height: 40px; border-radius: 50%; background: #2c2840; }
+      .post .c b { width: 120px; height: 12px; border-radius: 6px; background: #2c2840; }
+      .post .im { height: 300px; }
+      .post .t { height: 12px; margin: 16px 18px 0; border-radius: 6px; background: #2c2840; }
+      #estela { position: absolute; inset: 0; }
+      #estela i { position: absolute; left: 540px; top: 900px; width: 3px; height: 260px; background: linear-gradient(180deg, transparent, rgba(185,164,255,0.8)); transform-origin: 50% 0; }
+
+      /* la pieza que frena todo */
+      #s-pieza { background: #000; }
+      #pieza { position: absolute; left: 90px; top: 280px; width: 900px; height: 1000px; border-radius: 48px; overflow: hidden; background: radial-gradient(120% 90% at 30% 20%, #8f6bff 0%, #6f40fc 30%, #2a1170 70%, #0d0626 100%); box-shadow: 0 0 0 2px rgba(255,255,255,0.15), 0 0 160px rgba(111,64,252,0.55); }
+      #ojo { position: absolute; left: 450px; top: 430px; width: 520px; height: 520px; margin: -260px 0 0 -260px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.35); }
+      #ojo i { position: absolute; left: 50%; top: 50%; width: 180px; height: 180px; margin: -90px 0 0 -90px; border-radius: 50%; background: #05020f; box-shadow: 0 0 0 26px rgba(255,255,255,0.08), 0 0 80px rgba(0,0,0,0.6); }
+      #ojo u { position: absolute; left: 56%; top: 40%; width: 34px; height: 34px; border-radius: 50%; background: #fff; }
+      .anillo { position: absolute; left: 450px; top: 430px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.18); }
+      #pregunta { position: absolute; left: 60px; right: 60px; top: 790px; text-align: left; font-size: 132px; font-weight: 900; letter-spacing: -0.045em; line-height: 0.95; }
+      #pregunta .l { display: inline-block; }
+
+      /* cierre */
+      #violeta { position: absolute; left: 540px; top: 780px; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: var(--violeta); }
+      #s-logo { background: radial-gradient(70% 40% at 50% 34%, #1a0f3d 0%, #000 70%); }
+      #logo { position: absolute; left: 50%; top: 560px; width: 860px; margin-left: -430px; }
+      #redes { position: absolute; left: 0; right: 0; top: 850px; display: flex; justify-content: center; }
+      #redes span { padding: 14px 44px; border-radius: 999px; background: var(--violeta); font-size: 46px; font-weight: 900; letter-spacing: 0.32em; text-indent: 0.32em; }
+      #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="10" data-width="1080" data-height="1920">
+      <audio id="mezcla" src="assets/mezcla.m4a" data-start="0" data-duration="10" data-track-index="9"></audio>
+
+      <!-- 0–3: 3, 2, 1 -->
+      <div id="s-cuenta" class="esc clip" data-start="0" data-duration="3.25" data-track-index="0" data-layout-ignore>
+        <div id="brillo1"></div>
+        <div id="pulso"></div>
+        <div id="cam">
+          <div id="g3a" class="fant">3</div><div id="g3b" class="fant">3</div><div id="n3" class="num">3</div>
+          <div id="g2a" class="fant">2</div><div id="g2b" class="fant">2</div><div id="n2" class="num">2</div>
+          <div id="n1" class="num">1</div>
+        </div>
+      </div>
+
+      <!-- 3–5: adentro del scroll -->
+      <div id="s-tunel" class="esc clip" data-start="3.1" data-duration="2.05" data-track-index="1" data-layout-ignore>
+        <div id="estela"></div>
+        <div id="mundo"></div>
+      </div>
+
+      <!-- 5–7: todo se detiene -->
+      <div id="s-pieza" class="esc clip" data-start="5.15" data-duration="2.1" data-track-index="0" data-layout-ignore>
+        <div id="pieza">
+          <div class="anillo" style="width:760px;height:760px;margin:-380px 0 0 -380px"></div>
+          <div class="anillo" style="width:1000px;height:1000px;margin:-500px 0 0 -500px"></div>
+          <div id="ojo"><i></i><u></u></div>
+        </div>
+        <div id="pregunta">¿TE ESTÁN<br />MIRANDO?</div>
+      </div>
+
+      <!-- 7–10: logo, con la parte de abajo libre para la encuesta -->
+      <div id="capa-violeta" class="clip" data-start="6.9" data-duration="0.55" data-track-index="2" data-layout-ignore><div id="violeta"></div></div>
+      <div id="s-logo" class="esc clip" data-start="7.3" data-duration="2.7" data-track-index="1" data-layout-ignore>
+        <img id="logo" src="assets/logo-horizontal-blanco.png" />
+        <div id="redes"><span>REDES</span></div>
+      </div>
+      <div id="flash" class="clip" data-start="0" data-duration="10" data-track-index="8" data-layout-ignore></div>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      const $ = (s, r = document) => r.querySelector(s);
+      const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+      const flash = (t, o = 0.4, d = 0.25) => tl.fromTo("#flash", { opacity: o }, { opacity: 0, duration: d, ease: "power2.out", immediateRender: false }, t);
+      let semilla = 5; const azar = () => ((semilla = (semilla * 16807) % 2147483647) / 2147483647);
+      const sacudon = (t, f = 18) => tl.fromTo("#cam", { x: 0, y: 0 }, { keyframes: { x: [f, -f * 0.8, f * 0.5, -f * 0.3, 0], y: [-f * 0.6, f * 0.5, -f * 0.3, f * 0.2, 0] }, duration: 0.3, ease: "none", immediateRender: false }, t);
+
+      // 3: golpe seco desde la oscuridad
+      tl.fromTo("#n3", { scale: 1.9, opacity: 0, filter: "blur(30px)" }, { scale: 1, opacity: 1, filter: "blur(0px)", duration: 0.22, ease: "expo.out" }, 0.12)
+        .to("#n3", { scale: 0.92, duration: 0.8, ease: "none" }, 0.34)
+        .fromTo("#pulso", { opacity: 0.9 }, { opacity: 0, duration: 0.5 }, 0.12);
+      sacudon(0.14, 22);
+      // 3 → 2: se parte en 3D, con fantasmas de color
+      tl.to("#n3", { rotationY: 92, z: -400, x: -260, filter: "blur(8px)", duration: 0.2, ease: "power3.in" }, 1.0)
+        .fromTo(["#g3a", "#g3b"], { opacity: 0.85, x: 0 }, { opacity: 0, x: (i) => (i ? 70 : -70), duration: 0.25, ease: "power2.out", immediateRender: false }, 1.0).to("#n3", { opacity: 0, duration: 0.01 }, 1.2)
+        .fromTo("#n2", { rotationY: -92, z: -400, x: 260, opacity: 0, filter: "blur(8px)" }, { rotationY: 0, z: 0, x: 0, opacity: 1, filter: "blur(0px)", duration: 0.28, ease: "expo.out" }, 1.18)
+        .to("#n2", { scale: 0.9, duration: 0.7, ease: "none" }, 1.46);
+      flash(1.15, 0.25, 0.18); sacudon(1.2, 16);
+      // 2 → 1 violeta: cae hacia atrás y el 1 sube con brillo
+      tl.to("#n2", { rotationX: -95, y: 200, z: -300, filter: "blur(8px)", duration: 0.2, ease: "power3.in" }, 1.98)
+        .fromTo(["#g2a", "#g2b"], { opacity: 0.85, y: 0 }, { opacity: 0, y: (i) => (i ? 60 : -60), duration: 0.25, immediateRender: false }, 1.98).to("#n2", { opacity: 0, duration: 0.01 }, 2.18)
+        .fromTo("#n1", { rotationX: 95, y: -200, z: -300, opacity: 0, filter: "blur(10px)" }, { rotationX: 0, y: 0, z: 0, opacity: 1, filter: "blur(0px)", duration: 0.3, ease: "expo.out" }, 2.15)
+        .fromTo("#brillo1", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1.1, duration: 0.8, ease: "power2.out" }, 2.15);
+      flash(2.15, 0.3, 0.2); sacudon(2.2, 14);
+      // la cámara atraviesa el 1
+      tl.to("#n1", { scale: 1.12, duration: 0.6, ease: "power1.in" }, 2.45)
+        .to("#n1", { scale: 34, duration: 0.25, ease: "expo.in" }, 2.95)
+        .to("#brillo1", { scale: 3, opacity: 0, duration: 0.25, ease: "expo.in" }, 2.95);
+      flash(3.12, 0.85, 0.3);
+
+      // túnel: cientos de publicaciones que pasan a toda velocidad
+      const tonos = [["#6f40fc", "#2a1170"], ["#ff5c8a", "#5a1030"], ["#2fd3c4", "#0b3a44"], ["#ffb15c", "#4a2508"], ["#b9a4ff", "#3a2a7a"], ["#ffffff", "#5a5866"], ["#5aa0ff", "#0d2a5a"]];
+      const mundo = $("#mundo"); const posts = [];
+      for (let i = 0; i < 70; i++) {
+        const d = document.createElement("div"); d.className = "post";
+        const [a, b] = tonos[i % tonos.length];
+        d.innerHTML = `<div class="c"><i></i><b></b></div><div class="im" style="background:linear-gradient(${Math.floor(azar() * 360)}deg, ${a}, ${b})"></div><div class="t" style="width:${120 + azar() * 160}px"></div>`;
+        mundo.appendChild(d);
+        const ang = azar() * Math.PI * 2, rad = 420 + azar() * 520;
+        posts.push({ d, x: Math.cos(ang) * rad, y: Math.sin(ang) * rad * 1.3, z: -i * 190, r: (azar() - 0.5) * 30 });
+      }
+      for (let i = 0; i < 40; i++) { const e = document.createElement("i"); $("#estela").appendChild(e); e.style.transform = `rotate(${i * 9}deg) translateY(${140 + azar() * 300}px)`; e.style.opacity = 0.2 + azar() * 0.6; }
+      const cam = { z: 0 }; const LARGO = 70 * 190;
+      const pinta = () => {
+        for (const p of posts) {
+          let z = ((p.z + cam.z) % LARGO + LARGO) % LARGO - LARGO + 700;
+          p.d.style.transform = `translate3d(${p.x}px, ${p.y}px, ${z}px) rotateZ(${p.r}deg)`;
+          p.d.style.opacity = z < -8000 ? 0 : Math.min(1, (z + 8000) / 2500);
+        }
+      };
+      pinta();
+      tl.fromTo(cam, { z: 0 }, { z: 26000, duration: 2.05, ease: "power1.in", onUpdate: pinta }, 3.1)
+        .fromTo("#estela", { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1.4, duration: 2.0, ease: "none" }, 3.1)
+        .fromTo("#mundo", { rotationZ: 0 }, { rotationZ: 12, duration: 2.05, ease: "power1.in" }, 3.1);
+
+      // corte seco: una sola pieza
+      flash(5.15, 0.7, 0.12);
+      tl.fromTo("#pieza", { scale: 1.06 }, { scale: 1.0, duration: 1.9, ease: "power2.out" }, 5.15)
+        .fromTo("#ojo", { scale: 0.92 }, { scale: 1.0, duration: 1.8, ease: "power2.out" }, 5.15)
+        .fromTo("#ojo i", { scale: 1.25 }, { scale: 0.8, duration: 0.5, ease: "expo.out" }, 5.5)
+        .fromTo(".anillo", { scale: 0.9, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.8, stagger: 0.12 }, 5.2);
+      const pal = $("#pregunta"); pal.innerHTML = pal.innerHTML.split("<br>").map((ln) => ln.split(" ").map((w) => `<span class="l">${w}</span>`).join(" ")).join("<br>");
+      tl.fromTo($$("#pregunta .l"), { opacity: 0, y: 60, scale: 1.2 }, { opacity: 1, y: 0, scale: 1, duration: 0.3, stagger: 0.12, ease: "expo.out" }, 5.35);
+
+      // logo oficial
+      tl.fromTo("#violeta", { scale: 0 }, { scale: 110, duration: 0.5, ease: "expo.in" }, 6.92);
+      tl.fromTo("#logo", { opacity: 0, scale: 0.85, filter: "blur(14px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 0.55, ease: "expo.out" }, 7.32)
+        .fromTo("#redes span", { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.4, ease: "back.out(2.2)" }, 7.7)
+        .to("#logo", { scale: 1.03, duration: 2.2, ease: "none" }, 7.9);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
