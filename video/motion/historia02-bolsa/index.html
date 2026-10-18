@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="es" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root { --violeta: #6f40fc; --rosa: #ff3d9a; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+      #root { position: relative; width: 100%; height: 100%; overflow: hidden; font-family: Inter, sans-serif; color: #fff; background: #000; }
+      .toma { position: absolute; inset: 0; width: 1080px; height: 1920px; object-fit: cover; }
+      .esc { position: absolute; inset: 0; overflow: hidden; }
+      .l { display: inline-block; }
+      #f1 { position: absolute; left: 60px; right: 60px; top: 1520px; text-align: center; font-size: 78px; font-weight: 900; letter-spacing: -0.03em; text-shadow: 0 6px 40px rgba(0,0,0,0.9); }
+      #ono { position: absolute; left: 0; right: 0; top: 760px; text-align: center; font-size: 260px; font-weight: 900; letter-spacing: -0.05em; line-height: 1; color: #fff; text-shadow: 0 0 60px rgba(255,61,154,0.55), 0 10px 60px rgba(0,0,0,0.8); }
+      #velo-ab { position: absolute; left: 0; right: 0; bottom: 0; height: 700px; background: linear-gradient(180deg, transparent, rgba(0,0,0,0.85)); }
+      /* placa final */
+      #s-placa { background: radial-gradient(70% 38% at 50% 28%, #24103f 0%, #000 72%); }
+      #bolsa-chica { position: absolute; left: 540px; top: 960px; width: 720px; height: 1280px; margin: -640px 0 0 -360px; object-fit: contain; mix-blend-mode: screen; }
+      #halo-rosa { position: absolute; left: 540px; top: 960px; width: 900px; height: 900px; margin: -450px 0 0 -450px; border-radius: 50%; background: radial-gradient(circle, rgba(255,61,154,0.35) 0%, transparent 65%); }
+      #marcas { position: absolute; left: 0; right: 0; top: 300px; display: flex; flex-direction: column; align-items: center; gap: 26px; }
+      #polinea { display: flex; align-items: center; gap: 26px; }
+      #polinea img { height: 130px; }
+      #polinea span { font-size: 84px; font-weight: 900; letter-spacing: 0.12em; text-indent: 0.12em; }
+      #por { font-size: 70px; font-weight: 300; color: rgba(255,255,255,0.7); }
+      #prodi { display: flex; align-items: center; gap: 22px; }
+      #prodi img { width: 470px; }
+      #prodi span { padding: 10px 30px; border-radius: 999px; background: var(--violeta); font-size: 36px; font-weight: 900; letter-spacing: 0.3em; text-indent: 0.3em; }
+      #linea { width: 620px; height: 3px; margin-top: 18px; background: linear-gradient(90deg, transparent, var(--rosa), var(--violeta), transparent); }
+      #historia { margin-top: 6px; font-size: 56px; font-weight: 900; letter-spacing: 0.14em; text-indent: 0.14em; }
+      #flecha { width: 60px; height: 60px; margin-top: 10px; }
+      #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+      #rosa-flash { position: absolute; inset: 0; background: var(--rosa); opacity: 0; pointer-events: none; mix-blend-mode: screen; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="11" data-width="1080" data-height="1920">
+      <audio id="mezcla" src="assets/mezcla.m4a" data-start="0" data-duration="11" data-track-index="9"></audio>
+
+      <!-- 0–5: la bolsa real y el viaje adentro del material -->
+      <video id="v-ida" class="toma clip" src="assets/ida.mp4" muted data-start="0" data-duration="5.0" data-track-index="0"></video>
+      <div id="velo-ab" class="clip" data-start="0" data-duration="2.4" data-track-index="1"></div>
+      <div id="f1" class="clip" data-start="0.4" data-duration="1.9" data-track-index="2">ES SOLO UNA BOLSA.</div>
+
+      <!-- 5–8: vuelve a ser la bolsa -->
+      <video id="v-vuelta" class="toma clip" src="assets/vuelta.mp4" muted data-start="5.0" data-duration="3.0" data-track-index="0"></video>
+      <img id="bolsa-fija" class="toma clip" src="assets/bolsa.jpg" data-start="7.95" data-duration="0.6" data-track-index="0" />
+      <div id="ono" class="clip" data-start="7.25" data-duration="1.3" data-track-index="2">¿O NO?</div>
+
+      <!-- 8.5–11: POLINEA × PRODI REDES, con la mitad de abajo libre para el reel -->
+      <div id="s-placa" class="esc clip" data-start="8.5" data-duration="2.5" data-track-index="0" data-layout-ignore>
+        <div id="halo-rosa"></div>
+        <img id="bolsa-chica" src="assets/bolsa.jpg" />
+        <div id="marcas">
+          <div id="polinea"><img src="assets/polinea-isotipo-t.png" /><span>POLINEA</span></div>
+          <div id="por">×</div>
+          <div id="prodi"><img src="assets/logo-horizontal-blanco.png" /><span>REDES</span></div>
+          <div id="linea"></div>
+          <div id="historia">LA HISTORIA COMPLETA</div>
+          <svg id="flecha" viewBox="0 0 24 24" fill="none" stroke="#ff3d9a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16" /><path d="M5 13l7 7 7-7" /></svg>
+        </div>
+      </div>
+      <div id="rosa-flash" class="clip" data-start="0" data-duration="11" data-track-index="7" data-layout-ignore></div>
+      <div id="flash" class="clip" data-start="0" data-duration="11" data-track-index="8" data-layout-ignore></div>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      const $ = (s, r = document) => r.querySelector(s);
+      const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+      const flash = (sel, t, o, d = 0.3) => tl.fromTo(sel, { opacity: o }, { opacity: 0, duration: d, ease: "power2.out", immediateRender: false }, t);
+      const partir = (el) => { el.innerHTML = el.textContent.split(" ").map((w) => `<span class="l">${w}</span>`).join(" "); return $$(".l", el); };
+
+      // 0–2: la bolsa flota, la cámara se acerca
+      tl.fromTo("#v-ida", { scale: 1.0 }, { scale: 1.05, duration: 5.0, ease: "none" }, 0)
+        .fromTo(partir($("#f1")), { opacity: 0, y: 24, scale: 1.3 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, stagger: 0.1, ease: "expo.out" }, 0.4)
+        .to("#f1", { opacity: 0, duration: 0.25 }, 2.05);
+      // 2.3: entramos en el material (impacto)
+      flash("#rosa-flash", 2.3, 0.45, 0.5);
+      flash("#flash", 2.3, 0.25, 0.2);
+
+      // 5–8: el viaje de vuelta, cada vez más rápido, hasta la bolsa real
+      flash("#flash", 5.0, 0.2, 0.2);
+      tl.fromTo("#v-vuelta", { scale: 1.06 }, { scale: 1.0, duration: 3.0, ease: "power1.in" }, 5.0)
+        .fromTo("#bolsa-fija", { scale: 1.0 }, { scale: 0.98, duration: 0.6, ease: "none" }, 7.95)
+        .fromTo("#ono", { opacity: 0, scale: 1.5, filter: "blur(16px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 0.35, ease: "expo.out" }, 7.25)
+        .to("#ono", { opacity: 0, scale: 0.92, duration: 0.3 }, 8.25);
+
+      // 8.5–11: la cámara se aleja y aparece la placa
+      tl.fromTo("#bolsa-chica", { scale: 1, y: 0, opacity: 1 }, { scale: 0.42, y: 330, opacity: 0.55, duration: 1.0, ease: "power3.inOut" }, 8.5)
+        .fromTo("#halo-rosa", { scale: 0.5, y: 0, opacity: 0 }, { scale: 1, y: 330, opacity: 1, duration: 1.0, ease: "power3.inOut" }, 8.5)
+        .to("#bolsa-chica", { opacity: 0, duration: 0.5 }, 9.6)
+        .to("#halo-rosa", { opacity: 0.4, duration: 0.5 }, 9.6)
+        .fromTo("#polinea", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.45, ease: "expo.out" }, 8.9)
+        .fromTo("#por", { opacity: 0, scale: 0.5 }, { opacity: 1, scale: 1, duration: 0.35, ease: "back.out(2)" }, 9.1)
+        .fromTo("#prodi", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.45, ease: "expo.out" }, 9.2)
+        .fromTo("#linea", { scaleX: 0 }, { scaleX: 1, duration: 0.5, ease: "expo.out" }, 9.5)
+        .fromTo("#historia", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: "expo.out" }, 9.6)
+        .fromTo("#flecha", { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.2 }, 9.9)
+        .to("#flecha", { y: 14, duration: 0.45, yoyo: true, repeat: 1, ease: "sine.inOut" }, 10.1);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
