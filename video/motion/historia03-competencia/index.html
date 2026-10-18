@@ -14,6 +14,8 @@
       /* universo de piezas */
       #s-uni { perspective: 1000px; background: radial-gradient(60% 40% at 50% 46%, #121018 0%, #000 75%); }
       #mundo { position: absolute; left: 540px; top: 900px; width: 0; height: 0; transform-style: preserve-3d; }
+      #titular { position: absolute; left: -800px; top: -420px; width: 1600px; text-align: center; font-size: 190px; font-weight: 900; line-height: 0.92; letter-spacing: -0.045em; color: #fff; text-shadow: 0 10px 50px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.6); backface-visibility: hidden; transform-style: preserve-3d; }
+      #titular .w { display: inline-block; }
       .pz { position: absolute; left: -150px; top: -190px; width: 300px; height: 380px; border-radius: 22px; overflow: hidden; backface-visibility: hidden; }
       .pz .col, .pz .gris { position: absolute; inset: 0; }
       .pz .gris { background: #26252b; opacity: 0; }
@@ -56,7 +58,7 @@
 
       <!-- 0–4.75: el universo de publicaciones que se vuelven iguales -->
       <div id="s-uni" class="esc clip" data-start="0" data-duration="4.75" data-track-index="0" data-layout-ignore>
-        <div id="mundo"></div>
+        <div id="mundo"><div id="titular"><span class="w">TU</span><br /><span class="w">COMPETENCIA</span><br /><span class="w">TAMBIÉN</span><br /><span class="w">PUBLICA.</span></div></div>
         <div id="pila"></div>
         <div id="ruido"></div>
       </div>
@@ -109,7 +111,8 @@
           const z = (((p.z + cam.z * p.v) % LARGO) + LARGO) % LARGO - LARGO + 650;
           p.d.style.transform = `translate3d(${p.x}px, ${p.y}px, ${z}px) rotateZ(${p.r}deg)`;
           const lejos = Math.min(1, (z + LARGO) / 3500);
-          p.d.style.opacity = p.nace < cam.cant ? lejos : 0;
+          const tapa = cam.z < 7000 && z > -560 && Math.abs(p.x) < 760 && Math.abs(p.y) < 470;
+          p.d.style.opacity = p.nace < cam.cant ? lejos * (tapa ? 0.22 : 1) : 0;
         }
       };
       pinta();
@@ -118,6 +121,13 @@
         // 3–4.75: acelera
         .fromTo(cam, { z: 5200 }, { z: 26000, duration: 1.75, ease: "power3.in", onUpdate: pinta, immediateRender: false }, 3.0)
         .fromTo("#mundo", { rotationZ: 0 }, { rotationZ: -10, duration: 4.75, ease: "power2.in" }, 0);
+      // el mensaje, desde el primer segundo, adentro del universo: las piezas le pasan por delante y por detrás
+      tl.fromTo("#titular", { z: -720, rotationZ: 0 }, { z: -430, rotationZ: 7.5, duration: 3.0, ease: "power1.inOut" }, 0)
+        .fromTo($$("#titular .w"), { opacity: 0, y: 80, rotationX: 70 }, { opacity: 1, y: 0, rotationX: 0, duration: 0.45, stagger: 0.12, ease: "expo.out" }, 0.05)
+        // late apenas con el pulso de la música
+        .to("#titular", { scale: 1.035, duration: 0.25, yoyo: true, repeat: 5, ease: "sine.inOut" }, 0.6)
+        // cuando todo acelera, el mensaje sale disparado hacia la cámara
+        .to("#titular", { z: 700, rotationZ: 10, opacity: 0, duration: 0.6, ease: "power3.in", immediateRender: false }, 3.0);
       // todas empiezan a parecer iguales: el color se apaga y queda el mismo molde gris
       tl.to(pz.map((p) => $(".gris", p.d)), { opacity: 1, duration: 0.5, stagger: { each: 0.012, from: "random" } }, 1.3);
       // saturación: las piezas grises se apilan encima hasta tapar todo
