@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BellRing, ChevronRight } from "lucide-react";
+import { BellRing, CheckCircle2, ChevronRight } from "lucide-react";
+import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { useRedes } from "@/contexts/redes-data-context";
-import { alertasPauta, estadoPresupuesto, type AlertaPauta } from "@/lib/redes/alertasPauta";
+import { alertasPauta, estadoPresupuesto, presupuestoPauta, type AlertaPauta } from "@/lib/redes/alertasPauta";
 import { sumarDiasF, usePautaMeta } from "@/lib/redes/metaPauta";
 import { cn } from "@/lib/utils";
 
@@ -35,7 +36,13 @@ const CHIP = [
  */
 export function AlertasPauta() {
   const navigate = useNavigate();
-  const { clienteById } = useRedes();
+  const { clienteById, clientes } = useRedes();
+  const { user, tieneRol } = useUserProfileContext();
+  const uid = user?.uid ?? "";
+  // Sus clientes: los que tiene en pauta (el admin, todos).
+  const mios = clientes.filter((c) => c.enabled !== false && (tieneRol("admin") || (c.team_roles?.pauta ?? []).includes(uid)));
+  const conectados = mios.filter((c) => c.meta?.ad_account_id);
+  const sinPresupuesto = conectados.filter((c) => !presupuestoPauta(c)).length;
   const { alertas, cargando } = useAlertasPauta();
   const [abierto, setAbierto] = useState(false);
   const porCliente = useMemo(() => {
@@ -43,8 +50,27 @@ export function AlertasPauta() {
     for (const a of alertas.filter((x) => x.nivel >= 1)) m.set(a.proyectoId, [...(m.get(a.proyectoId) ?? []), a]);
     return [...m.entries()].map(([id, lista]) => ({ id, lista, nivel: Math.max(...lista.map((x) => x.nivel)) })).sort((x, y) => y.nivel - x.nivel);
   }, [alertas]);
-  if (cargando || !porCliente.length) return null;
+  if (cargando || !mios.length) return null;
   const urgentes = porCliente.filter((x) => x.nivel === 2).length;
+  // Cuántos de sus clientes el sistema puede controlar (los que tienen la cuenta publicitaria cargada).
+  const cobertura = (
+    <p className="px-4 pb-3 text-[11px] text-muted-foreground">
+      Se controlan {conectados.length} de {mios.length} clientes (los que tienen la cuenta publicitaria cargada en su ficha)
+      {sinPresupuesto ? ` · ${sinPresupuesto} sin presupuesto de pauta cargado` : ""}.
+    </p>
+  );
+  if (!porCliente.length) {
+    return (
+      <section className="mb-4 rounded-2xl border bg-card">
+        <div className="flex items-center gap-2 px-4 pb-1 pt-3">
+          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          <h3 className="text-sm font-semibold">Pauta en orden</h3>
+          <span className="text-xs text-muted-foreground">nada para revisar hoy</span>
+        </div>
+        {cobertura}
+      </section>
+    );
+  }
   const visibles = abierto ? porCliente : porCliente.slice(0, 3);
   return (
     <section className="mb-4 rounded-2xl border bg-card">
@@ -85,6 +111,7 @@ export function AlertasPauta() {
           {abierto ? "Ver menos" : `Ver los ${porCliente.length - 3} restantes`}
         </button>
       )}
+      {cobertura}
     </section>
   );
 }
