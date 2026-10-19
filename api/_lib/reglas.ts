@@ -359,6 +359,8 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
     case "meta_anuncios_diaria": // pauta por anuncio y día (la escribe el servidor)
     case "meta_anuncios": // nombre y miniatura de cada anuncio (la escribe el servidor)
       return equipoDe(c, d.proyecto_id) || esFinanzas(c) || clienteDe(c, d.proyecto_id);
+    case "ia_pauta": // consejos de la IA sobre la pauta: solo el equipo (los escribe el servidor)
+      return equipoDe(c, d.proyecto_id);
     case "prodi_pedidos": // pedidos a @prodi (límite por minuto): solo el servidor
     case "whatsapp_verifications": // código de verificación (hasheado): solo lo usa el servidor
     case "notification_queue":

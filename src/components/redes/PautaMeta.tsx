@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { ConsejosPauta } from "@/components/redes/ConsejosPauta";
+import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { BarraPresupuesto } from "@/components/redes/AlertasPauta";
 import { Eye, Heart, Instagram, Loader2, Megaphone, MousePointerClick, ShoppingBag, TrendingDown, TrendingUp, Users, Wallet, AlertTriangle } from "lucide-react";
 import type { Project } from "@/integrations/firebase/types";
@@ -101,6 +103,9 @@ export function PautaMeta({ cliente, modo }: { cliente: Project; modo: "admin" |
   const igA = useMemo(() => resumirIg(ig, f.antDesde, f.antHasta), [ig, f.antDesde, f.antHasta]);
   const conectado = !!(cliente.meta?.ad_account_id || cliente.meta?.ig_user_id);
   const esCliente = modo === "cliente";
+  const { tieneRol } = useUserProfileContext();
+  // Los consejos de la IA son para quien maneja la pauta (y el admin).
+  const puedeConsejos = !esCliente && (tieneRol("pauta") || tieneRol("admin"));
   const buscando = useMetaAuto(cliente.id, conectado);
 
   if (!conectado) {
@@ -140,6 +145,7 @@ export function PautaMeta({ cliente, modo }: { cliente: Project; modo: "admin" |
         ))}
       </div>
 
+      {puedeConsejos && cliente.meta?.ad_account_id && <ConsejosPauta proyectoId={cliente.id} />}
       {filas && modo !== "cliente" && <BarraPresupuesto cliente={cliente} filas={filas} />}
       {r && r.moneda !== "ARS" && modo !== "cliente" && (
         <p className="text-[11px] text-muted-foreground">La cuenta publicitaria está en {r.moneda === "USD" ? "dólares" : r.moneda}: los montos se muestran en esa moneda.</p>
