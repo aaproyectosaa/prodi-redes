@@ -88,6 +88,89 @@ export function usePautaMeta(proyectoId: string | undefined | null, desde: strin
   return lista;
 }
 
+/** Pauta por anuncio y día (api/_lib/meta-anuncios.ts). */
+export interface AnuncioDia {
+  id: string;
+  proyecto_id: string;
+  fecha: string;
+  ad_id: string;
+  ad_name?: string | null;
+  campaign_id?: string | null;
+  objetivo?: string | null;
+  gasto: number;
+  impresiones: number;
+  clics: number;
+  mensajes: number;
+  compras: number;
+  valor_compras: number;
+  leads: number;
+}
+
+/** Nombre y miniatura de un anuncio, y el post al que apunta. */
+export interface AnuncioInfo {
+  id: string;
+  ad_id: string;
+  nombre?: string | null;
+  miniatura?: string | null;
+  post_id?: string | null;
+  ig_media_id?: string | null;
+  permalink?: string | null;
+}
+
+export function useAnunciosMeta(proyectoId: string | undefined, desde: string) {
+  const [lista, setLista] = useState<AnuncioDia[] | null>(null);
+  useEffect(() => {
+    if (!proyectoId) return;
+    return onSnapshot(
+      query(collection(db, "meta_anuncios_diaria"), where("proyecto_id", "==", proyectoId), where("fecha", ">=", desde)),
+      (s) => setLista(s.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<AnuncioDia, "id">) }))),
+      () => setLista([])
+    );
+  }, [proyectoId, desde]);
+  return lista;
+}
+
+export function useAnunciosInfo(proyectoId: string | undefined) {
+  const [lista, setLista] = useState<AnuncioInfo[]>([]);
+  useEffect(() => {
+    if (!proyectoId) return;
+    return onSnapshot(
+      query(collection(db, "meta_anuncios"), where("proyecto_id", "==", proyectoId)),
+      (s) => setLista(s.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<AnuncioInfo, "id">) }))),
+      () => setLista([])
+    );
+  }, [proyectoId]);
+  return lista;
+}
+
+/** El anuncio que más resultados trajo en el rango (según el resultado principal de la cuenta). */
+export function mejorAnuncio(filas: AnuncioDia[], desde: string, hasta: string, tipo: TipoResultado) {
+  const por = new Map<string, { ad_id: string; nombre: string; gasto: number; resultados: number; valor_compras: number }>();
+  for (const f of filas) {
+    if (f.fecha < desde || f.fecha > hasta) continue;
+    const a = por.get(f.ad_id) ?? { ad_id: f.ad_id, nombre: f.ad_name || f.ad_id, gasto: 0, resultados: 0, valor_compras: 0 };
+    a.gasto += f.gasto || 0;
+    a.resultados += Number(f[tipo]) || 0;
+    a.valor_compras += f.valor_compras || 0;
+    por.set(f.ad_id, a);
+  }
+  const top = [...por.values()].filter((a) => a.resultados > 0).sort((a, b) => b.resultados - a.resultados || a.gasto - b.gasto)[0];
+  return top ? { ...top, costo: top.gasto / top.resultados } : null;
+}
+
+/** Resultado principal, inversión y costo de cada mes (para el gráfico de los últimos meses). */
+export function resumirPorMes(filas: PautaDia[], meses: string[], tipo: TipoResultado) {
+  return meses.map((mes) => {
+    const del = filas.filter((f) => f.fecha.startsWith(mes));
+    const gasto = del.reduce((a, f) => a + (f.gasto || 0), 0);
+    const resultados = del.reduce((a, f) => a + (Number(f[tipo]) || 0), 0);
+    return { mes, gasto, resultados, costo: resultados ? gasto / resultados : null };
+  });
+}
+
+/** El resultado que importa en todo un período (para que todos los meses del gráfico midan lo mismo). */
+export const principalDelPeriodo = (filas: PautaDia[]): TipoResultado => principalDe(filas);
+
 const pedidos = new Map<string, number>();
 
 /**

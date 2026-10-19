@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   BarChart3,
   ExternalLink,
@@ -14,6 +14,7 @@ import {
   ShoppingBag,
   TrendingDown,
   TrendingUp,
+  Trophy,
   Users,
   Wallet,
 } from "lucide-react";
@@ -21,7 +22,20 @@ import type { Project } from "@/integrations/firebase/types";
 import type { Video } from "@/lib/redes/types";
 import { cn, hrefSeguro } from "@/lib/utils";
 import { fechaCorta, formatARS, formatNum, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
-import { NOMBRE_RESULTADO, fechasDeMes, resumirIg, resumirPauta, useMetaAuto, usePautaMeta } from "@/lib/redes/metaPauta";
+import {
+  NOMBRE_RESULTADO,
+  fechasDeMes,
+  mejorAnuncio,
+  principalDelPeriodo,
+  resumirIg,
+  resumirPauta,
+  resumirPorMes,
+  useAnunciosInfo,
+  useAnunciosMeta,
+  useMetaAuto,
+  usePautaMeta,
+  type AnuncioInfo,
+} from "@/lib/redes/metaPauta";
 import { CrecimientoRedes, useMetricasRedes } from "@/components/redes/CrecimientoRedes";
 import { EvolucionMensajes } from "@/components/redes/EvolucionMensajes";
 import { resumirMes } from "@/components/redes/ResultadosMes";
@@ -32,10 +46,25 @@ import { EmptyState } from "@/components/redes/PageShell";
 // Las tarjetas sin dato no se muestran (nunca un "—" ni un "0" que confunda).
 
 const fmt = (n: number) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(n);
+const pesos2 = (n: number) => `$${new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)}`;
 const nombreMes = (m: string) => mesLabel(m).split(" ")[0];
 const anio = (m: string) => m.slice(0, 4);
 
-function Cambio({ ahora, antes, alReves = false }: { ahora: number | null | undefined; antes: number | null | undefined; alReves?: boolean }) {
+/**
+ * Variación contra el período anterior. Gris por defecto (invertir menos o que te vean menos no es "malo"); en verde o
+ * rojo solo con `valorar`: resultados y retorno (subir es bueno) o, con `alReves`, el costo de cada uno (bajar es bueno).
+ */
+function Cambio({
+  ahora,
+  antes,
+  valorar = false,
+  alReves = false,
+}: {
+  ahora: number | null | undefined;
+  antes: number | null | undefined;
+  valorar?: boolean;
+  alReves?: boolean;
+}) {
   if (ahora == null || !antes) return null;
   const pct = Math.round(((ahora - antes) / antes) * 100);
   if (!isFinite(pct) || pct === 0) return null;
@@ -44,7 +73,11 @@ function Cambio({ ahora, antes, alReves = false }: { ahora: number | null | unde
     <span
       className={cn(
         "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold",
-        bueno ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-red-500/10 text-red-600 dark:text-red-400"
+        !valorar
+          ? "bg-muted text-muted-foreground"
+          : bueno
+            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+            : "bg-red-500/10 text-red-600 dark:text-red-400"
       )}
     >
       {pct > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -111,7 +144,22 @@ function Grupo({ icono: Icono, titulo, nota, tiles }: { icono: React.ElementType
 }
 
 /** Lo más importante del mes, en una frase y un número grande. */
-function Destacado({ etiqueta, numero, unidad, detalle, cambio }: { etiqueta: string; numero: string; unidad: string; detalle?: string; cambio?: React.ReactNode }) {
+function Destacado({
+  etiqueta,
+  numero,
+  unidad,
+  detalle,
+  cambio,
+  retorno,
+}: {
+  etiqueta: string;
+  numero: string;
+  unidad: string;
+  detalle?: string;
+  cambio?: React.ReactNode;
+  /** Ventas: "Por cada $1 que invertiste, vendiste $N". */
+  retorno?: React.ReactNode;
+}) {
   return (
     <section className="relative overflow-hidden rounded-3xl border border-primary/30 bg-gradient-to-br from-primary/15 via-card to-card p-5 sm:p-7">
       <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-fuchsia-500/15 blur-3xl" aria-hidden />
@@ -124,6 +172,12 @@ function Destacado({ etiqueta, numero, unidad, detalle, cambio }: { etiqueta: st
         {cambio}
       </p>
       {detalle && <p className="relative mt-2 text-sm text-muted-foreground">{detalle}</p>}
+      {retorno && (
+        <p className="relative mt-4 inline-flex flex-wrap items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2 text-sm font-medium">
+          <TrendingUp className="h-4 w-4 shrink-0 text-emerald-500" />
+          {retorno}
+        </p>
+      )}
     </section>
   );
 }
@@ -236,6 +290,191 @@ function VideosDelMes({ publicados, conMeta }: { publicados: Video[]; conMeta: b
   );
 }
 
+const VIOLETA = "#6F40FC";
+
+/** "Tu anuncio que más vendió": miniatura, cuánto trajo, cuánto costó cada uno y, si es un video nuestro, el link. */
+function MejorAnuncio({
+  top,
+  info,
+  video,
+  uno,
+  varios,
+  esVentas,
+}: {
+  top: { nombre: string; resultados: number; costo: number; valor_compras: number };
+  info?: AnuncioInfo;
+  video?: Video;
+  uno: string;
+  varios: string;
+  esVentas: boolean;
+}) {
+  const open = useOpenVideo();
+  const [sinImagen, setSinImagen] = useState(false);
+  const titulo = esVentas ? "Tu anuncio que más vendió" : `Tu anuncio que más ${varios} trajo`;
+  return (
+    <section className="space-y-3">
+      <h3 className="flex items-center gap-2 text-base font-semibold">
+        <Trophy className="h-4 w-4 text-muted-foreground" /> {titulo}
+      </h3>
+      <div className="flex items-start gap-4 overflow-hidden rounded-2xl border bg-card p-4 sm:items-center">
+        <div className="relative aspect-square w-24 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-primary/25 to-fuchsia-500/20 sm:w-36">
+          {info?.miniatura && !sinImagen ? (
+            <img src={info.miniatura} alt={top.nombre} loading="lazy" referrerPolicy="no-referrer" onError={() => setSinImagen(true)} className="h-full w-full object-cover" />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center text-primary">
+              <Megaphone className="h-8 w-8" />
+            </span>
+          )}
+          <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur">
+            <Trophy className="h-3 w-3 text-amber-300" /> N.º 1
+          </span>
+        </div>
+        <div className="min-w-0 flex-1 space-y-3 overflow-hidden">
+          <p className="line-clamp-2 font-semibold" title={info?.nombre || top.nombre}>
+            {info?.nombre || top.nombre}
+          </p>
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            <div>
+              <p className="text-2xl font-extrabold tabular-nums tracking-tight sm:text-3xl" style={{ color: VIOLETA }}>
+                {fmt(top.resultados)}
+              </p>
+              <p className="text-xs text-muted-foreground">{top.resultados === 1 ? uno : varios}</p>
+            </div>
+            <div>
+              <p className="text-2xl font-extrabold tabular-nums tracking-tight sm:text-3xl">{formatARS(top.costo)}</p>
+              <p className="text-xs text-muted-foreground">cada {uno}</p>
+            </div>
+            {esVentas && top.valor_compras > 0 && (
+              <div>
+                <p className="text-2xl font-extrabold tabular-nums tracking-tight sm:text-3xl">{formatARS(top.valor_compras)}</p>
+                <p className="text-xs text-muted-foreground">vendido</p>
+              </div>
+            )}
+          </div>
+          {(video || info?.permalink) && (
+            <div className="flex flex-wrap gap-2">
+              {video && (
+                <button
+                  type="button"
+                  onClick={() => open(video.id)}
+                  className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+                >
+                  <Play className="h-3 w-3 shrink-0 fill-current" /> <span className="min-w-0 truncate">Ver el video: {video.titulo}</span>
+                </button>
+              )}
+              {info?.permalink && (
+                <a
+                  href={hrefSeguro(info.permalink)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                >
+                  Ver en Instagram <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const MES_CORTO = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+/** Una barra por mes con el resultado principal. Al pasar el mouse o tocar: inversión y costo de cada uno. */
+function GraficoMeses({
+  datos,
+  uno,
+  varios,
+  mes,
+}: {
+  datos: { mes: string; gasto: number; resultados: number; costo: number | null }[];
+  uno: string;
+  varios: string;
+  mes: string;
+}) {
+  const [foco, setFoco] = useState<string | null>(null);
+  const max = Math.max(1, ...datos.map((d) => d.resultados));
+  const hoy = mesActual();
+  const total = datos.reduce((a, d) => a + d.resultados, 0);
+  const visto = datos.find((d) => d.mes === (foco ?? mes)) ?? datos[datos.length - 1];
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
+        <h3 className="flex items-center gap-2 text-base font-semibold">
+          <BarChart3 className="h-4 w-4 text-muted-foreground" /> {varios.charAt(0).toUpperCase() + varios.slice(1)} de los últimos 6 meses
+        </h3>
+        <p className="text-[11px] text-muted-foreground">
+          {fmt(total)} en total · tocá una barra para ver la inversión de ese mes
+        </p>
+      </div>
+      <div className="rounded-2xl border bg-card p-4 sm:p-5" onMouseLeave={() => setFoco(null)}>
+        {/* Detalle del mes que se toca o se señala (si no, el mes elegido arriba). */}
+        {visto && (
+          <div className="mb-4 flex flex-wrap items-baseline gap-x-5 gap-y-1 rounded-xl bg-muted/50 px-3.5 py-2.5 text-sm">
+            <b>
+              {mesLabel(visto.mes)}
+              {visto.mes === hoy && <span className="ml-1.5 text-xs font-normal text-primary">en curso</span>}
+            </b>
+            <span>
+              <b className="tabular-nums" style={{ color: VIOLETA }}>
+                {fmt(visto.resultados)}
+              </b>{" "}
+              {visto.resultados === 1 ? uno : varios}
+            </span>
+            <span className="text-muted-foreground">
+              Inversión: <b className="tabular-nums text-foreground">{formatARS(visto.gasto)}</b>
+            </span>
+            {visto.costo != null && (
+              <span className="text-muted-foreground">
+                Cada {uno}: <b className="tabular-nums text-foreground">{formatARS(visto.costo)}</b>
+              </span>
+            )}
+          </div>
+        )}
+        <div className="flex h-48 items-end gap-2 sm:gap-4">
+          {datos.map((d) => {
+            const enCurso = d.mes === hoy;
+            const activo = foco === d.mes;
+            const alto = d.resultados ? Math.max((d.resultados / max) * 100, 4) : 0;
+            return (
+              <button
+                key={d.mes}
+                type="button"
+                onMouseEnter={() => setFoco(d.mes)}
+                onFocus={() => setFoco(d.mes)}
+                onClick={() => setFoco((f) => (f === d.mes ? null : d.mes))}
+                aria-label={`${mesLabel(d.mes)}: ${fmt(d.resultados)} ${d.resultados === 1 ? uno : varios}, inversión ${formatARS(d.gasto)}`}
+                className="group flex h-full flex-1 flex-col items-center justify-end outline-none"
+              >
+                <span className={cn("mb-1 text-xs font-semibold tabular-nums", d.resultados ? "" : "text-muted-foreground")}>{fmt(d.resultados)}</span>
+                <span
+                  className={cn("w-full max-w-14 rounded-t-lg transition-all", d.mes === mes || activo ? "opacity-100" : "opacity-70 group-hover:opacity-100")}
+                  style={{
+                    height: `${alto}%`,
+                    backgroundColor: VIOLETA,
+                    backgroundImage: enCurso ? "repeating-linear-gradient(135deg, rgba(255,255,255,.18) 0 6px, transparent 6px 12px)" : undefined,
+                    boxShadow: d.mes === mes ? `0 0 0 2px ${VIOLETA}55` : undefined,
+                  }}
+                />
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-2 flex gap-2 border-t pt-2 sm:gap-4">
+          {datos.map((d) => (
+            <span key={d.mes} className={cn("flex-1 text-center text-[11px] text-muted-foreground", d.mes === mes && "font-semibold text-foreground")}>
+              {MES_CORTO[Number(d.mes.slice(5, 7)) - 1]}
+              {d.mes === hoy && <span className="block text-[10px] font-normal text-primary">en curso</span>}
+            </span>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 const GLOSARIO: [string, string][] = [
   ["Invertiste", "Lo que se puso en publicidad en Meta (Instagram y Facebook) en el mes."],
   ["Tus anuncios se vieron", "Cuántas veces aparecieron tus anuncios en pantalla. Una misma persona puede verlos más de una vez."],
@@ -257,7 +496,11 @@ export function ResultadosCliente({
   onMes: (m: string) => void;
 }) {
   const f = fechasDeMes(mes);
-  const filas = usePautaMeta(cliente.id, f.antDesde);
+  const hoyMes = mesActual();
+  const meses6 = useMemo(() => [-5, -4, -3, -2, -1, 0].map((d) => sumarMeses(hoyMes, d)), [hoyMes]);
+  const filas = usePautaMeta(cliente.id, `${sumarMeses(hoyMes, -6)}-01`);
+  const anuncios = useAnunciosMeta(cliente.id, f.desde);
+  const infoAnuncios = useAnunciosInfo(cliente.id);
   const ig = useMetricasRedes(cliente.id);
   const r = useMemo(() => (filas ? resumirPauta(filas, f.desde, f.hasta) : null), [filas, f.desde, f.hasta]);
   const ant = useMemo(() => (filas ? resumirPauta(filas, f.antDesde, f.antHasta) : null), [filas, f.antDesde, f.antHasta]);
@@ -276,6 +519,27 @@ export function ResultadosCliente({
   const plural = (n: number, uno: string) => (n === 1 ? uno : uno === "compra" ? "ventas" : `${uno}s`);
   const unoVisible = (u: string) => (u === "compra" ? "venta" : u);
 
+  // Gráfico de 6 meses: todos los meses miden lo mismo (el resultado principal de todo el período).
+  const tipo6 = useMemo(() => (filas?.length ? principalDelPeriodo(filas.filter((x) => x.fecha >= `${meses6[0]}-01`)) : null), [filas, meses6]);
+  const porMes = useMemo(() => (filas && tipo6 && tipo6 !== "clics" ? resumirPorMes(filas, meses6, tipo6) : null), [filas, meses6, tipo6]);
+  const uno6 = tipo6 ? unoVisible(NOMBRE_RESULTADO[tipo6].uno) : "";
+
+  // El anuncio del mes que más trajo, según el objetivo principal (ventas, mensajes o contactos).
+  const top = useMemo(
+    () => (anuncios && r && r.principal !== "clics" ? mejorAnuncio(anuncios, f.desde, f.hasta, r.principal) : null),
+    [anuncios, r, f.desde, f.hasta]
+  );
+  const topInfo = top ? infoAnuncios.find((a) => a.ad_id === top.ad_id) : undefined;
+  const topVideo = top
+    ? videos.find(
+        (v) =>
+          v.proyecto_id === cliente.id &&
+          v.meta &&
+          ((v.meta.ad_id && v.meta.ad_id === top.ad_id) ||
+            (!!v.meta.post_id && !!topInfo && [topInfo.post_id, topInfo.ig_media_id].some((x) => x && (x === v.meta!.post_id || x.endsWith(`_${v.meta!.post_id}`)))))
+      )
+    : undefined;
+
   // Lo más importante del mes: el resultado de la pauta; si no hubo, los mensajes de los videos; si no, el Instagram.
   let destacado: React.ReactNode = null;
   if (hayPauta && r && r.resultados > 0) {
@@ -284,10 +548,20 @@ export function ResultadosCliente({
         etiqueta={`${cuando}, gracias a tu publicidad`}
         numero={fmt(r.resultados)}
         unidad={plural(r.resultados, unoVisible(nom.uno))}
-        cambio={!enCurso ? <Cambio ahora={r.resultados} antes={ant?.resultados} /> : undefined}
+        cambio={!enCurso ? <Cambio ahora={r.resultados} antes={ant?.resultados} valorar /> : undefined}
         detalle={`Invertiste ${formatARS(r.gasto)}${r.costo != null ? ` · cada ${unoVisible(nom.uno)} costó ${formatARS(r.costo)}` : ""}${
           r.principal === "compras" && r.valor_compras > 0 ? ` · vendiste por ${formatARS(r.valor_compras)}` : ""
         }`}
+        retorno={
+          r.principal === "compras" && r.valor_compras > 0 && r.gasto > 0 ? (
+            <>
+              <span>
+                Por cada <b>$1</b> que invertiste, vendiste <b className="text-emerald-600 dark:text-emerald-400">{pesos2(r.valor_compras / r.gasto)}</b>
+              </span>
+              {!enCurso && ant?.roas != null && <Cambio ahora={r.valor_compras / r.gasto} antes={ant.roas} valorar />}
+            </>
+          ) : undefined
+        }
       />
     );
   } else if (vid.mensajes > 0) {
@@ -344,14 +618,14 @@ export function ResultadosCliente({
               nota={enCurso ? "Se actualiza sola todos los días · comparado con los mismos días del mes pasado" : "Comparado con el mes anterior"}
               tiles={[
                 { icono: Wallet, titulo: "Invertiste", valor: formatARS(r.gasto), cambio: <Cambio ahora={r.gasto} antes={ant?.gasto} />, tono: "violeta" },
-                { icono: Eye, titulo: "Tus anuncios se vieron", valor: `${fmt(r.impresiones)} veces`, cambio: <Cambio ahora={r.impresiones} antes={ant?.impresiones} />, tono: "azul" },
+                { icono: Eye, titulo: "Tus anuncios se vieron", valor: fmt(r.impresiones), sub: "veces", cambio: <Cambio ahora={r.impresiones} antes={ant?.impresiones} />, tono: "azul" },
                 r.resultados > 0
                   ? {
                       icono: r.principal === "compras" ? ShoppingBag : r.principal === "mensajes" ? MessageCircle : MousePointerClick,
                       titulo: `Cada ${unoVisible(nom.uno)} costó`,
                       valor: r.costo != null ? formatARS(r.costo) : "",
                       sub: `${fmt(r.resultados)} ${plural(r.resultados, unoVisible(nom.uno))} en total`,
-                      cambio: <Cambio ahora={r.costo} antes={ant?.costo} alReves />,
+                      cambio: <Cambio ahora={r.costo} antes={ant?.costo} valorar alReves />,
                       tono: "verde",
                     }
                   : null,
@@ -402,8 +676,23 @@ export function ResultadosCliente({
             />
           )}
 
+          {top && r && (
+            <MejorAnuncio
+              top={top}
+              info={topInfo}
+              video={topVideo}
+              uno={unoVisible(nom.uno)}
+              varios={plural(2, unoVisible(nom.uno))}
+              esVentas={r.principal === "compras"}
+            />
+          )}
+
           <CrecimientoRedes proyectoId={cliente.id} />
-          <EvolucionMensajes videos={videos} proyectoId={cliente.id} mes={mes} onMes={onMes} />
+          {porMes && porMes.some((d) => d.resultados > 0) ? (
+            <GraficoMeses datos={porMes} uno={uno6} varios={plural(2, uno6)} mes={mes} />
+          ) : (
+            <EvolucionMensajes videos={videos} proyectoId={cliente.id} mes={mes} onMes={onMes} />
+          )}
           <VideosDelMes publicados={vid.publicados} conMeta={hayPauta} />
         </>
       )}
