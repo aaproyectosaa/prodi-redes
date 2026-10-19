@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useAlertasPauta } from "@/components/redes/AlertasPauta";
 import { auditoriaPauta } from "@/lib/redes/auditoriaPauta";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, CalendarClock, ChevronDown, Sun, X } from "lucide-react";
@@ -310,6 +311,7 @@ export function MiDia() {
   const { mias } = useTareas(delEquipo ? uid : undefined);
   const { facturas } = useFacturas(sumarMeses(mesActual(), -3), plata);
   const obligaciones = useObligaciones(plata);
+  const { alertas: alertasMeta } = useAlertasPauta(misRoles.includes("pauta"));
 
   const items = useMemo(() => {
     if (!delEquipo || !uid) return [];
@@ -340,6 +342,17 @@ export function MiDia() {
         out.push({ id: `meta-${v.id}`, titulo: v.titulo, clienteId: v.proyecto_id, fecha: hoy, etiqueta: "Falta", tarea: "Cargar ID de Meta", onAbrir: () => navigate(`/videos?video=${v.id}`) });
       for (const { video: v } of a.resultadosViejos)
         out.push({ id: `res-${v.id}`, titulo: v.titulo, clienteId: v.proyecto_id, fecha: hoy, etiqueta: "Falta", tarea: "Actualizar resultados", onAbrir: () => navigate(`/videos?video=${v.id}`) });
+      // Alertas de Meta (presupuesto, sin gasto, costo que sube…): las que hay que mirar hoy.
+      for (const al of alertasMeta.filter((x) => x.nivel >= 1 && x.tipo !== "video_sin_anuncio"))
+        out.push({
+          id: `al-${al.id}`,
+          titulo: al.titulo,
+          clienteId: al.proyectoId,
+          fecha: hoy,
+          etiqueta: al.nivel === 2 ? "Urgente" : "Hoy",
+          tarea: al.detalle,
+          onAbrir: () => navigate(`/clientes/${al.proyectoId}?tab=resultados`),
+        });
     }
     // Diseño: piezas para hacer o corregir.
     if (misRoles.includes("diseno")) {
@@ -399,7 +412,7 @@ export function MiDia() {
       out.push({ id: r.id, titulo: r.titulo, clienteId: r.proyecto_id, sub: "Reunión", fecha: hoy, etiqueta: `Hoy ${hh}`, tarea: "Reunión", onAbrir: () => navigate(`/reuniones?r=${r.id}`) });
     }
     return out;
-  }, [delEquipo, uid, misRoles, videos, piezas, clientes, plata, facturas, obligaciones, mias, reuniones, navigate]);
+  }, [delEquipo, uid, misRoles, videos, piezas, clientes, plata, facturas, obligaciones, mias, reuniones, navigate, alertasMeta]);
 
   if (!delEquipo) return null;
   return <MiDiaCartel items={items} />;

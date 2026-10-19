@@ -12,7 +12,7 @@ import { chequeoMeta, fotoRedesTodos } from "../_lib/meta-redes";
 import { appUrl, body, HttpError, requireCaller, sendError } from "../_lib/http";
 import { construirInforme, enviarMail, mesAnteriorAR } from "../_lib/informe";
 import { sincronizarTodoMeta, sincronizarVideoMeta } from "../_lib/meta";
-import { sincronizarAuto, sincronizarCuentasTodos } from "../_lib/meta-cuenta";
+import { avisarPresupuesto, sincronizarAuto, sincronizarCuentasTodos } from "../_lib/meta-cuenta";
 import { facturacionDel27, recordatoriosCobro, vencimientosObligaciones, recordatoriosAprobacion, recordatoriosEdicion, recordatoriosPlan, recordatoriosRodaje } from "../_lib/diario";
 import { assertProjectAccess } from "../_lib/http";
 import { aprenderDeChats } from "../_lib/chat-memoria";
@@ -55,7 +55,9 @@ async function metaCuenta(req: VercelRequest) {
   if (!b.proyecto_id) throw new HttpError(400, "Falta el cliente");
   await assertProjectAccess(caller, b.proyecto_id);
   try {
-    return await sincronizarAuto(b.proyecto_id);
+    const r = await sincronizarAuto(b.proyecto_id);
+    if (!r.saltado) await avisarPresupuesto(b.proyecto_id, appUrl(req)).catch(() => undefined);
+    return r;
   } catch (err) {
     throw new HttpError(502, err instanceof Error ? err.message : "Meta no respondió");
   }
@@ -106,7 +108,7 @@ async function diario(req: VercelRequest) {
   // Instagram y Facebook de los clientes: la foto del día (seguidores, alcance).
   const redesMeta = await fotoRedesTodos().catch((err) => `error: ${err}`);
   // Pauta de toda la cuenta e Instagram día por día (últimos 3 días, Meta corrige los recientes).
-  const cuentasMeta = await sincronizarCuentasTodos().catch((err) => `error: ${err}`);
+  const cuentasMeta = await sincronizarCuentasTodos(base).catch((err) => `error: ${err}`);
   // Mora: escalón de cada cliente según sus días de atraso (después de los recordatorios de cobro).
   const mora = await moraTodos(base).catch((err) => `error: ${err}`);
   // Lo que les llegó al equipo mientras descansaban: un solo aviso de buenos días.

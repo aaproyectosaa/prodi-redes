@@ -317,7 +317,17 @@ export interface Project {
     conectado?: boolean;
   } | null;
   /** Última vez que se trajeron la pauta y el Instagram de Meta (lo escribe el servidor). */
-  meta_sync?: { at: string; ok: boolean; detalle: string; desde?: string; hasta?: string; historial?: boolean; ids?: string } | null;
+  meta_sync?: {
+    at: string;
+    ok: boolean;
+    detalle: string;
+    desde?: string;
+    hasta?: string;
+    historial?: boolean;
+    ids?: string;
+    /** Frecuencia de cada campaña en los últimos 7 días (veces que la vio cada persona). */
+    frecuencia?: { id: string; nombre: string; frecuencia: number }[];
+  } | null;
   /** Fecha de alta del cliente (YYYY-MM-DD). */
   alta?: string | null;
   /** Producción de los videos. `filma`: quién filma (por defecto Prodi). */

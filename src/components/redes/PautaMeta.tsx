@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { BarraPresupuesto } from "@/components/redes/AlertasPauta";
 import { Eye, Heart, Instagram, Loader2, Megaphone, MousePointerClick, ShoppingBag, TrendingDown, TrendingUp, Users, Wallet, AlertTriangle } from "lucide-react";
 import type { Project } from "@/integrations/firebase/types";
 import { formatARS } from "@/lib/redes/format";
@@ -137,6 +138,7 @@ export function PautaMeta({ cliente, modo }: { cliente: Project; modo: "admin" |
         ))}
       </div>
 
+      {filas && modo !== "cliente" && <BarraPresupuesto cliente={cliente} filas={filas} />}
       {filas === null ? (
         <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Cargando…
@@ -186,6 +188,7 @@ export function PautaMeta({ cliente, modo }: { cliente: Project; modo: "admin" |
                           <th className="p-3 text-right font-medium">{nom.varios}</th>
                           <th className="p-3 text-right font-medium">Costo c/u</th>
                           <th className="p-3 text-right font-medium">Clics</th>
+                          <th className="p-3 text-right font-medium" title="Veces que vio el anuncio cada persona, últimos 7 días">Frecuencia 7 d</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -198,6 +201,14 @@ export function PautaMeta({ cliente, modo }: { cliente: Project; modo: "admin" |
                             <td className="p-3 text-right tabular-nums">{fmt(c.resultados)}</td>
                             <td className="p-3 text-right tabular-nums">{c.costo != null ? formatARS(c.costo) : "—"}</td>
                             <td className="p-3 text-right tabular-nums">{fmt(c.clics)}</td>
+                            {(() => {
+                              const fr = cliente.meta_sync?.frecuencia?.find((x) => x.id === c.id)?.frecuencia;
+                              return (
+                                <td className={cn("p-3 text-right tabular-nums", fr != null && fr >= 3.5 && "font-semibold text-amber-600 dark:text-amber-400")}>
+                                  {fr != null ? fmt(fr, 1) : "—"}
+                                </td>
+                              );
+                            })()}
                           </tr>
                         ))}
                       </tbody>

@@ -10,13 +10,15 @@
 import crypto from "crypto";
 import { adminDb } from "./db";
 import { hoyAR, sumarDias } from "./fecha";
+import { sincronizarAnuncios } from "./meta-anuncios";
+import { destinatariosDe, enviarAviso } from "./notify";
 
 const VERSION = () => process.env.META_GRAPH_VERSION || "v23.0";
 // Errores de Meta por límite de uso: se espera y se reintenta.
 const LIMITE = new Set([4, 17, 613, 80004]);
 const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function graph(url: string): Promise<any> {
+export async function graph(url: string): Promise<any> {
   for (let intento = 0; ; intento++) {
     const r = await fetch(url);
     const j: any = await r.json().catch(() => ({}));
@@ -30,7 +32,7 @@ async function graph(url: string): Promise<any> {
   }
 }
 
-function urlDe(path: string, params: Record<string, string>): string {
+export function urlDe(path: string, params: Record<string, string>): string {
   const token = process.env.META_ACCESS_TOKEN;
   if (!token) throw new Error("Falta META_ACCESS_TOKEN en Vercel");
   const qs = new URLSearchParams({ ...params, access_token: token });
@@ -40,7 +42,7 @@ function urlDe(path: string, params: Record<string, string>): string {
 }
 
 /** Todas las páginas de resultados (sigue `paging.next`). */
-async function graphTodo(path: string, params: Record<string, string>): Promise<any[]> {
+export async function graphTodo(path: string, params: Record<string, string>): Promise<any[]> {
   const out: any[] = [];
   let url: string | null = urlDe(path, params);
   for (let i = 0; i < 50 && url; i++) {
@@ -59,10 +61,10 @@ function enCriollo(code: number, msg: string): string {
   return `Meta: ${msg}`;
 }
 
-const num = (v: unknown) => (v == null || v === "" ? 0 : Number(v) || 0);
-const dec = (v: unknown) => (v == null || v === "" ? null : Math.round(Number(v) * 100) / 100);
+export const num = (v: unknown) => (v == null || v === "" ? 0 : Number(v) || 0);
+export const dec = (v: unknown) => (v == null || v === "" ? null : Math.round(Number(v) * 100) / 100);
 
-function accion(lista: any[] | undefined, ...tipos: string[]): number {
+export function accion(lista: any[] | undefined, ...tipos: string[]): number {
   for (const t of tipos) {
     const a = (lista ?? []).find((x: any) => x.action_type === t);
     if (a) return num(a.value);
@@ -71,7 +73,7 @@ function accion(lista: any[] | undefined, ...tipos: string[]): number {
 }
 
 /** Tramos de hasta 30 días entre dos fechas (inclusive). */
-function tramos(desde: string, hasta: string): { since: string; until: string }[] {
+export function tramos(desde: string, hasta: string): { since: string; until: string }[] {
   const out: { since: string; until: string }[] = [];
   for (let d = desde; d <= hasta; d = sumarDias(d, 30)) {
     const fin = sumarDias(d, 29);
@@ -179,10 +181,12 @@ export async function sincronizarCuentaMeta(pid: string, dias = 3): Promise<Resu
   const desde = sumarDias(hasta, -(Math.min(Math.max(dias, 1), 90) - 1));
   const partes: string[] = [];
   let ok = true;
+  let frecuencia: { id: string; nombre: string; frecuencia: number }[] | undefined;
   if (cuenta) {
     try {
       const n = await pautaCuenta(pid, cuenta, desde, hasta);
       partes.push(`Pauta: ${n} ${n === 1 ? "registro" : "registros"}`);
+      frecuencia = await frecuencia7d(cuenta).catch(() => undefined);
     } catch (err) {
       ok = false;
       partes.push(`Pauta: ${err instanceof Error ? err.message : "error"}`);
@@ -208,8 +212,57 @@ export async function sincronizarCuentaMeta(pid: string, dias = 3): Promise<Resu
   const detalle = partes.join(" · ");
   // Historial completo: ya se trajeron 90 días con estos IDs (si cambian los IDs, se vuelve a traer).
   const historial = p.meta_sync?.ids === idsDe(p) && p.meta_sync?.historial ? true : ok && dias >= 90;
-  await ref.update({ meta_sync: { at: new Date().toISOString(), ok, detalle, desde, hasta, historial, ids: idsDe(p) } });
+  await ref.update({
+    meta_sync: { at: new Date().toISOString(), ok, detalle, desde, hasta, historial, ids: idsDe(p), frecuencia: frecuencia ?? p.meta_sync?.frecuencia ?? [] },
+  });
   return { ok, detalle };
+}
+
+/** Frecuencia de cada campaña con entrega en los últimos 7 días (veces que la vio cada persona). */
+async function frecuencia7d(cuenta: string): Promise<{ id: string; nombre: string; frecuencia: number }[]> {
+  const data = await graphTodo(`act_${cuenta}/insights`, { level: "campaign", date_preset: "last_7d", fields: "campaign_id,campaign_name,frequency,impressions", limit: "200" });
+  return data
+    .filter((d: any) => Number(d.impressions) > 0)
+    .map((d: any) => ({ id: String(d.campaign_id), nombre: String(d.campaign_name ?? d.campaign_id), frecuencia: Math.round(Number(d.frequency || 0) * 100) / 100 }));
+}
+
+/** Presupuesto mensual de pauta: el que eligió el cliente o el de su plan. */
+const presupuestoDe = (p: Record<string, any>): number | null => {
+  const m = Number(p.pauta_cliente?.monto ?? p.plan_redes_override?.pauta?.monto ?? 0);
+  return m > 0 ? m : null;
+};
+
+/**
+ * Aviso a pauta (y admins) cuando la inversión del mes llega al 90% o pasa el presupuesto del cliente.
+ * Una vez por escalón y por mes (queda anotado en `meta_aviso_presupuesto`).
+ */
+export async function avisarPresupuesto(pid: string, baseUrl: string): Promise<void> {
+  const db = adminDb();
+  const ref = db.collection("projects").doc(pid);
+  const p = (await ref.get()).data();
+  const tope = p ? presupuestoDe(p) : null;
+  if (!p || !tope) return;
+  const hoy = hoyAR();
+  const mes = hoy.slice(0, 7);
+  const filas = (await db.collection("meta_pauta_diaria").where("proyecto_id", "==", pid).where("fecha", ">=", `${mes}-01`).get()).docs;
+  const gasto = filas.reduce((a, d) => a + (Number(d.data().gasto) || 0), 0);
+  const nivel = gasto >= tope ? 2 : gasto >= tope * 0.9 ? 1 : 0;
+  const previo = p.meta_aviso_presupuesto?.mes === mes ? Number(p.meta_aviso_presupuesto?.nivel ?? 0) : 0;
+  if (nivel === 0 || nivel <= previo) return;
+  const ars = (n: number) => `$ ${Math.round(n).toLocaleString("es-AR")}`;
+  const nombre = String(p.nombre ?? "Un cliente");
+  await enviarAviso(
+    {
+      destinatarios: await destinatariosDe(pid, ["pauta"]),
+      titulo: nivel === 2 ? `${nombre} se pasó del presupuesto de pauta` : `${nombre} está por llegar al presupuesto de pauta`,
+      cuerpo: `Lleva ${ars(gasto)} de ${ars(tope)} este mes (${Math.round((gasto / tope) * 100)}%).${nivel === 2 ? " Pausá o bajá el presupuesto en Meta." : ""}`,
+      link: `/clientes/${pid}?tab=resultados`,
+      clave: `presupuesto-pauta:${pid}:${mes}:${nivel}`,
+      proyectoId: pid,
+    },
+    baseUrl
+  );
+  await ref.update({ meta_aviso_presupuesto: { mes, nivel, gasto: Math.round(gasto), at: new Date().toISOString() } });
 }
 
 const idsDe = (p: Record<string, any>) => `${String(p.meta?.ad_account_id ?? "").replace(/^act_/, "").trim()}|${String(p.meta?.ig_user_id ?? "").trim()}`;
@@ -228,13 +281,18 @@ export async function sincronizarAuto(pid: string, forzar = false): Promise<Resu
   if (!p) throw new Error("Cliente no encontrado");
   if (!p.meta?.ad_account_id && !p.meta?.ig_user_id) return { ok: false, detalle: "Sin IDs de Meta", saltado: true };
   const historia = faltaHistorial(p);
+  // La pauta por anuncio se agregó después: si todavía no tiene su historial, se busca aunque lo demás esté al día.
+  const faltanAnuncios = !!p.meta?.ad_account_id && !p.meta_anuncios_sync?.historial;
   const reciente = p.meta_sync?.at && Date.now() - new Date(p.meta_sync.at).getTime() < CADA;
-  if (!forzar && !historia && reciente) return { ok: true, detalle: p.meta_sync.detalle ?? "", saltado: true };
-  return sincronizarCuentaMeta(pid, historia ? 90 : 3);
+  if (!forzar && !historia && !faltanAnuncios && reciente) return { ok: true, detalle: p.meta_sync.detalle ?? "", saltado: true };
+  const r = await sincronizarCuentaMeta(pid, historia ? 90 : 3);
+  if (!p.meta?.ad_account_id) return r;
+  const anuncios = await sincronizarAnuncios(pid, 3);
+  return { ...r, detalle: `${r.detalle} · ${anuncios}` };
 }
 
 /** Cron diario: los últimos 3 días de cada cliente, de a uno; si uno falla, sigue con el próximo. */
-export async function sincronizarCuentasTodos(): Promise<string> {
+export async function sincronizarCuentasTodos(baseUrl: string): Promise<string> {
   if (!process.env.META_ACCESS_TOKEN) return "sin token";
   const proyectos = (await adminDb().collection("projects").get()).docs.filter((d) => {
     const p = d.data();
@@ -250,6 +308,7 @@ export async function sincronizarCuentasTodos(): Promise<string> {
         historiales++;
       }
       if ((await sincronizarAuto(d.id, true)).ok) bien++;
+      await avisarPresupuesto(d.id, baseUrl).catch((err) => console.warn("[meta-cuenta] aviso presupuesto", d.id, err));
     } catch (err) {
       console.warn("[meta-cuenta]", d.id, err instanceof Error ? err.message : err);
     }
