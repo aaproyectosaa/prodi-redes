@@ -135,7 +135,7 @@ export async function guardarDatosFacturacion(proyectoId: string, facturacion: N
 export function agrupadasDe(principalId: string, clientes: Project[], abonoDe: (c: Project) => number): EmpresaAgrupada[] {
   return clientes
     .filter((c) => c.id !== principalId && c.enabled !== false && c.facturacion?.factura_con === principalId)
-    .map((c) => ({ id: c.id, nombre: c.nombre, abono: abonoDe(c), extras_fijos: c.facturacion?.extras_fijos ?? [] }));
+    .map((c) => ({ id: c.id, nombre: c.nombre, abono: abonoDe(c), concepto_abono: c.facturacion?.concepto_abono ?? null, extras_fijos: c.facturacion?.extras_fijos ?? [] }));
 }
 
 /** ¿Se factura dentro de la boleta de otra empresa? (la otra tiene que existir y estar activa) */

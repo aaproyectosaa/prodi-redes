@@ -49,7 +49,7 @@ export async function prepararFacturacion(
     const con = p.facturacion?.factura_con;
     if (p.enabled === false || !con || con === d.id || !vivas.has(con)) continue;
     const lista = agrupadasDe.get(con) ?? [];
-    lista.push({ id: d.id, nombre: String(p.nombre ?? "Empresa"), abono: abonoDe(p), extras_fijos: p.facturacion?.extras_fijos ?? [] });
+    lista.push({ id: d.id, nombre: String(p.nombre ?? "Empresa"), abono: abonoDe(p), concepto_abono: p.facturacion?.concepto_abono ?? null, extras_fijos: p.facturacion?.extras_fijos ?? [] });
     agrupadasDe.set(con, lista);
   }
 

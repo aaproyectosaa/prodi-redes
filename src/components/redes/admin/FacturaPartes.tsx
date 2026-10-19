@@ -200,6 +200,7 @@ export function DatosFacturacionDialog({ proyectoId, onClose }: { proyectoId: st
   const [pausada, setPausada] = useState(false);
   const [recordar, setRecordar] = useState(true);
   const [fijos, setFijos] = useState<{ concepto: string; neto: string }[]>([]);
+  const [conceptoAbono, setConceptoAbono] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!c) return;
@@ -213,6 +214,7 @@ export function DatosFacturacionDialog({ proyectoId, onClose }: { proyectoId: st
     setPausada(!!f.pausada);
     setRecordar(!f.sin_recordatorios);
     setFijos((f.extras_fijos ?? []).map((x) => ({ concepto: x.concepto, neto: String(x.neto) })));
+    setConceptoAbono(f.concepto_abono ?? "");
     setFacturaCon(f.factura_con ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proyectoId]);
@@ -241,6 +243,7 @@ export function DatosFacturacionDialog({ proyectoId, onClose }: { proyectoId: st
         sin_recordatorios: !recordar,
         extras_fijos: fijos.filter((x) => x.concepto.trim() && Number(x.neto) > 0).map((x) => ({ concepto: x.concepto.trim(), neto: Number(x.neto) })),
         factura_con: facturaCon || null,
+        concepto_abono: conceptoAbono.trim() || null,
       });
       toast.success("Guardado: se usa desde la próxima boleta");
       onClose();
@@ -310,8 +313,14 @@ export function DatosFacturacionDialog({ proyectoId, onClose }: { proyectoId: st
             <Input value={cuit} onChange={(e) => setCuit(e.target.value)} placeholder="Opcional" />
           </div>
         </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Descripción del abono en la factura</Label>
+          <Input value={conceptoAbono} onChange={(e) => setConceptoAbono(e.target.value)} placeholder="Gestión de redes sociales" />
+          <p className="text-[11px] text-muted-foreground">Solo cambia el texto del renglón del plan. No suma plata.</p>
+        </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Ítems que se suman todos los meses</Label>
+          <p className="text-[11px] text-muted-foreground">Cada ítem se cobra aparte, además del plan.</p>
           {fijos.map((x, i) => (
             <div key={i} className="flex gap-2">
               <Input value={x.concepto} onChange={(e) => setFijos(fijos.map((y, j) => (j === i ? { ...y, concepto: e.target.value } : y)))} placeholder="Ej.: Combustible" />

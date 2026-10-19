@@ -229,6 +229,8 @@ export interface Project {
     condicion_iva?: CondicionIva | null;
     /** Ítems que se suman todos los meses (ej. "Combustible"). */
     extras_fijos?: { concepto: string; neto: number }[];
+    /** Cómo se llama el abono en la factura (por defecto "Gestión de redes sociales"). Solo el texto: no suma. */
+    concepto_abono?: string | null;
     /** "Tiene pagado hasta": último mes de servicio pagado por adelantado (YYYY-MM); hasta esa boleta sale cobrada. */
     adelantado_hasta?: string | null;
     /** Días del mes siguiente al facturado en que paga (por defecto del 1 al 5). Vence el último. */

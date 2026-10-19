@@ -241,6 +241,8 @@ export interface DatosCliente {
     razon_social?: string | null;
     cuit?: string | null;
     extras_fijos?: { concepto: string; neto: number }[];
+    /** Cómo se llama el abono en la factura (por defecto "Gestión de redes sociales"). Solo el texto: no suma. */
+    concepto_abono?: string | null;
     adelantado_hasta?: string | null;
     /** Días del mes siguiente en que paga (por defecto del 1 al día de vencimiento de Ajustes, el 5). */
     pago_desde?: number | null;
@@ -265,6 +267,7 @@ export interface EmpresaAgrupada {
   id: string;
   nombre: string;
   abono: number;
+  concepto_abono?: string | null;
   extras_fijos?: { concepto: string; neto: number }[];
 }
 
@@ -278,10 +281,11 @@ export function itemsDe(c: DatosMonto): ItemFactura[] {
   const items: ItemFactura[] = [];
   // Con varias empresas en la misma boleta, cada abono dice de qué empresa es.
   const grupo = (c.agrupadas ?? []).length > 0;
+  const base = c.facturacion?.concepto_abono?.trim() || "Gestión de redes sociales";
   if (c.abono > 0) {
     items.push({
       id: "abono",
-      concepto: grupo && c.nombre ? `Gestión de redes sociales · ${c.nombre}` : "Gestión de redes sociales",
+      concepto: grupo && c.nombre ? `${base} · ${c.nombre}` : base,
       servicio: "REDES",
       neto: c.abono,
     });
@@ -290,7 +294,7 @@ export function itemsDe(c: DatosMonto): ItemFactura[] {
     if (x.concepto && Number(x.neto) > 0) items.push({ id: `fijo${i}`, concepto: x.concepto, servicio: "EXTRAS", neto: Number(x.neto) });
   });
   (c.agrupadas ?? []).forEach((g, i) => {
-    if (g.abono > 0) items.push({ id: `grupo${i}`, concepto: `Gestión de redes sociales · ${g.nombre}`, servicio: "REDES", neto: g.abono });
+    if (g.abono > 0) items.push({ id: `grupo${i}`, concepto: `${g.concepto_abono?.trim() || "Gestión de redes sociales"} · ${g.nombre}`, servicio: "REDES", neto: g.abono });
     (g.extras_fijos ?? []).forEach((x, j) => {
       if (x.concepto && Number(x.neto) > 0) items.push({ id: `grupo${i}fijo${j}`, concepto: `${x.concepto} · ${g.nombre}`, servicio: "EXTRAS", neto: Number(x.neto) });
     });
