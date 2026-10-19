@@ -272,14 +272,19 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
   const { role, user, tieneRol } = useUserProfileContext();
   const puedeFilma = isAdmin || (tieneRol("productor") && !!user && (cliente.team_roles?.productor ?? []).includes(user.uid));
   const [form, setForm] = useState(() => toForm(cliente));
+  const formEditado = form;
   const [saving, setSaving] = useState(false);
   // El equipo como estaba al abrir (o al último cambio de afuera). Al guardar solo se escriben los roles que se
   // tocaron acá: si mientras tanto se sumó alguien desde otro lado (ej. un integrante nuevo), no se lo saca.
   const teamBase = useRef(toForm(cliente).team);
+  // Todo el formulario como estaba al abrir: al guardar, lo que no se tocó acá se toma de cómo está ahora en la base
+  // (si otro lo cambió mientras tanto, por ejemplo los precios o los ítems fijos, no se le vuelve a poner lo viejo).
+  const formBase = useRef(toForm(cliente));
 
   useEffect(() => {
     setForm(toForm(cliente));
     teamBase.current = toForm(cliente).team;
+    formBase.current = toForm(cliente);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cliente.id]);
 
@@ -321,6 +326,14 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
 
   const save = async () => {
     setSaving(true);
+    // Lo tocado acá + lo demás como está ahora (el equipo se resuelve aparte, rol por rol).
+    const actual = toForm(cliente);
+    const form = Object.fromEntries(
+      (Object.keys(actual) as (keyof typeof actual)[]).map((k) => [
+        k,
+        k === "team" || JSON.stringify(formEditado[k]) !== JSON.stringify(formBase.current[k]) ? formEditado[k] : actual[k],
+      ])
+    ) as typeof actual;
     try {
       assertEditable();
       const errPlazo = isAdmin ? errorPlazo(form.factPagoDesde, form.factPagoHasta, settings.dia_vencimiento ?? DIA_VENCIMIENTO) : null;
@@ -397,6 +410,8 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
         });
       }
       await updateDoc(doc(db, "projects", cliente.id), data);
+      formBase.current = form;
+      setForm(form);
       toast.success("Cliente guardado");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo guardar");
