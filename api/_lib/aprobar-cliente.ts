@@ -169,8 +169,23 @@ export async function responderPiezaApp(caller: Caller, b: PedidoPieza, base: st
     const p = (await tx.get(db.collection("projects").doc(String(pz.proyecto_id)))).data() ?? {};
     const team = (p.team_roles ?? {}) as Record<string, string[]>;
     const esCliente = caller.role === "cliente" && (team.cliente ?? []).includes(caller.uid);
-    if (!esCliente && caller.role !== "admin") throw new HttpError(403, "No tenés acceso a esta pieza");
+    const esProd = caller.role === "admin" || (caller.roles.includes("productor") && miembro(team, caller.uid));
+    if (!esCliente && !esProd) throw new HttpError(403, "No tenés acceso a esta pieza");
     if (pz.estado !== "para_aprobar") throw new HttpError(409, "Esta pieza ya fue respondida");
+    // El cliente la aprobó por WhatsApp, en persona…: producción la da por aprobada (todas las versiones que se le mandaron).
+    if (!esCliente) {
+      if (decision !== "aprobar") throw new HttpError(403, "Los cambios los pide el cliente (o volvela a Diseñando)");
+      const enviadasTodas = Array.isArray(pz.versiones_enviadas) && pz.versiones_enviadas.length ? (pz.versiones_enviadas as string[]) : null;
+      tx.update(ref, {
+        estado: "entregada",
+        version_aprobada_id: enviadasTodas?.[0] ?? pz.version_enviada_id ?? null,
+        ...(enviadasTodas && enviadasTodas.length > 1 ? { versiones_aprobadas: enviadasTodas } : {}),
+        updated_at: now,
+        ...(pz.sube_cliente === true ? { publicada_at: now } : {}),
+        historial: FieldValue.arrayUnion({ at: now, by: caller.uid, accion: "Aprobada por el cliente fuera del sistema", nota: null }),
+      });
+      return { pz: { ...pz, _todas: true, _aprobadas: true }, p };
+    }
     // Varias versiones juntas: se responde cada una; recién con todas respondidas la pieza cambia de estado.
     const enviadas = Array.isArray(pz.versiones_enviadas) ? (pz.versiones_enviadas as string[]) : [];
     if (enviadas.length > 1) {

@@ -57,6 +57,7 @@ import {
   mandarAlCliente,
   mandarARevision,
   deshacerAprobacionPieza,
+  aprobarPiezaPorFuera,
   pasaPorRevision,
   pedirCambiosInternoPieza,
   moverPieza,
@@ -600,6 +601,7 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
   const [varias, setVarias] = useState<string[] | null>(null);
   const [volviendo, setVolviendo] = useState(false);
   const [deshaciendo, setDeshaciendo] = useState(false);
+  const [aprobandoFuera, setAprobandoFuera] = useState(false);
   const [borrando, setBorrando] = useState(false);
   // "Mandar por chat": a una persona, un grupo o el chat del cliente.
   const [compartir, setCompartir] = useState(false);
@@ -744,6 +746,19 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
       toast.error(err instanceof Error ? err.message : "No se pudo");
     } finally {
       setDeshaciendo(false);
+    }
+  };
+  const aprobadaPorFuera = async () => {
+    if (!window.confirm("¿El cliente la aprobó por otro medio (WhatsApp, en persona…)? Queda aprobada y entregada.")) return;
+    setAprobandoFuera(true);
+    try {
+      await aprobarPiezaPorFuera(pieza);
+      toast.success("Marcada como aprobada por el cliente");
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo");
+    } finally {
+      setAprobandoFuera(false);
     }
   };
   const volverADisenando = async () => {
@@ -1307,6 +1322,12 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                       <Button size="sm" variant="outline" className="h-8 bg-background/60 text-xs" disabled={deshaciendo} onClick={() => void deshacerAprobacion()}>
                         {deshaciendo ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Undo2 className="mr-1.5 h-3.5 w-3.5" />}
                         Deshacer aprobación
+                      </Button>
+                    )}
+                    {revisa && (
+                      <Button size="sm" variant="outline" className="h-8 bg-background/60 text-xs" disabled={aprobandoFuera} onClick={() => void aprobadaPorFuera()}>
+                        {aprobandoFuera ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Check className="mr-1.5 h-3.5 w-3.5" />}
+                        El cliente la aprobó por otro medio
                       </Button>
                     )}
                     <Button size="sm" variant="ghost" className="h-8 text-xs" disabled={volviendo} onClick={() => void volverADisenando()}>

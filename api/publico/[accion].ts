@@ -72,7 +72,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const caller = await requireCaller(req, ["admin", "productor", "cliente"]);
       res.status(200).json(await responderVideoApp(caller, body<PedidoVideo>(req), appUrl(req)));
     } else if (accion === "pieza-cliente") {
-      const caller = await requireCaller(req, ["admin", "cliente"]);
+      const caller = await requireCaller(req, ["admin", "productor", "cliente"]);
       res.status(200).json(await responderPiezaApp(caller, body<PedidoPieza>(req), appUrl(req)));
     }
     else res.status(404).json({ error: "Acción desconocida" });

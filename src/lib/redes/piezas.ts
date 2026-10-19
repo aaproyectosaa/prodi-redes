@@ -370,6 +370,12 @@ export async function aprobarPieza(pieza: PiezaIA, _project: Project | undefined
   await callApi("/api/publico/pieza-cliente", { pieza_id: pieza.id, decision: "aprobar", ...(versionId ? { version_id: versionId } : {}) });
 }
 
+/** El cliente la aprobó por otro medio (WhatsApp, en persona): producción la da por aprobada. */
+export async function aprobarPiezaPorFuera(pieza: PiezaIA) {
+  assertEditable();
+  await callApi("/api/publico/pieza-cliente", { pieza_id: pieza.id, decision: "aprobar" });
+}
+
 /** El cliente pide cambios: vuelve a diseño con su comentario. */
 export async function pedirCambiosPieza(pieza: PiezaIA, _project: Project | undefined, _by: string, nota: string, versionId?: string) {
   await callApi("/api/publico/pieza-cliente", { pieza_id: pieza.id, decision: "cambios", nota, ...(versionId ? { version_id: versionId } : {}) });
