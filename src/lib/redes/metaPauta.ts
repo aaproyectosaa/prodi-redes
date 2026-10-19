@@ -21,6 +21,8 @@ export interface PautaDia {
   compras: number;
   valor_compras: number;
   leads: number;
+  /** Moneda de la cuenta publicitaria (ARS, USD…). */
+  moneda?: string | null;
   reproducciones_3s?: number;
   thruplays?: number;
 }
@@ -206,6 +208,8 @@ export const NOMBRE_RESULTADO: Record<TipoResultado, { uno: string; varios: stri
 };
 
 export interface ResumenPauta {
+  /** Moneda de la cuenta (la que más aparece; ARS si no dice). */
+  moneda: string;
   gasto: number;
   impresiones: number;
   alcance: number;
@@ -249,6 +253,21 @@ function principalDe(filas: PautaDia[]): TipoResultado {
   return "clics";
 }
 
+/** La moneda de una cuenta publicitaria (la que más aparece en sus filas). */
+export function monedaDe(filas: Pick<PautaDia, "moneda">[]): string {
+  const n = new Map<string, number>();
+  for (const f of filas) if (f.moneda) n.set(f.moneda, (n.get(f.moneda) ?? 0) + 1);
+  return [...n.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "ARS";
+}
+
+/** Plata en la moneda de la cuenta: "$ 1.234" en pesos, "US$ 1.234" en dólares. */
+export function dinero(n: number | null | undefined, moneda = "ARS"): string {
+  if (n == null || !isFinite(n)) return "—";
+  const dec = moneda === "ARS" || n === 0 ? 0 : Math.abs(n) < 100 ? 2 : 0;
+  const v = new Intl.NumberFormat("es-AR", { maximumFractionDigits: dec, minimumFractionDigits: dec }).format(n);
+  return moneda === "ARS" ? `$ ${v}` : moneda === "USD" ? `US$ ${v}` : `${moneda} ${v}`;
+}
+
 export function resumirPauta(filas: PautaDia[], desde: string, hasta: string): ResumenPauta {
   const f = filas.filter((x) => x.fecha >= desde && x.fecha <= hasta);
   const suma = (k: keyof PautaDia) => f.reduce((a, x) => a + (Number(x[k]) || 0), 0);
@@ -272,6 +291,7 @@ export function resumirPauta(filas: PautaDia[], desde: string, hasta: string): R
     camp.set(x.campaign_id, c);
   }
   return {
+    moneda: monedaDe(f.length ? f : filas),
     gasto,
     impresiones,
     alcance: suma("alcance"),

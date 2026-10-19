@@ -1,5 +1,5 @@
 import type { Project } from "@/integrations/firebase/types";
-import { NOMBRE_RESULTADO, resumirPauta, sumarDiasF, type PautaDia } from "@/lib/redes/metaPauta";
+import { NOMBRE_RESULTADO, dinero, monedaDe, resumirPauta, sumarDiasF, type PautaDia } from "@/lib/redes/metaPauta";
 
 // Alertas para quien maneja la pauta: lo que hay que tocar hoy en Meta. Salen de la pauta que se trae sola
 // (meta_pauta_diaria) y de los videos. Se muestran en su tablero y en "Mi día"; el presupuesto además avisa solo
@@ -30,7 +30,9 @@ const pct = (n: number) => `${Math.round(n * 100)}%`;
 
 /** Cómo viene la inversión del mes contra el presupuesto (y a qué ritmo). */
 export function estadoPresupuesto(c: Project, filas: PautaDia[], hoy: string) {
-  const tope = presupuestoPauta(c);
+  // El presupuesto está en pesos: si la cuenta publicitaria está en otra moneda (dólares), no se compara.
+  const enPesos = monedaDe(filas.filter((f) => f.proyecto_id === c.id)) === "ARS";
+  const tope = enPesos ? presupuestoPauta(c) : null;
   const desde = `${hoy.slice(0, 7)}-01`;
   const gasto = filas.filter((f) => f.proyecto_id === c.id && f.fecha >= desde && f.fecha <= hoy).reduce((a, f) => a + f.gasto, 0);
   const [y, m, d] = hoy.split("-").map(Number);
@@ -72,7 +74,7 @@ export function alertasPauta({ clientes, filas, hoy }: { clientes: Project[]; fi
       const a7 = resumirPauta(mias, sumarDiasF(hoy, -14), sumarDiasF(hoy, -8));
       if (r7.costo != null && a7.costo != null && r7.resultados >= 3 && a7.resultados >= 3 && r7.costo > a7.costo * 1.3) {
         const n = NOMBRE_RESULTADO[r7.principal];
-        out.push({ id: `cs-${c.id}`, tipo: "costo_sube", nivel: 1, proyectoId: c.id, titulo: `Cada ${n.uno} sale más caro`, detalle: `Esta semana ${ars(r7.costo)} contra ${ars(a7.costo)} la anterior (+${pct(r7.costo / a7.costo - 1)}). Probá otro anuncio o público.` });
+        out.push({ id: `cs-${c.id}`, tipo: "costo_sube", nivel: 1, proyectoId: c.id, titulo: `Cada ${n.uno} sale más caro`, detalle: `Esta semana ${dinero(r7.costo, r7.moneda)} contra ${dinero(a7.costo, r7.moneda)} la anterior (+${pct(r7.costo / a7.costo - 1)}). Probá otro anuncio o público.` });
       }
 
       // Campaña que gasta sin resultados hace 3 días.
@@ -87,7 +89,7 @@ export function alertasPauta({ clientes, filas, hoy }: { clientes: Project[]; fi
       }
       for (const [id, x] of porCamp) {
         if (x.gasto > 0 && x.res === 0 && principal !== "clics") {
-          out.push({ id: `sr-${c.id}-${id}`, tipo: "sin_resultados", nivel: 1, proyectoId: c.id, titulo: "Gasta sin resultados", detalle: `"${x.nombre}" lleva ${ars(x.gasto)} en 3 días y ningún${principal === "compras" ? "a venta" : principal === "leads" ? " contacto" : " mensaje"}.` });
+          out.push({ id: `sr-${c.id}-${id}`, tipo: "sin_resultados", nivel: 1, proyectoId: c.id, titulo: "Gasta sin resultados", detalle: `"${x.nombre}" lleva ${dinero(x.gasto, r7.moneda)} en 3 días y ningún${principal === "compras" ? "a venta" : principal === "leads" ? " contacto" : " mensaje"}.` });
         }
       }
 

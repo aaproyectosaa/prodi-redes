@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { createContext, useContext, useMemo, useState } from "react";
 import {
   BarChart3,
   ExternalLink,
@@ -35,6 +35,7 @@ import {
   useMetaAuto,
   usePautaMeta,
   type AnuncioInfo,
+  dinero,
 } from "@/lib/redes/metaPauta";
 import { CrecimientoRedes, useMetricasRedes } from "@/components/redes/CrecimientoRedes";
 import { EvolucionMensajes } from "@/components/redes/EvolucionMensajes";
@@ -54,6 +55,13 @@ const anio = (m: string) => m.slice(0, 4);
  * Variación contra el período anterior. Gris por defecto (invertir menos o que te vean menos no es "malo"); en verde o
  * rojo solo con `valorar`: resultados y retorno (subir es bueno) o, con `alReves`, el costo de cada uno (bajar es bueno).
  */
+const MonedaMeta = createContext("ARS");
+/** Plata de Meta en la moneda de la cuenta del cliente. */
+function useDin() {
+  const moneda = useContext(MonedaMeta);
+  return (n: number | null | undefined) => dinero(n, moneda);
+}
+
 function Cambio({
   ahora,
   antes,
@@ -308,6 +316,7 @@ function MejorAnuncio({
   varios: string;
   esVentas: boolean;
 }) {
+  const din = useDin();
   const open = useOpenVideo();
   const [sinImagen, setSinImagen] = useState(false);
   const titulo = esVentas ? "Tu anuncio que más vendió" : `Tu anuncio que más ${varios} trajo`;
@@ -341,12 +350,12 @@ function MejorAnuncio({
               <p className="text-xs text-muted-foreground">{top.resultados === 1 ? uno : varios}</p>
             </div>
             <div>
-              <p className="text-2xl font-extrabold tabular-nums tracking-tight sm:text-3xl">{formatARS(top.costo)}</p>
+              <p className="text-2xl font-extrabold tabular-nums tracking-tight sm:text-3xl">{din(top.costo)}</p>
               <p className="text-xs text-muted-foreground">cada {uno}</p>
             </div>
             {esVentas && top.valor_compras > 0 && (
               <div>
-                <p className="text-2xl font-extrabold tabular-nums tracking-tight sm:text-3xl">{formatARS(top.valor_compras)}</p>
+                <p className="text-2xl font-extrabold tabular-nums tracking-tight sm:text-3xl">{din(top.valor_compras)}</p>
                 <p className="text-xs text-muted-foreground">vendido</p>
               </div>
             )}
@@ -394,6 +403,7 @@ function GraficoMeses({
   varios: string;
   mes: string;
 }) {
+  const din = useDin();
   const [foco, setFoco] = useState<string | null>(null);
   const max = Math.max(1, ...datos.map((d) => d.resultados));
   const hoy = mesActual();
@@ -429,12 +439,12 @@ function GraficoMeses({
             )}
             {visto.conDatos && (
               <span className="text-muted-foreground">
-                Inversión: <b className="tabular-nums text-foreground">{formatARS(visto.gasto)}</b>
+                Inversión: <b className="tabular-nums text-foreground">{din(visto.gasto)}</b>
               </span>
             )}
             {visto.costo != null && (
               <span className="text-muted-foreground">
-                Cada {uno}: <b className="tabular-nums text-foreground">{formatARS(visto.costo)}</b>
+                Cada {uno}: <b className="tabular-nums text-foreground">{din(visto.costo)}</b>
               </span>
             )}
           </div>
@@ -451,7 +461,7 @@ function GraficoMeses({
                 onMouseEnter={() => setFoco(d.mes)}
                 onFocus={() => setFoco(d.mes)}
                 onClick={() => setFoco((f) => (f === d.mes ? null : d.mes))}
-                aria-label={d.conDatos ? `${mesLabel(d.mes)}: ${fmt(d.resultados)} ${d.resultados === 1 ? uno : varios}, inversión ${formatARS(d.gasto)}` : `${mesLabel(d.mes)}: sin datos`}
+                aria-label={d.conDatos ? `${mesLabel(d.mes)}: ${fmt(d.resultados)} ${d.resultados === 1 ? uno : varios}, inversión ${din(d.gasto)}` : `${mesLabel(d.mes)}: sin datos`}
                 className="group flex h-full flex-1 flex-col items-center justify-end outline-none"
               >
                 <span className={cn("mb-1 text-xs font-semibold tabular-nums", d.resultados ? "" : "text-muted-foreground")}>{d.conDatos ? fmt(d.resultados) : "sin datos"}</span>
@@ -513,6 +523,7 @@ export function ResultadosCliente({
   const igR = useMemo(() => resumirIg(ig, f.desde, f.hasta), [ig, f.desde, f.hasta]);
   const igA = useMemo(() => resumirIg(ig, f.antDesde, f.antHasta), [ig, f.antDesde, f.antHasta]);
   const vid = resumirMes(videos, cliente.id, mes);
+  const din = (n: number | null | undefined) => dinero(n, r?.moneda ?? "ARS");
 
   const conMeta = !!(cliente.meta?.ad_account_id || cliente.meta?.ig_user_id);
   // Al abrir: si lo de Meta tiene más de 3 horas, el servidor lo vuelve a buscar solo.
@@ -555,8 +566,8 @@ export function ResultadosCliente({
         numero={fmt(r.resultados)}
         unidad={plural(r.resultados, unoVisible(nom.uno))}
         cambio={!enCurso ? <Cambio ahora={r.resultados} antes={ant?.resultados} valorar /> : undefined}
-        detalle={`Invertiste ${formatARS(r.gasto)}${r.costo != null ? ` · cada ${unoVisible(nom.uno)} costó ${formatARS(r.costo)}` : ""}${
-          r.principal === "compras" && r.valor_compras > 0 ? ` · vendiste por ${formatARS(r.valor_compras)}` : ""
+        detalle={`Invertiste ${din(r.gasto)}${r.costo != null ? ` · cada ${unoVisible(nom.uno)} costó ${din(r.costo)}` : ""}${
+          r.principal === "compras" && r.valor_compras > 0 ? ` · vendiste por ${din(r.valor_compras)}` : ""
         }`}
         retorno={
           r.principal === "compras" && r.valor_compras > 0 && r.gasto > 0 ? (
@@ -595,6 +606,7 @@ export function ResultadosCliente({
   const deVideos = !hayPauta && vid.publicados.some((v) => v.resultados);
 
   return (
+    <MonedaMeta.Provider value={r?.moneda ?? "ARS"}>
     <div className="space-y-7">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <SelectorMes mes={mes} onMes={onMes} />
@@ -623,13 +635,13 @@ export function ResultadosCliente({
               titulo="Tu publicidad"
               nota={enCurso ? "Se actualiza sola todos los días · comparado con los mismos días del mes pasado" : "Comparado con el mes anterior"}
               tiles={[
-                { icono: Wallet, titulo: "Invertiste", valor: formatARS(r.gasto), cambio: <Cambio ahora={r.gasto} antes={ant?.gasto} />, tono: "violeta" },
+                { icono: Wallet, titulo: "Invertiste", valor: din(r.gasto), cambio: <Cambio ahora={r.gasto} antes={ant?.gasto} />, tono: "violeta" },
                 { icono: Eye, titulo: "Tus anuncios se vieron", valor: fmt(r.impresiones), sub: "veces", cambio: <Cambio ahora={r.impresiones} antes={ant?.impresiones} />, tono: "azul" },
                 r.resultados > 0
                   ? {
                       icono: r.principal === "compras" ? ShoppingBag : r.principal === "mensajes" ? MessageCircle : MousePointerClick,
                       titulo: `Cada ${unoVisible(nom.uno)} costó`,
-                      valor: r.costo != null ? formatARS(r.costo) : "",
+                      valor: r.costo != null ? din(r.costo) : "",
                       sub: `${fmt(r.resultados)} ${plural(r.resultados, unoVisible(nom.uno))} en total`,
                       cambio: <Cambio ahora={r.costo} antes={ant?.costo} valorar alReves />,
                       tono: "verde",
@@ -710,5 +722,6 @@ export function ResultadosCliente({
         </dl>
       </details>
     </div>
+    </MonedaMeta.Provider>
   );
 }

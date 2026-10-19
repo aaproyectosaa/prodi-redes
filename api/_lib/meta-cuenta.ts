@@ -245,6 +245,8 @@ export async function avisarPresupuesto(pid: string, baseUrl: string): Promise<v
   const hoy = hoyAR();
   const mes = hoy.slice(0, 7);
   const filas = (await db.collection("meta_pauta_diaria").where("proyecto_id", "==", pid).where("fecha", ">=", `${mes}-01`).get()).docs;
+  // El presupuesto está en pesos: con la cuenta en otra moneda (dólares) no se compara.
+  if (filas.some((d) => d.data().moneda && d.data().moneda !== "ARS")) return;
   const gasto = filas.reduce((a, d) => a + (Number(d.data().gasto) || 0), 0);
   const nivel = gasto >= tope ? 2 : gasto >= tope * 0.9 ? 1 : 0;
   const previo = p.meta_aviso_presupuesto?.mes === mes ? Number(p.meta_aviso_presupuesto?.nivel ?? 0) : 0;

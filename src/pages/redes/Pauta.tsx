@@ -11,7 +11,7 @@ import { useUserProfileContext } from "@/contexts/user-profile-context";
 import type { Project } from "@/integrations/firebase/types";
 import { estadoPresupuesto, presupuestoPauta } from "@/lib/redes/alertasPauta";
 import { formatARS } from "@/lib/redes/format";
-import { NOMBRE_RESULTADO, fechasDe, resumirPauta, sumarDiasF, usePautaMeta, type PautaDia, type Rango } from "@/lib/redes/metaPauta";
+import { NOMBRE_RESULTADO, dinero, fechasDe, resumirPauta, sumarDiasF, usePautaMeta, type PautaDia, type Rango } from "@/lib/redes/metaPauta";
 import { cn } from "@/lib/utils";
 
 // Módulo de pauta: cómo viene la publicidad de cada cliente en Meta (se trae sola todos los días), para quien la maneja.
@@ -121,13 +121,18 @@ export default function Pauta() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filas, conectados.map((c) => c.id).join(), alertas, f.desde, f.hasta, f.antDesde, f.antHasta, hoy]);
 
-  const total = lista.reduce((a, x) => a + x.r.gasto, 0);
-  const totalAnt = lista.reduce((a, x) => a + x.ant.gasto, 0);
+  // Los totales en pesos; las cuentas en dólares van aparte (no se suman monedas distintas).
+  const enPesos = lista.filter((x) => x.r.moneda === "ARS");
+  const total = enPesos.reduce((a, x) => a + x.r.gasto, 0);
+  const totalAnt = enPesos.reduce((a, x) => a + x.ant.gasto, 0);
+  const totalUsd = lista.filter((x) => x.r.moneda === "USD").reduce((a, x) => a + x.r.gasto, 0);
   const mensajes = lista.reduce((a, x) => a + x.r.mensajes, 0);
   const ventas = lista.reduce((a, x) => a + x.r.compras, 0);
   const conAlertas = lista.filter((x) => x.alertas > 0).length;
-  const presTotal = conectados.reduce((a, c) => a + (presupuestoPauta(c) ?? 0), 0);
-  const gastoMes = lista.reduce((a, x) => a + x.pres.gasto, 0);
+  // Solo los que tienen presupuesto y la cuenta en pesos (el presupuesto es en pesos).
+  const conTope = lista.filter((x) => x.pres.tope);
+  const presTotal = conTope.reduce((a, x) => a + (x.pres.tope ?? 0), 0);
+  const gastoMes = conTope.reduce((a, x) => a + x.pres.gasto, 0);
   const elegido = abierto ? mios.find((c) => c.id === abierto) : null;
 
   return (
@@ -146,7 +151,7 @@ export default function Pauta() {
       </div>
 
       <FilaKpis className="mb-4">
-        <Kpi icono={Wallet} label="Inversión" valor={formatARS(total)} sub={totalAnt ? `antes ${formatARS(totalAnt)}` : undefined} />
+        <Kpi icono={Wallet} label="Inversión" valor={!total && totalUsd ? dinero(totalUsd, "USD") : formatARS(total)} sub={[totalAnt ? `antes ${formatARS(totalAnt)}` : "", total && totalUsd ? `+ ${dinero(totalUsd, "USD")} en cuentas en dólares` : ""].filter(Boolean).join(" · ") || undefined} />
         <Kpi icono={MousePointerClick} tono="verde" label="Resultados" valor={`${fmt(mensajes)} mensajes`} sub={ventas ? `${fmt(ventas)} ventas` : undefined} />
         <Kpi
           icono={Target}
@@ -205,6 +210,7 @@ export default function Pauta() {
                         <p className="flex items-center gap-1.5 font-medium">
                           {x.urgente ? <span className="h-2 w-2 rounded-full bg-red-500" /> : x.alertas ? <span className="h-2 w-2 rounded-full bg-amber-500" /> : null}
                           {x.c.nombre}
+                          {x.r.moneda !== "ARS" && <span className="rounded bg-muted px-1 py-0.5 text-[10px] font-normal text-muted-foreground">{x.r.moneda}</span>}
                         </p>
                         {x.alertas > 0 && <p className="text-[11px] text-muted-foreground">{x.alertas} para revisar</p>}
                       </td>
@@ -212,12 +218,12 @@ export default function Pauta() {
                         <BarraMini uso={x.pres.uso} />
                         {x.pres.tope && <p className="text-[11px] tabular-nums text-muted-foreground">{formatARS(x.pres.gasto)} de {formatARS(x.pres.tope)}</p>}
                       </td>
-                      <td className="p-3 text-right tabular-nums">{x.r.gasto ? formatARS(x.r.gasto) : "—"}</td>
+                      <td className="p-3 text-right tabular-nums">{x.r.gasto ? dinero(x.r.gasto, x.r.moneda) : "—"}</td>
                       <td className="p-3 text-right tabular-nums">
                         {x.r.resultados ? `${fmt(x.r.resultados)} ${n.varios.toLowerCase()}` : "—"}
                       </td>
                       <td className="p-3 text-right tabular-nums">
-                        <span className="block">{x.r.costo != null ? formatARS(x.r.costo) : "—"}</span>
+                        <span className="block">{x.r.costo != null ? dinero(x.r.costo, x.r.moneda) : "—"}</span>
                         <Cambio ahora={x.r.costo} antes={x.ant.costo} />
                       </td>
                       <td className="p-3 text-right tabular-nums">{x.r.ctr != null ? `${fmt(x.r.ctr, 2)}%` : "—"}</td>

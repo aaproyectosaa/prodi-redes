@@ -3,7 +3,7 @@ import { BarraPresupuesto } from "@/components/redes/AlertasPauta";
 import { Eye, Heart, Instagram, Loader2, Megaphone, MousePointerClick, ShoppingBag, TrendingDown, TrendingUp, Users, Wallet, AlertTriangle } from "lucide-react";
 import type { Project } from "@/integrations/firebase/types";
 import { formatARS } from "@/lib/redes/format";
-import { NOMBRE_RESULTADO, RANGOS, fechasDe, resumirIg, resumirPauta, useMetaAuto, usePautaMeta, type Rango } from "@/lib/redes/metaPauta";
+import { NOMBRE_RESULTADO, RANGOS, dinero, fechasDe, resumirIg, resumirPauta, useMetaAuto, usePautaMeta, type Rango } from "@/lib/redes/metaPauta";
 import { useMetricasRedes } from "@/components/redes/CrecimientoRedes";
 import { cn } from "@/lib/utils";
 
@@ -49,7 +49,7 @@ function Dato({ icono: Icono, titulo, valor, sub, cambio }: { icono: React.Eleme
   );
 }
 
-function BarrasGasto({ dias }: { dias: { fecha: string; gasto: number }[] }) {
+function BarrasGasto({ dias, moneda }: { dias: { fecha: string; gasto: number }[]; moneda: string }) {
   const max = Math.max(...dias.map((d) => d.gasto), 1);
   if (!dias.some((d) => d.gasto > 0)) return null;
   return (
@@ -57,7 +57,7 @@ function BarrasGasto({ dias }: { dias: { fecha: string; gasto: number }[] }) {
       <p className="mb-3 text-xs font-medium text-muted-foreground">Inversión por día</p>
       <div className="flex h-28 items-end gap-[2px]">
         {dias.map((d) => (
-          <div key={d.fecha} className="group relative flex h-full flex-1 items-end" title={`${ddmm(d.fecha)}: ${formatARS(d.gasto)}`}>
+          <div key={d.fecha} className="group relative flex h-full flex-1 items-end" title={`${ddmm(d.fecha)}: ${dinero(d.gasto, moneda)}`}>
             <div className="w-full rounded-t bg-primary/80 transition-colors group-hover:bg-primary" style={{ height: `${Math.max((d.gasto / max) * 100, d.gasto ? 3 : 0)}%` }} />
           </div>
         ))}
@@ -115,6 +115,8 @@ export function PautaMeta({ cliente, modo }: { cliente: Project; modo: "admin" |
   const hayIg = igR.alcance != null || igR.vistas != null || igR.interacciones != null || igR.seguidores != null;
   if (esCliente && filas && !hayPauta && !hayIg && !(ant && ant.gasto > 0)) return null;
   const nom = r ? NOMBRE_RESULTADO[r.principal] : NOMBRE_RESULTADO.mensajes;
+  // Plata en la moneda de la cuenta publicitaria (algunas están en dólares).
+  const din = (n: number | null | undefined) => dinero(n, r?.moneda ?? "ARS");
 
   return (
     <section className="space-y-3">
@@ -139,6 +141,9 @@ export function PautaMeta({ cliente, modo }: { cliente: Project; modo: "admin" |
       </div>
 
       {filas && modo !== "cliente" && <BarraPresupuesto cliente={cliente} filas={filas} />}
+      {r && r.moneda !== "ARS" && modo !== "cliente" && (
+        <p className="text-[11px] text-muted-foreground">La cuenta publicitaria está en {r.moneda === "USD" ? "dólares" : r.moneda}: los montos se muestran en esa moneda.</p>
+      )}
       {filas === null ? (
         <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Cargando…
@@ -148,36 +153,36 @@ export function PautaMeta({ cliente, modo }: { cliente: Project; modo: "admin" |
           {hayPauta && r && ant ? (
             esCliente ? (
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <Dato icono={Wallet} titulo="Invertiste" valor={formatARS(r.gasto)} cambio={<Cambio ahora={r.gasto} antes={ant.gasto} />} sub="en anuncios" />
+                <Dato icono={Wallet} titulo="Invertiste" valor={din(r.gasto)} cambio={<Cambio ahora={r.gasto} antes={ant.gasto} />} sub="en anuncios" />
                 <Dato icono={Eye} titulo="Tus anuncios se vieron" valor={`${fmt(r.impresiones)} veces`} cambio={<Cambio ahora={r.impresiones} antes={ant.impresiones} />} />
                 <Dato
                   icono={r.principal === "compras" ? ShoppingBag : MousePointerClick}
                   titulo={nom.titulo}
                   valor={nom.cliente(fmt(r.resultados))}
-                  sub={r.principal === "compras" && r.valor_compras > 0 ? `Total vendido: ${formatARS(r.valor_compras)}` : undefined}
+                  sub={r.principal === "compras" && r.valor_compras > 0 ? `Total vendido: ${din(r.valor_compras)}` : undefined}
                   cambio={<Cambio ahora={r.resultados} antes={ant.resultados} />}
                 />
                 {r.costo != null && (
-                  <Dato icono={Wallet} titulo={`Cada ${nom.uno} te costó`} valor={formatARS(r.costo)} cambio={<Cambio ahora={r.costo} antes={ant.costo} alReves />} />
+                  <Dato icono={Wallet} titulo={`Cada ${nom.uno} te costó`} valor={din(r.costo)} cambio={<Cambio ahora={r.costo} antes={ant.costo} alReves />} />
                 )}
               </div>
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  <Dato icono={Wallet} titulo="Inversión" valor={formatARS(r.gasto)} cambio={<Cambio ahora={r.gasto} antes={ant.gasto} />} sub={`antes ${formatARS(ant.gasto)}`} />
+                  <Dato icono={Wallet} titulo="Inversión" valor={din(r.gasto)} cambio={<Cambio ahora={r.gasto} antes={ant.gasto} />} sub={`antes ${din(ant.gasto)}`} />
                   <Dato
                     icono={r.principal === "compras" ? ShoppingBag : MousePointerClick}
                     titulo={nom.varios}
                     valor={fmt(r.resultados)}
                     cambio={<Cambio ahora={r.resultados} antes={ant.resultados} />}
-                    sub={r.costo != null ? `${formatARS(r.costo)} c/u` : undefined}
+                    sub={r.costo != null ? `${din(r.costo)} c/u` : undefined}
                   />
-                  <Dato icono={Eye} titulo="Impresiones" valor={fmt(r.impresiones)} sub={`CPM ${r.cpm != null ? formatARS(r.cpm) : "—"}`} />
+                  <Dato icono={Eye} titulo="Impresiones" valor={fmt(r.impresiones)} sub={`CPM ${r.cpm != null ? din(r.cpm) : "—"}`} />
                   <Dato icono={MousePointerClick} titulo="Clics" valor={fmt(r.clics)} sub={`CTR ${fmt(r.ctr, 2)}%`} />
                   <Dato icono={Users} titulo="Alcance (suma por día)" valor={fmt(r.alcance)} />
-                  {r.roas != null && <Dato icono={ShoppingBag} titulo="ROAS" valor={`${fmt(r.roas, 2)}x`} sub={`${formatARS(r.valor_compras)} en ventas`} />}
+                  {r.roas != null && <Dato icono={ShoppingBag} titulo="ROAS" valor={`${fmt(r.roas, 2)}x`} sub={`${din(r.valor_compras)} en ventas`} />}
                 </div>
-                <BarrasGasto dias={r.porDia} />
+                <BarrasGasto dias={r.porDia} moneda={r.moneda} />
                 {r.campanias.length > 0 && (
                   <div className="overflow-x-auto rounded-2xl border bg-card">
                     <table className="w-full min-w-[520px] text-sm">
@@ -197,9 +202,9 @@ export function PautaMeta({ cliente, modo }: { cliente: Project; modo: "admin" |
                             <td className="max-w-[260px] truncate p-3" title={c.nombre}>
                               {c.nombre}
                             </td>
-                            <td className="p-3 text-right tabular-nums">{formatARS(c.gasto)}</td>
+                            <td className="p-3 text-right tabular-nums">{din(c.gasto)}</td>
                             <td className="p-3 text-right tabular-nums">{fmt(c.resultados)}</td>
-                            <td className="p-3 text-right tabular-nums">{c.costo != null ? formatARS(c.costo) : "—"}</td>
+                            <td className="p-3 text-right tabular-nums">{c.costo != null ? din(c.costo) : "—"}</td>
                             <td className="p-3 text-right tabular-nums">{fmt(c.clics)}</td>
                             {(() => {
                               const fr = cliente.meta_sync?.frecuencia?.find((x) => x.id === c.id)?.frecuencia;
@@ -283,10 +288,13 @@ export function PautaTodos({ clientes, onAbrir }: { clientes: Project[]; onAbrir
         <tbody>
           {lista.map(({ c, r }) => (
             <tr key={c.id} className={cn("border-b last:border-0", onAbrir && "cursor-pointer hover:bg-muted/50")} onClick={() => onAbrir?.(c.id)}>
-              <td className="p-3 font-medium">{c.nombre}</td>
-              <td className="p-3 text-right tabular-nums">{r.gasto ? formatARS(r.gasto) : "—"}</td>
+              <td className="p-3 font-medium">
+                {c.nombre}
+                {r.moneda !== "ARS" && <span className="ml-1.5 rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground">{r.moneda}</span>}
+              </td>
+              <td className="p-3 text-right tabular-nums">{r.gasto ? dinero(r.gasto, r.moneda) : "—"}</td>
               <td className="p-3 text-right tabular-nums">{r.resultados ? `${fmt(r.resultados)} ${NOMBRE_RESULTADO[r.principal].varios.toLowerCase()}` : "—"}</td>
-              <td className="p-3 text-right tabular-nums">{r.costo != null ? formatARS(r.costo) : "—"}</td>
+              <td className="p-3 text-right tabular-nums">{r.costo != null ? dinero(r.costo, r.moneda) : "—"}</td>
               <td className="p-3 text-xs">
                 {!c.meta_sync ? (
                   <span className="text-muted-foreground">Todavía no</span>
