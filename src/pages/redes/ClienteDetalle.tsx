@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CrecimientoRedes } from "@/components/redes/CrecimientoRedes";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { doc, updateDoc } from "@/lib/db";
@@ -271,11 +271,30 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
   const puedeFilma = isAdmin || (tieneRol("productor") && !!user && (cliente.team_roles?.productor ?? []).includes(user.uid));
   const [form, setForm] = useState(() => toForm(cliente));
   const [saving, setSaving] = useState(false);
+  // El equipo como estaba al abrir (o al último cambio de afuera). Al guardar solo se escriben los roles que se
+  // tocaron acá: si mientras tanto se sumó alguien desde otro lado (ej. un integrante nuevo), no se lo saca.
+  const teamBase = useRef(toForm(cliente).team);
 
   useEffect(() => {
     setForm(toForm(cliente));
+    teamBase.current = toForm(cliente).team;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cliente.id]);
+
+  // Cambió el equipo desde otro lado (integrantes, Equipo): lo que no se tocó acá se actualiza solo.
+  const teamAfuera = JSON.stringify(cliente.team_roles ?? {});
+  useEffect(() => {
+    const nuevo = toForm(cliente).team;
+    setForm((f) => {
+      const team = { ...f.team };
+      for (const k of Object.keys(nuevo) as ProjectTeamRole[]) {
+        if (JSON.stringify(f.team[k] ?? []) === JSON.stringify(teamBase.current[k] ?? [])) team[k] = nuevo[k];
+      }
+      return { ...f, team };
+    });
+    teamBase.current = nuevo;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamAfuera]);
 
   const set = <K extends keyof ReturnType<typeof toForm>>(k: K, v: ReturnType<typeof toForm>[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -364,7 +383,13 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
               .filter((x) => x.concepto.trim() && Number(x.neto) > 0)
               .map((x) => ({ concepto: x.concepto.trim(), neto: Number(x.neto) })),
           },
-          team_roles: { ...(cliente.team_roles ?? {}), ...form.team },
+          // Solo los roles que se cambiaron en esta pantalla; el resto queda como está ahora en la base.
+          team_roles: {
+            ...(cliente.team_roles ?? {}),
+            ...Object.fromEntries(
+              Object.entries(form.team).filter(([k, v]) => JSON.stringify(v ?? []) !== JSON.stringify(teamBase.current[k as ProjectTeamRole] ?? []))
+            ),
+          },
         });
       }
       await updateDoc(doc(db, "projects", cliente.id), data);
