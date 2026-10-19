@@ -161,10 +161,16 @@ export function useSinLeerDock(): Record<string, number> {
   );
 }
 
+/** Se dispara cuando se abre una conversación (para dar por leídos sus avisos). */
+export const EVENTO_CHAT_A_LA_VISTA = "prodi-chat-a-la-vista";
+
 // Conversaciones a la vista ahora mismo (página /chat o paneles desplegados del chat flotante).
 const enPantalla = new Map<string, number>();
 export const chatEnPantalla = {
-  entrar: (id: string) => void enPantalla.set(id, (enPantalla.get(id) ?? 0) + 1),
+  entrar: (id: string) => {
+    enPantalla.set(id, (enPantalla.get(id) ?? 0) + 1);
+    window.dispatchEvent(new Event(EVENTO_CHAT_A_LA_VISTA));
+  },
   salir: (id: string) => {
     const n = (enPantalla.get(id) ?? 0) - 1;
     if (n > 0) enPantalla.set(id, n);
