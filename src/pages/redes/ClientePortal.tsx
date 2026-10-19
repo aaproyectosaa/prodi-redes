@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { PautaMeta } from "@/components/redes/PautaMeta";
-import { CrecimientoRedes } from "@/components/redes/CrecimientoRedes";
 import { AvisoMoraCliente } from "@/components/redes/MoraAvisos";
 import { useSearchParams } from "react-router-dom";
-import { HelpCircle, Loader2, Mail, Minus, Plus, Sparkles } from "lucide-react";
+import { HelpCircle, Loader2, Minus, Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,8 +15,6 @@ import {
 import { PageShell, Section, EmptyState } from "@/components/redes/PageShell";
 import { VideoCard } from "@/components/redes/VideoCard";
 import { PlanUsage } from "@/components/redes/PlanUsage";
-import { ResultadosMes, resumirMes } from "@/components/redes/ResultadosMes";
-import { EvolucionMensajes } from "@/components/redes/EvolucionMensajes";
 import { PedirPiezaDialog, PiezaAprobarDialog, PiezaClienteCard } from "@/components/redes/PiezaDialogs";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
@@ -36,6 +32,7 @@ import { DatosMarcaCliente, TarjetaPerfil } from "@/components/redes/cliente/Per
 import { PlanMesCliente } from "@/components/redes/cliente/PlanMesCliente";
 import { usePlanMes } from "@/lib/redes/planMes";
 import { MiPlan } from "@/components/redes/cliente/MiPlan";
+import { ResultadosCliente } from "@/components/redes/cliente/ResultadosCliente";
 import { CupoVideos } from "@/components/redes/cliente/CupoVideos";
 import { MaterialCliente } from "@/components/redes/cliente/MaterialCliente";
 import { ContextoComercialEditor } from "@/components/redes/ContextoComercial";
@@ -146,7 +143,6 @@ export default function ClientePortal() {
   const plan = planDe(cliente, planes);
   const misPiezas = piezas.filter((p) => p.proyecto_id === cliente?.id);
   const cupoP = cupoPiezas(cliente, planes, piezas, mes);
-  const resumen = resumirMes(videos, cliente?.id ?? "", mesRes);
   const nombre = profile?.nombre?.split(" ")[0] ?? "";
   // Ideas del mes que mandó el equipo y esperan respuesta (este mes o el que viene).
   const { plan: planEste } = usePlanMes(cliente?.id, mes);
@@ -335,53 +331,8 @@ export default function ClientePortal() {
           </Section>
         </TabsContent>
 
-        <TabsContent value="resultados" className="space-y-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Select value={mesRes} onValueChange={setMesRes}>
-              <SelectTrigger className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[0, -1, -2, -3, -4, -5].map((d) => {
-                  const m = sumarMeses(mes, d);
-                  return (
-                    <SelectItem key={m} value={m}>
-                      {mesLabel(m)}
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-            {(cliente.contacto_emails?.length ?? 0) > 0 && (
-              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Mail className="h-3.5 w-3.5" /> El día 1 de cada mes te llega este informe por correo.
-              </p>
-            )}
-          </div>
-          <CrecimientoRedes proyectoId={cliente.id} />
-          <PautaMeta cliente={cliente} modo="cliente" />
-          <ResultadosMes
-            resumen={resumen}
-            grafico={<EvolucionMensajes videos={videos} proyectoId={cliente.id} mes={mesRes} onMes={setMesRes} />}
-          />
-          <details className="group rounded-2xl border bg-card p-4">
-            <summary className="flex cursor-pointer select-none items-center gap-2 text-sm font-semibold">
-              <HelpCircle className="h-4 w-4 text-primary" /> ¿Qué significa cada número?
-            </summary>
-            <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-              {[
-                ["Mensajes recibidos", "Las consultas que te llegaron por WhatsApp, Instagram o Messenger gracias a la pauta. Es el número más importante."],
-                ["Personas alcanzadas", "Cuánta gente distinta vio tus videos."],
-                ["Reproducciones", "Cuántas veces se reprodujeron tus videos."],
-                ["Inversión en pauta", "Lo que se invirtió en Meta para mostrar tus videos. Abajo ves cuánto costó cada mensaje."],
-              ].map(([t, d]) => (
-                <div key={t}>
-                  <dt className="font-medium">{t}</dt>
-                  <dd className="text-xs text-muted-foreground">{d}</dd>
-                </div>
-              ))}
-            </dl>
-          </details>
+        <TabsContent value="resultados">
+          <ResultadosCliente cliente={cliente} videos={videos} mes={mesRes} onMes={setMesRes} />
         </TabsContent>
 
         <TabsContent value="piezas" className="space-y-5">

@@ -65,6 +65,13 @@ export function fechasDe(r: Rango, hoy = iso(new Date())): { desde: string; hast
   return { desde, hasta: hoy, antDesde: sumarDiasF(desde, -n), antHasta: sumarDiasF(desde, -1) };
 }
 
+/** Desde/hasta de un mes ("2026-10") y del mes anterior. El mes en curso, como "mes" (se compara hasta el mismo día). */
+export function fechasDeMes(mes: string, hoy = iso(new Date())) {
+  if (hoy.startsWith(mes)) return fechasDe("mes", hoy);
+  const [y, m] = mes.split("-").map(Number);
+  return { desde: iso(new Date(y, m - 1, 1)), hasta: iso(new Date(y, m, 0)), antDesde: iso(new Date(y, m - 2, 1)), antHasta: iso(new Date(y, m - 1, 0)) };
+}
+
 /** Filas de pauta de un cliente (o de todos, sin `proyectoId`) desde una fecha. */
 export function usePautaMeta(proyectoId: string | undefined | null, desde: string) {
   const [lista, setLista] = useState<PautaDia[] | null>(null);
