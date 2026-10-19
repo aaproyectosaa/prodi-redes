@@ -15,6 +15,7 @@ import {
   query,
   where,
   type QueryConstraint,
+  arrayRemove,
 } from "@/lib/db";
 import { db } from "@/integrations/firebase/client";
 import type { Project } from "@/integrations/firebase/types";
@@ -257,8 +258,14 @@ export function RedesDataProvider({ children }: { children: ReactNode }) {
       const team = p.team_roles ?? {};
       const cambia = Object.values(team).some((ids) => (ids ?? []).some((id) => inactivos.has(id)));
       if (!cambia) continue;
-      const limpio = Object.fromEntries(Object.entries(team).map(([k, ids]) => [k, (ids ?? []).filter((id) => !inactivos.has(id))]));
-      void updateDoc(doc(db, "projects", p.id), { team_roles: limpio }).catch((err) => console.warn("[redes] equipo", p.id, err));
+      // Solo saca a los desactivados de cada rol (arrayRemove): no reescribe el equipo con esta copia, que puede estar
+      // vieja (si no, alguien recién sumado al cliente se borraba).
+      const cambios: Record<string, unknown> = {};
+      for (const [k, ids] of Object.entries(team)) {
+        const fuera = (ids ?? []).filter((id) => inactivos.has(id));
+        if (fuera.length) cambios[`team_roles.${k}`] = arrayRemove(...fuera);
+      }
+      void updateDoc(doc(db, "projects", p.id), cambios).catch((err) => console.warn("[redes] equipo", p.id, err));
     }
   }, [isAdmin, viewingAs, appLoading, profiles, projects]);
 

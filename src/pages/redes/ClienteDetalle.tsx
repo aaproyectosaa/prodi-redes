@@ -245,8 +245,8 @@ const ROLES_EQUIPO: { rol: ProjectTeamRole; label: string; desc: string }[] = [
   { rol: "editor", label: "Edición", desc: "Edita los videos" },
   { rol: "pauta", label: "Pauta", desc: "Sube y pauta los videos" },
   { rol: "diseno", label: "Diseño", desc: "Arma las piezas gráficas: ve este cliente y le llegan sus pedidos" },
-  { rol: "cliente", label: "Usuarios del cliente", desc: "Aprueban y ven resultados" },
 ];
+// Los usuarios del cliente no van acá: se agregan y sacan en "Integrantes" (así este Guardar nunca los pisa).
 
 const PUBLICA_OPCIONES: { v: QuienPublica; titulo: string; texto: string }[] = [
   { v: "prodi", titulo: "Los subimos nosotros", texto: "Cuando el cliente aprueba, el video pasa a pauta para subirlo y pautarlo." },
@@ -387,7 +387,9 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
           team_roles: {
             ...(cliente.team_roles ?? {}),
             ...Object.fromEntries(
-              Object.entries(form.team).filter(([k, v]) => JSON.stringify(v ?? []) !== JSON.stringify(teamBase.current[k as ProjectTeamRole] ?? []))
+              Object.entries(form.team).filter(
+                ([k, v]) => k !== "cliente" && JSON.stringify(v ?? []) !== JSON.stringify(teamBase.current[k as ProjectTeamRole] ?? [])
+              )
             ),
           },
         });
