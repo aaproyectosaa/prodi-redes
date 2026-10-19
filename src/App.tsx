@@ -1,5 +1,6 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
+import { AvisoVersion } from "@/components/AvisoVersion";
 import { BarraLlamada } from "@/components/redes/chat/BarraLlamada";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -94,6 +95,8 @@ const App = () => (
         {/* Llamada de voz en curso: arriba en todas las pantallas (sistema, Prodi Chat y chat flotante). */}
         <BarraLlamada />
         <Router>
+          {/* Versión nueva publicada con la app abierta: avisa y se actualiza sola. */}
+          <AvisoVersion />
           <AppProviders>
             <PendingRoleGate />
             <Suspense fallback={<Cargando />}>
