@@ -356,6 +356,8 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
       return esAdmin(c) || d.creada_por === c.uid || (Array.isArray(d.asignados) && d.asignados.includes(c.uid));
     case "metricas_redes": // seguidores y alcance de cada día (los escribe el servidor)
     case "meta_pauta_diaria": // pauta de la cuenta por campaña y día (la escribe el servidor)
+    case "meta_anuncios_diaria": // pauta por anuncio y día (la escribe el servidor)
+    case "meta_anuncios": // nombre y miniatura de cada anuncio (la escribe el servidor)
       return equipoDe(c, d.proyecto_id) || esFinanzas(c) || clienteDe(c, d.proyecto_id);
     case "prodi_pedidos": // pedidos a @prodi (límite por minuto): solo el servidor
     case "whatsapp_verifications": // código de verificación (hasheado): solo lo usa el servidor
