@@ -348,3 +348,15 @@ html.teclado-ios {
   background-size: 260px 260px;
   background-repeat: repeat;
 }
+
+/* Saludo del portal del cliente: la manito saluda una vez. */
+@keyframes saludo {
+  0%, 60%, 100% { transform: rotate(0deg); }
+  10%, 30% { transform: rotate(14deg); }
+  20% { transform: rotate(-8deg); }
+  40% { transform: rotate(-4deg); }
+  50% { transform: rotate(10deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [class*="animate-[saludo"] { animation: none !important; }
+}

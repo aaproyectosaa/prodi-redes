@@ -39,6 +39,7 @@ import { CupoVideos } from "@/components/redes/cliente/CupoVideos";
 import { MaterialCliente } from "@/components/redes/cliente/MaterialCliente";
 import { ContextoComercialEditor } from "@/components/redes/ContextoComercial";
 import { cn } from "@/lib/utils";
+import { LogoCliente } from "@/components/redes/LogoCliente";
 import { DATOS_COBRO_DEFAULT } from "@/lib/redes/types";
 import { SelectorVista, VistaCalendario, useVista } from "@/components/redes/VistaCalendario";
 import { faltaMarca, pasosCliente, resumenMarca } from "@/lib/redes/proximoPaso";
@@ -59,6 +60,13 @@ const SUBTITULOS: Partial<Record<Tab, string>> = {
   plan: "Si estás al día, qué incluye tu plan, cuánto usaste y tus boletas.",
   negocio: "Tu marca y lo que vendés: con esto armamos tus videos y piezas.",
 };
+
+function saludoDelDia() {
+  const h = new Date().getHours();
+  return h < 6 ? "Buenas noches" : h < 13 ? "Buen día" : h < 20 ? "Buenas tardes" : "Buenas noches";
+}
+
+const fechaDeHoy = () => new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
 
 export default function ClientePortal() {
   const { profile, user, viewingAs } = useUserProfileContext();
@@ -203,30 +211,61 @@ export default function ClientePortal() {
 
   return (
     <PageShell
-      title={TITULOS[tab] ?? `Hola${nombre ? `, ${nombre}` : ""}`}
-      subtitle={tab === "inicio" ? cliente.nombre : SUBTITULOS[tab]}
+      title={
+        TITULOS[tab] ?? (
+          <span>
+            {saludoDelDia()}
+            {nombre ? `, ${nombre}` : ""} <span className="inline-block origin-[70%_70%] animate-[saludo_1.6s_ease-in-out_1]">👋</span>
+          </span>
+        )
+      }
+      subtitle={tab === "inicio" ? <span className="inline-block first-letter:uppercase">{fechaDeHoy()}</span> : SUBTITULOS[tab]}
       actions={
         <>
-        <Button variant="outline" size="sm" onClick={() => setGuia(true)}>
-          <HelpCircle className="mr-1.5 h-4 w-4" /> ¿Cómo funciona?
-        </Button>
-        <Button size="sm" onClick={() => setPedirVideo(true)}>
-          <Plus className="mr-1.5 h-4 w-4" /> Pedir un video
-        </Button>
-        {clientes.length > 1 && (
-          <Select value={cliente.id} onValueChange={setClienteId}>
-            <SelectTrigger className="w-56">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {clientes.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.nombre}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+          {/* Marca: con varias se elige acá; con una sola queda como etiqueta. */}
+          {clientes.length > 1 ? (
+            <Select value={cliente.id} onValueChange={setClienteId}>
+              <SelectTrigger className="h-10 w-auto min-w-0 max-w-[15rem] gap-2 rounded-full border-border/60 bg-card/60 pl-1.5 pr-3 text-sm font-medium shadow-sm backdrop-blur transition-colors hover:bg-accent focus:ring-primary/40">
+                <SelectValue>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <LogoCliente cliente={cliente} className="h-7 w-7 rounded-full text-[10px]" />
+                    <span className="truncate">{cliente.nombre}</span>
+                  </span>
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                {clientes.map((c) => (
+                  <SelectItem key={c.id} value={c.id} className="rounded-lg">
+                    <span className="flex items-center gap-2">
+                      <LogoCliente cliente={c} className="h-6 w-6 rounded-full text-[9px]" />
+                      {c.nombre}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <span className="flex h-10 max-w-[15rem] items-center gap-2 rounded-full border border-border/60 bg-card/60 pl-1.5 pr-4 text-sm font-medium shadow-sm">
+              <LogoCliente cliente={cliente} className="h-7 w-7 rounded-full text-[10px]" />
+              <span className="truncate">{cliente.nombre}</span>
+            </span>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setGuia(true)}
+            title="¿Cómo funciona?"
+            aria-label="¿Cómo funciona?"
+            className="h-10 w-10 rounded-full border border-border/60 bg-card/60 text-muted-foreground shadow-sm hover:text-foreground"
+          >
+            <HelpCircle className="h-[18px] w-[18px]" />
+          </Button>
+          <Button
+            onClick={() => setPedirVideo(true)}
+            className="group h-11 w-full rounded-full sm:h-10 sm:w-auto bg-gradient-to-r from-primary to-fuchsia-500 px-5 font-semibold shadow-lg shadow-primary/25 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/35"
+          >
+            <Plus className="mr-1.5 h-4 w-4 transition-transform group-hover:rotate-90" /> Pedir un video
+          </Button>
         </>
       }
     >
