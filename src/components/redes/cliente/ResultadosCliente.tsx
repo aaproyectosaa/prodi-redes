@@ -21,7 +21,7 @@ import type { Project } from "@/integrations/firebase/types";
 import type { Video } from "@/lib/redes/types";
 import { cn, hrefSeguro } from "@/lib/utils";
 import { fechaCorta, formatARS, formatNum, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
-import { NOMBRE_RESULTADO, fechasDeMes, resumirIg, resumirPauta, usePautaMeta } from "@/lib/redes/metaPauta";
+import { NOMBRE_RESULTADO, fechasDeMes, resumirIg, resumirPauta, useMetaAuto, usePautaMeta } from "@/lib/redes/metaPauta";
 import { CrecimientoRedes, useMetricasRedes } from "@/components/redes/CrecimientoRedes";
 import { EvolucionMensajes } from "@/components/redes/EvolucionMensajes";
 import { resumirMes } from "@/components/redes/ResultadosMes";
@@ -266,6 +266,8 @@ export function ResultadosCliente({
   const vid = resumirMes(videos, cliente.id, mes);
 
   const conMeta = !!(cliente.meta?.ad_account_id || cliente.meta?.ig_user_id);
+  // Al abrir: si lo de Meta tiene más de 3 horas, el servidor lo vuelve a buscar solo.
+  useMetaAuto(cliente.id, conMeta);
   const hayPauta = !!r && (r.gasto > 0 || r.impresiones > 0);
   const hayIg = igR.vistas != null || igR.alcanceDia != null || igR.interacciones != null || igR.seguidores != null;
   const enCurso = mes === mesActual();

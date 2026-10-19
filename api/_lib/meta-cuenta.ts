@@ -206,8 +206,31 @@ export async function sincronizarCuentaMeta(pid: string, dias = 3): Promise<Resu
     }
   }
   const detalle = partes.join(" · ");
-  await ref.update({ meta_sync: { at: new Date().toISOString(), ok, detalle, desde, hasta } });
+  // Historial completo: ya se trajeron 90 días con estos IDs (si cambian los IDs, se vuelve a traer).
+  const historial = p.meta_sync?.ids === idsDe(p) && p.meta_sync?.historial ? true : ok && dias >= 90;
+  await ref.update({ meta_sync: { at: new Date().toISOString(), ok, detalle, desde, hasta, historial, ids: idsDe(p) } });
   return { ok, detalle };
+}
+
+const idsDe = (p: Record<string, any>) => `${String(p.meta?.ad_account_id ?? "").replace(/^act_/, "").trim()}|${String(p.meta?.ig_user_id ?? "").trim()}`;
+
+/** ¿Le falta traer el historial (90 días)? La primera vez o si le cambiaron los IDs de Meta. */
+const faltaHistorial = (p: Record<string, any>) => !p.meta_sync?.historial || p.meta_sync?.ids !== idsDe(p);
+
+const CADA = 3 * 3600_000; // Al abrir la pantalla: si lo último tiene más de 3 horas, se vuelve a buscar.
+
+/**
+ * Lo que se trae solo: el historial de 90 días la primera vez (o si cambiaron los IDs) y después los últimos 3 días.
+ * Sin `forzar` (al abrir la pantalla), no hace nada si se actualizó hace menos de 3 horas.
+ */
+export async function sincronizarAuto(pid: string, forzar = false): Promise<ResultadoSync & { saltado?: boolean }> {
+  const p = (await adminDb().collection("projects").doc(pid).get()).data();
+  if (!p) throw new Error("Cliente no encontrado");
+  if (!p.meta?.ad_account_id && !p.meta?.ig_user_id) return { ok: false, detalle: "Sin IDs de Meta", saltado: true };
+  const historia = faltaHistorial(p);
+  const reciente = p.meta_sync?.at && Date.now() - new Date(p.meta_sync.at).getTime() < CADA;
+  if (!forzar && !historia && reciente) return { ok: true, detalle: p.meta_sync.detalle ?? "", saltado: true };
+  return sincronizarCuentaMeta(pid, historia ? 90 : 3);
 }
 
 /** Cron diario: los últimos 3 días de cada cliente, de a uno; si uno falla, sigue con el próximo. */
@@ -218,9 +241,15 @@ export async function sincronizarCuentasTodos(): Promise<string> {
     return p.enabled !== false && !p.demo_ejemplo && (p.meta?.ad_account_id || p.meta?.ig_user_id);
   });
   let bien = 0;
+  let historiales = 0;
   for (const d of proyectos) {
     try {
-      if ((await sincronizarCuentaMeta(d.id, 3)).ok) bien++;
+      // El historial tarda más: hasta 2 por corrida (el resto, al otro día o cuando alguien abre su pantalla).
+      if (faltaHistorial(d.data())) {
+        if (historiales >= 2) continue;
+        historiales++;
+      }
+      if ((await sincronizarAuto(d.id, true)).ok) bien++;
     } catch (err) {
       console.warn("[meta-cuenta]", d.id, err instanceof Error ? err.message : err);
     }

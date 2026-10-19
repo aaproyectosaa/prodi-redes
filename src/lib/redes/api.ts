@@ -3,7 +3,8 @@ import { assertEditable } from "@/lib/redes/vistaComo";
 import { asset } from "@/lib/asset";
 
 /** Llamadas que solo leen (permitidas en modo "ver como"). */
-const SOLO_LECTURA = ["/api/pagos/verificar"];
+// Se pueden llamar también en "Ver como" (no cambian nada de la persona que se está viendo).
+const SOLO_LECTURA = ["/api/pagos/verificar", "/api/informes/meta-cuenta"];
 
 /** Llama a una función de /api con el token del usuario logueado. */
 export async function callApi<T = unknown>(

@@ -1,16 +1,13 @@
 import { useMemo, useState } from "react";
-import { Eye, Heart, Instagram, Loader2, Megaphone, MousePointerClick, RefreshCw, ShoppingBag, TrendingDown, TrendingUp, Users, Wallet, AlertTriangle, History } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import { Eye, Heart, Instagram, Loader2, Megaphone, MousePointerClick, ShoppingBag, TrendingDown, TrendingUp, Users, Wallet, AlertTriangle } from "lucide-react";
 import type { Project } from "@/integrations/firebase/types";
-import { callApi } from "@/lib/redes/api";
 import { formatARS } from "@/lib/redes/format";
-import { NOMBRE_RESULTADO, RANGOS, fechasDe, resumirIg, resumirPauta, usePautaMeta, type Rango } from "@/lib/redes/metaPauta";
+import { NOMBRE_RESULTADO, RANGOS, fechasDe, resumirIg, resumirPauta, useMetaAuto, usePautaMeta, type Rango } from "@/lib/redes/metaPauta";
 import { useMetricasRedes } from "@/components/redes/CrecimientoRedes";
 import { cn } from "@/lib/utils";
 
 // Resultados de Meta de un cliente (toda la cuenta publicitaria + Instagram), por rango. Lo traen solos el cron diario
-// y los botones "Buscar … en Meta". `cliente`: en lenguaje simple y sin tablas técnicas.
+// y al abrir la pantalla (sin botones). `cliente`: en lenguaje simple y sin tablas técnicas.
 
 const fmt = (n: number | null | undefined, dec = 0) =>
   n == null ? "—" : new Intl.NumberFormat("es-AR", { maximumFractionDigits: dec, minimumFractionDigits: dec }).format(n);
@@ -72,37 +69,23 @@ function BarrasGasto({ dias }: { dias: { fecha: string; gasto: number }[] }) {
   );
 }
 
-/** Botones del admin: traer lo último o el historial (90 días). */
-function Sincronizar({ cliente }: { cliente: Project }) {
-  const [busy, setBusy] = useState<number | null>(null);
-  const correr = async (dias: number) => {
-    setBusy(dias);
-    try {
-      const r = await callApi<{ ok: boolean; detalle: string }>("/api/informes/meta-cuenta", { proyecto_id: cliente.id, dias });
-      if (r.ok) toast.success(r.detalle || "Listo");
-      else toast.error(r.detalle || "Meta no respondió");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo");
-    } finally {
-      setBusy(null);
-    }
-  };
+/** Cómo está lo de Meta. No hay botones: se busca solo al abrir la pantalla y todos los días. */
+function EstadoSync({ cliente, buscando, admin }: { cliente: Project; buscando: boolean; admin: boolean }) {
   const s = cliente.meta_sync;
+  if (buscando) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando lo nuevo en Meta…
+      </span>
+    );
+  }
+  if (!s) return null;
+  const falla = !s.ok && admin;
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {s && (
-        <span className={cn("inline-flex items-center gap-1 text-[11px]", s.ok ? "text-muted-foreground" : "text-red-600 dark:text-red-400")} title={s.detalle}>
-          {!s.ok && <AlertTriangle className="h-3.5 w-3.5" />}
-          {s.ok ? `Actualizado ${hace(s.at)}` : `Falló ${hace(s.at)}: ${s.detalle}`}
-        </span>
-      )}
-      <Button size="sm" variant="outline" onClick={() => correr(3)} disabled={busy !== null}>
-        {busy === 3 ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />} Buscar lo último en Meta
-      </Button>
-      <Button size="sm" variant="ghost" onClick={() => correr(90)} disabled={busy !== null}>
-        {busy === 90 ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <History className="mr-1.5 h-3.5 w-3.5" />} {busy === 90 ? "Buscando en Meta…" : "Buscar historial en Meta (90 días)"}
-      </Button>
-    </div>
+    <span className={cn("inline-flex items-center gap-1 text-[11px]", falla ? "text-red-600 dark:text-red-400" : "text-muted-foreground")} title={admin ? s.detalle : undefined}>
+      {falla && <AlertTriangle className="h-3.5 w-3.5" />}
+      {falla ? `Falló ${hace(s.at)}: ${s.detalle}` : `Actualizado ${hace(s.at)}`}
+    </span>
   );
 }
 
@@ -117,6 +100,7 @@ export function PautaMeta({ cliente, modo }: { cliente: Project; modo: "admin" |
   const igA = useMemo(() => resumirIg(ig, f.antDesde, f.antHasta), [ig, f.antDesde, f.antHasta]);
   const conectado = !!(cliente.meta?.ad_account_id || cliente.meta?.ig_user_id);
   const esCliente = modo === "cliente";
+  const buscando = useMetaAuto(cliente.id, conectado);
 
   if (!conectado) {
     return modo === "cliente" ? null : (
@@ -136,12 +120,12 @@ export function PautaMeta({ cliente, modo }: { cliente: Project; modo: "admin" |
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h3 className="text-base font-semibold">{esCliente ? "Tu publicidad en Meta" : "Pauta e Instagram (Meta)"}</h3>
-          <p className="text-[11px] text-muted-foreground">Se actualiza solo todos los días · comparado con el período anterior</p>
+          <p className="text-[11px] text-muted-foreground">Se trae solo de Meta · comparado con el período anterior</p>
         </div>
-        {modo === "admin" && <Sincronizar cliente={cliente} />}
+        <EstadoSync cliente={cliente} buscando={buscando} admin={modo === "admin"} />
       </div>
       <div className="flex flex-wrap gap-1">
-        {RANGOS.filter((x) => !esCliente || x.k === "mes" || x.k === "mes_pasado").map((x) => (
+        {RANGOS.map((x) => (
           <button
             key={x.k}
             type="button"
@@ -224,7 +208,7 @@ export function PautaMeta({ cliente, modo }: { cliente: Project; modo: "admin" |
             )
           ) : (
             <p className="rounded-2xl border border-dashed p-4 text-sm text-muted-foreground">
-              {esCliente ? "En este período no hubo publicidad." : cliente.meta?.ad_account_id ? "Sin pauta en este período (o todavía no se trajo: tocá Buscar historial en Meta)." : "Sin cuenta publicitaria cargada."}
+              {esCliente ? "En este período no hubo publicidad." : cliente.meta?.ad_account_id ? "Sin pauta en este período." : "Sin cuenta publicitaria cargada."}
             </p>
           )}
 

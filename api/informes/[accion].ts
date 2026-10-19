@@ -12,7 +12,7 @@ import { chequeoMeta, fotoRedesTodos } from "../_lib/meta-redes";
 import { appUrl, body, HttpError, requireCaller, sendError } from "../_lib/http";
 import { construirInforme, enviarMail, mesAnteriorAR } from "../_lib/informe";
 import { sincronizarTodoMeta, sincronizarVideoMeta } from "../_lib/meta";
-import { sincronizarCuentaMeta, sincronizarCuentasTodos } from "../_lib/meta-cuenta";
+import { sincronizarAuto, sincronizarCuentasTodos } from "../_lib/meta-cuenta";
 import { facturacionDel27, recordatoriosCobro, vencimientosObligaciones, recordatoriosAprobacion, recordatoriosEdicion, recordatoriosPlan, recordatoriosRodaje } from "../_lib/diario";
 import { assertProjectAccess } from "../_lib/http";
 import { aprenderDeChats } from "../_lib/chat-memoria";
@@ -45,14 +45,17 @@ function assertCron(req: VercelRequest) {
   if (!secret || req.headers.authorization !== `Bearer ${secret}`) throw new HttpError(401, "No autorizado");
 }
 
-/** Ficha del cliente → "Actualizar ahora" (3 días) o "Traer historial" (hasta 90). Solo admin. */
+/**
+ * Al abrir los resultados de un cliente (equipo o el cliente mismo): si lo de Meta tiene más de 3 horas, se vuelve a
+ * buscar solo (y la primera vez, el historial de 90 días). No hay botones: es todo automático.
+ */
 async function metaCuenta(req: VercelRequest) {
-  await requireCaller(req, ["admin"]);
-  const b = body<{ proyecto_id?: string; dias?: number }>(req);
+  const caller = await requireCaller(req);
+  const b = body<{ proyecto_id?: string }>(req);
   if (!b.proyecto_id) throw new HttpError(400, "Falta el cliente");
-  const dias = Math.min(Math.max(Math.round(Number(b.dias) || 3), 1), 90);
+  await assertProjectAccess(caller, b.proyecto_id);
   try {
-    return await sincronizarCuentaMeta(b.proyecto_id, dias);
+    return await sincronizarAuto(b.proyecto_id);
   } catch (err) {
     throw new HttpError(502, err instanceof Error ? err.message : "Meta no respondió");
   }

@@ -46,9 +46,11 @@ Configuración (una sola vez):
 - `metricas_redes/{cliente}_{fecha}`: se le suman alcance, visualizaciones e interacciones de Instagram de ese día.
 - `projects.meta_sync`: cuándo se trajo por última vez y si falló (con el error en criollo).
 
-Cuándo corre: el cron diario trae los últimos 3 días (Meta corrige los números recientes). En la ficha del cliente →
-Resultados, el admin tiene *Actualizar ahora* y *Traer 90 días* (historial, en tramos de 30). Errores de límite de uso
-de Meta (4, 17, 613, 80004) se reintentan solos; si un cliente falla, se anota y se sigue con el próximo.
+Cuándo corre (todo automático, sin botones): la primera vez que un cliente tiene IDs (o si se los cambian) se trae
+el historial de 90 días, en tramos de 30; después, los últimos 3 días (Meta corrige los números recientes). Lo dispara
+el cron diario (hasta 2 historiales por corrida) y también abrir los resultados del cliente (equipo o el cliente mismo):
+si lo último tiene más de 3 horas, el servidor lo vuelve a buscar. Errores de límite de uso de Meta (4, 17, 613, 80004)
+se reintentan solos; si un cliente falla, se anota y se sigue con el próximo.
 
 Dónde se ve: ficha del cliente → Resultados (rangos, campañas, inversión por día, ROAS), el panel del cliente (en
 criollo: "Invertiste", "Te escribieron X veces", comparado con el mismo tramo del mes pasado) y Reportes → *Pauta de los

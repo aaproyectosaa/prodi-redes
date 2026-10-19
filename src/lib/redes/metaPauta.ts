@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { callApi } from "@/lib/redes/api";
 import { collection, onSnapshot, query, where } from "@/lib/db";
 import { db } from "@/integrations/firebase/client";
 
@@ -85,6 +86,31 @@ export function usePautaMeta(proyectoId: string | undefined | null, desde: strin
     );
   }, [proyectoId, desde]);
   return lista;
+}
+
+const pedidos = new Map<string, number>();
+
+/**
+ * Al abrir los resultados de un cliente: le pide al servidor que busque lo nuevo en Meta (el servidor decide si hace
+ * falta: más de 3 horas, o el historial la primera vez). Una vez por cliente cada 10 minutos. Devuelve si está buscando.
+ */
+export function useMetaAuto(proyectoId: string | undefined, conectado: boolean) {
+  const [buscando, setBuscando] = useState(false);
+  useEffect(() => {
+    if (!proyectoId || !conectado) return;
+    const ultimo = pedidos.get(proyectoId) ?? 0;
+    if (Date.now() - ultimo < 10 * 60_000) return;
+    pedidos.set(proyectoId, Date.now());
+    let vivo = true;
+    setBuscando(true);
+    callApi("/api/informes/meta-cuenta", { proyecto_id: proyectoId })
+      .catch(() => undefined)
+      .finally(() => vivo && setBuscando(false));
+    return () => {
+      vivo = false;
+    };
+  }, [proyectoId, conectado]);
+  return buscando;
 }
 
 export type TipoResultado = "mensajes" | "compras" | "leads" | "clics";
