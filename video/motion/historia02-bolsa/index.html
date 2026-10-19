@@ -28,8 +28,9 @@
       #prodi img { width: 470px; }
       #prodi span { padding: 10px 30px; border-radius: 999px; background: var(--violeta); font-size: 36px; font-weight: 900; letter-spacing: 0.3em; text-indent: 0.3em; }
       #linea { width: 620px; height: 3px; margin-top: 18px; background: linear-gradient(90deg, transparent, var(--rosa), var(--violeta), transparent); }
-      #historia { margin-top: 6px; font-size: 56px; font-weight: 900; letter-spacing: 0.14em; text-indent: 0.14em; }
-      #flecha { width: 60px; height: 60px; margin-top: 10px; }
+      #historia { margin-top: 10px; text-align: center; font-size: 52px; font-weight: 900; letter-spacing: 0.06em; text-indent: 0.06em; line-height: 1.22; text-shadow: 0 6px 30px rgba(0,0,0,0.9); }
+      #historia .w { display: inline-block; }
+      #historia .fl { display: inline-block; color: #ff3d9a; font-size: 1.1em; -webkit-text-stroke: 3px #ff3d9a; }
       #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
       #rosa-flash { position: absolute; inset: 0; background: var(--rosa); opacity: 0; pointer-events: none; mix-blend-mode: screen; }
     </style>
@@ -57,8 +58,7 @@
           <div id="por">×</div>
           <div id="prodi"><img src="assets/logo-horizontal-blanco.png" /><span>REDES</span></div>
           <div id="linea"></div>
-          <div id="historia">LA HISTORIA COMPLETA</div>
-          <svg id="flecha" viewBox="0 0 24 24" fill="none" stroke="#ff3d9a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16" /><path d="M5 13l7 7 7-7" /></svg>
+          <div id="historia"><span class="w">MIRÁ</span> <span class="w">LA</span> <span class="w">HISTORIA</span> <span class="w">COMPLETA</span><br /><span class="w">EN</span> <span class="w">LA</span> <span class="w">SIGUIENTE</span> <span class="w">HISTORIA</span> <span class="fl">→</span></div>
         </div>
       </div>
       <div id="rosa-flash" class="clip" data-start="0" data-duration="11" data-track-index="7" data-layout-ignore></div>
@@ -96,9 +96,9 @@
         .fromTo("#por", { opacity: 0, scale: 0.5 }, { opacity: 1, scale: 1, duration: 0.35, ease: "back.out(2)" }, 9.1)
         .fromTo("#prodi", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.45, ease: "expo.out" }, 9.2)
         .fromTo("#linea", { scaleX: 0 }, { scaleX: 1, duration: 0.5, ease: "expo.out" }, 9.5)
-        .fromTo("#historia", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: "expo.out" }, 9.6)
-        .fromTo("#flecha", { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.2 }, 9.9)
-        .to("#flecha", { y: 14, duration: 0.45, yoyo: true, repeat: 1, ease: "sine.inOut" }, 10.1);
+        .fromTo($$("#historia .w"), { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.4, stagger: 0.06, ease: "expo.out" }, 9.6)
+        .fromTo("#historia .fl", { opacity: 0, x: -24 }, { opacity: 1, x: 0, duration: 0.35, ease: "expo.out" }, 10.1)
+        .to("#historia .fl", { x: 12, duration: 0.25, yoyo: true, repeat: 1, ease: "sine.inOut" }, 10.45);
 
       window.__timelines = window.__timelines || {};
       window.__timelines["main"] = tl;
