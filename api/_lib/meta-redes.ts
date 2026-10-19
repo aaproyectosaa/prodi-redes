@@ -88,6 +88,40 @@ function paginaDe(p: Record<string, any>, paginas: PaginaMeta[]): PaginaMeta | n
   return parecidas.length === 1 ? parecidas[0] : null;
 }
 
+/** Las cuentas publicitarias que el usuario del sistema tiene asignadas. */
+async function cuentasAsignadas(): Promise<{ id: string; nombre: string }[]> {
+  const out: { id: string; nombre: string }[] = [];
+  let params: Record<string, string> = { fields: "account_id,name", limit: "200" };
+  for (let i = 0; i < 10; i++) {
+    const j: any = await graph("me/adaccounts", params);
+    for (const a of j?.data ?? []) out.push({ id: String(a.account_id ?? String(a.id ?? "").replace(/^act_/, "")), nombre: String(a.name ?? "") });
+    const after = j?.paging?.cursors?.after;
+    if (!j?.paging?.next || !after) break;
+    params = { ...params, after };
+  }
+  return out;
+}
+
+/**
+ * La cuenta publicitaria de un cliente: la que se llama como él, como su página o como su Instagram. Solo si hay
+ * una sola que coincide (si hay dudas, se carga a mano en la ficha).
+ */
+function cuentaDe(p: Record<string, any>, pag: PaginaMeta | null, cuentas: { id: string; nombre: string }[]): { id: string; nombre: string } | null {
+  const nombres = [p.nombre, pag?.nombre, pag?.usuario, pag?.ig?.usuario, p.redes?.instagram].map(clave).filter((n) => n.length >= 3);
+  for (const n of nombres) {
+    const iguales = cuentas.filter((c) => clave(c.nombre) === n);
+    if (iguales.length === 1) return iguales[0];
+  }
+  for (const n of nombres) {
+    const parecidas = cuentas.filter((c) => {
+      const k = clave(c.nombre);
+      return k.length >= 3 && (k.includes(n) || (k.length >= 4 && n.includes(k)));
+    });
+    if (parecidas.length === 1) return parecidas[0];
+  }
+  return null;
+}
+
 export type EstadoMeta = "ok" | "sin_ig" | "sin_acceso" | "error";
 export interface ChequeoCliente {
   id: string;
@@ -98,6 +132,8 @@ export interface ChequeoCliente {
   ig: string | null;
   seguidores_ig: number | null;
   seguidores_fb: number | null;
+  /** La cuenta publicitaria: la que encontró ahora, "cargada" si ya estaba o null si no hay. */
+  cuenta: string | null;
 }
 
 /**
@@ -107,6 +143,8 @@ export interface ChequeoCliente {
 export async function chequeoMeta(): Promise<{ clientes: ChequeoCliente[]; paginas: number }> {
   const db = adminDb();
   const paginas = await paginasAsignadas();
+  // Si el token no tiene ads_read, sin cuentas (lo demás sigue igual).
+  const cuentas = await cuentasAsignadas().catch(() => [] as { id: string; nombre: string }[]);
   const proyectos = (await db.collection("projects").get()).docs.filter((d) => d.data().enabled !== false);
   const out: ChequeoCliente[] = [];
   for (const d of proyectos) {
@@ -115,6 +153,9 @@ export async function chequeoMeta(): Promise<{ clientes: ChequeoCliente[]; pagin
     if (pag && (!p.meta?.page_id || (pag.ig && !p.meta?.ig_user_id))) {
       await d.ref.update({ "meta.page_id": pag.id, ...(pag.ig ? { "meta.ig_user_id": pag.ig.id } : {}) });
     }
+    // La cuenta publicitaria (para la pauta de toda la cuenta), si todavía no la tiene cargada.
+    const cuenta = p.meta?.ad_account_id ? null : cuentaDe(p, pag, cuentas);
+    if (cuenta) await d.ref.update({ "meta.ad_account_id": cuenta.id });
     let estado: EstadoMeta = !pag ? "sin_acceso" : pag.ig ? "ok" : "sin_ig";
     let detalle =
       estado === "sin_acceso"
@@ -136,6 +177,7 @@ export async function chequeoMeta(): Promise<{ clientes: ChequeoCliente[]; pagin
       estado,
       detalle,
       pagina: pag?.nombre ?? null,
+      cuenta: cuenta?.nombre ?? (p.meta?.ad_account_id ? "cargada" : null),
       ig: pag?.ig?.usuario ?? null,
       seguidores_ig: pag?.ig?.seguidores ?? null,
       seguidores_fb: pag?.seguidores ?? null,

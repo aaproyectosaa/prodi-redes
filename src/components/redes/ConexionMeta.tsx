@@ -15,6 +15,7 @@ interface Fila {
   ig: string | null;
   seguidores_ig: number | null;
   seguidores_fb: number | null;
+  cuenta?: string | null;
 }
 
 const ESTADO: Record<Estado, { label: string; clase: string; icono: React.ElementType }> = {
@@ -75,6 +76,7 @@ export function ConexionMeta() {
                 </span>
                 <span className="w-full text-xs text-muted-foreground">
                   {c.estado === "ok" ? `@${c.ig} · ${fmt(c.seguidores_ig)} seguidores en Instagram · ${fmt(c.seguidores_fb)} en Facebook` : c.detalle}
+                  {c.cuenta ? ` · Cuenta publicitaria: ${c.cuenta}` : " · Sin cuenta publicitaria"}
                 </span>
               </div>
             );
