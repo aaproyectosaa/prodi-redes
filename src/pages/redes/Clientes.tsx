@@ -228,6 +228,8 @@ interface Alta {
   email: string | null;
   password: string | null;
   pid: string;
+  /** Ya tenía usuario (dueño de varias empresas): se lo sumó a esta. */
+  yaTenia?: boolean;
 }
 
 /** Alta de cliente en un solo paso: marca, plan, equipo, su usuario y el mensaje de bienvenida listo. */
@@ -266,6 +268,12 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     try {
       assertEditable();
       const email = contacto.email.trim().toLowerCase();
+      // Mismo dueño de varias empresas: si ese mail ya es de un usuario cliente, se lo suma a esta (no se crea otro).
+      const existente = email ? profiles.find((p) => (p.email ?? "").toLowerCase() === email) : undefined;
+      if (existente && existente.role !== "cliente") {
+        toast.error("Ese mail es de alguien del equipo. Usá el mail del cliente.");
+        return;
+      }
       const ref = await addDoc(collection(db, "projects"), {
         nombre: nombre.trim(),
         color,
@@ -275,7 +283,7 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
           productor: equipo.productor ? [equipo.productor] : [],
           editor: equipo.editor ? [equipo.editor] : [],
           pauta: equipo.pauta ? [equipo.pauta] : [],
-          cliente: [],
+          cliente: existente ? [existente.id] : [],
         },
         contacto_emails: email ? [email] : [],
         facturacion: { tipo },
@@ -283,7 +291,7 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
         created_at: new Date().toISOString(),
       });
       let password: string | null = null;
-      if (email) {
+      if (email && !existente) {
         try {
           const r = await callApi<{ uid: string; password: string }>("/api/usuarios/crear", {
             nombre: contacto.nombre.trim() || nombre.trim(),
@@ -296,7 +304,7 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
           toast.error(`El cliente se creó, pero no su usuario: ${e instanceof Error ? e.message : "error"}`);
         }
       }
-      setAlta({ nombre: nombre.trim(), usuario: contacto.nombre.trim() || null, email: email || null, password, pid: ref.id });
+      setAlta({ nombre: nombre.trim(), usuario: contacto.nombre.trim() || existente?.nombre || null, email: email || null, password, pid: ref.id, yaTenia: !!existente });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo crear");
     } finally {
@@ -316,7 +324,11 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
             <DialogTitle className="text-[22px] font-bold tracking-tight">¡{alta.nombre} ya está adentro! 🎉</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            {alta.password ? "Le creamos su usuario. Mandale este mensaje de bienvenida:" : "Mandale este mensaje de bienvenida (cuando le crees el usuario, sumale sus datos de acceso):"}
+            {alta.yaTenia
+              ? "Ya tenía usuario: lo sumamos a esta empresa. Entra con el mismo mail y contraseña y cambia de empresa con el selector de arriba. Mandale este mensaje:"
+              : alta.password
+                ? "Le creamos su usuario. Mandale este mensaje de bienvenida:"
+                : "Mandale este mensaje de bienvenida (cuando le crees el usuario, sumale sus datos de acceso):"}
           </p>
           <Textarea readOnly rows={11} value={mensaje} className={cn(SUAVE, "text-sm leading-relaxed")} />
           <div className="flex flex-wrap gap-2">
@@ -492,7 +504,11 @@ function mensajeBienvenida(a: Alta, plan?: { nombre: string; videos_mes: number;
     plan ? `${/^plan\b/i.test(plan.nombre.trim()) ? `Tu ${plan.nombre}` : `Tu plan ${plan.nombre}`} incluye ${plan.videos_mes} videos con publicidad${plan.piezas_mes ? ` y ${plan.piezas_mes} piezas gráficas` : ""} por mes.` : "",
     "",
     `Entrá acá: ${url}`,
-    a.email ? `Usuario: ${a.email}` : "",
+    a.yaTenia
+      ? `Entrás con el mismo usuario de siempre (${a.email}) y cambiás de empresa con el selector de arriba del panel.`
+      : a.email
+        ? `Usuario: ${a.email}`
+        : "",
     a.password ? `Contraseña: ${a.password} (la podés cambiar desde tu perfil)` : "",
     "",
     "Lo primero: subí tu logo y los colores de tu marca, y contanos qué vendés en “Mi negocio”. Con eso arrancamos.",
