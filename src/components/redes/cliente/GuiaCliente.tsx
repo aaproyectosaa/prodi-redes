@@ -11,7 +11,10 @@ import {
   Lightbulb,
   Loader2,
   MessageCircle,
+  Hand,
   Rocket,
+  Sparkles,
+  Store,
   TrendingUp,
   type LucideIcon,
 } from "lucide-react";
@@ -131,62 +134,110 @@ export function GuiaCliente({
     }
   };
 
+  const PASOS = [
+    { icon: Sparkles, etiqueta: "Bienvenida" },
+    { icon: Clapperboard, etiqueta: "Cómo funciona" },
+    { icon: Hand, etiqueta: "Lo tuyo" },
+    { icon: Store, etiqueta: "Tu marca" },
+  ];
+  const IconoPaso = PASOS[paso].icon;
+  const titulo =
+    paso === 0 ? `¡Hola${nombre ? `, ${nombre}` : ""}! 👋` : paso === 1 ? "Así nace cada video" : paso === 2 ? "Lo único que tenés que hacer" : "Tu marca";
+
   return (
     <Dialog open={open} onOpenChange={cerrar}>
       <DialogContent
         className={cn(
-          "sm:max-h-[94dvh] w-[calc(100vw-2rem)] max-w-lg overflow-y-auto rounded-2xl p-0",
+          "flex max-h-[92dvh] w-[calc(100vw-1.5rem)] max-w-lg flex-col gap-0 overflow-hidden rounded-3xl border-0 p-0 shadow-2xl sm:max-h-[94dvh]",
+          // La cruz de cerrar, sobre la cabecera de color.
+          "[&>button.absolute]:right-4 [&>button.absolute]:top-4 [&>button.absolute]:z-20 [&>button.absolute]:rounded-full [&>button.absolute]:bg-black/20 [&>button.absolute]:p-1.5 [&>button.absolute]:text-white [&>button.absolute]:opacity-100 [&>button.absolute]:backdrop-blur",
           obligatorio && "[&>button.absolute]:hidden"
         )}
         onPointerDownOutside={(e) => obligatorio && e.preventDefault()}
         onEscapeKeyDown={(e) => obligatorio && e.preventDefault()}
       >
-        <div className="space-y-5 p-5 sm:p-6">
-          <div className="flex gap-1.5 pr-8">
-            {Array.from({ length: total }).map((_, i) => (
-              <span key={i} className={cn("h-1 flex-1 rounded-full", i <= paso ? "bg-primary" : "bg-muted")} />
+        {/* Cabecera con degradé: en qué paso está y cuántos faltan. */}
+        <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-primary via-violet-600 to-fuchsia-500 px-5 pb-5 pt-5 text-white sm:px-6">
+          <div className="pointer-events-none absolute -right-10 -top-12 h-40 w-40 rounded-full bg-white/15 blur-2xl" aria-hidden />
+          <div className="pointer-events-none absolute -bottom-16 left-6 h-32 w-32 rounded-full bg-fuchsia-300/25 blur-2xl" aria-hidden />
+          <div className="relative flex items-center gap-1.5 pr-10">
+            {PASOS.map((p, i) => (
+              <span key={p.etiqueta} className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/25">
+                <span className={cn("block h-full rounded-full bg-white transition-all duration-500", i <= paso ? "w-full" : "w-0")} />
+              </span>
             ))}
           </div>
+          <div className="relative mt-4 flex items-center gap-3">
+            <span
+              key={paso}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/20 shadow-inner ring-1 ring-white/30 backdrop-blur animate-in zoom-in-50 duration-300"
+            >
+              <IconoPaso className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-white/75">
+                Paso {paso + 1} de {total} · {PASOS[paso].etiqueta}
+              </p>
+              <DialogTitle className="text-xl font-bold leading-tight text-white sm:text-2xl">{titulo}</DialogTitle>
+            </div>
+          </div>
+        </div>
 
+        {/* Contenido con scroll propio: la cabecera y los botones quedan fijos. */}
+        <div key={paso} className="min-h-0 flex-1 overflow-y-auto px-5 py-5 animate-in fade-in slide-in-from-right-4 duration-300 sm:px-6">
           {paso === 0 && (
-            <div className="space-y-3 py-2 text-center">
-              <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 text-primary">
-                <Rocket className="h-7 w-7" />
-              </span>
-              <DialogTitle className="text-2xl">¡Hola{nombre ? `, ${nombre}` : ""}!</DialogTitle>
-              <DialogDescription className="text-base">
-                Este es tu espacio en Prodi. Desde acá seguís tus videos de principio a fin, sin perderte nada. Te
-                mostramos cómo funciona en un minuto.
+            <div className="space-y-5">
+              <DialogDescription className="text-base leading-relaxed text-foreground/80">
+                Este es tu espacio en Prodi. Desde acá seguís tus videos de principio a fin, sin perderte nada. Te mostramos cómo funciona en un
+                minuto.
               </DialogDescription>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { icon: Clapperboard, t: "Tus videos" },
+                  { icon: CheckCircle2, t: "Los aprobás" },
+                  { icon: TrendingUp, t: "Resultados" },
+                ].map((x) => (
+                  <div key={x.t} className="flex flex-col items-center gap-2 rounded-2xl border bg-muted/40 px-2 py-3.5 text-center">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-fuchsia-500 text-white shadow-md shadow-primary/25">
+                      <x.icon className="h-5 w-5" />
+                    </span>
+                    <span className="text-xs font-semibold">{x.t}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
           {paso === 1 && (
             <div className="space-y-4">
-              <div>
-                <DialogTitle className="text-xl">Así nace cada video</DialogTitle>
-                <DialogDescription>Son 5 pasos. Vos solo participás en dos.</DialogDescription>
-              </div>
-              <ol className="space-y-2.5">
+              <DialogDescription className="text-sm">
+                Son 5 pasos. <b className="text-foreground">Vos solo participás en dos</b>: los que dicen “Te toca”.
+              </DialogDescription>
+              {/* Línea de tiempo: los pasos del cliente, resaltados. */}
+              <ol className="relative">
                 {CAMINO.map((c, i) => (
-                  <li
-                    key={c.titulo}
-                    className={cn("flex items-start gap-3 rounded-xl border p-3", c.vos && "border-primary/40 bg-primary/[0.06]")}
-                  >
+                  <li key={c.titulo} className="relative flex gap-3.5 pb-3 last:pb-0">
+                    {i < CAMINO.length - 1 && (
+                      <span className="absolute left-[19px] top-10 h-[calc(100%-2.5rem)] w-0.5 rounded-full bg-gradient-to-b from-primary/40 to-border" aria-hidden />
+                    )}
                     <span
                       className={cn(
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold",
-                        c.vos ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                        "relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
+                        c.vos ? "bg-gradient-to-br from-primary to-fuchsia-500 text-white shadow-lg shadow-primary/30" : "border-2 border-border bg-card text-muted-foreground"
                       )}
                     >
-                      {i + 1}
+                      <c.icon className="h-[18px] w-[18px]" />
                     </span>
-                    <div className="min-w-0">
-                      <p className="flex items-center gap-2 text-sm font-semibold">
-                        <c.icon className="h-4 w-4" /> {c.titulo}
-                        {c.vos && <span className="rounded-full bg-primary/15 px-2 text-[10px] text-primary">VOS</span>}
+                    <div className={cn("min-w-0 flex-1 rounded-2xl px-3.5 py-2.5", c.vos && "bg-primary/[0.08] ring-1 ring-primary/25")}>
+                      <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+                        <span className="text-muted-foreground">{i + 1}.</span> {c.titulo}
+                        {c.vos && (
+                          <span className="rounded-full bg-gradient-to-r from-primary to-fuchsia-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                            Te toca
+                          </span>
+                        )}
                       </p>
-                      <p className="text-xs text-muted-foreground">{c.texto}</p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{c.texto}</p>
                     </div>
                   </li>
                 ))}
@@ -196,43 +247,47 @@ export function GuiaCliente({
 
           {paso === 2 && (
             <div className="space-y-4">
-              <div>
-                <DialogTitle className="text-xl">Lo único que tenés que hacer</DialogTitle>
-                <DialogDescription>Del resto nos encargamos nosotros.</DialogDescription>
-              </div>
+              <DialogDescription className="text-sm">Del resto nos encargamos nosotros.</DialogDescription>
               <div className="space-y-2.5">
-                {TAREAS.map((t) => (
-                  <div key={t.titulo} className="flex items-start gap-3 rounded-xl border bg-card p-3">
-                    <t.icon className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-                    <div>
+                {TAREAS.map((t, i) => (
+                  <div key={t.titulo} className="flex items-center gap-3.5 rounded-2xl border bg-card p-3.5 transition-colors hover:border-primary/40">
+                    <span
+                      className={cn(
+                        "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white shadow-md",
+                        [
+                          "bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-emerald-500/25",
+                          "bg-gradient-to-br from-sky-400 to-blue-600 shadow-sky-500/25",
+                          "bg-gradient-to-br from-primary to-fuchsia-500 shadow-primary/25",
+                        ][i % 3]
+                      )}
+                    >
+                      <t.icon className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0">
                       <p className="text-sm font-semibold">{t.titulo}</p>
-                      <p className="text-xs text-muted-foreground">{t.texto}</p>
+                      <p className="text-xs leading-relaxed text-muted-foreground">{t.texto}</p>
                     </div>
                   </div>
                 ))}
               </div>
-              <p className="flex items-start gap-2 rounded-xl bg-muted/50 p-3 text-xs text-muted-foreground">
-                <Bell className="mt-0.5 h-4 w-4 shrink-0" />
-                Arriba de todo vas a ver siempre un cartel con tu próximo paso. Si no dice nada para hacer, es que está todo
-                en marcha.
+              <p className="flex items-start gap-2.5 rounded-2xl border border-dashed border-primary/30 bg-primary/[0.05] p-3.5 text-xs leading-relaxed text-muted-foreground">
+                <Bell className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                Arriba de todo vas a ver siempre un cartel con tu próximo paso. Si no dice nada para hacer, es que está todo en marcha.
               </p>
             </div>
           )}
 
           {paso === 3 && (
             <div className="space-y-4">
-              <div>
-                <DialogTitle className="text-xl">Tu marca</DialogTitle>
-                <DialogDescription>
-                  Con esto armamos tus videos, los textos y las piezas gráficas con tu identidad. Con contarnos de tu negocio ya arrancamos.
-                </DialogDescription>
-              </div>
-              <div className="space-y-3">
+              <DialogDescription className="text-sm">
+                Con esto armamos tus videos, los textos y las piezas gráficas con tu identidad. Con contarnos de tu negocio ya arrancamos.
+              </DialogDescription>
+              <div className="space-y-3.5">
                 <div className="space-y-1.5">
                   <Label>
                     ¿A qué se dedica tu negocio? <span className="text-destructive">*</span>
                   </Label>
-                  <Input value={rubro} onChange={(e) => setRubro(e.target.value)} placeholder="Ej: pizzería y delivery" />
+                  <Input className="h-11 rounded-xl" value={rubro} onChange={(e) => setRubro(e.target.value)} placeholder="Ej: pizzería y delivery" />
                 </div>
                 <div className="space-y-1.5">
                   <Label>
@@ -240,21 +295,24 @@ export function GuiaCliente({
                   </Label>
                   <Textarea
                     rows={2}
+                    className="rounded-xl"
                     value={descripcion}
                     onChange={(e) => setDescripcion(e.target.value)}
                     placeholder="Ej: masa madre de 48 horas, horno a leña, abrimos hasta las 2 AM"
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <Label>¿A quién le vendés?</Label>
-                  <Input value={publico} onChange={(e) => setPublico(e.target.value)} placeholder="Ej: familias y jóvenes" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Instagram</Label>
-                  <Input value={instagram} onChange={(e) => setInstagram(e.target.value)} placeholder="@tumarca" />
+                <div className="grid gap-3.5 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label>¿A quién le vendés?</Label>
+                    <Input className="h-11 rounded-xl" value={publico} onChange={(e) => setPublico(e.target.value)} placeholder="Ej: familias y jóvenes" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Instagram</Label>
+                    <Input className="h-11 rounded-xl" value={instagram} onChange={(e) => setInstagram(e.target.value)} placeholder="@tumarca" />
+                  </div>
                 </div>
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 rounded-2xl border bg-muted/30 p-3.5">
                 <Label>
                   Logo y colores de tu marca
                   <span className="ml-1 font-normal text-muted-foreground">(si no los tenés a mano, después)</span>
@@ -264,33 +322,41 @@ export function GuiaCliente({
             </div>
           )}
 
-          {aviso && <p className="text-sm font-medium text-destructive animate-in fade-in">{aviso}</p>}
+          {aviso && <p className="mt-4 rounded-xl bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive animate-in fade-in">{aviso}</p>}
+        </div>
 
-          <div className="flex items-center justify-between gap-2 pt-1">
-            {paso === 0 ? (
-              obligatorio ? (
-                <span />
-              ) : (
-                <Button variant="ghost" onClick={() => cerrar(false)}>
-                  Ahora no
-                </Button>
-              )
+        {/* Botones fijos abajo. */}
+        <div className="flex shrink-0 items-center justify-between gap-2 border-t bg-background/80 px-5 py-3.5 backdrop-blur sm:px-6">
+          {paso === 0 ? (
+            obligatorio ? (
+              <span />
             ) : (
-              <Button variant="ghost" onClick={() => setPaso((p) => p - 1)}>
-                <ArrowLeft className="mr-1.5 h-4 w-4" /> Atrás
+              <Button variant="ghost" className="rounded-full" onClick={() => cerrar(false)}>
+                Ahora no
               </Button>
-            )}
-            {paso < total - 1 ? (
-              <Button onClick={() => setPaso((p) => p + 1)}>
-                {paso === 0 ? "Empezar" : "Siguiente"} <ArrowRight className="ml-1.5 h-4 w-4" />
-              </Button>
-            ) : (
-              <Button onClick={() => void terminar()} disabled={guardando}>
-                {guardando ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
-                {falta.logo ? "Listo, el logo lo subo después" : "Listo, ir a mi panel"} {!guardando && <CheckCircle2 className="ml-1.5 h-4 w-4" />}
-              </Button>
-            )}
-          </div>
+            )
+          ) : (
+            <Button variant="ghost" className="rounded-full" onClick={() => setPaso((p) => p - 1)}>
+              <ArrowLeft className="mr-1.5 h-4 w-4" /> Atrás
+            </Button>
+          )}
+          {paso < total - 1 ? (
+            <Button
+              className="group h-11 rounded-full bg-gradient-to-r from-primary to-fuchsia-500 px-6 font-semibold shadow-lg shadow-primary/25 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/35"
+              onClick={() => setPaso((p) => p + 1)}
+            >
+              {paso === 0 ? "Empezar" : "Siguiente"} <ArrowRight className="ml-1.5 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            </Button>
+          ) : (
+            <Button
+              className="h-11 rounded-full bg-gradient-to-r from-primary to-fuchsia-500 px-5 font-semibold shadow-lg shadow-primary/25 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/35"
+              onClick={() => void terminar()}
+              disabled={guardando}
+            >
+              {guardando ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+              {falta.logo ? "Listo, el logo después" : "Listo, ir a mi panel"} {!guardando && <CheckCircle2 className="ml-1.5 h-4 w-4" />}
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>
