@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { avisar } from "@/lib/redes/avisos";
 import { Link, useNavigate } from "react-router-dom";
 import { addDoc, collection } from "@/lib/db";
 import { Building2, ChevronRight, Copy, Loader2, Mail, Plus, Search, Upload, X } from "lucide-react";
@@ -304,6 +305,16 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
           toast.error(`El cliente se creó, pero no su usuario: ${e instanceof Error ? e.message : "error"}`);
         }
       }
+      // Ya tenía usuario: la empresa le aparece sola en su panel (sin volver a entrar); le avisamos.
+      if (existente)
+        void avisar({
+          destinatarios: [existente.id],
+          titulo: `Sumamos ${nombre.trim()} a tu panel`,
+          cuerpo: "Ya la tenés en el selector de empresas, arriba de tu panel.",
+          link: "/cliente",
+          clave: `empresa-nueva:${ref.id}`,
+          proyectoId: ref.id,
+        });
       setAlta({ nombre: nombre.trim(), usuario: contacto.nombre.trim() || existente?.nombre || null, email: email || null, password, pid: ref.id, yaTenia: !!existente });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo crear");
