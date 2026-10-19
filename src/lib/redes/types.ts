@@ -423,6 +423,8 @@ export interface DatosCobro {
 }
 
 export interface RedesSettings {
+  /** Qué alertas de pauta están prendidas (api/_lib/pauta-reglas.ts). */
+  reglas_pauta?: Partial<Record<import("../../../api/_lib/pauta-reglas").ReglaPauta, boolean>> | null;
   /** Mora: escalones por días de atraso (ver api/_lib/mora-calc.ts). */
   mora?: { activo?: boolean; aviso?: number; extras?: number; pausa?: number };
   /** Precio de cada pieza gráfica para redes fuera del plan (ARS). */

@@ -4,6 +4,8 @@ import { BellRing, CheckCircle2, ChevronRight } from "lucide-react";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { useRedes } from "@/contexts/redes-data-context";
 import { alertasPauta, estadoPresupuesto, presupuestoPauta, type AlertaPauta } from "@/lib/redes/alertasPauta";
+import { reglasActivas, REGLAS_INFO, type ReglaPauta } from "../../../api/_lib/pauta-reglas";
+import { Switch } from "@/components/ui/switch";
 import { sumarDiasF, usePautaMeta } from "@/lib/redes/metaPauta";
 import { cn } from "@/lib/utils";
 
@@ -16,11 +18,12 @@ const hoyISO = () => {
 
 /** Las alertas de los clientes que ve esta persona (la pauta de los últimos 31 días, para comparar semanas y el mes). */
 export function useAlertasPauta(activo = true) {
-  const { clientes } = useRedes();
+  const { clientes, settings } = useRedes();
+  const reglas = useMemo(() => reglasActivas(settings.reglas_pauta), [settings.reglas_pauta]);
   const hoy = hoyISO();
   const desde = [sumarDiasF(hoy, -15), `${hoy.slice(0, 7)}-01`].sort()[0];
   const filas = usePautaMeta(activo ? null : undefined, desde);
-  const alertas = useMemo(() => (filas ? alertasPauta({ clientes, filas, hoy }) : []), [filas, clientes, hoy]);
+  const alertas = useMemo(() => (filas ? alertasPauta({ clientes, filas, hoy, reglas }) : []), [filas, clientes, hoy, reglas]);
   return { alertas, filas, cargando: activo && filas === null };
 }
 
@@ -139,6 +142,24 @@ export function BarraPresupuesto({ cliente, filas }: { cliente: Parameters<typeo
           ? `Se pasó por ${ars(e.gasto - e.tope)}.`
           : `${Math.round(uso * 100)}% usado · día ${e.dia} de ${e.diasMes}${e.proyectado != null ? ` · al ritmo actual termina en ${ars(e.proyectado)}` : ""}`}
       </p>
+    </div>
+  );
+}
+
+/** Ajustes → qué alertas de pauta están prendidas (las ve pauta en su tablero y le llegan como aviso). */
+export function ReglasPautaAjustes({ actual, onCambiar }: { actual: unknown; onCambiar: (reglas: Record<ReglaPauta, boolean>) => Promise<void> }) {
+  const reglas = reglasActivas(actual);
+  return (
+    <div className="divide-y rounded-xl border bg-card">
+      {(Object.keys(REGLAS_INFO) as ReglaPauta[]).map((k) => (
+        <label key={k} className="flex items-start justify-between gap-3 p-3">
+          <span>
+            <span className="block text-sm font-medium">{REGLAS_INFO[k].label}</span>
+            <span className="block text-xs text-muted-foreground">{REGLAS_INFO[k].detalle}</span>
+          </span>
+          <Switch checked={reglas[k]} onCheckedChange={(v) => void onCambiar({ ...reglas, [k]: v })} />
+        </label>
+      ))}
     </div>
   );
 }

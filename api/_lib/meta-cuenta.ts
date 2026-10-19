@@ -12,6 +12,7 @@ import { adminDb } from "./db";
 import { hoyAR, sumarDias } from "./fecha";
 import { sincronizarAnuncios } from "./meta-anuncios";
 import { destinatariosDe, enviarAviso } from "./notify";
+import { evaluarPauta, reglasActivas, type FilaPautaRegla } from "./pauta-reglas";
 
 const VERSION = () => process.env.META_GRAPH_VERSION || "v23.0";
 // Errores de Meta por límite de uso: se espera y se reintenta.
@@ -236,6 +237,53 @@ const presupuestoDe = (p: Record<string, any>): number | null => {
  * Aviso a pauta (y admins) cuando la inversión del mes llega al 90% o pasa el presupuesto del cliente.
  * Una vez por escalón y por mes (queda anotado en `meta_aviso_presupuesto`).
  */
+/**
+ * Las alertas de pauta prendidas en Ajustes (costo alto, gasta sin resultados, dejó de gastar…): a quien maneja la
+ * pauta de ese cliente, con el diagnóstico y qué hacer. La misma alerta no se repite durante 7 días. El presupuesto
+ * avisa aparte (avisarPresupuesto, una vez por escalón y por mes).
+ */
+export async function avisarAlertasPauta(pid: string, baseUrl: string, reglasCfg: unknown): Promise<number> {
+  const db = adminDb();
+  const ref = db.collection("projects").doc(pid);
+  const p = (await ref.get()).data();
+  if (!p?.meta?.ad_account_id) return 0;
+  const hoy = hoyAR();
+  const filas = (await db.collection("meta_pauta_diaria").where("proyecto_id", "==", pid).where("fecha", ">=", sumarDias(hoy, -31)).get()).docs.map(
+    (d) => d.data() as FilaPautaRegla
+  );
+  const presupuesto = Number(p.pauta_cliente?.monto ?? p.plan_redes_override?.pauta?.monto ?? 0) || null;
+  const alertas = evaluarPauta({ filas, hoy, presupuesto, frecuencia: p.meta_sync?.frecuencia ?? [], reglas: reglasActivas(reglasCfg) }).filter(
+    (a) => a.nivel >= 1 && a.regla !== "presupuesto"
+  );
+  if (!alertas.length) return 0;
+  const avisadas = { ...((p.meta_alertas_avisadas ?? {}) as Record<string, string>) };
+  const nuevas = alertas.filter((a) => !avisadas[a.id] || avisadas[a.id] < sumarDias(hoy, -7));
+  if (!nuevas.length) return 0;
+  // A quien maneja su pauta; si no tiene a nadie asignado, a los admins.
+  const pauta = await destinatariosDe(pid, ["pauta"], false);
+  const destinatarios = pauta.length ? pauta : await destinatariosDe(pid, [], true);
+  const nombre = String(p.nombre ?? "Un cliente");
+  for (const a of nuevas) {
+    await enviarAviso(
+      {
+        destinatarios,
+        titulo: `${nombre}: ${a.titulo}`,
+        cuerpo: a.detalle,
+        link: "/pauta",
+        clave: `alerta-pauta:${pid}:${a.id}:${hoy}`,
+        proyectoId: pid,
+        mail: a.nivel === 2,
+      },
+      baseUrl
+    );
+    avisadas[a.id] = hoy;
+  }
+  // Se limpian las de hace más de 30 días.
+  for (const k of Object.keys(avisadas)) if (avisadas[k] < sumarDias(hoy, -30)) delete avisadas[k];
+  await ref.update({ meta_alertas_avisadas: avisadas });
+  return nuevas.length;
+}
+
 export async function avisarPresupuesto(pid: string, baseUrl: string): Promise<void> {
   const db = adminDb();
   const ref = db.collection("projects").doc(pid);
@@ -295,6 +343,7 @@ export async function sincronizarAuto(pid: string, forzar = false): Promise<Resu
 
 /** Cron diario: los últimos 3 días de cada cliente, de a uno; si uno falla, sigue con el próximo. */
 export async function sincronizarCuentasTodos(baseUrl: string): Promise<string> {
+  const reglasCfg = (await adminDb().collection("app_settings").doc("redes").get()).data()?.reglas_pauta ?? null;
   if (!process.env.META_ACCESS_TOKEN) return "sin token";
   const proyectos = (await adminDb().collection("projects").get()).docs.filter((d) => {
     const p = d.data();
@@ -311,6 +360,7 @@ export async function sincronizarCuentasTodos(baseUrl: string): Promise<string> 
       }
       if ((await sincronizarAuto(d.id, true)).ok) bien++;
       await avisarPresupuesto(d.id, baseUrl).catch((err) => console.warn("[meta-cuenta] aviso presupuesto", d.id, err));
+      await avisarAlertasPauta(d.id, baseUrl, reglasCfg).catch((err) => console.warn("[meta-cuenta] alertas", d.id, err));
     } catch (err) {
       console.warn("[meta-cuenta]", d.id, err instanceof Error ? err.message : err);
     }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ConexionMeta } from "@/components/redes/ConexionMeta";
+import { ReglasPautaAjustes } from "@/components/redes/AlertasPauta";
 import { MoraAjustes } from "@/components/redes/MoraAvisos";
 import { addDoc, collection, deleteDoc, doc, onSnapshot, setDoc, updateDoc } from "@/lib/db";
 import { CheckCircle2, FlaskConical, HardDrive, Loader2, Moon, Plus, Trash2, XCircle } from "lucide-react";
@@ -211,6 +212,24 @@ export default function Ajustes() {
             description="El sistema lee solo, todos los días, los seguidores y el alcance de cada cliente (con el mismo acceso a Meta de la pauta) y arma su curva de crecimiento."
           >
             <ConexionMeta />
+          </Section>
+
+          <Section
+            title="Alertas de pauta"
+            description="Lo que el sistema controla solo todos los días en la pauta de cada cliente. Las prendidas le aparecen a quien maneja la pauta (en Pauta y en Mi día) y le llegan como aviso, con qué hacer. Una misma alerta no se repite durante 7 días."
+          >
+            <ReglasPautaAjustes
+              actual={settings.reglas_pauta}
+              onCambiar={async (r) => {
+                try {
+                  assertEditable();
+                  await updateDoc(doc(db, "app_settings", "redes"), { reglas_pauta: r });
+                  toast.success("Alertas de pauta guardadas");
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "No se pudo guardar");
+                }
+              }}
+            />
           </Section>
 
           <Section

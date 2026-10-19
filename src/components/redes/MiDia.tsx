@@ -343,7 +343,7 @@ export function MiDia() {
       for (const { video: v } of a.resultadosViejos)
         out.push({ id: `res-${v.id}`, titulo: v.titulo, clienteId: v.proyecto_id, fecha: hoy, etiqueta: "Falta", tarea: "Actualizar resultados", onAbrir: () => navigate(`/videos?video=${v.id}`) });
       // Alertas de Meta (presupuesto, sin gasto, costo que sube…): las que hay que mirar hoy.
-      for (const al of alertasMeta.filter((x) => x.nivel >= 1 && x.tipo !== "video_sin_anuncio"))
+      for (const al of alertasMeta.filter((x) => x.nivel >= 1))
         out.push({
           id: `al-${al.id}`,
           titulo: al.titulo,
