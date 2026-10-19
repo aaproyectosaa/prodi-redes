@@ -164,7 +164,8 @@ export function resumirPorMes(filas: PautaDia[], meses: string[], tipo: TipoResu
     const del = filas.filter((f) => f.fecha.startsWith(mes));
     const gasto = del.reduce((a, f) => a + (f.gasto || 0), 0);
     const resultados = del.reduce((a, f) => a + (Number(f[tipo]) || 0), 0);
-    return { mes, gasto, resultados, costo: resultados ? gasto / resultados : null };
+    // Sin filas: ese mes es anterior al historial que se trajo de Meta (no es que no haya habido resultados).
+    return { mes, gasto, resultados, costo: resultados ? gasto / resultados : null, conDatos: del.length > 0 };
   });
 }
 

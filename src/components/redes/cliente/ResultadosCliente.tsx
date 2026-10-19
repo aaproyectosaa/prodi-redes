@@ -389,7 +389,7 @@ function GraficoMeses({
   varios,
   mes,
 }: {
-  datos: { mes: string; gasto: number; resultados: number; costo: number | null }[];
+  datos: { mes: string; gasto: number; resultados: number; costo: number | null; conDatos: boolean }[];
   uno: string;
   varios: string;
   mes: string;
@@ -417,15 +417,21 @@ function GraficoMeses({
               {mesLabel(visto.mes)}
               {visto.mes === hoy && <span className="ml-1.5 text-xs font-normal text-primary">en curso</span>}
             </b>
+            {!visto.conDatos ? (
+              <span className="text-muted-foreground">Sin datos de Meta para este mes</span>
+            ) : (
             <span>
               <b className="tabular-nums" style={{ color: VIOLETA }}>
                 {fmt(visto.resultados)}
               </b>{" "}
               {visto.resultados === 1 ? uno : varios}
             </span>
-            <span className="text-muted-foreground">
-              Inversión: <b className="tabular-nums text-foreground">{formatARS(visto.gasto)}</b>
-            </span>
+            )}
+            {visto.conDatos && (
+              <span className="text-muted-foreground">
+                Inversión: <b className="tabular-nums text-foreground">{formatARS(visto.gasto)}</b>
+              </span>
+            )}
             {visto.costo != null && (
               <span className="text-muted-foreground">
                 Cada {uno}: <b className="tabular-nums text-foreground">{formatARS(visto.costo)}</b>
@@ -445,10 +451,10 @@ function GraficoMeses({
                 onMouseEnter={() => setFoco(d.mes)}
                 onFocus={() => setFoco(d.mes)}
                 onClick={() => setFoco((f) => (f === d.mes ? null : d.mes))}
-                aria-label={`${mesLabel(d.mes)}: ${fmt(d.resultados)} ${d.resultados === 1 ? uno : varios}, inversión ${formatARS(d.gasto)}`}
+                aria-label={d.conDatos ? `${mesLabel(d.mes)}: ${fmt(d.resultados)} ${d.resultados === 1 ? uno : varios}, inversión ${formatARS(d.gasto)}` : `${mesLabel(d.mes)}: sin datos`}
                 className="group flex h-full flex-1 flex-col items-center justify-end outline-none"
               >
-                <span className={cn("mb-1 text-xs font-semibold tabular-nums", d.resultados ? "" : "text-muted-foreground")}>{fmt(d.resultados)}</span>
+                <span className={cn("mb-1 text-xs font-semibold tabular-nums", d.resultados ? "" : "text-muted-foreground")}>{d.conDatos ? fmt(d.resultados) : "sin datos"}</span>
                 <span
                   className={cn("w-full max-w-14 rounded-t-lg transition-all", d.mes === mes || activo ? "opacity-100" : "opacity-70 group-hover:opacity-100")}
                   style={{
