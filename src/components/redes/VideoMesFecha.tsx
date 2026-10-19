@@ -1,4 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { es } from "date-fns/locale";
+import { Calendar } from "@/components/ui/calendar";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CalendarDays, X } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,15 +18,8 @@ import type { Video } from "@/lib/redes/types";
  */
 export function VideoMesFecha({ video, editable, uid }: { video: Video; editable: boolean; uid: string }) {
   const { clienteById, planes, videos } = useRedes();
-  const fechaRef = useRef<HTMLInputElement>(null);
-  // En el celular el calendario (la ruedita) cambia el valor a cada movimiento y al abrirse pone hoy: se guarda recién
-  // al cerrarlo, con lo que quedó elegido. En la compu, apenas se elige el día.
-  const [borrador, setBorrador] = useState(video.fecha_deseada ?? "");
-  const abierto = useRef(false);
-  const tactil = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
-  useEffect(() => {
-    if (!abierto.current) setBorrador(video.fecha_deseada ?? "");
-  }, [video.fecha_deseada]);
+  // Calendario propio (no el campo de fecha del navegador, que en el celular se trababa y ponía hoy solo).
+  const [eligiendo, setEligiendo] = useState(false);
   const cliente = clienteById(video.proyecto_id);
   if (!editable) return <span className="text-xs text-muted-foreground">{mesLabel(video.mes)}</span>;
   const publicado = video.etapa === "publicado";
@@ -79,45 +75,51 @@ export function VideoMesFecha({ video, editable, uid }: { video: Video; editable
       </Select>
       {!publicado && (
       <span className="inline-flex items-center">
-        {/* El "botón" es solo el dibujo: encima va el campo de fecha real, transparente y del mismo tamaño. Así el toque
-            cae en el campo y el iPhone muestra su calendario (Safari no abre un campo escondido). */}
-        <span className="group relative inline-flex">
-          <span
-            aria-hidden
-            className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed px-2.5 text-xs text-muted-foreground transition-colors group-hover:border-primary/50 group-hover:text-foreground"
-          >
-            <CalendarDays className="h-3.5 w-3.5" />
-            {video.fecha_deseada ? `Publicar ${fechaCorta(video.fecha_deseada)}` : "Fecha de publicación"}
-          </span>
-          <input
-            ref={fechaRef}
-            type="date"
-            min={hoyISO()}
-            value={borrador}
-            onFocus={() => {
-              abierto.current = true;
-            }}
-            onChange={(e) => {
-              setBorrador(e.target.value);
-              if (!tactil && e.target.value !== (video.fecha_deseada ?? "")) void cambiarFecha(e.target.value);
-            }}
-            onBlur={(e) => {
-              abierto.current = false;
-              if (tactil && e.target.value !== (video.fecha_deseada ?? "")) void cambiarFecha(e.target.value);
-            }}
-            // En la compu el calendario sale solo con el ícono del campo: así se abre tocando en cualquier parte.
-            onClick={(e) => {
-              try {
-                e.currentTarget.showPicker();
-              } catch {
-                /* el navegador lo abre solo */
-              }
-            }}
-            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-            title="Para cuándo se publica (define el mes del plan)"
-            aria-label="Fecha de publicación"
-          />
-        </span>
+        <button
+          type="button"
+          onClick={() => setEligiendo(true)}
+          className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed px-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+          title="Para cuándo se publica (define el mes del plan)"
+        >
+          <CalendarDays className="h-3.5 w-3.5" />
+          {video.fecha_deseada ? `Publicar ${fechaCorta(video.fecha_deseada)}` : "Fecha de publicación"}
+        </button>
+        <Dialog open={eligiendo} onOpenChange={setEligiendo}>
+          <DialogContent className="w-[calc(100vw-1.5rem)] max-w-sm rounded-3xl p-4">
+            <DialogHeader>
+              <DialogTitle>¿Cuándo se publica?</DialogTitle>
+              <DialogDescription>Tocá el día. Si es de otro mes, el video pasa al plan de ese mes.</DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-center">
+              <Calendar
+                mode="single"
+                locale={es}
+                weekStartsOn={1}
+                selected={video.fecha_deseada ? new Date(`${video.fecha_deseada}T12:00:00`) : undefined}
+                defaultMonth={video.fecha_deseada ? new Date(`${video.fecha_deseada}T12:00:00`) : undefined}
+                fromDate={new Date(`${hoyISO()}T12:00:00`)}
+                onSelect={(dia) => {
+                  if (!dia) return;
+                  const iso = `${dia.getFullYear()}-${String(dia.getMonth() + 1).padStart(2, "0")}-${String(dia.getDate()).padStart(2, "0")}`;
+                  setEligiendo(false);
+                  if (iso !== video.fecha_deseada) void cambiarFecha(iso);
+                }}
+              />
+            </div>
+            {video.fecha_deseada && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEligiendo(false);
+                  void cambiarFecha("");
+                }}
+                className="w-full rounded-xl py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-destructive"
+              >
+                Sacar la fecha
+              </button>
+            )}
+          </DialogContent>
+        </Dialog>
         {video.fecha_deseada && (
           <button type="button" onClick={() => void cambiarFecha("")} className="ml-0.5 rounded-full p-1 text-muted-foreground hover:text-destructive" aria-label="Sacar la fecha">
             <X className="h-3 w-3" />
