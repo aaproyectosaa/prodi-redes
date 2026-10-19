@@ -662,15 +662,7 @@ export function ResultadosCliente({
               icono={Instagram}
               titulo="Tu Instagram"
               tiles={[
-                igR.seguidores != null
-                  ? {
-                      icono: Users,
-                      titulo: "Seguidores",
-                      valor: fmt(igR.seguidores),
-                      sub: igR.variacion ? `${igR.variacion > 0 ? "+" : ""}${fmt(igR.variacion)} en el mes` : undefined,
-                      tono: "rosa",
-                    }
-                  : null,
+                // Los seguidores van una sola vez: en "Crecimiento en redes" (más abajo, con la curva).
                 igR.alcanceDia != null
                   ? { icono: Users, titulo: "Personas que te ven por día", valor: fmt(igR.alcanceDia), sub: "en promedio", cambio: <Cambio ahora={igR.alcanceDia} antes={igA.alcanceDia} />, tono: "azul" }
                   : null,
