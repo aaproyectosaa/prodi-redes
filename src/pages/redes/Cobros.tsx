@@ -14,10 +14,12 @@ import {
   MoreHorizontal,
   Pencil,
   Receipt,
+  Search,
   Send,
   Trash2,
   Undo2,
   Wallet,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -195,6 +197,14 @@ export default function Cobros() {
     }
   };
 
+  // Buscador: por nombre del cliente (sin acentos ni mayúsculas).
+  const [q, setQ] = useState("");
+  const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const coincide = (nombre: string) => !q.trim() || norm(nombre).includes(norm(q.trim()));
+  const porEmitirV = porEmitir.filter((r) => coincide(r.f.cliente));
+  const pendientesV = pendientes.filter((x) => coincide(x.cliente));
+  const cobradasV = cobradas.filter((x) => coincide(x.cliente));
+  const delAnioV = q.trim() ? delAnio.filter((x) => coincide(x.cliente)) : delAnio;
   const vencidoBoletas = pendientes.filter((f) => f.vencimiento < hoy);
   const pestanias: Pestania<Paso>[] = [
     { k: "emitir", label: "Emitir", n: porEmitir.length, listo: vivas.length > 0 && porEmitir.length === 0 },
@@ -248,13 +258,33 @@ export default function Cobros() {
             />
           </FilaKpis>
 
-          <Pestanias items={pestanias} valor={paso} onChange={ir} />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <Pestanias items={pestanias} valor={paso} onChange={ir} />
+            {/* Buscar un cliente: filtra todas las pestañas. */}
+            <div className="relative sm:w-72">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Buscar cliente…"
+                className="h-10 w-full rounded-xl border bg-card pl-9 pr-9 text-sm outline-none transition-colors focus:border-primary"
+              />
+              {q && (
+                <button type="button" onClick={() => setQ("")} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:text-foreground" aria-label="Borrar búsqueda">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+          {q && !porEmitirV.length && !pendientesV.length && !cobradasV.length && !delAnioV.length && (
+            <p className="text-sm text-muted-foreground">Ningún cliente coincide con «{q}».</p>
+          )}
 
           <div key={`${mes}-${paso}`} className="animate-in fade-in slide-in-from-bottom-1 duration-200 motion-reduce:animate-none">
             {paso === "emitir" && (
               <PasoEmitir
                 mes={mes}
-                lista={porEmitir}
+                lista={porEmitirV}
                 anuladas={anuladas}
                 onVer={abrir}
                 onEditar={(r) => void editarFila(r)}
@@ -263,11 +293,11 @@ export default function Cobros() {
                 onEmitidas={() => ir("cobrar")}
               />
             )}
-            {paso === "cobrar" && <PasoCobrar lista={pendientes} hoy={hoy} cobro={cobro} onVer={abrir} />}
+            {paso === "cobrar" && <PasoCobrar lista={pendientesV} hoy={hoy} cobro={cobro} onVer={abrir} />}
             {paso === "cobradas" &&
-              (cobradas.length ? (
+              (cobradasV.length ? (
                 <div className="divide-y rounded-2xl border bg-card px-4">
-                {cobradas.map((f) => (
+                {cobradasV.map((f) => (
                   <div key={f.id} className="flex items-center gap-3 py-2 text-sm">
                     <span className="min-w-0 flex-1 truncate">{f.cliente}</span>
                     <span className="hidden text-xs text-muted-foreground sm:inline">
@@ -311,7 +341,7 @@ export default function Cobros() {
                 <VacioAdmin icono={Wallet} titulo="Todavía no se cobró nada este mes" texto="Cuando marques una boleta como cobrada (o pague por Mercado Pago) aparece acá." />
               ))}
             {paso === "morosos" &&
-              (morosos.filas.length ? <Morosos facturas={delAnio} embebido /> : <VacioAdmin icono={Check} titulo="Nadie está atrasado" texto="Todos los clientes están al día con sus boletas." />)}
+              (morosos.filas.length ? <Morosos facturas={delAnioV} embebido /> : <VacioAdmin icono={Check} titulo="Nadie está atrasado" texto="Todos los clientes están al día con sus boletas." />)}
           </div>
 
           <ComoFunciona>
