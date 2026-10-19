@@ -1,6 +1,4 @@
 import type { Project } from "@/integrations/firebase/types";
-import type { Video } from "@/lib/redes/types";
-import { loSubeElCliente } from "@/lib/redes/extra";
 import { NOMBRE_RESULTADO, resumirPauta, sumarDiasF, type PautaDia } from "@/lib/redes/metaPauta";
 
 // Alertas para quien maneja la pauta: lo que hay que tocar hoy en Meta. Salen de la pauta que se trae sola
@@ -42,7 +40,7 @@ export function estadoPresupuesto(c: Project, filas: PautaDia[], hoy: string) {
   return { tope, gasto, uso: tope ? gasto / tope : null, proyectado, diasMes, dia: d };
 }
 
-export function alertasPauta({ clientes, filas, videos, hoy }: { clientes: Project[]; filas: PautaDia[]; videos: Video[]; hoy: string }): AlertaPauta[] {
+export function alertasPauta({ clientes, filas, hoy }: { clientes: Project[]; filas: PautaDia[]; hoy: string }): AlertaPauta[] {
   const out: AlertaPauta[] = [];
   for (const c of clientes) {
     if (c.enabled === false) continue;
@@ -102,16 +100,6 @@ export function alertasPauta({ clientes, filas, videos, hoy }: { clientes: Proje
     }
   }
 
-  // Videos publicados con pauta y sin anuncio vinculado (últimos 30 días).
-  const desde30 = sumarDiasF(hoy, -30);
-  for (const v of videos) {
-    if (v.etapa !== "publicado" || loSubeElCliente(v) || v.meta?.ad_id || v.meta?.campaign_id) continue;
-    if (!v.pauta?.objetivo && !v.pauta?.inicio) continue;
-    const pub = (v.publicacion?.publicado_at ?? "").slice(0, 10);
-    if (!pub || pub < desde30) continue;
-    if (!clientes.some((c) => c.id === v.proyecto_id)) continue;
-    out.push({ id: `va-${v.id}`, tipo: "video_sin_anuncio", nivel: 1, proyectoId: v.proyecto_id, videoId: v.id, titulo: "Video pautado sin anuncio vinculado", detalle: `"${v.titulo}": cargá el ID del anuncio para que se vean sus resultados.` });
-  }
-
+  // Los videos pautados sin ID de anuncio ya los controla "Mi rendimiento" (auditoriaPauta), con su regla.
   return out.sort((a, b) => b.nivel - a.nivel);
 }

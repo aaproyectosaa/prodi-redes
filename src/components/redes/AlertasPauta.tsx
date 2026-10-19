@@ -1,10 +1,8 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, BellRing, ChevronDown, Flame, Link2Off, PauseCircle, Repeat, TrendingUp, Wallet } from "lucide-react";
-import { ClienteTag } from "@/components/redes/ClienteTag";
-import { useOpenVideo } from "@/components/redes/VideoCard";
+import { BellRing, ChevronRight } from "lucide-react";
 import { useRedes } from "@/contexts/redes-data-context";
-import { alertasPauta, estadoPresupuesto, type AlertaPauta, type TipoAlerta } from "@/lib/redes/alertasPauta";
+import { alertasPauta, estadoPresupuesto, type AlertaPauta } from "@/lib/redes/alertasPauta";
 import { sumarDiasF, usePautaMeta } from "@/lib/redes/metaPauta";
 import { cn } from "@/lib/utils";
 
@@ -17,84 +15,74 @@ const hoyISO = () => {
 
 /** Las alertas de los clientes que ve esta persona (la pauta de los últimos 31 días, para comparar semanas y el mes). */
 export function useAlertasPauta(activo = true) {
-  const { clientes, videos } = useRedes();
+  const { clientes } = useRedes();
   const hoy = hoyISO();
   const desde = [sumarDiasF(hoy, -15), `${hoy.slice(0, 7)}-01`].sort()[0];
   const filas = usePautaMeta(activo ? null : undefined, desde);
-  const alertas = useMemo(() => (filas ? alertasPauta({ clientes, filas, videos, hoy }) : []), [filas, clientes, videos, hoy]);
+  const alertas = useMemo(() => (filas ? alertasPauta({ clientes, filas, hoy }) : []), [filas, clientes, hoy]);
   return { alertas, filas, cargando: activo && filas === null };
 }
 
-const ICONO: Record<TipoAlerta, React.ElementType> = {
-  presupuesto_excedido: Wallet,
-  presupuesto_cerca: Wallet,
-  presupuesto_ritmo: TrendingUp,
-  sin_gasto: PauseCircle,
-  costo_sube: Flame,
-  sin_resultados: AlertTriangle,
-  frecuencia: Repeat,
-  video_sin_anuncio: Link2Off,
-};
-
-const TONO = [
-  "border-border bg-card",
-  "border-amber-500/40 bg-amber-500/5",
-  "border-red-500/50 bg-red-500/5",
+const CHIP = [
+  "bg-muted text-muted-foreground",
+  "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  "bg-red-500/15 text-red-700 dark:text-red-300",
 ];
-const ICONO_TONO = ["bg-muted text-muted-foreground", "bg-amber-500/15 text-amber-600 dark:text-amber-300", "bg-red-500/15 text-red-600 dark:text-red-300"];
 
-function Fila({ a }: { a: AlertaPauta }) {
-  const navigate = useNavigate();
-  const open = useOpenVideo();
-  const { clienteById } = useRedes();
-  const Icono = ICONO[a.tipo];
-  const c = clienteById(a.proyectoId);
-  return (
-    <button
-      type="button"
-      onClick={() => (a.videoId ? open(a.videoId) : navigate(`/clientes/${a.proyectoId}?tab=resultados`))}
-      className={cn("flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors hover:bg-muted/40", TONO[a.nivel])}
-    >
-      <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", ICONO_TONO[a.nivel])}>
-        <Icono className="h-4 w-4" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold">{a.titulo}</span>
-          {c && <ClienteTag cliente={c} />}
-        </span>
-        <span className="mt-0.5 block text-xs text-muted-foreground">{a.detalle}</span>
-      </span>
-    </button>
-  );
-}
-
-/** Panel del tablero: las urgentes a la vista, el resto plegado. */
+/**
+ * Panel del tablero: una fila por cliente con lo que le pasa (en pastillas). Solo lo que hay que mirar hoy;
+ * el detalle de cada una, al pasar el mouse, y tocando la fila se abre su pauta.
+ */
 export function AlertasPauta() {
+  const navigate = useNavigate();
+  const { clienteById } = useRedes();
   const { alertas, cargando } = useAlertasPauta();
-  const [verTodas, setVerTodas] = useState(false);
-  if (cargando || !alertas.length) return null;
-  const importantes = alertas.filter((a) => a.nivel >= 1);
-  const visibles = verTodas ? alertas : importantes.slice(0, 5);
-  const resto = alertas.length - visibles.length;
-  const urgentes = alertas.filter((a) => a.nivel === 2).length;
+  const [abierto, setAbierto] = useState(false);
+  const porCliente = useMemo(() => {
+    const m = new Map<string, AlertaPauta[]>();
+    for (const a of alertas.filter((x) => x.nivel >= 1)) m.set(a.proyectoId, [...(m.get(a.proyectoId) ?? []), a]);
+    return [...m.entries()].map(([id, lista]) => ({ id, lista, nivel: Math.max(...lista.map((x) => x.nivel)) })).sort((x, y) => y.nivel - x.nivel);
+  }, [alertas]);
+  if (cargando || !porCliente.length) return null;
+  const urgentes = porCliente.filter((x) => x.nivel === 2).length;
+  const visibles = abierto ? porCliente : porCliente.slice(0, 3);
   return (
-    <section className="mb-4 space-y-2 rounded-2xl border bg-card p-4">
-      <div className="flex items-center gap-2">
+    <section className="mb-4 rounded-2xl border bg-card">
+      <div className="flex items-center gap-2 px-4 pt-3">
         <BellRing className={cn("h-4 w-4", urgentes ? "text-red-500" : "text-amber-500")} />
-        <h3 className="text-sm font-semibold">Alertas de pauta</h3>
-        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", urgentes ? "bg-red-500/15 text-red-600 dark:text-red-300" : "bg-amber-500/15 text-amber-700 dark:text-amber-300")}>
-          {urgentes ? `${urgentes} urgente${urgentes === 1 ? "" : "s"}` : `${alertas.length} para mirar`}
+        <h3 className="text-sm font-semibold">Pauta para revisar</h3>
+        <span className="text-xs text-muted-foreground">
+          {porCliente.length} {porCliente.length === 1 ? "cliente" : "clientes"}
+          {urgentes ? ` · ${urgentes} urgente${urgentes === 1 ? "" : "s"}` : ""}
         </span>
       </div>
-      <div className="space-y-2">
-        {visibles.map((a) => (
-          <Fila key={a.id} a={a} />
-        ))}
-      </div>
-      {resto > 0 && (
-        <button type="button" onClick={() => setVerTodas(true)} className="flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-          Ver {resto} más <ChevronDown className="h-3.5 w-3.5" />
+      <ul className="divide-y px-2 py-1">
+        {visibles.map(({ id, lista }) => {
+          const c = clienteById(id);
+          return (
+            <li key={id}>
+              <button
+                type="button"
+                onClick={() => navigate(`/clientes/${id}?tab=resultados`)}
+                className="flex w-full flex-wrap items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted/50"
+              >
+                <span className="min-w-[8rem] text-sm font-medium">{c?.nombre ?? "Cliente"}</span>
+                <span className="flex flex-1 flex-wrap gap-1.5">
+                  {lista.map((a) => (
+                    <span key={a.id} title={a.detalle} className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", CHIP[a.nivel])}>
+                      {a.titulo}
+                    </span>
+                  ))}
+                </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {porCliente.length > 3 && (
+        <button type="button" onClick={() => setAbierto(!abierto)} className="w-full border-t py-2 text-xs font-medium text-primary hover:bg-muted/40">
+          {abierto ? "Ver menos" : `Ver los ${porCliente.length - 3} restantes`}
         </button>
       )}
     </section>
