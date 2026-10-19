@@ -10,7 +10,7 @@ import { useMetricasRedes } from "@/components/redes/CrecimientoRedes";
 import { cn } from "@/lib/utils";
 
 // Resultados de Meta de un cliente (toda la cuenta publicitaria + Instagram), por rango. Lo traen solos el cron diario
-// y "Actualizar ahora". `cliente`: en lenguaje simple y sin tablas técnicas.
+// y los botones "Buscar … en Meta". `cliente`: en lenguaje simple y sin tablas técnicas.
 
 const fmt = (n: number | null | undefined, dec = 0) =>
   n == null ? "—" : new Intl.NumberFormat("es-AR", { maximumFractionDigits: dec, minimumFractionDigits: dec }).format(n);
@@ -97,10 +97,10 @@ function Sincronizar({ cliente }: { cliente: Project }) {
         </span>
       )}
       <Button size="sm" variant="outline" onClick={() => correr(3)} disabled={busy !== null}>
-        {busy === 3 ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />} Actualizar ahora
+        {busy === 3 ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />} Buscar lo último en Meta
       </Button>
       <Button size="sm" variant="ghost" onClick={() => correr(90)} disabled={busy !== null}>
-        {busy === 90 ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <History className="mr-1.5 h-3.5 w-3.5" />} Traer 90 días
+        {busy === 90 ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <History className="mr-1.5 h-3.5 w-3.5" />} {busy === 90 ? "Buscando en Meta…" : "Buscar historial en Meta (90 días)"}
       </Button>
     </div>
   );
@@ -224,7 +224,7 @@ export function PautaMeta({ cliente, modo }: { cliente: Project; modo: "admin" |
             )
           ) : (
             <p className="rounded-2xl border border-dashed p-4 text-sm text-muted-foreground">
-              {esCliente ? "En este período no hubo publicidad." : cliente.meta?.ad_account_id ? "Sin pauta en este período (o todavía no se trajo: tocá Actualizar ahora)." : "Sin cuenta publicitaria cargada."}
+              {esCliente ? "En este período no hubo publicidad." : cliente.meta?.ad_account_id ? "Sin pauta en este período (o todavía no se trajo: tocá Buscar historial en Meta)." : "Sin cuenta publicitaria cargada."}
             </p>
           )}
 
