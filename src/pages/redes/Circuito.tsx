@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { AlertasPauta } from "@/components/redes/AlertasPauta";
 import { MiRendimientoPauta } from "@/components/redes/MiRendimientoPauta";
 import { AccionTile, GrillaAcciones } from "@/components/redes/AccionesTablero";
 import { AlertTriangle, Building2, CalendarPlus, CalendarRange, Clapperboard, Plus, Search } from "lucide-react";
@@ -94,7 +93,6 @@ function TableroEquipo({ tablero }: { tablero: TableroRol }) {
     >
       {esProd && <PlanesAviso />}
       <BotonMiDia />
-      {(tieneRol("pauta") || tieneRol("admin")) && <AlertasPauta />}
       {tieneRol("pauta") && <MiRendimientoPauta />}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <SelectorVista vista={vista} onChange={setVista} />
@@ -249,7 +247,6 @@ function CircuitoCompleto() {
       }
     >
       {canManageProduction(role) && <PlanesAviso />}
-      <AlertasPauta />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <SelectorVista vista={vista} onChange={setVista} />
         <div className="relative w-full sm:w-64">

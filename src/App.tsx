@@ -30,6 +30,7 @@ const Deudas = lazy(() => import("./pages/redes/Deudas"));
 const Administracion = lazy(() => import("./pages/redes/Administracion"));
 const Circuito = lazy(() => import("./pages/redes/Circuito"));
 const Pedidos = lazy(() => import("./pages/redes/Pedidos"));
+const Pauta = lazy(() => import("./pages/redes/Pauta"));
 const Rodajes = lazy(() => import("./pages/redes/Rodajes"));
 const ClientePortal = lazy(() => import("./pages/redes/ClientePortal"));
 const Clientes = lazy(() => import("./pages/redes/Clientes"));
@@ -132,6 +133,7 @@ const App = () => (
 
                 {/* Equipo */}
                 <Route path="/pedidos" element={<RequireRole roles={["admin", "productor"]}><Pedidos /></RequireRole>} />
+                <Route path="/pauta" element={<RequireRole roles={["admin", "pauta"]}><Pauta /></RequireRole>} />
                 <Route path="/videos" element={<RequireRole roles={["admin", "productor", "editor", "pauta"]}><Circuito /></RequireRole>} />
                 <Route path="/rodajes" element={<RequireRole roles={["admin", "productor"]}><Rodajes /></RequireRole>} />
                 <Route path="/piezas" element={<RequireRole roles={["admin", "productor", "diseno"]}><Piezas /></RequireRole>} />

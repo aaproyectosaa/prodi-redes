@@ -199,7 +199,7 @@ export function useMetaAuto(proyectoId: string | undefined, conectado: boolean) 
 export type TipoResultado = "mensajes" | "compras" | "leads" | "clics";
 export const NOMBRE_RESULTADO: Record<TipoResultado, { uno: string; varios: string; titulo: string; cliente: (n: string) => string }> = {
   mensajes: { uno: "mensaje", varios: "Mensajes", titulo: "Mensajes", cliente: (n) => `Te escribieron ${n} veces` },
-  compras: { uno: "venta", varios: "Compras", titulo: "Ventas", cliente: (n) => `Vendiste ${n} veces` },
+  compras: { uno: "venta", varios: "Ventas", titulo: "Ventas", cliente: (n) => `Vendiste ${n} veces` },
   leads: { uno: "contacto", varios: "Contactos", titulo: "Contactos", cliente: (n) => `${n} te dejaron sus datos` },
   clics: { uno: "clic", varios: "Clics", titulo: "Clics", cliente: (n) => `${n} clics` },
 };
