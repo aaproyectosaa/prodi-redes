@@ -161,16 +161,19 @@ export function PautaMeta({ cliente, modo }: { cliente: Project; modo: "admin" |
         <>
           {hayPauta && r && ant ? (
             esCliente ? (
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <Dato icono={Wallet} titulo="Invertiste" valor={formatARS(r.gasto)} cambio={<Cambio ahora={r.gasto} antes={ant.gasto} />} sub="en anuncios" />
                 <Dato icono={Eye} titulo="Tus anuncios se vieron" valor={`${fmt(r.impresiones)} veces`} cambio={<Cambio ahora={r.impresiones} antes={ant.impresiones} />} />
                 <Dato
                   icono={r.principal === "compras" ? ShoppingBag : MousePointerClick}
-                  titulo={nom.cliente(fmt(r.resultados))}
-                  valor={r.costo != null ? formatARS(r.costo) : "—"}
-                  sub={`cada ${nom.uno}`}
+                  titulo={nom.titulo}
+                  valor={nom.cliente(fmt(r.resultados))}
+                  sub={r.principal === "compras" && r.valor_compras > 0 ? `Total vendido: ${formatARS(r.valor_compras)}` : undefined}
                   cambio={<Cambio ahora={r.resultados} antes={ant.resultados} />}
                 />
+                {r.costo != null && (
+                  <Dato icono={Wallet} titulo={`Cada ${nom.uno} te costó`} valor={formatARS(r.costo)} cambio={<Cambio ahora={r.costo} antes={ant.costo} alReves />} />
+                )}
               </div>
             ) : (
               <>
@@ -231,7 +234,13 @@ export function PautaMeta({ cliente, modo }: { cliente: Project; modo: "admin" |
                 icono={Instagram}
                 titulo="Seguidores en Instagram"
                 valor={fmt(igR.seguidores)}
-                sub={igR.variacion != null ? `${igR.variacion >= 0 ? "+" : ""}${fmt(igR.variacion)} en el período` : undefined}
+                sub={
+                  igR.variacion != null
+                    ? `${igR.variacion >= 0 ? "+" : ""}${fmt(igR.variacion)} en el período`
+                    : igR.seguidoresFecha && igR.seguidoresFecha < f.hasta
+                      ? `al ${ddmm(igR.seguidoresFecha)}`
+                      : undefined
+                }
               />
               {esCliente ? (
                 <Dato icono={Users} titulo="Personas que te ven por día" valor={fmt(igR.alcanceDia)} sub="en promedio" cambio={<Cambio ahora={igR.alcanceDia} antes={igA.alcanceDia} />} />

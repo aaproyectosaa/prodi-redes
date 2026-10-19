@@ -191,7 +191,15 @@ export async function sincronizarCuentaMeta(pid: string, dias = 3): Promise<Resu
   if (ig) {
     try {
       const n = await igDias(pid, ig, desde, hasta);
-      partes.push(`Instagram: ${n} ${n === 1 ? "día" : "días"}`);
+      // Seguidores: foto del día (Meta no da el histórico).
+      const perfil = await graph(urlDe(ig, { fields: "followers_count,username" }));
+      if (perfil?.followers_count != null) {
+        await db
+          .collection("metricas_redes")
+          .doc(`${pid}_${hasta}`)
+          .set({ proyecto_id: pid, fecha: hasta, ig_seguidores: Number(perfil.followers_count), ig_usuario: perfil.username ?? null }, { merge: true });
+      }
+      partes.push(`Instagram: ${n} ${n === 1 ? "día" : "días"}${perfil?.followers_count != null ? ` · ${perfil.followers_count} seguidores` : " · sin seguidores"}`);
     } catch (err) {
       ok = false;
       partes.push(`Instagram: ${err instanceof Error ? err.message : "error"}`);

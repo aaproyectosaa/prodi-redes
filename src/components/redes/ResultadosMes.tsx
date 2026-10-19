@@ -15,6 +15,8 @@ export interface ResumenMes {
   clics: number;
   gasto: number;
   costoMensaje: number | null;
+  /** Cuántos de los publicados ya tienen resultados (si ninguno, se muestra "—" en vez de 0). */
+  conResultados: number;
 }
 
 export function resumirMes(videos: Video[], proyectoId: string, mes: string): ResumenMes {
@@ -34,10 +36,13 @@ export function resumirMes(videos: Video[], proyectoId: string, mes: string): Re
     clics: sum("clics"),
     gasto,
     costoMensaje: mensajes > 0 && gasto > 0 ? gasto / mensajes : null,
+    conResultados: publicados.filter((v) => v.resultados).length,
   };
 }
 
 /** Publicado hace menos de 2 días: la pauta todavía no tiene números. */
+const tieneAnuncio = (v: Video) => !!(v.meta?.ad_id || v.meta?.campaign_id);
+
 function esReciente(v: Video): boolean {
   const p = v.publicacion?.publicado_at;
   return !!p && Date.now() - new Date(p).getTime() < 2 * 86_400_000;
@@ -57,17 +62,21 @@ export function ResultadosMes({ resumen, grafico }: { resumen: ResumenMes; grafi
       </div>
     );
   }
+  // Sin resultados todavía: "—" (un 0 parece que algo anda mal).
+  const hay = resumen.conResultados > 0;
+  const sinPauta = !hay && !resumen.publicados.some(tieneAnuncio);
+  const vacio = sinPauta ? "Sin pauta todavía" : "Cargando…";
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard label="Videos publicados" value={resumen.publicados.length} tone="primary" />
-        <StatCard label="Personas alcanzadas" value={formatNum(resumen.alcance)} />
-        <StatCard label="Reproducciones" value={formatNum(resumen.reproducciones)} />
-        <StatCard label="Mensajes recibidos" value={formatNum(resumen.mensajes)} tone="success" />
+        <StatCard label="Personas alcanzadas" value={hay ? formatNum(resumen.alcance) : "—"} hint={hay ? undefined : vacio} />
+        <StatCard label="Reproducciones" value={hay ? formatNum(resumen.reproducciones) : "—"} hint={hay ? undefined : vacio} />
+        <StatCard label="Mensajes recibidos" value={hay ? formatNum(resumen.mensajes) : "—"} tone="success" hint={hay ? undefined : vacio} />
         <StatCard
-          label="Inversión en pauta"
-          value={formatARS(resumen.gasto)}
-          hint={resumen.costoMensaje ? `${formatARS(resumen.costoMensaje)} por mensaje` : undefined}
+          label="Inversión en pauta de los videos"
+          value={hay ? formatARS(resumen.gasto) : "—"}
+          hint={hay ? (resumen.costoMensaje ? `${formatARS(resumen.costoMensaje)} por mensaje` : undefined) : vacio}
         />
       </div>
 
@@ -104,9 +113,11 @@ export function ResultadosMes({ resumen, grafico }: { resumen: ResumenMes; grafi
                   </>
                 ) : (
                   <td colSpan={4} className="px-4 py-2.5 text-right text-xs text-muted-foreground">
-                    {esReciente(v)
-                      ? "Los resultados aparecen a las 48 h de publicado"
-                      : "Estamos cargando los resultados"}
+                    {!tieneAnuncio(v)
+                      ? "Sin pauta todavía"
+                      : esReciente(v)
+                        ? "Los resultados aparecen a las 48 h de publicado"
+                        : "Estamos cargando los resultados"}
                   </td>
                 )}
                 <td className="px-4 py-2.5 text-right">

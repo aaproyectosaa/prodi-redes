@@ -88,11 +88,11 @@ export function usePautaMeta(proyectoId: string | undefined | null, desde: strin
 }
 
 export type TipoResultado = "mensajes" | "compras" | "leads" | "clics";
-export const NOMBRE_RESULTADO: Record<TipoResultado, { uno: string; varios: string; cliente: (n: string) => string }> = {
-  mensajes: { uno: "mensaje", varios: "Mensajes", cliente: (n) => `Te escribieron ${n} veces` },
-  compras: { uno: "compra", varios: "Compras", cliente: (n) => `Vendiste ${n} veces` },
-  leads: { uno: "contacto", varios: "Contactos", cliente: (n) => `Te dejaron sus datos ${n} personas` },
-  clics: { uno: "clic", varios: "Clics", cliente: (n) => `Hicieron clic ${n} veces` },
+export const NOMBRE_RESULTADO: Record<TipoResultado, { uno: string; varios: string; titulo: string; cliente: (n: string) => string }> = {
+  mensajes: { uno: "mensaje", varios: "Mensajes", titulo: "Mensajes", cliente: (n) => `Te escribieron ${n} veces` },
+  compras: { uno: "venta", varios: "Compras", titulo: "Ventas", cliente: (n) => `Vendiste ${n} veces` },
+  leads: { uno: "contacto", varios: "Contactos", titulo: "Contactos", cliente: (n) => `${n} te dejaron sus datos` },
+  clics: { uno: "clic", varios: "Clics", titulo: "Clics", cliente: (n) => `${n} clics` },
 };
 
 export interface ResumenPauta {
@@ -187,13 +187,14 @@ export function resumirIg(lista: IgDia[], desde: string, hasta: string) {
   const seg = f.filter((x) => x.ig_seguidores != null);
   const antes = [...lista].filter((x) => x.fecha < desde && x.ig_seguidores != null).pop();
   const ini = antes ?? seg[0];
-  const fin = seg[seg.length - 1];
+  const fin = seg[seg.length - 1] ?? [...lista].filter((x) => x.ig_seguidores != null && x.fecha <= hasta).pop();
   const suma = (k: keyof IgDia) => {
     const v = f.filter((x) => x[k] != null);
     return v.length ? v.reduce((a, x) => a + Number(x[k]), 0) : null;
   };
   return {
     seguidores: fin?.ig_seguidores ?? null,
+    seguidoresFecha: fin?.fecha ?? null,
     variacion: fin && ini && fin !== ini ? Number(fin.ig_seguidores) - Number(ini.ig_seguidores) : null,
     alcance: suma("ig_alcance_dia"),
     // Promedio por día (sumar el alcance de cada día repite a las mismas personas).
