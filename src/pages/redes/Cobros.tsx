@@ -57,6 +57,8 @@ import {
   prepararFacturacion,
   marcarCobrada,
   sincronizarBorrador,
+  agrupadasDe,
+  vaEnOtraBoleta,
   pagadoDe,
   registrarPago,
   saldoDe,
@@ -105,10 +107,12 @@ export default function Cobros() {
     for (const f of borradores) {
       const c = clientes.find((x) => x.id === f.proyecto_id);
       const abono = c ? planDe(c, planes).precioMensual : 0;
-      const clave = `${f.id}:${abono}:${JSON.stringify(c?.facturacion ?? null)}`;
+      // Empresas del mismo dueño que van en esta misma boleta.
+      const agrupadas = c ? agrupadasDe(c.id, clientes, (x) => planDe(x, planes).precioMensual) : [];
+      const clave = `${f.id}:${abono}:${JSON.stringify(c?.facturacion ?? null)}:${JSON.stringify(agrupadas)}`;
       if (!c || sincronizadas.current.has(clave)) continue;
       sincronizadas.current.add(clave);
-      void sincronizarBorrador(f, c, abono, settings.iva_pct ?? 21).catch((e) => console.warn("[cobros] sincronizar", f.id, e));
+      void sincronizarBorrador(f, c, abono, settings.iva_pct ?? 21, agrupadas).catch((e) => console.warn("[cobros] sincronizar", f.id, e));
     }
   }, [borradores, clientes, planes, settings.iva_pct]);
   const pendientes = vivas
@@ -127,10 +131,21 @@ export default function Cobros() {
     const filas: PorEmitir[] = borradores.map((f) => ({ pid: f.proyecto_id, f, doc: f }));
     for (const c of clientes) {
       if (facturas.some((f) => f.proyecto_id === c.id)) continue;
+      // Va dentro de la boleta de otra empresa del mismo dueño: no tiene boleta propia.
+      if (vaEnOtraBoleta(c, clientes)) continue;
       const plan = planDe(c, planes);
-      if (!plan.precioMensual) continue;
+      const agrupadas = agrupadasDe(c.id, clientes, (x) => planDe(x, planes).precioMensual);
+      if (!plan.precioMensual && !agrupadas.length) continue;
       const f = armarFactura(
-        { id: c.id, nombre: c.nombre, abono: plan.precioMensual, planNombre: plan.nombre, facturacion: c.facturacion ?? null, debitoActivo: c.suscripcion?.estado === "activa" },
+        {
+          id: c.id,
+          nombre: c.nombre,
+          abono: plan.precioMensual,
+          planNombre: plan.nombre,
+          facturacion: c.facturacion ?? null,
+          agrupadas,
+          debitoActivo: c.suscripcion?.estado === "activa",
+        },
         mes,
         { ivaPct, diaVencimiento: dia, por: "", hoy }
       );

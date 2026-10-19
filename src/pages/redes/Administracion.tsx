@@ -39,8 +39,7 @@ import {
   useGastos,
   useLiquidaciones,
   useObligaciones,
-  vencimientos,
-} from "@/lib/redes/facturacion";
+  vencimientos, vaEnOtraBoleta } from "@/lib/redes/facturacion";
 import { cn } from "@/lib/utils";
 
 type Urgencia = "alta" | "media" | "info";
@@ -81,7 +80,8 @@ export default function Administracion() {
   const borradores = delMes.filter((f) => f.estado === "borrador");
   const vencidas = facturas.filter((f) => f.estado === "pendiente" && f.vencimiento < hoy);
   const porCobrar = facturas.filter((f) => f.estado === "pendiente");
-  const facturable = clientes.filter((c) => planDe(c, planes).precioMensual > 0 && !c.facturacion?.pausada);
+  // Las que se facturan dentro de la boleta de otra empresa del mismo dueño no tienen boleta propia.
+  const facturable = clientes.filter((c) => planDe(c, planes).precioMensual > 0 && !c.facturacion?.pausada && !vaEnOtraBoleta(c, clientes));
   const faltan = facturable.filter((c) => !facturas.some((f) => f.mes === mes && f.proyecto_id === c.id));
   const totalMes = delMes.reduce((a, f) => a + f.bruto, 0);
   const cobradoMes = delMes.filter((f) => f.estado === "cobrada").reduce((a, f) => a + f.bruto, 0);

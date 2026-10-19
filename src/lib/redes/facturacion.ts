@@ -23,8 +23,7 @@ import {
   type EstadoFactura,
   type Factura,
   type ItemFactura,
-  type MedioCobro,
-} from "../../../api/_lib/facturacion";
+  type MedioCobro, type EmpresaAgrupada } from "../../../api/_lib/facturacion";
 
 export type { EstadoFactura, Factura, ItemFactura, MedioCobro };
 export type { ModoCobro } from "../../../api/_lib/facturacion";
@@ -132,16 +131,30 @@ export async function guardarDatosFacturacion(proyectoId: string, facturacion: N
  * Boleta armada que todavía no se emitió: toma los datos de facturación actuales del cliente
  * (si le cambiaron boleta / factura, razón social o CUIT después de armarla). Los ítems no se tocan.
  */
-export async function sincronizarBorrador(f: FacturaDoc, c: Project, abono: number, ivaPct: number): Promise<boolean> {
+/** Empresas que se facturan dentro de la boleta de `principal` (mismo dueño), con su abono del plan. */
+export function agrupadasDe(principalId: string, clientes: Project[], abonoDe: (c: Project) => number): EmpresaAgrupada[] {
+  return clientes
+    .filter((c) => c.id !== principalId && c.enabled !== false && c.facturacion?.factura_con === principalId)
+    .map((c) => ({ id: c.id, nombre: c.nombre, abono: abonoDe(c), extras_fijos: c.facturacion?.extras_fijos ?? [] }));
+}
+
+/** ¿Se factura dentro de la boleta de otra empresa? (la otra tiene que existir y estar activa) */
+export const vaEnOtraBoleta = (c: Project, clientes: Project[]) =>
+  !!c.facturacion?.factura_con && c.facturacion.factura_con !== c.id && clientes.some((x) => x.id === c.facturacion!.factura_con && x.enabled !== false);
+
+export async function sincronizarBorrador(f: FacturaDoc, c: Project, abono: number, ivaPct: number, agrupadas: EmpresaAgrupada[] = []): Promise<boolean> {
   if (f.estado !== "borrador" || f.arca?.cae) return false;
   const fa = c.facturacion ?? {};
   const tipo: Factura["tipo"] = fa.tipo === "boleta" ? "boleta" : "factura";
   const razon = fa.razon_social?.trim() || null;
   const cuit = fa.cuit?.trim() || null;
   // El abono y los extras fijos siguen los del cliente, salvo que la hayas editado a mano; lo agregado a mano queda.
-  const auto = (id: string) => id === "abono" || /^fijo\d+$/.test(id);
+  const auto = (id: string) => id === "abono" || /^fijo\d+$/.test(id) || /^grupo\d+(fijo\d+)?$/.test(id);
   // Sin abono en el plan (cliente sin plan): los ítems se cargan a mano, no se tocan.
-  const items = f.editada_a_mano || !(abono > 0) ? f.items : [...itemsDe({ abono, facturacion: c.facturacion ?? null }), ...f.items.filter((i) => !auto(i.id))];
+  const items =
+    f.editada_a_mano || (!(abono > 0) && !agrupadas.length)
+      ? f.items
+      : [...itemsDe({ abono, nombre: c.nombre, facturacion: c.facturacion ?? null, agrupadas }), ...f.items.filter((i) => !auto(i.id))];
   const mismosItems = JSON.stringify(items) === JSON.stringify(f.items);
   if (mismosItems && f.tipo === tipo && (f.razon_social ?? null) === razon && (f.cuit ?? null) === cuit) return false;
   await updateDoc(doc(db, "facturas", f.id), { items, tipo, razon_social: razon, cuit, ...totales(items, tipo, ivaPct) });

@@ -3,7 +3,7 @@
 // (el del 27) y el que se factura (mes vencido); se paga del 1 al 5 del siguiente.
 
 import { adminDb, YaExiste } from "./db";
-import { armarFactura, DIA_VENCIMIENTO, debitoCubre, facturaId, notaDebitoParcial, saldoDe, type DatosCliente } from "./facturacion";
+import { armarFactura, DIA_VENCIMIENTO, debitoCubre, facturaId, notaDebitoParcial, saldoDe, type DatosCliente, type EmpresaAgrupada } from "./facturacion";
 import { hoyAR } from "./fecha";
 
 export async function prepararFacturacion(
@@ -37,17 +37,35 @@ export async function prepararFacturacion(
   const hoy = hoyAR();
   let creadas = 0;
   let existentes = 0;
+  const abonoDe = (p: Record<string, unknown> & { plan_redes_id?: string; plan_redes_override?: { precio_mensual?: number } }) => {
+    const plan = p.plan_redes_id ? planes.get(p.plan_redes_id) : undefined;
+    return Number(p.plan_redes_override?.precio_mensual ?? plan?.precio_mensual ?? 0);
+  };
+  // Empresas del mismo dueño que van dentro de la boleta de otra (factura_con = la empresa que se factura).
+  const vivas = new Set(projects.docs.filter((d) => d.data().enabled !== false).map((d) => d.id));
+  const agrupadasDe = new Map<string, EmpresaAgrupada[]>();
+  for (const d of projects.docs) {
+    const p = d.data();
+    const con = p.facturacion?.factura_con;
+    if (p.enabled === false || !con || con === d.id || !vivas.has(con)) continue;
+    const lista = agrupadasDe.get(con) ?? [];
+    lista.push({ id: d.id, nombre: String(p.nombre ?? "Empresa"), abono: abonoDe(p), extras_fijos: p.facturacion?.extras_fijos ?? [] });
+    agrupadasDe.set(con, lista);
+  }
 
   for (const d of projects.docs) {
     const p = d.data();
     if (p.enabled === false) continue;
+    // Va dentro de la boleta de otra empresa del mismo dueño: no tiene boleta propia.
+    if (p.facturacion?.factura_con && p.facturacion.factura_con !== d.id && vivas.has(p.facturacion.factura_con)) continue;
     if (elegidos && !elegidos.has(d.id)) continue;
     // Los clientes de ejemplo no se facturan solos (solo si se los elige a mano, en la demo).
     if (!elegidos && p.demo_ejemplo) continue;
     // Automático: solo los clientes de Redes con plan (los proyectos viejos sin plan no se facturan solos).
     const plan = p.plan_redes_id ? planes.get(p.plan_redes_id) : undefined;
     const abono = Number(p.plan_redes_override?.precio_mensual ?? plan?.precio_mensual ?? 0);
-    if (!elegidos && !plan && !abono) continue;
+    const agrupadas = agrupadasDe.get(d.id) ?? [];
+    if (!elegidos && !plan && !abono && !agrupadas.length) continue;
     // "No facturarle el 27" (pausado, canje, etc.): solo se le factura si se lo elige a mano.
     if (!elegidos && p.facturacion?.pausada) continue;
     const suelto = debitados.get(d.id);
@@ -58,6 +76,7 @@ export async function prepararFacturacion(
       planNombre: plan?.nombre ?? null,
       videosMes: Number(p.plan_redes_override?.videos_mes ?? plan?.videos_mes ?? 0),
       facturacion: p.facturacion ?? null,
+      agrupadas,
       debitoActivo: p.suscripcion?.estado === "activa",
       abonoDebitado: !!suelto,
       montoDebitado: suelto?.monto ?? null,

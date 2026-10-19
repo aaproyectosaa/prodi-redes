@@ -247,7 +247,11 @@ export interface DatosCliente {
     pago_hasta?: number | null;
     /** vencido (por defecto): el 27 se factura ese mes. adelantado: el 27 se factura el mes que viene. */
     modo_cobro?: "vencido" | "adelantado" | null;
+    /** Va dentro de la boleta de otra empresa del mismo dueño (id de esa empresa): no tiene boleta propia. */
+    factura_con?: string | null;
   } | null;
+  /** Empresas del mismo dueño que se facturan dentro de esta boleta (cada una con su abono y sus ítems fijos). */
+  agrupadas?: EmpresaAgrupada[];
   debitoActivo?: boolean;
   /** Mercado Pago ya debitó y ese débito todavía no se aplicó a ninguna boleta. */
   abonoDebitado?: boolean;
@@ -257,7 +261,14 @@ export interface DatosCliente {
   comisionDebitada?: number | null;
 }
 
-type DatosMonto = Pick<DatosCliente, "abono" | "facturacion">;
+export interface EmpresaAgrupada {
+  id: string;
+  nombre: string;
+  abono: number;
+  extras_fijos?: { concepto: string; neto: number }[];
+}
+
+type DatosMonto = Pick<DatosCliente, "abono" | "facturacion"> & { nombre?: string; agrupadas?: EmpresaAgrupada[] };
 
 // Por defecto factura (con IVA, se autoriza en ARCA); boleta solo si el cliente lo tiene elegido.
 const tipoDe = (c: DatosMonto): TipoComprobante => (c.facturacion?.tipo === "boleta" ? "boleta" : "factura");
@@ -265,16 +276,24 @@ const tipoDe = (c: DatosMonto): TipoComprobante => (c.facturacion?.tipo === "bol
 /** Ítems de la boleta mensual: el abono y los extras fijos. */
 export function itemsDe(c: DatosMonto): ItemFactura[] {
   const items: ItemFactura[] = [];
+  // Con varias empresas en la misma boleta, cada abono dice de qué empresa es.
+  const grupo = (c.agrupadas ?? []).length > 0;
   if (c.abono > 0) {
     items.push({
       id: "abono",
-      concepto: "Gestión de redes sociales",
+      concepto: grupo && c.nombre ? `Gestión de redes sociales · ${c.nombre}` : "Gestión de redes sociales",
       servicio: "REDES",
       neto: c.abono,
     });
   }
   (c.facturacion?.extras_fijos ?? []).forEach((x, i) => {
     if (x.concepto && Number(x.neto) > 0) items.push({ id: `fijo${i}`, concepto: x.concepto, servicio: "EXTRAS", neto: Number(x.neto) });
+  });
+  (c.agrupadas ?? []).forEach((g, i) => {
+    if (g.abono > 0) items.push({ id: `grupo${i}`, concepto: `Gestión de redes sociales · ${g.nombre}`, servicio: "REDES", neto: g.abono });
+    (g.extras_fijos ?? []).forEach((x, j) => {
+      if (x.concepto && Number(x.neto) > 0) items.push({ id: `grupo${i}fijo${j}`, concepto: `${x.concepto} · ${g.nombre}`, servicio: "EXTRAS", neto: Number(x.neto) });
+    });
   });
   return items;
 }

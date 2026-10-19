@@ -26,6 +26,14 @@ const TEXTO_NIVEL: Record<NivelMora, string> = {
  * y al cliente (cuando se le frenan los extras o la producción). Devuelve el estado nuevo.
  */
 export async function actualizarMora(pid: string, base: string | null): Promise<EstadoMora | null> {
+  const r = await actualizarMoraUno(pid, base);
+  // Las empresas del mismo dueño que se facturan dentro de esta boleta siguen su misma mora.
+  const hijas = await adminDb().collection("projects").where("facturacion.factura_con", "==", pid).get();
+  for (const h of hijas.docs) if (h.id !== pid) await actualizarMoraUno(h.id, base).catch(() => null);
+  return r;
+}
+
+async function actualizarMoraUno(pid: string, base: string | null): Promise<EstadoMora | null> {
   const db = adminDb();
   const pref = db.collection("projects").doc(pid);
   const p = (await pref.get()).data();
@@ -33,7 +41,9 @@ export async function actualizarMora(pid: string, base: string | null): Promise<
   const settings = (await db.collection("app_settings").doc("redes").get()).data() ?? {};
   const cfg = leerConfigMora(settings);
   const hoy = hoyAR();
-  const snap = await db.collection("facturas").where("proyecto_id", "==", pid).where("estado", "==", "pendiente").get();
+  // Si se factura dentro de la boleta de otra empresa del mismo dueño, sigue la mora de esa boleta.
+  const deQuien = typeof p.facturacion?.factura_con === "string" && p.facturacion.factura_con ? p.facturacion.factura_con : pid;
+  const snap = await db.collection("facturas").where("proyecto_id", "==", deQuien).where("estado", "==", "pendiente").get();
   const tregua = typeof p.mora_tregua_hasta === "string" && p.mora_tregua_hasta >= hoy;
   const nuevo = estadoMora(
     snap.docs.map((d) => d.data() as Factura & { debito?: boolean }),
@@ -93,7 +103,7 @@ export async function moraTodos(base: string): Promise<string> {
     db.collection("projects").get(),
   ]);
   const ids = new Set<string>(pend.docs.map((d) => String(d.data().proyecto_id)));
-  conMora.docs.forEach((d) => d.data().mora && ids.add(d.id));
+  conMora.docs.forEach((d) => (d.data().mora || d.data().facturacion?.factura_con) && ids.add(d.id));
   const niveles: Record<string, number> = {};
   for (const pid of ids) {
     const e = await actualizarMora(pid, base).catch(() => null);

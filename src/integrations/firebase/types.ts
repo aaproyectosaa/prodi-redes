@@ -238,6 +238,8 @@ export interface Project {
     modo_cobro?: "vencido" | "adelantado" | null;
     /** No se le prepara la boleta sola el 27 (canje, pausa): se le factura solo eligiéndolo a mano. */
     pausada?: boolean;
+    /** Va dentro de la boleta de otra empresa del mismo dueño (id de esa empresa): no tiene boleta propia. */
+    factura_con?: string | null;
     /** No mandarle recordatorios automáticos de pago. */
     sin_recordatorios?: boolean;
   } | null;

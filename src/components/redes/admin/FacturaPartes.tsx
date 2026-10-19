@@ -186,8 +186,10 @@ export function ElegirClientes({
 }
 
 export function DatosFacturacionDialog({ proyectoId, onClose }: { proyectoId: string | null; onClose: () => void }) {
-  const { clienteById, settings } = useRedes();
+  const { clienteById, settings, clientes } = useRedes();
   const c = clienteById(proyectoId);
+  // Mismo dueño: en qué boleta va (la suya o la de otra empresa).
+  const [facturaCon, setFacturaCon] = useState<string>("");
   const diaDefecto = settings.dia_vencimiento ?? DIA_VENCIMIENTO;
   const [tipo, setTipo] = useState<"boleta" | "factura">("boleta");
   const [razon, setRazon] = useState("");
@@ -211,10 +213,18 @@ export function DatosFacturacionDialog({ proyectoId, onClose }: { proyectoId: st
     setPausada(!!f.pausada);
     setRecordar(!f.sin_recordatorios);
     setFijos((f.extras_fijos ?? []).map((x) => ({ concepto: x.concepto, neto: String(x.neto) })));
+    setFacturaCon(f.factura_con ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proyectoId]);
   if (!c) return null;
   const errPlazo = errorPlazo(plazo.desde, plazo.hasta, diaDefecto);
+  // Empresas del mismo dueño (comparten un usuario cliente) primero; las que ya van en otra boleta no pueden recibir.
+  const dueños = new Set(c.team_roles?.cliente ?? []);
+  const mismoDueño = (x: typeof c) => (x.team_roles?.cliente ?? []).some((u) => dueños.has(u));
+  const candidatas = clientes
+    .filter((x) => x.id !== c.id && x.enabled !== false && !x.facturacion?.factura_con)
+    .sort((a, b) => Number(mismoDueño(b)) - Number(mismoDueño(a)) || a.nombre.localeCompare(b.nombre));
+  const vanEnEsta = clientes.filter((x) => x.id !== c.id && x.facturacion?.factura_con === c.id);
   const guardar = async () => {
     setBusy(true);
     try {
@@ -230,6 +240,7 @@ export function DatosFacturacionDialog({ proyectoId, onClose }: { proyectoId: st
         pausada,
         sin_recordatorios: !recordar,
         extras_fijos: fijos.filter((x) => x.concepto.trim() && Number(x.neto) > 0).map((x) => ({ concepto: x.concepto.trim(), neto: Number(x.neto) })),
+        factura_con: facturaCon || null,
       });
       toast.success("Guardado: se usa desde la próxima boleta");
       onClose();
@@ -246,6 +257,36 @@ export function DatosFacturacionDialog({ proyectoId, onClose }: { proyectoId: st
           <DialogTitle>Datos de facturación · {c.nombre}</DialogTitle>
           <DialogDescription>Se usan cada vez que se prepara su boleta.</DialogDescription>
         </DialogHeader>
+        <div className="space-y-1.5 rounded-xl border p-3">
+          <Label className="text-xs">¿En qué boleta va?</Label>
+          {vanEnEsta.length > 0 ? (
+            <p className="text-sm">
+              En esta boleta también van: <b>{vanEnEsta.map((x) => x.nombre).join(", ")}</b>. (Para separarlas, cambialo en la ficha de cada una.)
+            </p>
+          ) : (
+            <>
+              <Select value={facturaCon || "propia"} onValueChange={(v) => setFacturaCon(v === "propia" ? "" : v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="propia">En su propia boleta</SelectItem>
+                  {candidatas.map((x) => (
+                    <SelectItem key={x.id} value={x.id}>
+                      Junto con {x.nombre}
+                      {mismoDueño(x) ? " (mismo dueño)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                {facturaCon
+                  ? `No tiene boleta propia: su abono y sus ítems fijos van como renglones en la boleta de ${clienteById(facturaCon)?.nombre ?? "esa empresa"} (a su razón social y CUIT).`
+                  : "Cada empresa con su boleta. Si el dueño tiene varias y quiere pagar todo junto, elegí con cuál va."}
+              </p>
+            </>
+          )}
+        </div>
         <PlazoPago modo={modo} onModo={setModo} desde={plazo.desde} hasta={plazo.hasta} onChange={setPlazo} adelantado={adelantado} onAdelantado={setAdelantado} />
         <div className="grid grid-cols-2 gap-1 rounded-xl border bg-muted/40 p-1">
           {(["boleta", "factura"] as const).map((t) => (
