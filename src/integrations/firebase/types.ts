@@ -315,6 +315,10 @@ export interface Project {
     ig_user_id?: string;
     ad_account_id?: string;
     conectado?: boolean;
+    /** Para comparar la pauta con otros clientes de Prodi (api/_lib/pauta-benchmarks.ts). */
+    rubro_pauta?: string | null;
+    zona_pauta?: "chica" | "grande" | "nacional" | null;
+    ciudad_pauta?: string | null;
   } | null;
   /** Última vez que se trajeron la pauta y el Instagram de Meta (lo escribe el servidor). */
   meta_sync?: {

@@ -57,6 +57,7 @@ import { itemsPerfil } from "../_lib/perfil-cliente";
 import { controlarTopeIA } from "../_lib/tope-ia";
 import { charlarIA, cuposDesde, esTipoCharla, ROLES_CHARLA, type PedidoCharla } from "../_lib/ia-charla";
 import { consejosPauta } from "../_lib/ia-pauta";
+import { chatEspecialista } from "../_lib/ia-especialista";
 import {
   comercialTexto,
   limpiarComercial,
@@ -671,6 +672,16 @@ Participantes: ${quienes || "sin datos"}. Duración: unos ${minutos} minutos.`;
   );
   if (nuevo) await avisarMensaje(chatId, chat, PRODI_ID, "Prodi", "📝 Minuta de la llamada", appUrl(req)).catch(() => undefined);
   return { ok: true, id };
+}
+
+/** Especialista Meta: el chat de pauta de un cliente (pauta y admin). */
+async function pautaChat(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "pauta"]);
+  const b = body<{ proyecto_id?: string; mensajes?: { rol?: string; texto?: string }[] }>(req);
+  if (!b.proyecto_id) throw new HttpError(400, "Falta el cliente");
+  await assertProjectAccess(caller, b.proyecto_id);
+  await controlarTopeIA(caller, "pauta-chat");
+  return chatEspecialista(b);
 }
 
 /** Consejos de la IA sobre la pauta de los últimos 90 días (para pauta y admin). */
@@ -1494,6 +1505,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "guion") res.status(200).json(await guion(req));
     else if (accion === "charla") res.status(200).json(await charla(req));
     else if (accion === "pauta-consejos") res.status(200).json(await pautaConsejos(req));
+    else if (accion === "pauta-chat") res.status(200).json(await pautaChat(req));
     else if (accion === "preparar") res.status(200).json(await preparar(req));
     else if (accion === "marca-subir") res.status(200).json(await marcaSubir(req));
     else if (accion === "marca-quitar") res.status(200).json(await marcaQuitar(req));

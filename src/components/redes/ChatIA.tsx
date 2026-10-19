@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 // o preguntarle cosas con el contexto del cliente. Lo que propone se aplica con un toque; lo que le contás del
 // cliente que sirve siempre, lo anota en su memoria (api/_lib/ia-charla.ts).
 
-export type TipoCharla = "plan" | "guion" | "copy" | "preparar";
+export type TipoCharla = "plan" | "guion" | "copy" | "preparar" | "pauta";
 
 interface Mensaje {
   rol: "yo" | "ia";
@@ -25,6 +25,7 @@ const SUGERENCIAS: Record<TipoCharla, string[]> = {
   guion: ["Hacelo más corto", "Más divertido", "Que el gancho sea una pregunta", "¿Qué cambiarías para que venda más?"],
   copy: ["Más corto", "Con más emojis", "Más formal", "Que invite a escribir por WhatsApp"],
   preparar: ["Más corto", "Sumá que traigan los productos nuevos", "Más amable"],
+  pauta: ["¿Qué hago esta semana?", "¿Qué anuncio rinde mejor?", "¿Cómo estamos contra otros del rubro?", "Resumen para el cliente"],
 };
 
 const PLACEHOLDER: Record<TipoCharla, string> = {
@@ -32,6 +33,7 @@ const PLACEHOLDER: Record<TipoCharla, string> = {
   guion: "Ej.: que lo diga la dueña y que mencione el delivery",
   copy: "Ej.: que sea más corto y mencione el envío gratis",
   preparar: "Ej.: que tengan listos los 3 sabores nuevos",
+  pauta: "Ej.: ¿subo el presupuesto de la campaña de ventas?",
 };
 
 export function ChatIA({
@@ -75,7 +77,7 @@ export function ChatIA({
     setTexto("");
     setEnviando(true);
     try {
-      const r = await callApi<{ respuesta: string; propuesta: Record<string, unknown> | null; recordado: string | null }>("/api/ia/charla", {
+      const r = await callApi<{ respuesta: string; propuesta: Record<string, unknown> | null; recordado: string | null }>(tipo === "pauta" ? "/api/ia/pauta-chat" : "/api/ia/charla", {
         tipo,
         proyecto_id: proyectoId,
         ...(mes ? { mes } : {}),
@@ -143,7 +145,7 @@ export function ChatIA({
             </div>
           ) : (
             <div key={i} className="max-w-[95%] space-y-2">
-              <div className="rounded-2xl rounded-bl-md bg-muted px-3 py-2 text-xs">{m.texto}</div>
+              <div className="whitespace-pre-wrap rounded-2xl rounded-bl-md bg-muted px-3 py-2 text-xs leading-relaxed">{m.texto}</div>
               {m.recordado && (
                 <p className="flex items-center gap-1 text-[11px] text-emerald-700 dark:text-emerald-400">
                   <Brain className="h-3 w-3" /> Anotado para este cliente: {m.recordado}

@@ -9,6 +9,7 @@ import { generarJSON } from "./ia";
 import { marcaTexto } from "./marca";
 import { comercialTexto, memoriaTexto, type MemoriaIA } from "./plan-mes";
 import { hoyAR, sumarDias } from "./fecha";
+import { benchmarksPauta, benchmarksTexto } from "./pauta-benchmarks";
 
 export interface SugerenciaPauta {
   titulo: string;
@@ -31,7 +32,7 @@ const VIGENCIA = 3 * 86_400_000;
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /** La pauta de 90 días resumida para la IA: por campaña, por mes y las últimas semanas. */
-function resumenPauta(filas: any[], hoy: string): string {
+export function resumenPauta(filas: any[], hoy: string): string {
   const res = (f: any) => Number(f.mensajes || 0) + Number(f.compras || 0) + Number(f.leads || 0);
   const moneda = filas.find((f) => f.moneda)?.moneda ?? "ARS";
   const camp = new Map<string, any>();
@@ -93,6 +94,7 @@ export async function consejosPauta(caller: Caller, pid: string, rehacer: boolea
   const memoria = (mem.data() ?? null) as MemoriaIA | null;
   const tope = Number(p.pauta_cliente?.monto ?? p.plan_redes_override?.pauta?.monto ?? 0) || null;
   const frecuencia = (p.meta_sync?.frecuencia ?? []) as { nombre: string; frecuencia: number }[];
+  const bench = await benchmarksPauta().catch(() => null);
 
   const prompt = `Sos un media buyer senior de Meta Ads (Instagram y Facebook) en una agencia argentina que trabaja con negocios chicos y medianos. Prodi busca resultados comerciales: mensajes por WhatsApp, ventas y contactos.
 Analizá la pauta de los últimos 90 días de este cliente y decile a la persona que maneja la pauta qué hacer para MANTENER lo que funciona y MEJORAR lo que no.
@@ -115,7 +117,10 @@ ${memoriaTexto(memoria)}
 ${tope ? `Presupuesto mensual de pauta acordado con el cliente: ${tope} ARS.` : "No tiene un presupuesto mensual cargado."}
 ${frecuencia.length ? `Frecuencia de los últimos 7 días por campaña: ${frecuencia.map((x) => `"${x.nombre}" ${x.frecuencia}`).join(", ")}` : ""}
 
-${resumenPauta(filas, hoy)}`;
+${resumenPauta(filas, hoy)}
+
+${bench ? `${benchmarksTexto(bench, p)}
+Compará contra estos benchmarks cuando sirva para decir si un número es bueno o malo.` : ""}`;
 
   const r = await generarJSON<{ resumen?: string; sugerencias?: any[] }>(
     prompt,

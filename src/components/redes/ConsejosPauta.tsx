@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { BotonAplicar, ChatIA } from "@/components/redes/ChatIA";
 import { CheckCircle2, FlaskConical, Loader2, RefreshCw, Scissors, Sparkles, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -96,6 +97,32 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
           </ul>
         </div>
       )}
+
+      <ChatIA
+        className="mt-3"
+        tipo="pauta"
+        titulo="Especialista Meta"
+        proyectoId={proyectoId}
+        actual={() => null}
+        renderPropuesta={(p, listo) => {
+          const texto = String(p.resumen_cliente ?? "");
+          return (
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold text-primary">Resumen para el cliente</p>
+              <p className="whitespace-pre-wrap text-xs leading-relaxed">{texto}</p>
+              <BotonAplicar
+                onClick={async () => {
+                  await navigator.clipboard.writeText(texto);
+                  toast.success("Copiado: pegalo en el chat del cliente");
+                  listo();
+                }}
+              >
+                Copiar
+              </BotonAplicar>
+            </div>
+          );
+        }}
+      />
     </div>
   );
 }

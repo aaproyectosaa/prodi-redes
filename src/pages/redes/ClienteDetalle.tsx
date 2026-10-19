@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { RUBROS_PAUTA, ZONAS_PAUTA } from "../../../api/_lib/pauta-rubros";
 import { PautaMeta } from "@/components/redes/PautaMeta";
 import { CrecimientoRedes } from "@/components/redes/CrecimientoRedes";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -804,6 +805,36 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
               <Input className="h-8 text-xs" value={form.meta.page_id ?? ""} onChange={(e) => set("meta", { ...form.meta, page_id: e.target.value })} placeholder="ID página FB" />
               <Input className="h-8 text-xs" value={form.meta.ig_user_id ?? ""} onChange={(e) => set("meta", { ...form.meta, ig_user_id: e.target.value })} placeholder="ID cuenta IG" />
               <Input className="h-8 text-xs" value={form.meta.ad_account_id ?? ""} onChange={(e) => set("meta", { ...form.meta, ad_account_id: e.target.value })} placeholder="act_… (anuncios)" />
+            </div>
+            <p className="mb-1 mt-3 text-[11px] text-muted-foreground">Para comparar su pauta con otros clientes de Prodi del mismo rubro y zona:</p>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <select
+                className="h-8 rounded-md border bg-background px-2 text-xs"
+                value={form.meta.rubro_pauta ?? ""}
+                onChange={(e) => set("meta", { ...form.meta, rubro_pauta: e.target.value || null })}
+                aria-label="Rubro"
+              >
+                <option value="">Rubro (lo deduce solo)</option>
+                {RUBROS_PAUTA.map((r) => (
+                  <option key={r.k} value={r.k}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="h-8 rounded-md border bg-background px-2 text-xs"
+                value={form.meta.zona_pauta ?? ""}
+                onChange={(e) => set("meta", { ...form.meta, zona_pauta: (e.target.value || null) as "chica" | "grande" | "nacional" | null })}
+                aria-label="Zona de la pauta"
+              >
+                <option value="">Zona de la pauta</option>
+                {ZONAS_PAUTA.map((z) => (
+                  <option key={z.k} value={z.k}>
+                    {z.label}
+                  </option>
+                ))}
+              </select>
+              <Input className="h-8 text-xs" value={form.meta.ciudad_pauta ?? ""} onChange={(e) => set("meta", { ...form.meta, ciudad_pauta: e.target.value })} placeholder="Ciudad (ej. Rafaela)" />
             </div>
           </div>
         </div>
