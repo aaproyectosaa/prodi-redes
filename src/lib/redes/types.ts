@@ -207,6 +207,8 @@ export interface IdeaPlan {
   respuesta?: { ok: boolean; comentario?: string | null } | null;
   video_id?: string | null;
   descartada?: boolean;
+  /** Campaña de la que salió (charla de campaña: se filman juntas en un día de rodaje). */
+  campania?: string | null;
 }
 
 export type EstadoPlanMes = "borrador" | "enviado" | "respondido" | "cerrado";

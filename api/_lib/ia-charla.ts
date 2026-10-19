@@ -4,17 +4,17 @@
 // para que la persona lo aplique con un toque. Si le cuentan un dato del cliente que sirve siempre, lo anota en su
 // memoria (las indicaciones del equipo), así la próxima vez ya lo sabe.
 //
-// Sirve para: el plan del mes (ideas), el guion de un video, el texto del posteo y lo que el cliente tiene que tener
-// listo para el rodaje.
+// Sirve para: el plan del mes (ideas), el guion de un video, el texto del posteo, lo que el cliente tiene que tener
+// listo para el rodaje y planificar una campaña (un día de rodaje con muchos videos que se reparten en varios meses).
 
 import { adminDb } from "./db";
 import { HttpError, type Caller } from "./http";
 import { generarJSON } from "./ia";
 import { marcaTexto } from "./marca";
-import { comercialTexto, ideasDesdeIA, memoriaTexto, nombreMes, rangoMes, type MemoriaIA } from "./plan-mes";
+import { comercialTexto, ideasDesdeIA, memoriaTexto, nombreMes, nuevoIdIdea, rangoMes, type MemoriaIA } from "./plan-mes";
 import { fechaAR, sumarDias } from "./fecha";
 
-export type TipoCharla = "plan" | "guion" | "copy" | "preparar";
+export type TipoCharla = "plan" | "guion" | "copy" | "preparar" | "campania";
 
 export interface PedidoCharla {
   tipo?: string;
@@ -35,9 +35,11 @@ export const ROLES_CHARLA: Record<TipoCharla, string[]> = {
   guion: ["admin", "productor"],
   preparar: ["admin", "productor"],
   copy: ["admin", "productor", "editor", "pauta", "diseno"],
+  campania: ["admin", "productor"],
 };
 
-export const esTipoCharla = (x: unknown): x is TipoCharla => x === "plan" || x === "guion" || x === "copy" || x === "preparar";
+export const esTipoCharla = (x: unknown): x is TipoCharla =>
+  x === "plan" || x === "guion" || x === "copy" || x === "preparar" || x === "campania";
 
 const ESQUEMAS: Record<TipoCharla, Record<string, unknown>> = {
   plan: {
@@ -53,6 +55,18 @@ const ESQUEMAS: Record<TipoCharla, Record<string, unknown>> = {
   guion: { guion: { type: "STRING" }, tomas: { type: "ARRAY", items: { type: "STRING" } } },
   copy: { opciones: { type: "ARRAY", items: { type: "STRING" } } },
   preparar: { texto: { type: "STRING" } },
+  campania: {
+    campania: { type: "STRING" },
+    rodaje: { type: "STRING" },
+    videos: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: { titulo: { type: "STRING" }, idea: { type: "STRING" }, objetivo: { type: "STRING" }, porque: { type: "STRING" }, mes: { type: "STRING" } },
+        required: ["titulo", "idea", "objetivo", "porque", "mes"],
+      },
+    },
+  },
 };
 
 const QUE_ES: Record<TipoCharla, string> = {
@@ -60,7 +74,55 @@ const QUE_ES: Record<TipoCharla, string> = {
   guion: `el guion de un video (Reel vertical de 20 a 45 segundos para pautar en Meta). Si te piden cambios, devolvé en "guion" SOLO las palabras que dice la persona a cámara, frases cortas una por renglón, sin escenas ni etiquetas ni comillas (50 a 110 palabras; la primera engancha y la última es el llamado a la acción), y en "tomas" la lista de planos para filmar (máximo 12).`,
   copy: `el texto que acompaña el video cuando se publica en Instagram y Facebook. Si te piden cambios o textos nuevos, devolvé en "opciones" de 1 a 3 textos completos (máximo 4 líneas cortas + hasta 5 hashtags, voseo, llamado a la acción concreto).`,
   preparar: `lo que el cliente tiene que tener listo para el día de rodaje (productos, personas, lugar, ropa, horarios). Si te piden cambios, devolvé en "texto" el mensaje completo, de 2 a 4 líneas, hablándole directo al cliente con voseo.`,
+  campania: `planificar una CAMPAÑA: en un solo día de rodaje se filman muchos videos juntos (planificados antes), y después se publican repartidos en varios meses según los videos por mes que tiene el plan del cliente.
+Cómo trabajás:
+- Primero entendé la campaña. Si te falta algo importante, preguntá (máximo 3 preguntas cortas por vez): de qué se trata o qué se lanza, qué productos o servicios mostrar, cuándo es el rodaje, cuántos videos se filman o cuántos meses tiene que cubrir, y si hay fechas, promos o algo que no se puede mostrar.
+- Cuando ya sabés lo suficiente (o te dicen "armalo", "dale", "proponé"), proponé los videos en "videos". Si te piden cambios sobre una propuesta, devolvé la lista COMPLETA como tiene que quedar.
+- Cantidad: la que te digan; si no dicen, llená los lugares libres de los meses de abajo desde el primero, hasta un máximo de 12.
+- "mes" de cada video (formato AAAA-MM): uno de los meses de abajo que tenga lugar, sin pasarte de los libres de cada mes. Lo que tiene que salir primero (el lanzamiento, lo más fuerte) va en el primer mes.
+- Todos se filman el mismo día: tienen que poder grabarse en el mismo lugar en una jornada (variá formatos: producto, detrás de escena, testimonio, oferta, tendencia).
+- Cada video: titulo corto (máx. 7 palabras), idea (qué se ve y qué se dice, 2 a 3 frases), objetivo y porque (para el equipo).
+- "campania": nombre corto de la campaña. "rodaje": cuándo o cómo es el día de rodaje si lo sabés (ej. "jueves 12/11 en la fábrica"); si no, vacío.`,
 };
+
+/** Lugares libres de cada mes desde `mes` (los del plan del cliente, menos los videos y las ideas ya cargadas). */
+export async function cuposDesde(pid: string, mes: string, cuantos = 6): Promise<{ mes: string; cupo: number; libres: number; bloqueado: boolean }[]> {
+  const db = adminDb();
+  const p = (await db.collection("projects").doc(pid).get()).data() ?? {};
+  let incluidos = Number(p.plan_redes_override?.videos_mes ?? NaN);
+  if (isNaN(incluidos) && p.plan_redes_id) {
+    incluidos = Number((await db.collection("planes_redes").doc(p.plan_redes_id).get()).data()?.videos_mes ?? 0);
+  }
+  const videos = (await db.collection("videos").where("proyecto_id", "==", pid).get()).docs.map((d) => d.data());
+  const [y, m] = mes.split("-").map(Number);
+  const meses = Array.from({ length: cuantos }, (_, i) => {
+    const d = new Date(Date.UTC(y, m - 1 + i, 1));
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  });
+  const planes = await Promise.all(meses.map((x) => db.collection("planes_mes").doc(`${pid}_${x}`).get()));
+  return meses.map((x, i) => {
+    const cupo = (incluidos || 0) + Number(p.creditos_extra?.[x] ?? 0);
+    const usados = videos.filter((v) => v.mes === x && v.extra !== true).length;
+    const plan = planes[i].data();
+    // Un plan ya mandado al cliente no se toca; uno en borrador ya ocupa lugares con sus ideas.
+    const bloqueado = !!plan && plan.estado !== "borrador";
+    const enBorrador = !plan || bloqueado ? 0 : (plan.ideas ?? []).filter((it: any) => !it?.video_id && !it?.descartada).length;
+    return { mes: x, cupo, libres: bloqueado ? 0 : Math.max(0, cupo - usados - enBorrador), bloqueado };
+  });
+}
+
+/** Acomoda cada video en un mes con lugar (si la IA eligió uno lleno o que no está, va al próximo con lugar). */
+export function repartirEnMeses<T extends { mes: string }>(videos: T[], cupos: { mes: string; libres: number }[]): (T & { sin_lugar?: boolean })[] {
+  const libres = new Map(cupos.map((c) => [c.mes, c.libres]));
+  const orden = cupos.map((c) => c.mes);
+  return videos.map((v) => {
+    const desde = Math.max(0, orden.indexOf(v.mes));
+    const destino = orden.slice(desde).find((x) => (libres.get(x) ?? 0) > 0) ?? orden.find((x) => (libres.get(x) ?? 0) > 0);
+    if (!destino) return { ...v, mes: orden.includes(v.mes) ? v.mes : orden[orden.length - 1], sin_lugar: true };
+    libres.set(destino, (libres.get(destino) ?? 0) - 1);
+    return { ...v, mes: destino };
+  });
+}
 
 /** El contexto de lo que se está trabajando (con lo que está en pantalla, aunque no esté guardado). */
 async function contextoDe(tipo: TipoCharla, b: PedidoCharla, pid: string): Promise<{ texto: string; mes: string; videoMes?: string }> {
@@ -75,6 +137,19 @@ async function contextoDe(tipo: TipoCharla, b: PedidoCharla, pid: string): Promi
       .map((i, n) => `${n + 1}. ${t(i?.titulo, 120)}: ${t(i?.idea, 600)}${i?.objetivo ? ` (objetivo: ${t(i.objetivo, 120)})` : ""}`)
       .join("\n");
     return { texto: `Plan de ${nombreMes(mes)} (${ideas.length} ideas):\n${lista || "(todavía sin ideas)"}`, mes };
+  }
+  if (tipo === "campania") {
+    const mes = t(b.mes, 7);
+    if (!/^\d{4}-\d{2}$/.test(mes)) throw new HttpError(400, "Falta el mes");
+    const cupos = await cuposDesde(pid, mes);
+    const lineas = cupos.map(
+      (c) => `- ${c.mes} (${nombreMes(c.mes)}): ${c.bloqueado ? "plan ya mandado al cliente, no se puede sumar" : `${c.libres} libre${c.libres === 1 ? "" : "s"} de ${c.cupo}`}`
+    );
+    const actual = Array.isArray(b.actual) ? (b.actual as any[]) : [];
+    const propuesta = actual.length
+      ? `\n\nPropuesta actual en pantalla (${actual.length} videos):\n${actual.map((v, n) => `${n + 1}. [${t(v?.mes, 7)}] ${t(v?.titulo, 120)}: ${t(v?.idea, 400)}`).join("\n")}`
+      : "";
+    return { texto: `Videos por mes del plan y lugares libres:\n${lineas.join("\n")}${propuesta}`, mes };
   }
   if (tipo === "preparar") {
     const ids = (b.video_ids ?? []).slice(0, 10).map(String);
@@ -127,7 +202,12 @@ export async function charlarIA(caller: Caller, b: PedidoCharla): Promise<{ resp
   const p = proj.data() ?? {};
   const memoria = (mem.data() ?? null) as MemoriaIA | null;
   const ctx = await contextoDe(tipo, b, pid);
-  const rango: [string, string] = tipo === "copy" ? [fechaAR(new Date()), sumarDias(fechaAR(new Date()), 30)] : rangoMes(ctx.mes);
+  const rango: [string, string] =
+    tipo === "copy"
+      ? [fechaAR(new Date()), sumarDias(fechaAR(new Date()), 30)]
+      : tipo === "campania"
+        ? [rangoMes(ctx.mes)[0], sumarDias(rangoMes(ctx.mes)[0], 180)]
+        : rangoMes(ctx.mes);
 
   const prompt = `Sos el asistente creativo de Prodi, una agencia argentina que hace videos comerciales y piezas gráficas con pauta en Meta para negocios. Estás ayudando al equipo con ${QUE_ES[tipo]}
 
@@ -164,6 +244,27 @@ ${mensajes.map((m) => `${m.rol === "yo" ? "Equipo" : "Vos"}: ${m.texto}`).join("
     const guion = t(r.guion, 3000);
     const tomas = (Array.isArray(r.tomas) ? r.tomas : []).map((x: unknown) => t(x, 200)).filter(Boolean).slice(0, 15);
     if (guion || tomas.length) propuesta = { guion, tomas };
+  } else if (tipo === "campania") {
+    const cupos = await cuposDesde(pid, ctx.mes);
+    const crudos = (Array.isArray(r.videos) ? r.videos : [])
+      .map((x: any) => ({
+        id: nuevoIdIdea(),
+        titulo: t(x?.titulo, 120),
+        idea: t(x?.idea, 1200),
+        objetivo: t(x?.objetivo, 200) || null,
+        porque: t(x?.porque, 300) || null,
+        mes: /^\d{4}-\d{2}$/.test(t(x?.mes, 7)) ? t(x?.mes, 7) : ctx.mes,
+      }))
+      .filter((x: { titulo: string }) => x.titulo.length >= 3)
+      .slice(0, 24);
+    if (crudos.length) {
+      propuesta = {
+        campania: t(r.campania, 120) || "Campaña",
+        rodaje: t(r.rodaje, 200) || null,
+        videos: repartirEnMeses(crudos, cupos),
+        cupos,
+      };
+    }
   } else if (tipo === "copy") {
     const opciones = (Array.isArray(r.opciones) ? r.opciones : []).map((x: unknown) => t(x, 1500)).filter(Boolean).slice(0, 3);
     if (opciones.length) propuesta = { opciones };

@@ -18,6 +18,8 @@ export interface IdeaPlan {
   video_id?: string | null;
   /** Producción la descartó después del pedido de cambio. */
   descartada?: boolean;
+  /** Campaña de la que salió (charla de campaña: se filman juntas en un día de rodaje). */
+  campania?: string | null;
 }
 
 export type EstadoPlan = "borrador" | "enviado" | "respondido" | "cerrado";
@@ -329,6 +331,7 @@ export function limpiarIdeas(raw: unknown, max = 20): IdeaPlan[] {
       objetivo: t(x.objetivo, 200) || null,
       porque: t(x.porque, 300) || null,
       origen: x.origen === "equipo" ? "equipo" : "ia",
+      ...(t(x.campania, 120) ? { campania: t(x.campania, 120) } : {}),
     }));
 }
 

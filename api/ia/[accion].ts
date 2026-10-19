@@ -17,6 +17,8 @@
 // POST /api/ia/plan-enviar   { proyecto_id, mes, ideas, nota_equipo } → producción lo revisó: va al cliente
 // POST /api/ia/plan-responder { proyecto_id, mes, respuestas, nota }  (cliente) → los OK pasan a ser videos
 // POST /api/ia/plan-ajustar  { proyecto_id, mes, idea_id, accion: "crear"|"descartar", titulo?, idea?, objetivo? }
+// POST /api/ia/plan-campania { proyecto_id, campania, rodaje?, videos: [{ titulo, idea, objetivo, porque, mes }] }
+//      → lo que se charló con la IA (tipo "campania"): carga los videos como ideas en el borrador de cada mes
 // POST /api/ia/memoria-notas { proyecto_id, notas } → indicaciones fijas del equipo para la IA
 // POST /api/ia/comercial-guardar { proyecto_id, comercial } → enfoque, productos y temporadas del cliente (también el cliente)
 // POST /api/ia/comercial-ver { proyecto_id } → solo el contexto comercial (para el panel del cliente)
@@ -53,7 +55,7 @@ import { crearTarea } from "../_lib/tareas";
 import { logosParaPieza, marcaTexto } from "../_lib/marca";
 import { itemsPerfil } from "../_lib/perfil-cliente";
 import { controlarTopeIA } from "../_lib/tope-ia";
-import { charlarIA, esTipoCharla, ROLES_CHARLA, type PedidoCharla } from "../_lib/ia-charla";
+import { charlarIA, cuposDesde, esTipoCharla, ROLES_CHARLA, type PedidoCharla } from "../_lib/ia-charla";
 import {
   comercialTexto,
   limpiarComercial,
@@ -1047,6 +1049,70 @@ async function planMes(req: VercelRequest) {
   return { ok: true, ideas };
 }
 
+/**
+ * Campaña charlada con la IA: cada video va como idea al borrador de su mes (se suma a lo que ya hay). Los meses con el
+ * plan ya mandado al cliente no se tocan. Después se revisa y se manda como siempre, mes por mes.
+ */
+async function planCampania(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "productor"]);
+  const b = body<{ proyecto_id?: string; campania?: string; rodaje?: string | null; videos?: unknown }>(req);
+  if (!b.proyecto_id) throw new HttpError(400, "Falta el cliente");
+  await assertProjectAccess(caller, b.proyecto_id);
+  const pid = b.proyecto_id;
+  const campania = String(b.campania ?? "").trim().slice(0, 120) || "Campaña";
+  const rodaje = String(b.rodaje ?? "").trim().slice(0, 200) || null;
+  const lista = (Array.isArray(b.videos) ? b.videos : []).slice(0, 30).map((x) => x as Record<string, unknown>);
+  const porMes = new Map<string, IdeaPlan[]>();
+  for (const x of lista) {
+    const mes = String(x.mes ?? "");
+    if (!MES_RE.test(mes)) continue;
+    const [idea] = limpiarIdeas([{ ...x, id: null, origen: "ia", campania }]);
+    if (!idea) continue;
+    porMes.set(mes, [...(porMes.get(mes) ?? []), idea]);
+  }
+  if (!porMes.size) throw new HttpError(400, "La propuesta no tiene videos");
+  const db = adminDb();
+  const now = new Date().toISOString();
+  const cargados: { mes: string; ideas: number }[] = [];
+  const saltados: string[] = [];
+  for (const [mes, nuevas] of [...porMes.entries()].sort((a, c) => a[0].localeCompare(c[0]))) {
+    const ref = db.collection("planes_mes").doc(planId(pid, mes));
+    const plan = (await ref.get()).data();
+    if (plan && plan.estado !== "borrador") {
+      saltados.push(mes);
+      continue;
+    }
+    const nota = `Campaña "${campania}"${rodaje ? ` · rodaje: ${rodaje}` : ""}`;
+    await ref.set({
+      proyecto_id: pid,
+      mes,
+      estado: "borrador",
+      ideas: [...((plan?.ideas ?? []) as IdeaPlan[]), ...nuevas],
+      ideas_ia: [...((plan?.ideas_ia ?? []) as IdeaPlan[]), ...nuevas],
+      descartadas: plan?.descartadas ?? [],
+      cupo: plan?.cupo ?? nuevas.length,
+      nota_equipo: plan?.nota_equipo ?? null,
+      campania: { nombre: campania, rodaje },
+      nota_interna: plan?.nota_interna ? `${plan.nota_interna}\n${nota}` : nota,
+      generado_at: plan?.generado_at ?? now,
+      generado_por: plan?.generado_por ?? caller.uid,
+      updated_at: now,
+    });
+    cargados.push({ mes, ideas: nuevas.length });
+  }
+  if (!cargados.length) throw new HttpError(409, "Esos meses ya se mandaron al cliente: no se pudo cargar nada");
+  return { ok: true, cargados, saltados };
+}
+
+/** Lugares libres de los próximos meses (para la charla de campaña). */
+async function planCupos(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "productor"]);
+  const b = body<{ proyecto_id?: string; mes?: string }>(req);
+  if (!b.proyecto_id || !MES_RE.test(String(b.mes))) throw new HttpError(400, "Elegí el cliente y el mes");
+  await assertProjectAccess(caller, b.proyecto_id);
+  return { cupos: await cuposDesde(b.proyecto_id, String(b.mes)) };
+}
+
 async function planEnviar(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "productor"]);
   const b = body<{ proyecto_id?: string; mes?: string; ideas?: unknown; nota_equipo?: string }>(req);
@@ -1426,6 +1492,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "plan-enviar") res.status(200).json(await planEnviar(req));
     else if (accion === "plan-responder") res.status(200).json(await planResponder(req));
     else if (accion === "plan-ajustar") res.status(200).json(await planAjustar(req));
+    else if (accion === "plan-campania") res.status(200).json(await planCampania(req));
+    else if (accion === "plan-cupos") res.status(200).json(await planCupos(req));
     else if (accion === "memoria-notas") res.status(200).json(await memoriaNotas(req));
     else if (accion === "comercial-guardar") res.status(200).json(await comercialGuardar(req));
     else if (accion === "marca-colores") res.status(200).json(await marcaColores(req));

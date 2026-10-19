@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BotonAplicar, ChatIA } from "@/components/redes/ChatIA";
+import { CampaniaIA } from "@/components/redes/CampaniaIA";
 import {
   Brain,
   Check,
@@ -7,8 +8,10 @@ import {
   ChevronRight,
   Clock,
   ExternalLink,
+  Clapperboard,
   Lightbulb,
   Loader2,
+  Megaphone,
   MessageCircle,
   MessageSquareWarning,
   Plus,
@@ -82,21 +85,53 @@ export function PlanMesDialog({
   const delMes = usePlanesDelMes(open ? [mes] : [], open);
   const libres = usoPlan(cliente, planes, videos, mes).disponibles;
   const meses = [0, 1, 2].map((d) => sumarMeses(mesActual(), d));
+  // "mes": las ideas de un mes (lo de siempre). "campania": charlar una campaña con la IA (un día de rodaje, varios meses).
+  const [modo, setModo] = useState<"mes" | "campania">("mes");
+  useEffect(() => {
+    if (open) setModo("mes");
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-h-[94dvh] w-[calc(100vw-1.5rem)] max-w-3xl overflow-y-auto rounded-2xl p-0">
-        <DialogHeader className="space-y-1 border-b px-5 pb-4 pt-5 text-left">
-          <DialogTitle className="flex items-center gap-2 text-xl">
-            <Sparkles className="h-5 w-5 text-primary" /> Armar el mes con IA
+      <DialogContent className="flex max-h-[94dvh] w-[calc(100vw-1.5rem)] max-w-3xl flex-col gap-0 overflow-hidden rounded-3xl border-0 p-0 shadow-2xl [&>button.absolute]:right-4 [&>button.absolute]:top-4 [&>button.absolute]:rounded-full [&>button.absolute]:bg-white/15 [&>button.absolute]:p-1.5 [&>button.absolute]:text-white [&>button.absolute]:opacity-100 [&>button.absolute]:backdrop-blur">
+        <DialogHeader className="relative shrink-0 space-y-1 overflow-hidden bg-gradient-to-br from-primary via-violet-600 to-fuchsia-500 px-5 pb-4 pt-5 text-left text-white">
+          <div className="pointer-events-none absolute -right-12 -top-16 h-48 w-48 rounded-full bg-white/15 blur-3xl" aria-hidden />
+          <div className="pointer-events-none absolute -bottom-20 left-10 h-40 w-40 rounded-full bg-fuchsia-300/25 blur-3xl" aria-hidden />
+          <DialogTitle className="relative flex items-center gap-2.5 pr-10 text-xl text-white">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/20 ring-1 ring-white/30 backdrop-blur">
+              <Sparkles className="h-5 w-5" />
+            </span>
+            {modo === "mes" ? "Armar el mes con IA" : "Campaña con IA"}
           </DialogTitle>
-          <DialogDescription>
-            La IA propone las ideas con lo que sabe del cliente. Vos las revisás y recién ahí le llegan. Lo que cambies, la IA lo
-            aprende para la próxima.
+          <DialogDescription className="relative text-white/80">
+            {modo === "mes"
+              ? "La IA propone las ideas con lo que sabe del cliente. Vos las revisás y recién ahí le llegan. Lo que cambies, lo aprende para la próxima."
+              : "Charlá la campaña con la IA: pregunta lo que le falta y reparte los videos del día de rodaje en los meses, según el plan del cliente."}
           </DialogDescription>
-          <div className="flex flex-wrap items-center gap-2 pt-2">
+          {/* Modo: un mes o una campaña. */}
+          <div className="relative mt-2 inline-flex w-full rounded-full bg-black/20 p-1 backdrop-blur sm:w-auto sm:self-start">
+            {(
+              [
+                ["mes", "Armar el mes", Sparkles],
+                ["campania", "Campaña con rodaje", Clapperboard],
+              ] as const
+            ).map(([k, label, Icono]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setModo(k)}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-all sm:flex-none",
+                  modo === k ? "bg-white text-primary shadow-md" : "text-white/85 hover:text-white"
+                )}
+              >
+                <Icono className="h-4 w-4" /> {label}
+              </button>
+            ))}
+          </div>
+          <div className="relative flex flex-wrap items-center gap-2 pt-2">
             <Select value={clienteId} onValueChange={setClienteId}>
-              <SelectTrigger className="h-9 w-full sm:w-64">
+              <SelectTrigger className="h-9 w-full rounded-full border-white/25 bg-white/15 text-white backdrop-blur sm:w-64 [&>svg]:text-white">
                 <SelectValue placeholder="Elegí el cliente">{cliente?.nombre}</SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -114,11 +149,12 @@ export function PlanMesDialog({
                 })}
               </SelectContent>
             </Select>
-            <div className="flex items-center gap-1 rounded-lg border p-0.5">
+            <div className="flex items-center gap-1 rounded-full border border-white/25 bg-white/15 p-0.5 backdrop-blur">
+              {modo === "campania" && <span className="pl-2.5 text-xs text-white/75">Desde</span>}
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-8 w-8"
+                className="h-8 w-8 rounded-full text-white hover:bg-white/20 hover:text-white"
                 disabled={mes <= meses[0]}
                 onClick={() => setMes(sumarMeses(mes, -1))}
                 aria-label="Mes anterior"
@@ -129,7 +165,7 @@ export function PlanMesDialog({
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-8 w-8"
+                className="h-8 w-8 rounded-full text-white hover:bg-white/20 hover:text-white"
                 disabled={mes >= meses[meses.length - 1]}
                 onClick={() => setMes(sumarMeses(mes, 1))}
                 aria-label="Mes siguiente"
@@ -137,23 +173,32 @@ export function PlanMesDialog({
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
-            {cliente && !loading && (
-              <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", ESTADO_PLAN[plan?.estado ?? "nada"].clase)}>
-                {ESTADO_PLAN[plan?.estado ?? "nada"].label}
-              </span>
+            {cliente && !loading && modo === "mes" && (
+              <span className="rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-primary shadow-sm">{ESTADO_PLAN[plan?.estado ?? "nada"].label}</span>
             )}
           </div>
         </DialogHeader>
 
-        <div className="space-y-5 px-5 pb-5 pt-4">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 pb-5 pt-5">
           {!cliente ? (
             <p className="py-8 text-center text-sm text-muted-foreground">Elegí un cliente.</p>
+          ) : modo === "campania" ? (
+            <CampaniaIA
+              key={cliente.id}
+              proyectoId={cliente.id}
+              nombre={cliente.nombre}
+              mesDesde={mes}
+              onCargado={(m) => {
+                setMes(m);
+                setModo("mes");
+              }}
+            />
           ) : loading ? (
             <div className="flex justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : !plan ? (
-            <SinPlan proyectoId={cliente.id} nombre={cliente.nombre} mes={mes} libres={libres} />
+            <SinPlan proyectoId={cliente.id} nombre={cliente.nombre} mes={mes} libres={libres} onCampania={() => setModo("campania")} />
           ) : plan.estado === "borrador" ? (
             <Borrador key={plan.id} plan={plan} nombre={cliente.nombre} />
           ) : (
@@ -169,7 +214,7 @@ export function PlanMesDialog({
 
 // ---------------------------------------------------------------------------
 
-function SinPlan({ proyectoId, nombre, mes, libres }: { proyectoId: string; nombre: string; mes: string; libres: number }) {
+function SinPlan({ proyectoId, nombre, mes, libres, onCampania }: { proyectoId: string; nombre: string; mes: string; libres: number; onCampania: () => void }) {
   const [busy, setBusy] = useState(false);
   const [pista, setPista] = useState("");
   const armar = async () => {
@@ -192,9 +237,11 @@ function SinPlan({ proyectoId, nombre, mes, libres }: { proyectoId: string; nomb
     );
   }
   return (
-    <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/[0.08] via-card to-card p-5 animate-in fade-in slide-in-from-bottom-2 duration-500 motion-reduce:animate-none">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+    <div className="space-y-3">
+    <div className="relative overflow-hidden rounded-3xl border border-primary/25 bg-gradient-to-br from-primary/[0.1] via-card to-card p-5 animate-in fade-in slide-in-from-bottom-2 duration-500 motion-reduce:animate-none">
+      <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-fuchsia-500/10 blur-2xl" aria-hidden />
+      <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center">
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-fuchsia-500 text-white shadow-lg shadow-primary/30">
           <Sparkles className="h-6 w-6" />
         </span>
         <div className="min-w-0 flex-1">
@@ -206,19 +253,39 @@ function SinPlan({ proyectoId, nombre, mes, libres }: { proyectoId: string; nomb
           </p>
         </div>
       </div>
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+      <div className="relative mt-4 flex flex-col gap-2 sm:flex-row">
         <Input
           value={pista}
           onChange={(e) => setPista(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && !busy && void armar()}
           placeholder="¿Algo para tener en cuenta este mes? (opcional) Ej.: lanzan menú nuevo"
-          className="flex-1"
+          className="h-11 flex-1 rounded-full px-4"
           maxLength={300}
         />
-        <Button onClick={() => void armar()} disabled={busy} className="shrink-0">
+        <Button
+          onClick={() => void armar()}
+          disabled={busy}
+          className="h-11 shrink-0 rounded-full bg-gradient-to-r from-primary to-fuchsia-500 px-5 font-semibold shadow-lg shadow-primary/25 transition-all hover:-translate-y-0.5"
+        >
           {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
           {busy ? "Pensando ideas…" : "Armar con IA"}
         </Button>
       </div>
+    </div>
+    <button
+      type="button"
+      onClick={onCampania}
+      className="group flex w-full items-center gap-3 rounded-2xl border border-dashed border-primary/30 px-4 py-3 text-left transition-colors hover:border-primary hover:bg-primary/[0.04]"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <Megaphone className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">¿Es una campaña con un día de rodaje?</span>
+        <span className="block text-xs text-muted-foreground">Charlala con la IA y que reparta los videos en varios meses.</span>
+      </span>
+      <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+    </button>
     </div>
   );
 }
@@ -391,6 +458,11 @@ function Borrador({ plan, nombre }: { plan: PlanMes; nombre: string }) {
             <div className="mt-2 flex flex-wrap justify-end gap-1">
               {i.origen === "equipo" && (
                 <span className="mr-auto self-center rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">Idea tuya</span>
+              )}
+              {i.origen !== "equipo" && i.campania && (
+                <span className="mr-auto inline-flex items-center gap-1 self-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                  <Clapperboard className="h-3 w-3" /> {i.campania}
+                </span>
               )}
               <PistaPopover
                 titulo="Otra idea en lugar de esta"
