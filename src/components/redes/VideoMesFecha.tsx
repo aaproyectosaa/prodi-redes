@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CalendarDays, X } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,6 +16,14 @@ import type { Video } from "@/lib/redes/types";
 export function VideoMesFecha({ video, editable, uid }: { video: Video; editable: boolean; uid: string }) {
   const { clienteById, planes, videos } = useRedes();
   const fechaRef = useRef<HTMLInputElement>(null);
+  // En el celular el calendario (la ruedita) cambia el valor a cada movimiento y al abrirse pone hoy: se guarda recién
+  // al cerrarlo, con lo que quedó elegido. En la compu, apenas se elige el día.
+  const [borrador, setBorrador] = useState(video.fecha_deseada ?? "");
+  const abierto = useRef(false);
+  const tactil = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
+  useEffect(() => {
+    if (!abierto.current) setBorrador(video.fecha_deseada ?? "");
+  }, [video.fecha_deseada]);
   const cliente = clienteById(video.proyecto_id);
   if (!editable) return <span className="text-xs text-muted-foreground">{mesLabel(video.mes)}</span>;
   const publicado = video.etapa === "publicado";
@@ -85,8 +93,18 @@ export function VideoMesFecha({ video, editable, uid }: { video: Video; editable
             ref={fechaRef}
             type="date"
             min={hoyISO()}
-            value={video.fecha_deseada ?? ""}
-            onChange={(e) => void cambiarFecha(e.target.value)}
+            value={borrador}
+            onFocus={() => {
+              abierto.current = true;
+            }}
+            onChange={(e) => {
+              setBorrador(e.target.value);
+              if (!tactil && e.target.value !== (video.fecha_deseada ?? "")) void cambiarFecha(e.target.value);
+            }}
+            onBlur={(e) => {
+              abierto.current = false;
+              if (tactil && e.target.value !== (video.fecha_deseada ?? "")) void cambiarFecha(e.target.value);
+            }}
             // En la compu el calendario sale solo con el ícono del campo: así se abre tocando en cualquier parte.
             onClick={(e) => {
               try {
