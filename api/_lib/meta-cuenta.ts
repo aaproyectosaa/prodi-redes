@@ -282,7 +282,7 @@ export async function sincronizarAuto(pid: string, forzar = false): Promise<Resu
   if (!p.meta?.ad_account_id && !p.meta?.ig_user_id) return { ok: false, detalle: "Sin IDs de Meta", saltado: true };
   const historia = faltaHistorial(p);
   // La pauta por anuncio se agregó después: si todavía no tiene su historial, se busca aunque lo demás esté al día.
-  const faltanAnuncios = !!p.meta?.ad_account_id && !p.meta_anuncios_sync?.historial;
+  const faltanAnuncios = !!p.meta?.ad_account_id && (!p.meta_anuncios_sync?.historial || !p.meta_anuncios_sync?.creativos);
   const reciente = p.meta_sync?.at && Date.now() - new Date(p.meta_sync.at).getTime() < CADA;
   if (!forzar && !historia && !faltanAnuncios && reciente) return { ok: true, detalle: p.meta_sync.detalle ?? "", saltado: true };
   const r = await sincronizarCuentaMeta(pid, historia ? 90 : 3);

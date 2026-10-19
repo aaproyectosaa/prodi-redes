@@ -60,49 +60,60 @@ async function pautaAnuncios(pid: string, cuenta: string, desde: string, hasta: 
   return { filas, anuncios };
 }
 
-/** Nombre, miniatura y post de cada anuncio (de a 50 por consulta). */
-async function creativos(pid: string, anuncios: string[]): Promise<number> {
+/**
+ * Nombre, miniatura y post de cada anuncio. De a uno (de a 5 en paralelo): si se piden juntos y uno ya no existe
+ * (anuncio borrado), Meta rechaza toda la consulta. Devuelve cuántos se guardaron y el primer error, si hubo.
+ */
+async function creativos(pid: string, anuncios: string[]): Promise<{ ok: number; error: string | null }> {
   const db = adminDb();
   let ok = 0;
-  for (let i = 0; i < anuncios.length; i += 50) {
-    const ids = anuncios.slice(i, i + 50);
-    const ads: Record<string, any> = await graph(urlDe("", { ids: ids.join(","), fields: "name,creative{id}" }));
-    const cre = [...new Set(Object.values(ads).map((a: any) => a?.creative?.id).filter(Boolean))] as string[];
-    // Miniatura grande (la de por defecto es de 64 px).
-    const cres: Record<string, any> = cre.length
-      ? await graph(
-          urlDe("", {
-            ids: cre.join(","),
-            fields: "thumbnail_url,image_url,effective_object_story_id,effective_instagram_media_id,instagram_permalink_url",
-            thumbnail_width: "600",
-            thumbnail_height: "600",
-          })
-        )
-      : {};
-    const lote = db.batch();
-    for (const id of ids) {
-      const a = ads[id];
-      if (!a) continue;
-      const c = cres[a.creative?.id] ?? {};
-      lote.set(
-        db.collection("meta_anuncios").doc(`${pid}_${id}`),
-        {
-          proyecto_id: pid,
-          ad_id: id,
-          nombre: a.name ?? null,
-          miniatura: c.image_url || c.thumbnail_url || null,
-          post_id: c.effective_object_story_id ?? null,
-          ig_media_id: c.effective_instagram_media_id ?? null,
-          permalink: c.instagram_permalink_url ?? null,
-          at: new Date().toISOString(),
-        },
-        { merge: true }
-      );
-      ok++;
-    }
-    await lote.commit();
+  let error: string | null = null;
+  for (let i = 0; i < anuncios.length; i += 5) {
+    await Promise.all(
+      anuncios.slice(i, i + 5).map(async (id) => {
+        try {
+          const a: any = await graph(urlDe(id, { fields: "name,creative{id}" }));
+          // Miniatura grande (la de por defecto es de 64 px).
+          const c: any = a?.creative?.id
+            ? await graph(
+                urlDe(a.creative.id, {
+                  fields: "thumbnail_url,image_url,effective_object_story_id,effective_instagram_media_id,instagram_permalink_url",
+                  thumbnail_width: "600",
+                  thumbnail_height: "600",
+                })
+              ).catch(() => ({}))
+            : {};
+          await db
+            .collection("meta_anuncios")
+            .doc(`${pid}_${id}`)
+            .set(
+              {
+                proyecto_id: pid,
+                ad_id: id,
+                nombre: a?.name ?? null,
+                miniatura: c.image_url || c.thumbnail_url || null,
+                post_id: c.effective_object_story_id ?? null,
+                ig_media_id: c.effective_instagram_media_id ?? null,
+                permalink: c.instagram_permalink_url ?? null,
+                at: new Date().toISOString(),
+              },
+              { merge: true }
+            );
+          ok++;
+        } catch (err) {
+          error ??= err instanceof Error ? err.message : String(err);
+        }
+      })
+    );
   }
-  return ok;
+  return { ok, error };
+}
+
+/** Anuncios con gasto en los últimos 90 días (de lo ya guardado), para buscarles la miniatura. */
+async function anunciosGuardados(pid: string): Promise<string[]> {
+  const desde = sumarDias(hoyAR(), -89);
+  const filas = (await adminDb().collection("meta_anuncios_diaria").where("proyecto_id", "==", pid).where("fecha", ">=", desde).get()).docs;
+  return [...new Set(filas.filter((d) => Number(d.data().gasto) > 0).map((d) => String(d.data().ad_id)))];
 }
 
 /**
@@ -120,12 +131,22 @@ export async function sincronizarAnuncios(pid: string, dias = 3): Promise<string
   const desde = sumarDias(hasta, -((historia ? 90 : Math.min(Math.max(dias, 1), 90)) - 1));
   try {
     const { filas, anuncios } = await pautaAnuncios(pid, cuenta, desde, hasta);
-    const conCreativo = await creativos(pid, [...anuncios]).catch((err) => {
-      console.warn("[meta-anuncios] creativos", pid, err instanceof Error ? err.message : err);
-      return 0;
+    // Miniaturas: las de los anuncios activos; si todavía no se buscaron las de todo el historial, las de los 90 días.
+    const faltan = !p.meta_anuncios_sync?.creativos;
+    const lista = faltan ? [...new Set([...anuncios, ...(await anunciosGuardados(pid))])] : [...anuncios];
+    const cre = await creativos(pid, lista);
+    if (cre.error) console.warn("[meta-anuncios] creativos", pid, cre.error);
+    const detalle = `Anuncios: ${filas} registros, ${cre.ok} de ${lista.length} con miniatura${cre.error ? ` (${cre.error})` : ""}`;
+    await ref.update({
+      meta_anuncios_sync: {
+        at: new Date().toISOString(),
+        ok: true,
+        detalle,
+        cuenta,
+        historial: historia ? true : !!p.meta_anuncios_sync?.historial,
+        creativos: !faltan || cre.ok > 0 || lista.length === 0,
+      },
     });
-    const detalle = `Anuncios: ${filas} registros, ${conCreativo} con miniatura`;
-    await ref.update({ meta_anuncios_sync: { at: new Date().toISOString(), ok: true, detalle, cuenta, historial: historia ? true : !!p.meta_anuncios_sync?.historial } });
     return detalle;
   } catch (err) {
     const detalle = `Anuncios: ${err instanceof Error ? err.message : "error"}`;
