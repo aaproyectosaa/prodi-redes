@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { BotonAplicar, ChatIA } from "@/components/redes/ChatIA";
 import {
   Brain,
   Check,
@@ -417,6 +418,42 @@ function Borrador({ plan, nombre }: { plan: PlanMes; nombre: string }) {
           <Plus className="h-4 w-4" /> Agregar una idea propia
         </button>
       </div>
+
+      <ChatIA
+        tipo="plan"
+        titulo="Charlá el plan con la IA"
+        proyectoId={plan.proyecto_id}
+        mes={plan.mes}
+        actual={() => ideasRef.current}
+        renderPropuesta={(p, listo) => {
+          const nuevas = (Array.isArray(p.ideas) ? (p.ideas as IdeaPlan[]) : []).filter((x) => x?.titulo);
+          return (
+            <div className="space-y-2">
+              <ol className="list-decimal space-y-1 pl-5 text-xs">
+                {nuevas.map((x) => (
+                  <li key={x.id}>
+                    <b>{x.titulo}</b>
+                    <span className="text-muted-foreground"> · {x.idea}</span>
+                  </li>
+                ))}
+              </ol>
+              <BotonAplicar
+                onClick={() => {
+                  // Las ideas propias del equipo que la IA dejó igual siguen siendo "tuyas".
+                  const propias = new Map(ideasRef.current.filter((x) => x.origen === "equipo").map((x) => [x.titulo.trim().toLowerCase(), x]));
+                  const final = nuevas.map((x) => propias.get(x.titulo.trim().toLowerCase()) ?? x);
+                  setIdeas(final);
+                  setDirty(true);
+                  listo();
+                  toast.success("Plan actualizado");
+                }}
+              >
+                Usar estas ideas
+              </BotonAplicar>
+            </div>
+          );
+        }}
+      />
 
       <div className="space-y-1.5">
         <p className="text-xs font-medium">Mensaje para el cliente (opcional)</p>

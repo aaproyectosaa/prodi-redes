@@ -1,0 +1,218 @@
+import { useEffect, useRef, useState } from "react";
+import { Brain, Loader2, MessageSquareText, Send, Sparkles, X } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { callApi } from "@/lib/redes/api";
+import { cn } from "@/lib/utils";
+
+// Charlar con la IA donde se planifica (plan del mes, guion, texto del posteo, preparar el rodaje): pedirle cambios
+// o preguntarle cosas con el contexto del cliente. Lo que propone se aplica con un toque; lo que le contás del
+// cliente que sirve siempre, lo anota en su memoria (api/_lib/ia-charla.ts).
+
+export type TipoCharla = "plan" | "guion" | "copy" | "preparar";
+
+interface Mensaje {
+  rol: "yo" | "ia";
+  texto: string;
+  propuesta?: Record<string, unknown> | null;
+  recordado?: string | null;
+  aplicada?: boolean;
+}
+
+const SUGERENCIAS: Record<TipoCharla, string[]> = {
+  plan: ["Más ideas de venta directa", "Sumá una para una fecha especial del mes", "¿Por qué elegiste estas?", "Que ninguna muestre precios"],
+  guion: ["Hacelo más corto", "Más divertido", "Que el gancho sea una pregunta", "¿Qué cambiarías para que venda más?"],
+  copy: ["Más corto", "Con más emojis", "Más formal", "Que invite a escribir por WhatsApp"],
+  preparar: ["Más corto", "Sumá que traigan los productos nuevos", "Más amable"],
+};
+
+const PLACEHOLDER: Record<TipoCharla, string> = {
+  plan: "Ej.: este mes tienen promo 2x1 los martes, sumá una idea con eso",
+  guion: "Ej.: que lo diga la dueña y que mencione el delivery",
+  copy: "Ej.: que sea más corto y mencione el envío gratis",
+  preparar: "Ej.: que tengan listos los 3 sabores nuevos",
+};
+
+export function ChatIA({
+  tipo,
+  proyectoId,
+  mes,
+  videoId,
+  videoIds,
+  actual,
+  renderPropuesta,
+  titulo = "Pedile a la IA",
+  className,
+}: {
+  tipo: TipoCharla;
+  proyectoId: string;
+  mes?: string;
+  videoId?: string;
+  videoIds?: string[];
+  /** Lo que está en pantalla ahora (aunque no esté guardado). */
+  actual: () => unknown;
+  /** Cómo se muestra lo que propone y cómo se aplica (`listo` lo marca como aplicado). */
+  renderPropuesta: (p: Record<string, unknown>, listo: () => void) => React.ReactNode;
+  titulo?: string;
+  className?: string;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const [mensajes, setMensajes] = useState<Mensaje[]>([]);
+  const [texto, setTexto] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const fin = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fin.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [mensajes.length, enviando]);
+
+  const enviar = async (pedido?: string) => {
+    const t = (pedido ?? texto).trim();
+    if (!t || enviando) return;
+    const nuevos: Mensaje[] = [...mensajes, { rol: "yo", texto: t }];
+    setMensajes(nuevos);
+    setTexto("");
+    setEnviando(true);
+    try {
+      const r = await callApi<{ respuesta: string; propuesta: Record<string, unknown> | null; recordado: string | null }>("/api/ia/charla", {
+        tipo,
+        proyecto_id: proyectoId,
+        ...(mes ? { mes } : {}),
+        ...(videoId ? { video_id: videoId } : {}),
+        ...(videoIds ? { video_ids: videoIds } : {}),
+        actual: actual(),
+        mensajes: nuevos.map((m) => ({ rol: m.rol, texto: m.texto })),
+      });
+      setMensajes((prev) => [...prev, { rol: "ia", texto: r.respuesta, propuesta: r.propuesta, recordado: r.recordado }]);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "La IA no respondió");
+      setMensajes((prev) => prev.slice(0, -1));
+      setTexto(t);
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  if (!abierto) {
+    return (
+      <button
+        type="button"
+        onClick={() => setAbierto(true)}
+        className={cn(
+          "flex w-full items-center gap-2 rounded-xl border border-dashed border-primary/40 bg-primary/[0.03] px-3 py-2 text-left text-xs font-medium text-primary transition-colors hover:bg-primary/[0.07]",
+          className
+        )}
+      >
+        <MessageSquareText className="h-4 w-4 shrink-0" />
+        <span className="flex-1">{titulo}: pedile cambios o preguntale lo que quieras</span>
+        <Sparkles className="h-3.5 w-3.5 shrink-0" />
+      </button>
+    );
+  }
+
+  return (
+    <div className={cn("overflow-hidden rounded-2xl border border-primary/30 bg-card", className)}>
+      <div className="flex items-center gap-2 border-b bg-primary/[0.05] px-3 py-2">
+        <MessageSquareText className="h-4 w-4 text-primary" />
+        <p className="flex-1 text-xs font-semibold">{titulo}</p>
+        <button type="button" onClick={() => setAbierto(false)} className="rounded-full p-1 text-muted-foreground hover:bg-muted" aria-label="Cerrar">
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      <div className="max-h-[22rem] space-y-2.5 overflow-y-auto p-3">
+        {mensajes.length === 0 && (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Ya sabe todo lo del cliente (marca, productos, lo que aprendió). Contale lo que le falta o pedile cambios. Si le contás algo que sirve siempre, lo anota.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {SUGERENCIAS[tipo].map((s) => (
+                <button key={s} type="button" onClick={() => void enviar(s)} className="rounded-full border px-2.5 py-1 text-[11px] hover:border-primary hover:text-primary">
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {mensajes.map((m, i) =>
+          m.rol === "yo" ? (
+            <div key={i} className="ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-primary px-3 py-2 text-xs text-primary-foreground">
+              {m.texto}
+            </div>
+          ) : (
+            <div key={i} className="max-w-[95%] space-y-2">
+              <div className="rounded-2xl rounded-bl-md bg-muted px-3 py-2 text-xs">{m.texto}</div>
+              {m.recordado && (
+                <p className="flex items-center gap-1 text-[11px] text-emerald-700 dark:text-emerald-400">
+                  <Brain className="h-3 w-3" /> Anotado para este cliente: {m.recordado}
+                </p>
+              )}
+              {m.propuesta && (
+                <div className={cn("rounded-xl border p-2", m.aplicada ? "border-emerald-500/40 bg-emerald-500/[0.05]" : "border-primary/30 bg-primary/[0.03]")}>
+                  {m.aplicada ? (
+                    <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">✓ Aplicado</p>
+                  ) : (
+                    renderPropuesta(m.propuesta, () => setMensajes((prev) => prev.map((x, j) => (j === i ? { ...x, aplicada: true } : x))))
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        )}
+        {enviando && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Pensando…
+          </div>
+        )}
+        <div ref={fin} />
+      </div>
+
+      <div className="flex items-end gap-2 border-t p-2">
+        <Textarea
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              void enviar();
+            }
+          }}
+          rows={1}
+          placeholder={PLACEHOLDER[tipo]}
+          className="min-h-9 resize-none text-xs"
+          maxLength={1500}
+        />
+        <Button size="icon" className="h-9 w-9 shrink-0" onClick={() => void enviar()} disabled={!texto.trim() || enviando} aria-label="Mandar">
+          <Send className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Botón "Aplicar" de una propuesta. */
+export function BotonAplicar({ onClick, children = "Aplicar" }: { onClick: () => void | Promise<void>; children?: React.ReactNode }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <Button
+      size="sm"
+      className="h-7 text-xs"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          await onClick();
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : "No se pudo aplicar");
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      {busy && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+      {children}
+    </Button>
+  );
+}

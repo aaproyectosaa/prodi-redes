@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { BotonAplicar, ChatIA } from "@/components/redes/ChatIA";
 import { AvisoPausaEquipo } from "@/components/redes/MoraAvisos";
 import { es } from "date-fns/locale";
 import { Building2, CalendarDays, Check, ChevronDown, Clapperboard, Film, History, Loader2, MapPin, Plus, Sparkles } from "lucide-react";
@@ -576,6 +577,28 @@ export function RodajeDialog({
                     placeholder="Productos, personas, vestuario, local ordenado…"
                   />
                   <p className="text-[11px] text-muted-foreground">Se lo mandamos el día anterior junto con la hora y el lugar.</p>
+                  {clienteId && sel.size > 0 && (
+                    <ChatIA
+                      tipo="preparar"
+                      titulo="Charlalo con la IA"
+                      proyectoId={clienteId}
+                      videoIds={Array.from(sel)}
+                      actual={() => preparar}
+                      renderPropuesta={(p, listo) => (
+                        <div className="space-y-2">
+                          <p className="whitespace-pre-wrap text-xs">{String(p.texto ?? "")}</p>
+                          <BotonAplicar
+                            onClick={() => {
+                              setPreparar(String(p.texto ?? ""));
+                              listo();
+                            }}
+                          >
+                            Usar este texto
+                          </BotonAplicar>
+                        </div>
+                      )}
+                    />
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Para el equipo</Label>

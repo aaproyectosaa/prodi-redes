@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { BotonAplicar, ChatIA } from "@/components/redes/ChatIA";
 import { esExtra, loSubeElCliente } from "@/lib/redes/extra";
 import { AvisoPausaEquipo } from "@/components/redes/MoraAvisos";
 import { useSearchParams } from "react-router-dom";
@@ -1028,6 +1029,41 @@ function GuionBlock({ video, editable }: { video: Video; editable: boolean }) {
           )}
         </div>
       )}
+      {editable && !editing && (
+        <ChatIA
+          className="mt-3"
+          tipo="guion"
+          titulo="Charlá el guion con la IA"
+          proyectoId={video.proyecto_id}
+          videoId={video.id}
+          actual={() => ({ guion: video.guion ?? "", tomas: video.tomas ?? [] })}
+          renderPropuesta={(p, listo) => {
+            const g = String(p.guion ?? "");
+            const tm = Array.isArray(p.tomas) ? (p.tomas as string[]) : [];
+            return (
+              <div className="space-y-2">
+                {g && <p className="whitespace-pre-wrap text-xs leading-relaxed">{g}</p>}
+                {tm.length > 0 && (
+                  <ol className="list-decimal space-y-0.5 pl-5 text-[11px] text-muted-foreground">
+                    {tm.map((x, i) => (
+                      <li key={i}>{x}</li>
+                    ))}
+                  </ol>
+                )}
+                <BotonAplicar
+                  onClick={async () => {
+                    await guardarGuion(video, g || video.guion || "", tm.length ? tm : video.tomas ?? []);
+                    listo();
+                    toast.success("Guion actualizado");
+                  }}
+                >
+                  Usar este guion
+                </BotonAplicar>
+              </div>
+            );
+          }}
+        />
+      )}
     </Block>
   );
 }
@@ -1193,6 +1229,33 @@ function CopyBlock({ video, editable, uid }: { video: Video; editable: boolean; 
           ))}
         </div>
       )}
+      <ChatIA
+        className="mb-2"
+        tipo="copy"
+        titulo="Charlá el texto con la IA"
+        proyectoId={video.proyecto_id}
+        videoId={video.id}
+        actual={() => ({ texto: text })}
+        renderPropuesta={(p, listo) => (
+          <div className="space-y-1.5">
+            {(Array.isArray(p.opciones) ? (p.opciones as string[]) : []).map((o, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => {
+                  setText(o);
+                  setDirty(true);
+                  listo();
+                }}
+                className="w-full whitespace-pre-wrap rounded-lg border bg-card p-2 text-left text-xs hover:border-primary"
+              >
+                {o}
+                <span className="mt-1 block text-[10px] font-semibold text-primary">Usar este texto</span>
+              </button>
+            ))}
+          </div>
+        )}
+      />
       <Textarea
         value={text}
         onChange={(e) => {

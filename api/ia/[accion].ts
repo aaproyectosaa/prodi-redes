@@ -53,6 +53,7 @@ import { crearTarea } from "../_lib/tareas";
 import { logosParaPieza, marcaTexto } from "../_lib/marca";
 import { itemsPerfil } from "../_lib/perfil-cliente";
 import { controlarTopeIA } from "../_lib/tope-ia";
+import { charlarIA, esTipoCharla, ROLES_CHARLA, type PedidoCharla } from "../_lib/ia-charla";
 import {
   comercialTexto,
   limpiarComercial,
@@ -89,7 +90,8 @@ async function contextoComercial(pid: string, rango: [string, string], conChat =
   ]);
   const base = comercialTexto(m.data()?.comercial ?? null, rango, cfg.data()?.ia_enfoque ?? null);
   const chat = conChat ? notasChatTexto(m.data()?.chat_notas, 15) : "";
-  return chat ? `${base}\n\n${chat}` : base;
+  const notas = conChat && m.data()?.notas_equipo ? `Indicaciones del equipo de Prodi (respetalas siempre):\n${m.data()!.notas_equipo}` : "";
+  return [base, notas, chat].filter(Boolean).join("\n\n");
 }
 const proximos30 = (desde: Date | string = new Date()): [string, string] => {
   const d = fechaAR(desde) || fechaAR(new Date());
@@ -666,6 +668,17 @@ Participantes: ${quienes || "sin datos"}. Duración: unos ${minutos} minutos.`;
   );
   if (nuevo) await avisarMensaje(chatId, chat, PRODI_ID, "Prodi", "📝 Minuta de la llamada", appUrl(req)).catch(() => undefined);
   return { ok: true, id };
+}
+
+/** Charlar con la IA mientras se planifica (plan del mes, guion, texto del posteo, preparar el rodaje). */
+async function charla(req: VercelRequest) {
+  const b = body<PedidoCharla>(req);
+  if (!esTipoCharla(b.tipo)) throw new HttpError(400, "Tipo inválido");
+  const caller = await requireCaller(req, ROLES_CHARLA[b.tipo]);
+  await controlarTopeIA(caller, "charla");
+  if (!b.proyecto_id) throw new HttpError(400, "Falta el cliente");
+  await assertProjectAccess(caller, b.proyecto_id);
+  return charlarIA(caller, b);
 }
 
 async function guion(req: VercelRequest) {
@@ -1402,6 +1415,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "llamada-texto") res.status(200).json(await llamadaTexto(req));
     else if (accion === "minuta-llamada-texto") res.status(200).json(await minutaLlamadaTexto(req));
     else if (accion === "guion") res.status(200).json(await guion(req));
+    else if (accion === "charla") res.status(200).json(await charla(req));
     else if (accion === "preparar") res.status(200).json(await preparar(req));
     else if (accion === "marca-subir") res.status(200).json(await marcaSubir(req));
     else if (accion === "marca-quitar") res.status(200).json(await marcaQuitar(req));
