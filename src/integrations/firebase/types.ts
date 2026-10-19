@@ -316,6 +316,8 @@ export interface Project {
     ad_account_id?: string;
     conectado?: boolean;
   } | null;
+  /** Última vez que se trajeron la pauta y el Instagram de Meta (lo escribe el servidor). */
+  meta_sync?: { at: string; ok: boolean; detalle: string; desde?: string; hasta?: string } | null;
   /** Fecha de alta del cliente (YYYY-MM-DD). */
   alta?: string | null;
   /** Producción de los videos. `filma`: quién filma (por defecto Prodi). */

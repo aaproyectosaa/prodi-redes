@@ -115,6 +115,8 @@ export function CrecimientoRedes({ proyectoId, equipo = false }: { proyectoId: s
   const fb = useMemo(() => lista.filter((x) => x.fb_seguidores != null).map((x) => ({ fecha: x.fecha, v: x.fb_seguidores as number })), [lista]);
   const usuario = [...lista].reverse().find((x) => x.ig_usuario)?.ig_usuario ?? null;
   const ultimo = lista[lista.length - 1];
+  // El alcance de cada día queda en el doc de ese día: el último que lo tenga.
+  const conAlcance = [...lista].reverse().find((x) => x.ig_alcance_dia != null);
   if (!ig.length && !fb.length) {
     return equipo ? (
       <div className="flex items-start gap-3 rounded-2xl border border-dashed p-4 text-sm text-muted-foreground">
@@ -133,10 +135,10 @@ export function CrecimientoRedes({ proyectoId, equipo = false }: { proyectoId: s
         <Red icono={Instagram} nombre="Instagram" usuario={usuario} serie={ig} color="text-pink-500" degradado="from-[#F58529] via-[#DD2A7B] to-[#8134AF]" />
         <Red icono={Facebook} nombre="Facebook" serie={fb} color="text-blue-500" degradado="from-sky-500 to-blue-700" />
       </div>
-      {ultimo?.ig_alcance_dia != null && (
+      {conAlcance && (
         <p className="text-xs text-muted-foreground">
-          Ayer en Instagram: {fmt(ultimo.ig_alcance_dia)} personas alcanzadas
-          {ultimo.ig_visitas_perfil_dia != null ? ` · ${fmt(ultimo.ig_visitas_perfil_dia)} visitas al perfil` : ""}.
+          El {ddmm(conAlcance.fecha)} en Instagram: {fmt(conAlcance.ig_alcance_dia as number)} personas alcanzadas
+          {ultimo?.ig_visitas_perfil_dia != null ? ` · ${fmt(ultimo.ig_visitas_perfil_dia)} visitas al perfil` : ""}.
         </p>
       )}
     </section>

@@ -12,13 +12,14 @@ import { chequeoMeta, fotoRedesTodos } from "../_lib/meta-redes";
 import { appUrl, body, HttpError, requireCaller, sendError } from "../_lib/http";
 import { construirInforme, enviarMail, mesAnteriorAR } from "../_lib/informe";
 import { sincronizarTodoMeta, sincronizarVideoMeta } from "../_lib/meta";
+import { sincronizarCuentaMeta, sincronizarCuentasTodos } from "../_lib/meta-cuenta";
 import { facturacionDel27, recordatoriosCobro, vencimientosObligaciones, recordatoriosAprobacion, recordatoriosEdicion, recordatoriosPlan, recordatoriosRodaje } from "../_lib/diario";
 import { assertProjectAccess } from "../_lib/http";
 import { aprenderDeChats } from "../_lib/chat-memoria";
 import { recordatoriosTareas } from "../_lib/tareas";
 import { enviarRetenidos } from "../_lib/push";
 
-export const config = { maxDuration: 120 };
+export const config = { maxDuration: 300 };
 
 async function registrar(proyectoId: string, mes: string, destinatarios: string[], resumen: unknown, por: string) {
   await adminDb()
@@ -42,6 +43,19 @@ async function enviar(req: VercelRequest) {
 function assertCron(req: VercelRequest) {
   const secret = process.env.CRON_SECRET;
   if (!secret || req.headers.authorization !== `Bearer ${secret}`) throw new HttpError(401, "No autorizado");
+}
+
+/** Ficha del cliente → "Actualizar ahora" (3 días) o "Traer historial" (hasta 90). Solo admin. */
+async function metaCuenta(req: VercelRequest) {
+  await requireCaller(req, ["admin"]);
+  const b = body<{ proyecto_id?: string; dias?: number }>(req);
+  if (!b.proyecto_id) throw new HttpError(400, "Falta el cliente");
+  const dias = Math.min(Math.max(Math.round(Number(b.dias) || 3), 1), 90);
+  try {
+    return await sincronizarCuentaMeta(b.proyecto_id, dias);
+  } catch (err) {
+    throw new HttpError(502, err instanceof Error ? err.message : "Meta no respondió");
+  }
 }
 
 /** Ajustes → "Revisar conexión": qué clientes se pueden leer de Instagram/Facebook (y saca la foto del día). */
@@ -88,13 +102,15 @@ async function diario(req: VercelRequest) {
   ]);
   // Instagram y Facebook de los clientes: la foto del día (seguidores, alcance).
   const redesMeta = await fotoRedesTodos().catch((err) => `error: ${err}`);
+  // Pauta de toda la cuenta e Instagram día por día (últimos 3 días, Meta corrige los recientes).
+  const cuentasMeta = await sincronizarCuentasTodos().catch((err) => `error: ${err}`);
   // Mora: escalón de cada cliente según sus días de atraso (después de los recordatorios de cobro).
   const mora = await moraTodos(base).catch((err) => `error: ${err}`);
   // Lo que les llegó al equipo mientras descansaban: un solo aviso de buenos días.
   const manana = await enviarRetenidos(base).catch((err) => `error: ${err}`);
   // Lo borrado se anota unos días para que las pantallas abiertas se enteren; después se limpia.
   await getPool().query("delete from borrados where borrado < now() - interval '7 days'").catch(() => undefined);
-  return { ok: true, meta: metaRes, recordatorios_rodaje: rodajes, recordatorios_aprobar: aprobar, recordatorios_plan: planes, facturacion, vencimientos, recordatorios_cobro: cobros, mora, redes_meta: redesMeta, aprendizaje_chats: chats, tareas, entregas_edicion: edicion, resumen_manana: manana };
+  return { ok: true, meta: metaRes, recordatorios_rodaje: rodajes, recordatorios_aprobar: aprobar, recordatorios_plan: planes, facturacion, vencimientos, recordatorios_cobro: cobros, mora, redes_meta: redesMeta, cuentas_meta: cuentasMeta, aprendizaje_chats: chats, tareas, entregas_edicion: edicion, resumen_manana: manana };
 }
 
 async function cron(req: VercelRequest) {
@@ -142,6 +158,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "diario") res.status(200).json(await diario(req));
     else if (accion === "meta" && req.method === "POST") res.status(200).json(await meta(req));
     else if (accion === "meta-redes" && req.method === "POST") res.status(200).json(await metaRedes(req));
+    else if (accion === "meta-cuenta" && req.method === "POST") res.status(200).json(await metaCuenta(req));
     else if (accion === "enviar" && req.method === "POST") res.status(200).json(await enviar(req));
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {

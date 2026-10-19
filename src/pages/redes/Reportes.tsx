@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { PautaTodos } from "@/components/redes/PautaMeta";
 import { useNavigate, useParams } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, ArrowUpRight, Clock, Eye, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -359,6 +360,10 @@ export default function Reportes() {
             ))}
           </div>
         )}
+      </Section>
+
+      <Section title="Pauta de los clientes (Meta)" className="mt-10" description="Lo que va del mes, traído solo de Meta todos los días. Tocá un cliente para ver el detalle.">
+        <PautaTodos clientes={proyectos} onAbrir={(id) => navigate(`/clientes/${id}?tab=resultados`)} />
       </Section>
 
       <Section title="Clientes" className="mt-10" description="Cuánto tardan en aprobar y cuántos cambios piden.">

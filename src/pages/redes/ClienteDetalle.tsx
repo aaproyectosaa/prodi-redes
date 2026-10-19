@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { PautaMeta } from "@/components/redes/PautaMeta";
 import { CrecimientoRedes } from "@/components/redes/CrecimientoRedes";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { doc, updateDoc } from "@/lib/db";
@@ -200,6 +201,7 @@ export default function ClienteDetalle() {
 
         <TabsContent value="resultados" className="space-y-6">
           <CrecimientoRedes proyectoId={cliente.id} equipo />
+          <PautaMeta cliente={cliente} modo={isAdmin ? "admin" : "equipo"} />
           <ResultadosMes resumen={resumen} grafico={<EvolucionMensajes videos={videos} proyectoId={cliente.id} mes={mes} />} />
         </TabsContent>
 
@@ -780,8 +782,8 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
           <div className="rounded-lg border border-dashed p-3">
             <p className="text-xs font-semibold">Meta</p>
             <p className="mb-2 text-[11px] text-muted-foreground">
-              Los resultados ya se traen solos: alcanza con cargar el ID del anuncio en cada video. Estos IDs quedan
-              listos para publicar y pautar desde el sistema más adelante.
+              Con la cuenta publicitaria y el Instagram cargados, todos los días se traen solos la pauta de toda la cuenta
+              y el Instagram (pestaña Resultados). Los números de cada video salen del ID del anuncio en el video.
             </p>
             <div className="grid gap-2 sm:grid-cols-3">
               <Input className="h-8 text-xs" value={form.meta.page_id ?? ""} onChange={(e) => set("meta", { ...form.meta, page_id: e.target.value })} placeholder="ID página FB" />

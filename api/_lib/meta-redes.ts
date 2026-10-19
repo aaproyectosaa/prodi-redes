@@ -178,6 +178,10 @@ async function fotoCliente(pid: string, pag: PaginaMeta) {
   if (fbSeg == null) fbSeg = (await graph(pag.id, { fields: "followers_count,fan_count" }).catch(() => null))?.followers_count ?? null;
   const ins = pag.ig ? await insightsIgAyer(pag.ig.id) : { alcance: null, visitas: null };
   const fecha = hoyAR();
+  // El alcance de cada día lo anota meta-cuenta.ts en el doc de ese día: acá queda el de ayer en el de ayer.
+  if (ins.alcance != null) {
+    await db.collection("metricas_redes").doc(`${pid}_${sumarDias(fecha, -1)}`).set({ proyecto_id: pid, fecha: sumarDias(fecha, -1), ig_alcance_dia: ins.alcance }, { merge: true });
+  }
   await db
     .collection("metricas_redes")
     .doc(`${pid}_${fecha}`)
@@ -187,10 +191,9 @@ async function fotoCliente(pid: string, pag: PaginaMeta) {
       ig_usuario: pag.ig?.usuario ?? null,
       ig_seguidores: igSeg,
       fb_seguidores: fbSeg,
-      ig_alcance_dia: ins.alcance,
       ig_visitas_perfil_dia: ins.visitas,
       at: new Date().toISOString(),
-    });
+    }, { merge: true });
 }
 
 /** Cron diario: la foto de todos los clientes que se pueden leer. */

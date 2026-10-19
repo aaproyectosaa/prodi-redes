@@ -37,6 +37,26 @@ Configuración (una sola vez):
 2. Generar de nuevo el token agregando `instagram_basic`, `instagram_manage_insights` y `pages_read_engagement`
    (además de `ads_read`) y reemplazar `META_ACCESS_TOKEN` en Vercel.
 
+## Pauta de toda la cuenta e Instagram día por día (ya funciona)
+
+`api/_lib/meta-cuenta.ts`. Para cada cliente con `meta.ad_account_id` y/o `meta.ig_user_id`:
+
+- `meta_pauta_diaria/{cliente}_{fecha}_{campaña}`: gasto, impresiones, alcance, clics, CTR, CPM, CPC, mensajes,
+  compras (y su valor), leads, reproducciones y thruplays, más el array `actions` completo (`acciones_raw`).
+- `metricas_redes/{cliente}_{fecha}`: se le suman alcance, visualizaciones e interacciones de Instagram de ese día.
+- `projects.meta_sync`: cuándo se trajo por última vez y si falló (con el error en criollo).
+
+Cuándo corre: el cron diario trae los últimos 3 días (Meta corrige los números recientes). En la ficha del cliente →
+Resultados, el admin tiene *Actualizar ahora* y *Traer 90 días* (historial, en tramos de 30). Errores de límite de uso
+de Meta (4, 17, 613, 80004) se reintentan solos; si un cliente falla, se anota y se sigue con el próximo.
+
+Dónde se ve: ficha del cliente → Resultados (rangos, campañas, inversión por día, ROAS), el panel del cliente (en
+criollo: "Invertiste", "Te escribieron X veces", comparado con el mismo tramo del mes pasado) y Reportes → *Pauta de los
+clientes* (todos juntos, con aviso si la última actualización falló).
+
+Permisos del token: `ads_read` + los de Instagram de arriba. Cada cuenta publicitaria tiene que estar asignada al
+usuario del sistema.
+
 ## Publicar y pautar desde el sistema (a futuro)
 
 Objetivo: que el equipo de pauta publique el video en Instagram/Facebook del cliente y cree la campaña sin

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { PautaMeta } from "@/components/redes/PautaMeta";
 import { CrecimientoRedes } from "@/components/redes/CrecimientoRedes";
 import { AvisoMoraCliente } from "@/components/redes/MoraAvisos";
 import { useSearchParams } from "react-router-dom";
@@ -358,6 +359,7 @@ export default function ClientePortal() {
             )}
           </div>
           <CrecimientoRedes proyectoId={cliente.id} />
+          <PautaMeta cliente={cliente} modo="cliente" />
           <ResultadosMes
             resumen={resumen}
             grafico={<EvolucionMensajes videos={videos} proyectoId={cliente.id} mes={mesRes} onMes={setMesRes} />}
