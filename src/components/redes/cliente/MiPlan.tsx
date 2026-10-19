@@ -184,7 +184,12 @@ export function MiPlan({
             {plan.precioMensual > 0 && (
               <div className="rounded-2xl bg-white/15 px-4 py-2.5 text-right backdrop-blur">
                 <p className="text-2xl font-bold tabular-nums">{formatARS(plan.precioMensual)}</p>
-                <p className="text-[11px] text-white/80">por mes</p>
+                <p className="text-[11px] text-white/80">
+                  {cliente.facturacion?.tipo === "boleta" ? "por mes" : "+ IVA por mes"}
+                </p>
+                {totalBoleta !== plan.precioMensual && (
+                  <p className="text-[11px] font-medium text-white/90">Total de la boleta: {formatARS(totalBoleta)}</p>
+                )}
               </div>
             )}
           </div>
