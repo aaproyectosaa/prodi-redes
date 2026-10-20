@@ -25,9 +25,14 @@ export interface PedidoCharla {
   mensajes?: { rol?: string; texto?: string }[];
   /** Lo que está en pantalla ahora (puede tener cambios sin guardar). */
   actual?: unknown;
+  /** Es una llamada de voz: la respuesta se escucha (corta y hablada). */
+  voz?: boolean;
 }
 
 const t = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
+
+/** En una llamada de voz: respuestas cortas y habladas. */
+export const VOZ = `La respuesta se va a escuchar en voz alta en una llamada: contestá en 1 a 3 frases cortas, como hablando, sin viñetas, sin listas, sin símbolos ni emojis; los números dichos como se dicen ("cuatro con sesenta y cinco dólares"). Si hay que proponer algo largo, decí lo principal y avisá que lo dejás escrito en el chat.`;
 
 /** Roles que pueden charlar con la IA en cada lugar (los mismos que pueden generar ahí). */
 export const ROLES_CHARLA: Record<TipoCharla, string[]> = {
@@ -226,7 +231,7 @@ ${memoriaTexto(memoria)}
 Lo que se está trabajando:
 ${ctx.texto}
 
-Charla con la persona del equipo (lo último es lo que te pide ahora):
+${b.voz ? `${VOZ}\n\n` : ""}Charla con la persona del equipo (lo último es lo que te pide ahora):
 ${mensajes.map((m) => `${m.rol === "yo" ? "Equipo" : "Vos"}: ${m.texto}`).join("\n")}`;
 
   const r = await generarJSON<Record<string, any>>(

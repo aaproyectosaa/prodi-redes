@@ -14,6 +14,7 @@ import { resumenPauta } from "./ia-pauta";
 import { benchmarksPauta, benchmarksTexto, labelRubro, labelZona, rubroPauta, zonaPauta } from "./pauta-benchmarks";
 import { evaluarPauta, monedaFilas, reglasActivas, type FilaPautaRegla } from "./pauta-reglas";
 import { segmentosPauta } from "./meta-segmentos";
+import { VOZ } from "./ia-charla";
 
 const t = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -40,7 +41,7 @@ async function anunciosTexto(pid: string, hoy: string, moneda: string): Promise<
 }
 
 export async function chatEspecialista(
-  b: { proyecto_id?: string; mensajes?: { rol?: string; texto?: string }[] }
+  b: { proyecto_id?: string; mensajes?: { rol?: string; texto?: string }[]; voz?: boolean }
 ): Promise<{ respuesta: string; propuesta: Record<string, unknown> | null; recordado: null }> {
   const pid = t(b.proyecto_id, 200);
   if (!pid) throw new HttpError(400, "Falta el cliente");
@@ -110,7 +111,7 @@ ${bench ? benchmarksTexto(bench, p) : ""}
 ${c?.resumen ? `Último análisis de la IA (${String(c.generado_at).slice(0, 10)}): ${c.resumen}` : ""}
 
 Charla (lo último es lo que te preguntan ahora):
-${mensajes.map((m) => `${m.rol === "yo" ? "Equipo" : "Vos"}: ${m.texto}`).join("\n")}`;
+${mensajes.map((m) => `${m.rol === "yo" ? "Equipo" : "Vos"}: ${m.texto}`).join("\n")}${b.voz ? `\n\n${VOZ}` : ""}`;
 
   const r = await generarJSON<{ respuesta?: string; resumen_cliente?: string }>(
     prompt,

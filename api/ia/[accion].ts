@@ -26,6 +26,8 @@
 // POST /api/ia/dueno { mensajes } (super admin) → asistente del dueño, ve todo (ver api/_lib/dueno.ts)
 // POST /api/ia/links-chat { chat_id, mensaje_id } → links del mensaje: a la ficha del cliente y a la memoria de la IA
 // POST /api/ia/memoria-chat-quitar { proyecto_id, texto } → saca un dato que la IA aprendió del chat
+// POST /api/ia/voz-escuchar { data (base64), mime } → lo que dijo (llamada de voz con la IA)
+// POST /api/ia/voz-hablar { texto } → { audio: { data, mime } | null } con la voz natural (si no hay, el navegador lee)
 // POST /api/ia/estado (admin) → qué claves de IA están cargadas (sí/no, nunca la clave) y con qué modelo de Claude
 // POST /api/ia/tarea-chat { chat_id, mensaje_id, titulo, asignados, vence?, cliente_software_id?, cliente_software_tipo?, desde_sugerencia? }
 //      → tarea a partir de un mensaje del chat (sin IA). En chats de Software queda como tarea de Software.
@@ -677,7 +679,7 @@ Participantes: ${quienes || "sin datos"}. Duración: unos ${minutos} minutos.`;
 /** Especialista Meta: el chat de pauta de un cliente (pauta y admin). */
 async function pautaChat(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "pauta"]);
-  const b = body<{ proyecto_id?: string; mensajes?: { rol?: string; texto?: string }[] }>(req);
+  const b = body<{ proyecto_id?: string; mensajes?: { rol?: string; texto?: string }[]; voz?: boolean }>(req);
   if (!b.proyecto_id) throw new HttpError(400, "Falta el cliente");
   await assertProjectAccess(caller, b.proyecto_id);
   await controlarTopeIA(caller, "pauta-chat");
@@ -1506,6 +1508,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "charla") res.status(200).json(await charla(req));
     else if (accion === "pauta-consejos") res.status(200).json(await pautaConsejos(req));
     else if (accion === "pauta-chat") res.status(200).json(await pautaChat(req));
+    else if (accion === "voz-escuchar") res.status(200).json(await vozEscuchar(req));
+    else if (accion === "voz-hablar") res.status(200).json(await vozHablar(req));
     else if (accion === "preparar") res.status(200).json(await preparar(req));
     else if (accion === "marca-subir") res.status(200).json(await marcaSubir(req));
     else if (accion === "marca-quitar") res.status(200).json(await marcaQuitar(req));
@@ -1608,6 +1612,30 @@ async function resumenVoz(req: VercelRequest) {
   const data = voz.data.toString("base64");
   await ref.set({ data, mime: voz.mime, texto, at: new Date().toISOString() });
   return { audio: { data, mime: voz.mime } };
+}
+
+const ROLES_VOZ = ["admin", "productor", "editor", "pauta", "diseno"];
+
+/** Llamada de voz con la IA: lo que dijo la persona, en texto (cuando el navegador no lo entiende solo). */
+async function vozEscuchar(req: VercelRequest) {
+  await requireCaller(req, ROLES_VOZ);
+  const b = body<{ data?: string; mime?: string }>(req);
+  if (typeof b.data !== "string" || !b.data) throw new HttpError(400, "Falta el audio");
+  const audio = Buffer.from(b.data, "base64");
+  if (audio.length > 3 * 1024 * 1024) throw new HttpError(413, "Hablá un poco menos de corrido (máximo 30 segundos)");
+  const mime = /^[a-z]+\/[a-z0-9.+-]+/i.exec(String(b.mime ?? ""))?.[0] ?? "audio/webm";
+  const texto = (await transcribir(audio, mime, "Charla de trabajo de una agencia de marketing argentina (pauta en Meta, videos, campañas).")).trim().slice(0, 1500);
+  return { texto };
+}
+
+/** Llamada de voz con la IA: la respuesta dicha con la voz natural (si no hay voz cargada, el navegador la lee). */
+async function vozHablar(req: VercelRequest) {
+  await requireCaller(req, ROLES_VOZ);
+  const b = body<{ texto?: string }>(req);
+  const texto = String(b.texto ?? "").trim().slice(0, 900);
+  if (!texto) throw new HttpError(400, "Falta el texto");
+  const voz = await vozNatural(texto).catch(() => null);
+  return { audio: voz ? { data: voz.data.toString("base64"), mime: voz.mime } : null };
 }
 
 /** Para Ajustes: qué claves de IA hay cargadas en Vercel (solo sí/no). */

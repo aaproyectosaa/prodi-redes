@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { Brain, Loader2, MessageSquareText, Send, Sparkles, X } from "lucide-react";
+import { Brain, Loader2, MessageSquareText, Phone, Send, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { callApi } from "@/lib/redes/api";
 import { cn } from "@/lib/utils";
+import { LlamadaIA } from "./LlamadaIA";
 
 // Charlar con la IA donde se planifica (plan del mes, guion, texto del posteo, preparar el rodaje): pedirle cambios
 // o preguntarle cosas con el contexto del cliente. Lo que propone se aplica con un toque; lo que le contás del
-// cliente que sirve siempre, lo anota en su memoria (api/_lib/ia-charla.ts).
+// cliente que sirve siempre, lo anota en su memoria (api/_lib/ia-charla.ts). También se puede llamar por voz (LlamadaIA):
+// lo que se dice queda escrito acá igual.
 
 export type TipoCharla = "plan" | "guion" | "copy" | "preparar" | "pauta";
 
@@ -63,18 +65,24 @@ export function ChatIA({
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
+  const [llamada, setLlamada] = useState(false);
   const fin = useRef<HTMLDivElement>(null);
+  // La llamada manda mensajes desde sus propios eventos: siempre con la charla al día.
+  const mensajesRef = useRef<Mensaje[]>([]);
+  mensajesRef.current = mensajes;
 
   useEffect(() => {
     fin.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [mensajes.length, enviando]);
 
-  const enviar = async (pedido?: string) => {
+  /** Manda un mensaje y devuelve lo que contestó la IA (null si falló). `voz`: viene de la llamada (respuesta corta). */
+  const enviar = async (pedido?: string, voz = false): Promise<string | null> => {
     const t = (pedido ?? texto).trim();
-    if (!t || enviando) return;
-    const nuevos: Mensaje[] = [...mensajes, { rol: "yo", texto: t }];
+    if (!t || (enviando && !voz)) return null;
+    const nuevos: Mensaje[] = [...mensajesRef.current, { rol: "yo", texto: t }];
+    mensajesRef.current = nuevos;
     setMensajes(nuevos);
-    setTexto("");
+    if (!voz) setTexto("");
     setEnviando(true);
     try {
       const r = await callApi<{ respuesta: string; propuesta: Record<string, unknown> | null; recordado: string | null }>(tipo === "pauta" ? "/api/ia/pauta-chat" : "/api/ia/charla", {
@@ -85,31 +93,46 @@ export function ChatIA({
         ...(videoIds ? { video_ids: videoIds } : {}),
         actual: actual(),
         mensajes: nuevos.map((m) => ({ rol: m.rol, texto: m.texto })),
+        ...(voz ? { voz: true } : {}),
       });
       setMensajes((prev) => [...prev, { rol: "ia", texto: r.respuesta, propuesta: r.propuesta, recordado: r.recordado }]);
+      return r.respuesta;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "La IA no respondió");
       setMensajes((prev) => prev.slice(0, -1));
-      setTexto(t);
+      if (!voz) setTexto(t);
+      return null;
     } finally {
       setEnviando(false);
     }
   };
 
+  const llamar = () => {
+    setAbierto(true);
+    setLlamada(true);
+  };
+
   if (!abierto) {
     return (
-      <button
-        type="button"
-        onClick={() => setAbierto(true)}
-        className={cn(
-          "flex w-full items-center gap-2 rounded-xl border border-dashed border-primary/40 bg-primary/[0.03] px-3 py-2 text-left text-xs font-medium text-primary transition-colors hover:bg-primary/[0.07]",
-          className
-        )}
-      >
-        <MessageSquareText className="h-4 w-4 shrink-0" />
-        <span className="flex-1">{titulo}: pedile cambios o preguntale lo que quieras</span>
-        <Sparkles className="h-3.5 w-3.5 shrink-0" />
-      </button>
+      <div className={cn("flex items-stretch gap-2", className)}>
+        <button
+          type="button"
+          onClick={() => setAbierto(true)}
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-dashed border-primary/40 bg-primary/[0.03] px-3 py-2 text-left text-xs font-medium text-primary transition-colors hover:bg-primary/[0.07]"
+        >
+          <MessageSquareText className="h-4 w-4 shrink-0" />
+          <span className="flex-1 truncate">{titulo}: pedile cambios o preguntale lo que quieras</span>
+          <Sparkles className="h-3.5 w-3.5 shrink-0" />
+        </button>
+        <button
+          type="button"
+          onClick={llamar}
+          className="flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary to-fuchsia-500 px-3 text-xs font-semibold text-white shadow-md shadow-primary/25 transition-transform hover:-translate-y-0.5"
+          title={`Hablar por voz con ${titulo}`}
+        >
+          <Phone className="h-3.5 w-3.5" /> Llamar
+        </button>
+      </div>
     );
   }
 
@@ -118,7 +141,25 @@ export function ChatIA({
       <div className="flex items-center gap-2 border-b bg-primary/[0.05] px-3 py-2">
         <MessageSquareText className="h-4 w-4 text-primary" />
         <p className="flex-1 text-xs font-semibold">{titulo}</p>
-        <button type="button" onClick={() => setAbierto(false)} className="rounded-full p-1 text-muted-foreground hover:bg-muted" aria-label="Cerrar">
+        {!llamada && (
+          <button
+            type="button"
+            onClick={llamar}
+            className="flex items-center gap-1 rounded-full bg-gradient-to-r from-primary to-fuchsia-500 px-2.5 py-1 text-[11px] font-semibold text-white"
+            title={`Hablar por voz con ${titulo}`}
+          >
+            <Phone className="h-3 w-3" /> Llamar
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            setLlamada(false);
+            setAbierto(false);
+          }}
+          className="rounded-full p-1 text-muted-foreground hover:bg-muted"
+          aria-label="Cerrar"
+        >
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
@@ -171,6 +212,11 @@ export function ChatIA({
         <div ref={fin} />
       </div>
 
+      {llamada ? (
+        <div className="border-t p-2">
+          <LlamadaIA titulo={titulo} onDecir={(t) => enviar(t, true)} onCortar={() => setLlamada(false)} />
+        </div>
+      ) : (
       <div className="flex items-end gap-2 border-t p-2">
         <Textarea
           value={texto}
@@ -190,6 +236,7 @@ export function ChatIA({
           <Send className="h-4 w-4" />
         </Button>
       </div>
+      )}
     </div>
   );
 }
