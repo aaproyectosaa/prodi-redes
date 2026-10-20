@@ -157,7 +157,10 @@ export function ChatIA({
               {mensajes.length} mensaje{mensajes.length === 1 ? "" : "s"}
             </span>
           )}
-          <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform", plegado && "-rotate-90")} />
+          <span className="ml-1 inline-flex shrink-0 items-center gap-0.5 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-foreground">
+            {plegado ? "Ver charla" : "Ocultar"}
+            <ChevronDown className={cn("h-3 w-3 transition-transform", !plegado && "rotate-180")} />
+          </span>
         </button>
         {!llamada && (
           <button

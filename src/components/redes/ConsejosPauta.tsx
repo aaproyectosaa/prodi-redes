@@ -282,16 +282,25 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
                   type="button"
                   onClick={() => setListaAbierta((v) => !v)}
                   aria-expanded={listaAbierta}
-                  className="flex items-center gap-2 text-left text-sm font-bold"
+                  className="group flex flex-wrap items-center gap-2 text-left text-sm font-bold"
                 >
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/15 text-primary">
                     <ListChecks className="h-4 w-4" />
                   </span>
                   Qué hacer ahora
-                  <span className="text-xs font-medium text-muted-foreground">
+                  <span className="whitespace-nowrap text-xs font-medium text-muted-foreground">
                     {hechas} de {lista.length} hechas
                   </span>
-                  <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", !listaAbierta && "-rotate-90")} />
+                  {/* Bien visible: dice qué hace el toque. */}
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold transition-colors",
+                      listaAbierta ? "bg-muted text-foreground group-hover:bg-muted/70" : "bg-primary text-primary-foreground shadow-md shadow-primary/25 group-hover:bg-primary/90"
+                    )}
+                  >
+                    {listaAbierta ? "Ocultar" : `Ver los ${lista.length} consejos`}
+                    <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", listaAbierta && "rotate-180")} />
+                  </span>
                 </button>
                 <div className="h-1.5 max-w-xs overflow-hidden rounded-full bg-muted">
                   <div
