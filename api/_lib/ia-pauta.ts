@@ -13,13 +13,31 @@ import { benchmarksPauta, benchmarksTexto } from "./pauta-benchmarks";
 
 export interface SugerenciaPauta {
   titulo: string;
+  /** Qué hacer en Meta, en una línea. */
+  accion?: string;
+  /** Por qué, en una línea con el dato clave. */
+  porque?: string;
+  /** La explicación completa (se ve al desplegar). */
   detalle: string;
   tipo: "mantener" | "mejorar" | "cortar" | "probar";
   prioridad: "alta" | "media" | "baja";
 }
 
+/** Un número clave de la cuenta, para verlo de un vistazo. */
+export interface NumeroPauta {
+  etiqueta: string;
+  valor: string;
+  tendencia: "sube" | "baja" | "igual";
+  bueno: boolean;
+}
+
 export interface ConsejosPauta {
   proyecto_id: string;
+  /** Semáforo de cómo viene la cuenta. */
+  estado?: "bien" | "regular" | "mal";
+  /** Cómo viene la cuenta en una frase corta. */
+  titular?: string;
+  numeros?: NumeroPauta[];
   resumen: string;
   sugerencias: SugerenciaPauta[];
   desde: string;
@@ -105,8 +123,16 @@ Reglas:
 - Si algo funciona bien, decilo como "mantener" (no todo tiene que cambiar).
 - Si faltan datos para concluir algo, decilo.
 - Español rioplatense con voseo, directo, sin vueltas. Nada de jerga innecesaria.
-- "resumen": 2 a 3 frases con cómo viene la cuenta.
-- "sugerencias": de 3 a 7, de la más importante a la menos. tipo: mantener, mejorar, cortar o probar. prioridad: alta, media o baja.
+- Escribí para alguien que tiene 10 segundos: primero lo corto y claro, el detalle después.
+- "estado": bien, regular o mal (cómo viene la cuenta en general).
+- "titular": cómo viene la cuenta en UNA frase de máximo 12 palabras, sin siglas (ej. "Los mensajes salen cada vez más caros desde septiembre").
+- "numeros": de 3 a 4 números clave para mirar de un vistazo (ej. costo por mensaje, mensajes del mes, inversión del mes, ventas). etiqueta corta (máx. 4 palabras), valor con su unidad ("4,65 USD", "102", "0 ventas"), tendencia contra el período anterior (sube, baja o igual) y bueno: si ese movimiento es bueno para el negocio.
+- "resumen": 2 a 3 frases con cómo viene la cuenta (el detalle, con los números).
+- "sugerencias": de 3 a 6, de la más importante a la menos. tipo: mantener, mejorar, cortar o probar. prioridad: alta, media o baja.
+  - titulo: máximo 8 palabras.
+  - accion: qué hacer concretamente en Meta, en UNA oración imperativa de máximo 18 palabras (ej. "Apagá 'Interacciones Octubre' y creá una campaña de mensajes a WhatsApp").
+  - porque: el motivo en UNA oración corta con el dato clave (ej. "Cada mensaje cuesta 5,68 USD, el doble que en julio").
+  - detalle: la explicación completa con los números, para quien quiera profundizar.
 
 ${marcaTexto(p)}
 
@@ -122,11 +148,26 @@ ${resumenPauta(filas, hoy)}
 ${bench ? `${benchmarksTexto(bench, p)}
 Compará contra estos benchmarks cuando sirva para decir si un número es bueno o malo.` : ""}`;
 
-  const r = await generarJSON<{ resumen?: string; sugerencias?: any[] }>(
+  const r = await generarJSON<{ estado?: string; titular?: string; numeros?: any[]; resumen?: string; sugerencias?: any[] }>(
     prompt,
     {
       type: "OBJECT",
       properties: {
+        estado: { type: "STRING", enum: ["bien", "regular", "mal"] },
+        titular: { type: "STRING" },
+        numeros: {
+          type: "ARRAY",
+          items: {
+            type: "OBJECT",
+            properties: {
+              etiqueta: { type: "STRING" },
+              valor: { type: "STRING" },
+              tendencia: { type: "STRING", enum: ["sube", "baja", "igual"] },
+              bueno: { type: "BOOLEAN" },
+            },
+            required: ["etiqueta", "valor", "tendencia", "bueno"],
+          },
+        },
         resumen: { type: "STRING" },
         sugerencias: {
           type: "ARRAY",
@@ -134,27 +175,43 @@ Compará contra estos benchmarks cuando sirva para decir si un número es bueno 
             type: "OBJECT",
             properties: {
               titulo: { type: "STRING" },
+              accion: { type: "STRING" },
+              porque: { type: "STRING" },
               detalle: { type: "STRING" },
               tipo: { type: "STRING", enum: ["mantener", "mejorar", "cortar", "probar"] },
               prioridad: { type: "STRING", enum: ["alta", "media", "baja"] },
             },
-            required: ["titulo", "detalle", "tipo", "prioridad"],
+            required: ["titulo", "accion", "porque", "detalle", "tipo", "prioridad"],
           },
         },
       },
-      required: ["resumen", "sugerencias"],
+      required: ["estado", "titular", "numeros", "resumen", "sugerencias"],
     },
     0.4
   );
   const tipos = ["mantener", "mejorar", "cortar", "probar"];
   const prioridades = ["alta", "media", "baja"];
+  const estados = ["bien", "regular", "mal"];
   const out: ConsejosPauta = {
     proyecto_id: pid,
+    estado: (estados.includes(String(r.estado)) ? r.estado : "regular") as ConsejosPauta["estado"],
+    titular: String(r.titular ?? "").trim().slice(0, 140),
+    numeros: (r.numeros ?? [])
+      .map((n) => ({
+        etiqueta: String(n?.etiqueta ?? "").trim().slice(0, 40),
+        valor: String(n?.valor ?? "").trim().slice(0, 30),
+        tendencia: (["sube", "baja", "igual"].includes(n?.tendencia) ? n.tendencia : "igual") as NumeroPauta["tendencia"],
+        bueno: !!n?.bueno,
+      }))
+      .filter((n) => n.etiqueta && n.valor)
+      .slice(0, 4),
     resumen: String(r.resumen ?? "").trim().slice(0, 800),
     sugerencias: (r.sugerencias ?? [])
       .map((s) => ({
         titulo: String(s?.titulo ?? "").trim().slice(0, 120),
-        detalle: String(s?.detalle ?? "").trim().slice(0, 600),
+        accion: String(s?.accion ?? "").trim().slice(0, 220),
+        porque: String(s?.porque ?? "").trim().slice(0, 220),
+        detalle: String(s?.detalle ?? "").trim().slice(0, 800),
         tipo: (tipos.includes(s?.tipo) ? s.tipo : "mejorar") as SugerenciaPauta["tipo"],
         prioridad: (prioridades.includes(s?.prioridad) ? s.prioridad : "media") as SugerenciaPauta["prioridad"],
       }))
