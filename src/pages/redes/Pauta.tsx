@@ -164,7 +164,7 @@ export default function Pauta() {
         <Kpi icono={AlertTriangle} tono={conAlertas ? "ambar" : "gris"} label="Para revisar" valor={`${conAlertas} ${conAlertas === 1 ? "cliente" : "clientes"}`} sub={`${conectados.length} de ${mios.length} conectados a Meta`} />
       </FilaKpis>
 
-      <AlertasPauta />
+      <AlertasPauta onAbrir={setAbierto} />
 
       <div className="mb-3">
         <Pestanias<"conectados" | "sin_conectar">

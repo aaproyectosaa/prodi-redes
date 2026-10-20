@@ -37,7 +37,7 @@ const CHIP = [
  * Panel del tablero: una fila por cliente con lo que le pasa (en pastillas). Solo lo que hay que mirar hoy;
  * el detalle de cada una, al pasar el mouse, y tocando la fila se abre su pauta.
  */
-export function AlertasPauta() {
+export function AlertasPauta({ onAbrir }: { onAbrir?: (clienteId: string) => void } = {}) {
   const navigate = useNavigate();
   const { clienteById, clientes } = useRedes();
   const { user, tieneRol } = useUserProfileContext();
@@ -92,7 +92,7 @@ export function AlertasPauta() {
             <li key={id}>
               <button
                 type="button"
-                onClick={() => navigate(`/clientes/${id}?tab=resultados`)}
+                onClick={() => (onAbrir ? onAbrir(id) : navigate(`/clientes/${id}?tab=resultados`))}
                 className="flex w-full flex-wrap items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted/50"
               >
                 <span className="min-w-[8rem] text-sm font-medium">{c?.nombre ?? "Cliente"}</span>
