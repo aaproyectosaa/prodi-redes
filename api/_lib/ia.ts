@@ -224,9 +224,14 @@ export async function generarImagen(
 
 /** Mensaje de voz a texto: Gemini (Claude no recibe audio). */
 /** Voz natural para leer un texto (solo con Gemini; sin clave, null y el navegador usa su voz). */
-export async function vozNatural(texto: string): Promise<{ data: Buffer; mime: string } | null> {
+export async function vozNatural(texto: string, rapido = false): Promise<{ data: Buffer; mime: string } | null> {
   if (!hayGemini()) return null;
-  return gemini.hablar(texto, "Leé esto en castellano rioplatense (Argentina), con tono cálido, cercano y natural, como un compañero de trabajo contándolo en un audio de WhatsApp, a ritmo tranquilo:");
+  return gemini.hablar(
+    texto,
+    rapido
+      ? "Decí esto en castellano rioplatense (Argentina), con tono cálido y natural, a ritmo ágil y dinámico, como en una llamada de trabajo, sin pausas largas:"
+      : "Leé esto en castellano rioplatense (Argentina), con tono cálido, cercano y natural, como un compañero de trabajo contándolo en un audio de WhatsApp, a ritmo tranquilo:"
+  );
 }
 
 export async function transcribir(data: Buffer, mime: string, pista?: string): Promise<string> {

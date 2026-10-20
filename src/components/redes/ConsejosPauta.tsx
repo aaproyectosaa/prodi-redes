@@ -141,6 +141,7 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
   const [busy, setBusy] = useState(false);
   const [filtro, setFiltro] = useState<Sugerencia["tipo"] | null>(null);
   const [abierto, setAbierto] = useState<number | null>(null);
+  const [listaAbierta, setListaAbierta] = useState(true);
   const { hechos, alternar } = useHechos(proyectoId, datos?.generado_at);
 
   useEffect(() => {
@@ -277,7 +278,12 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
           <div className="space-y-2.5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-[12rem] flex-1 space-y-1.5">
-                <p className="flex items-center gap-2 text-sm font-bold">
+                <button
+                  type="button"
+                  onClick={() => setListaAbierta((v) => !v)}
+                  aria-expanded={listaAbierta}
+                  className="flex items-center gap-2 text-left text-sm font-bold"
+                >
                   <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/15 text-primary">
                     <ListChecks className="h-4 w-4" />
                   </span>
@@ -285,7 +291,8 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
                   <span className="text-xs font-medium text-muted-foreground">
                     {hechas} de {lista.length} hechas
                   </span>
-                </p>
+                  <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", !listaAbierta && "-rotate-90")} />
+                </button>
                 <div className="h-1.5 max-w-xs overflow-hidden rounded-full bg-muted">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all duration-500"
@@ -322,7 +329,8 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
               </div>
             </div>
 
-            <ul className="space-y-2">
+            {listaAbierta && (
+            <ul className="space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
               {visibles.map(({ s, i }) => {
                 const t = TIPO[s.tipo] ?? TIPO.mejorar;
                 const Icono = t.icono;
@@ -330,72 +338,78 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
                 const accion = s.accion || s.titulo;
                 const porque = s.porque || primeraFrase(s.detalle);
                 const desplegado = abierto === i;
+                const so = s.sobre ? SOBRE[s.sobre.tipo] ?? SOBRE.general : null;
+                const IconoSobre = so?.icono;
                 return (
-                  <li key={i} className={cn("relative overflow-hidden rounded-2xl border bg-card transition-opacity", hecho && "opacity-55")}>
+                  <li
+                    key={i}
+                    className={cn(
+                      "relative overflow-hidden rounded-xl border bg-card transition-all",
+                      hecho && "opacity-55",
+                      desplegado ? "shadow-md" : "hover:border-foreground/20"
+                    )}
+                  >
                     <span className={cn("absolute inset-y-0 left-0 w-1", t.barra)} aria-hidden />
-                    <div className="flex items-start gap-3 py-3 pl-4 pr-3">
+                    {/* Fila compacta: tilde, tipo, la acción en una línea y la flecha para desplegar. */}
+                    <div className="flex items-center gap-2.5 py-2 pl-3.5 pr-2">
                       <button
                         type="button"
                         onClick={() => alternar(i)}
                         className={cn(
-                          "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+                          "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
                           hecho ? "border-emerald-500 bg-emerald-500 text-white" : "border-muted-foreground/40 hover:border-emerald-500"
                         )}
                         aria-label={hecho ? "Marcar como pendiente" : "Marcar como hecho"}
                         title={hecho ? "Hecho" : "Marcar como hecho"}
                       >
-                        {hecho && <Check className="h-3.5 w-3.5" />}
+                        {hecho && <Check className="h-3 w-3" />}
                       </button>
-                      <div className="min-w-0 flex-1 space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => setAbierto(desplegado ? null : i)}
+                        aria-expanded={desplegado}
+                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      >
+                        <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-lg", t.caja)} title={t.label}>
+                          <Icono className="h-3.5 w-3.5" />
+                        </span>
+                        <span className={cn("min-w-0 flex-1 text-sm font-semibold leading-snug", !desplegado && "truncate", hecho && "line-through")}>{accion}</span>
+                        {s.prioridad === "alta" && (
+                          <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-red-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-red-600 dark:text-red-300">
+                            <Flame className="h-3 w-3" />
+                            <span className="hidden sm:inline">Urgente</span>
+                          </span>
+                        )}
+                        <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", desplegado && "rotate-180")} />
+                      </button>
+                    </div>
+                    {desplegado && (
+                      <div className="space-y-2 pb-3 pl-[3.25rem] pr-3 animate-in fade-in slide-in-from-top-1 duration-150">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold", t.chip)}>
                             <Icono className="h-3 w-3" /> {t.label}
                           </span>
-                          {s.sobre && (() => {
-                            const so = SOBRE[s.sobre.tipo] ?? SOBRE.general;
-                            const IconoSobre = so.icono;
-                            return (
-                              <span className="inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground" title={s.sobre.nombre}>
-                                <IconoSobre className="h-3 w-3 shrink-0" />
-                                <span className="truncate">
-                                  {so.label}
-                                  {s.sobre.nombre && s.sobre.tipo !== "general" ? `: ${s.sobre.nombre}` : ""}
-                                </span>
+                          {so && IconoSobre && s.sobre && (
+                            <span className="inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground" title={s.sobre.nombre}>
+                              <IconoSobre className="h-3 w-3 shrink-0" />
+                              <span className="truncate">
+                                {so.label}
+                                {s.sobre.nombre && s.sobre.tipo !== "general" ? `: ${s.sobre.nombre}` : ""}
                               </span>
-                            );
-                          })()}
-                          {s.prioridad === "alta" && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold text-red-600 dark:text-red-300">
-                              <Flame className="h-3 w-3" /> Urgente
                             </span>
                           )}
                         </div>
-                        <p className={cn("text-sm font-semibold leading-snug", hecho && "line-through")}>{accion}</p>
-                        <p className="text-xs leading-relaxed text-muted-foreground">{porque}</p>
-                        {s.detalle && s.detalle !== porque && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => setAbierto(desplegado ? null : i)}
-                              className="inline-flex items-center gap-1 pt-0.5 text-[11px] font-medium text-primary hover:underline"
-                            >
-                              <ChevronDown className={cn("h-3 w-3 transition-transform", desplegado && "rotate-180")} />
-                              {desplegado ? "Ocultar detalle" : "Ver detalle"}
-                            </button>
-                            {desplegado && (
-                              <p className="rounded-xl bg-muted/40 p-2.5 text-xs leading-relaxed text-muted-foreground animate-in fade-in slide-in-from-top-1">{s.detalle}</p>
-                            )}
-                          </>
-                        )}
+                        <p className="text-xs leading-relaxed">
+                          <b>Por qué:</b> <span className="text-muted-foreground">{porque}</span>
+                        </p>
+                        {s.detalle && s.detalle !== porque && <p className="rounded-xl bg-muted/40 p-2.5 text-xs leading-relaxed text-muted-foreground">{s.detalle}</p>}
                       </div>
-                      <span className={cn("hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:flex", t.caja)}>
-                        <Icono className="h-4 w-4" />
-                      </span>
-                    </div>
+                    )}
                   </li>
                 );
               })}
             </ul>
+            )}
             {!datos.titular && (
               <p className="text-[11px] text-muted-foreground">Tocá “Analizar de nuevo” para verlo con el semáforo y los números clave.</p>
             )}

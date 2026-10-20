@@ -54,6 +54,19 @@ export function destrabarAudio() {
   }
 }
 
+// Velocidad de la voz (se acuerda la última elegida en este navegador).
+const VELOCIDADES = [1, 1.25, 1.5, 2];
+const CLAVE_VELOCIDAD = "prodi:llamada-ia-velocidad";
+function velocidadGuardada(): number {
+  try {
+    const v = Number(localStorage.getItem(CLAVE_VELOCIDAD));
+    return VELOCIDADES.includes(v) ? v : 1.25;
+  } catch {
+    return 1.25;
+  }
+}
+let velocidad = typeof window === "undefined" ? 1.25 : velocidadGuardada();
+
 /** Voz del navegador en castellano (la de Argentina si está). */
 function hablarNavegador(texto: string, alTerminar: () => void, alBloquear?: () => void): () => void {
   const s = window.speechSynthesis;
@@ -65,7 +78,7 @@ function hablarNavegador(texto: string, alTerminar: () => void, alBloquear?: () 
   const voces = s.getVoices();
   u.voice = voces.find((v) => v.lang === "es-AR") ?? voces.find((v) => v.lang.startsWith("es")) ?? null;
   u.lang = u.voice?.lang ?? "es-AR";
-  u.rate = 1.05;
+  u.rate = Math.min(2, 1.05 * velocidad);
   u.onend = alTerminar;
   // "not-allowed": el navegador no la dejó hablar sola (falta un toque).
   u.onerror = (e) => (e.error === "not-allowed" && alBloquear ? alBloquear() : alTerminar());
@@ -98,6 +111,19 @@ export function LlamadaIA({
   // Si el navegador no dejó sonar la respuesta: se reproduce con un toque.
   const pendiente = useRef<(() => void) | null>(null);
   const [respuesta, setRespuesta] = useState("");
+  const [vel, setVel] = useState(velocidad);
+  const cambiarVelocidad = () => {
+    const v = VELOCIDADES[(VELOCIDADES.indexOf(vel) + 1) % VELOCIDADES.length];
+    velocidad = v;
+    setVel(v);
+    // Si está hablando, se nota al instante.
+    if (reproductor && !reproductor.paused) reproductor.playbackRate = v;
+    try {
+      localStorage.setItem(CLAVE_VELOCIDAD, String(v));
+    } catch {
+      /* sin almacenamiento */
+    }
+  };
 
   /** Volumen del micrófono (0 a 1), para la animación y para saber cuándo hay una pausa. */
   const volumen = useCallback(() => {
@@ -151,6 +177,9 @@ export function LlamadaIA({
         if (fuente) {
           const audio = (reproductor ??= new Audio());
           audio.src = fuente;
+          // Más rápida sin voz de ardilla.
+          audio.preservesPitch = true;
+          audio.playbackRate = velocidad;
           audio.onended = seguir;
           audio.onerror = null;
           callar.current = () => {
@@ -395,6 +424,15 @@ export function LlamadaIA({
             <Hand className="h-4 w-4" /> Interrumpir
           </button>
         )}
+        <button
+          type="button"
+          onClick={cambiarVelocidad}
+          className="flex h-11 min-w-[3.25rem] items-center justify-center rounded-full bg-white/15 px-3 text-sm font-bold tabular-nums transition-colors hover:bg-white/25"
+          title="Velocidad de la voz"
+          aria-label={`Velocidad de la voz: ${vel}x`}
+        >
+          {String(vel).replace(".", ",")}×
+        </button>
         <button
           type="button"
           onClick={cortar}

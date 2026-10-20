@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Brain, Loader2, MessageSquareText, Phone, Send, Sparkles, X } from "lucide-react";
+import { Brain, ChevronDown, Loader2, MessageSquareText, Phone, Send, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -66,6 +66,8 @@ export function ChatIA({
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [llamada, setLlamada] = useState(false);
+  // La charla se pliega desde el título (queda solo el renglón para escribir o la llamada).
+  const [plegado, setPlegado] = useState(false);
   const fin = useRef<HTMLDivElement>(null);
   // La llamada manda mensajes desde sus propios eventos: siempre con la charla al día.
   const mensajesRef = useRef<Mensaje[]>([]);
@@ -142,7 +144,21 @@ export function ChatIA({
     <div className={cn("overflow-hidden rounded-2xl border border-primary/30 bg-card", className)}>
       <div className="flex items-center gap-2 border-b bg-primary/[0.05] px-3 py-2">
         <MessageSquareText className="h-4 w-4 text-primary" />
-        <p className="flex-1 text-xs font-semibold">{titulo}</p>
+        <button
+          type="button"
+          onClick={() => setPlegado((v) => !v)}
+          aria-expanded={!plegado}
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs font-semibold"
+          title={plegado ? "Ver la charla" : "Plegar la charla"}
+        >
+          <span className="truncate">{titulo}</span>
+          {plegado && mensajes.length > 0 && (
+            <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+              {mensajes.length} mensaje{mensajes.length === 1 ? "" : "s"}
+            </span>
+          )}
+          <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform", plegado && "-rotate-90")} />
+        </button>
         {!llamada && (
           <button
             type="button"
@@ -166,7 +182,8 @@ export function ChatIA({
         </button>
       </div>
 
-      <div className="max-h-[22rem] space-y-2.5 overflow-y-auto p-3">
+      {!plegado && (
+      <div className="max-h-[22rem] space-y-2.5 overflow-y-auto p-3 animate-in fade-in slide-in-from-top-1 duration-150">
         {mensajes.length === 0 && (
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">
@@ -213,6 +230,7 @@ export function ChatIA({
         )}
         <div ref={fin} />
       </div>
+      )}
 
       {llamada ? (
         <div className="border-t p-2">

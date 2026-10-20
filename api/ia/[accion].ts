@@ -1634,7 +1634,7 @@ async function vozHablar(req: VercelRequest) {
   const b = body<{ texto?: string }>(req);
   const texto = String(b.texto ?? "").trim().slice(0, 900);
   if (!texto) throw new HttpError(400, "Falta el texto");
-  const voz = await vozNatural(texto).catch(() => null);
+  const voz = await vozNatural(texto, true).catch(() => null);
   return { audio: voz ? { data: voz.data.toString("base64"), mime: voz.mime } : null };
 }
 
