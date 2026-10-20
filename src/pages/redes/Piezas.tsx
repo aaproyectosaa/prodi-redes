@@ -905,7 +905,7 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                 </p>
               )}
               {/* La idea: la cambian la productora o el admin mientras no se empezó a diseñar. */}
-              <EditarIdeaPieza pieza={pieza} puede={revisa} />
+              <EditarIdeaPieza pieza={pieza} puede={revisa} siempre={revisa} />
               {pieza.texto_en_pieza && (
                 <div className="rounded-lg bg-muted/60 p-2 text-xs">
                   <p className="mb-0.5 font-semibold text-muted-foreground">Texto que va en la pieza, tal cual:</p>
@@ -1237,6 +1237,11 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                   <span className="flex-1">
                     <b>El cliente la aprobó.</b> {aprobadaV ? "Abrila con «Ver» para descargarla." : ""}
                   </span>
+                  {revisa && (
+                    <Button size="sm" variant="outline" onClick={() => setCambiosInterno(true)} title="Vuelve a Diseñando con lo que haya que corregir">
+                      <MessageSquareWarning className="mr-1.5 h-4 w-4" /> Corregir algo
+                    </Button>
+                  )}
                   {aprobadaV && (
                     <Button size="sm" variant="outline" onClick={() => setVer(aprobadaV)}>
                       <Download className="mr-1.5 h-4 w-4" /> Abrir
@@ -1318,6 +1323,11 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
                         <CheckSquare className="mr-1.5 h-3.5 w-3.5" /> Elegir varias para mandar
                       </Button>
                     )}
+                    {revisa && (
+                      <Button size="sm" variant="outline" className="h-8 bg-background/60 text-xs" onClick={() => setCambiosInterno(true)}>
+                        <MessageSquareWarning className="mr-1.5 h-3.5 w-3.5" /> Mandar a corregir
+                      </Button>
+                    )}
                     {revisa && pasaPorRevision(cliente) && !Object.keys(pieza.respuestas_cliente ?? {}).length && (
                       <Button size="sm" variant="outline" className="h-8 bg-background/60 text-xs" disabled={deshaciendo} onClick={() => void deshacerAprobacion()}>
                         {deshaciendo ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Undo2 className="mr-1.5 h-3.5 w-3.5" />}
@@ -1396,7 +1406,11 @@ function PiezaTrabajo({ pieza, onClose }: { pieza: PiezaIA | null; onClose: () =
           open={cambiosInterno}
           onOpenChange={setCambiosInterno}
           title="Pedir cambios a diseño"
-          description="Vuelve a «Diseñando» con tu nota. El cliente todavía no la vio."
+          description={
+            pieza.estado === "entregada" || pieza.estado === "para_aprobar"
+              ? "Vuelve a «Diseñando» con tu nota. Cuando esté corregida, la revisás y se la volvés a mandar al cliente."
+              : "Vuelve a «Diseñando» con tu nota. El cliente todavía no la vio."
+          }
           placeholder="Ej.: el precio tiene que verse más grande y sacá el fondo rojo."
           confirmLabel="Pedir cambios"
           onConfirm={async (nota) => {

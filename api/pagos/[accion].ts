@@ -375,7 +375,10 @@ async function piezaIdea(req: VercelRequest) {
   const esCliente = caller.role === "cliente" && (team.cliente ?? []).includes(caller.uid);
   const esProductora = caller.roles.includes("productor") && (team.productor ?? []).includes(caller.uid);
   if (!esAdmin && !esCliente && !esProductora) throw new HttpError(403, "No podés cambiar esta pieza");
-  if (!ESTADOS_IDEA_EDITABLE.includes(String(pz.estado))) throw new HttpError(409, "Ya la está diseñando: la idea no se puede cambiar. Escribile al equipo por el chat.");
+  // El cliente, solo antes de que se empiece a diseñar; el admin y la productora, siempre (salvo cancelada o rechazada).
+  if (esCliente && !esAdmin && !esProductora && !ESTADOS_IDEA_EDITABLE.includes(String(pz.estado)))
+    throw new HttpError(409, "Ya la está diseñando: la idea no se puede cambiar. Escribile al equipo por el chat.");
+  if (["cancelada", "rechazada"].includes(String(pz.estado))) throw new HttpError(409, "Esta pieza ya no está activa");
   const anterior = String(pz.pedido ?? "");
   if (anterior.trim() === nuevo) return { ok: true, sinCambios: true };
   const now = new Date().toISOString();

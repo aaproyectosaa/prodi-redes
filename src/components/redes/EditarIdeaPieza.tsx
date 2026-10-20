@@ -14,11 +14,11 @@ import { ESTADOS_IDEA_EDITABLE } from "../../../api/_lib/piezas";
  * para hacer): el cliente, la productora del cliente o el admin (`puede`). El servidor valida todo, deja el texto
  * anterior en el historial y le avisa a la diseñadora. Después queda de solo lectura.
  */
-export function EditarIdeaPieza({ pieza, puede, className }: { pieza: PiezaIA; puede: boolean; className?: string }) {
+export function EditarIdeaPieza({ pieza, puede, siempre, className }: { pieza: PiezaIA; puede: boolean; /** Equipo (admin/productora): la puede cambiar en cualquier momento. */ siempre?: boolean; className?: string }) {
   const [editando, setEditando] = useState(false);
   const [texto, setTexto] = useState(pieza.pedido ?? "");
   const [guardando, setGuardando] = useState(false);
-  const abierta = ESTADOS_IDEA_EDITABLE.includes(pieza.estado);
+  const abierta = siempre ? !["cancelada", "rechazada"].includes(pieza.estado) : ESTADOS_IDEA_EDITABLE.includes(pieza.estado);
 
   const guardar = async () => {
     setGuardando(true);

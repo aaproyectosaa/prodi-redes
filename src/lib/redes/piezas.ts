@@ -291,14 +291,17 @@ export async function mandarARevision(pieza: PiezaIA, versionId: string | string
 /** Producción pide cambios en la revisión interna: vuelve a diseño con la nota. */
 export async function pedirCambiosInternoPieza(pieza: PiezaIA, project: Project | undefined, by: string, nota: string) {
   assertEditable();
+  // También desde "esperando al cliente" o ya aprobada: se reabre y lo anterior del cliente deja de valer.
+  const reabre = pieza.estado === "para_aprobar" || pieza.estado === "entregada";
   await updateDoc(doc(db, PIEZAS, pieza.id), {
     estado: "en_proceso",
     feedback_interno: nota.trim(),
     feedback_cliente: null,
     revision_desde: null,
     rondas: (pieza.rondas ?? 0) + 1,
+    ...(reabre ? { respuestas_cliente: null, versiones_aprobadas: null, version_aprobada_id: null, publicada_at: null } : {}),
     updated_at: now(),
-    historial: arrayUnion(evento(by, "Producción pidió cambios", nota.trim())),
+    historial: arrayUnion(evento(by, reabre ? "Producción la reabrió y pidió cambios" : "Producción pidió cambios", nota.trim())),
   });
   const quienEntrego = [...(pieza.historial ?? [])].reverse().find((h) => h.accion.includes("revisión interna"))?.by;
   void avisar({
