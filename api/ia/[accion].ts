@@ -50,7 +50,7 @@ import { enviarAviso } from "../_lib/notify";
 import { filmaElCliente, videoDesdePedido } from "../_lib/pedidos";
 import { fechaAR, sumarDias } from "../_lib/fecha";
 import { atenderMencion } from "../_lib/chat-asistente";
-import { avisarMensaje, chatDeMiembro, PRODI_ID, publicarEnChat } from "../_lib/chat-server";
+import { avisarMensaje, chatDeMiembro, mensajeProdi, PRODI_ID, publicarEnChat } from "../_lib/chat-server";
 import { asistenteDueno } from "../_lib/dueno";
 import { linksDeMensaje } from "../_lib/chat-links";
 import { crearTarea } from "../_lib/tareas";
@@ -1251,6 +1251,15 @@ async function planEnviar(req: VercelRequest) {
     },
     appUrl(req)
   );
+  // Y en el grupo del cliente: un aviso corto con el botón para verlas (no todo el detalle).
+  const grupo = `cliente_${pid}`;
+  if ((await db.collection("chats").doc(grupo).get()).exists) {
+    await mensajeProdi(
+      grupo,
+      `🎬 ¡Ya están las ideas de ${nombreMes(mes).split(" ")[0]}! Armamos ${ideas.length} idea${ideas.length === 1 ? "" : "s"} de video. Miralas y decinos cuáles van.`,
+      { link: `/cliente?plan=${mes}`, link_texto: "Ver ideas", link_equipo: `/videos?plan=${planId(pid, mes)}` }
+    ).catch((e) => console.warn("[plan-enviar] chat", pid, e));
+  }
   return { ok: true };
 }
 

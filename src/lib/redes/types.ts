@@ -576,6 +576,8 @@ export interface Mensaje {
   leyenda?: string | null;
   /** Respuestas de @prodi: texto del botón del link. */
   link_texto?: string | null;
+  /** Adónde lleva el botón al equipo de Prodi (si es distinto que al cliente). */
+  link_equipo?: string | null;
   tarea_id?: string | null;
   /** Software: la tarea que sugiere la IA para este mensaje (la escribe el servidor). */
   sugerencia_tarea?: SugerenciaTarea | null;

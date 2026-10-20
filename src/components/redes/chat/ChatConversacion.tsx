@@ -1079,7 +1079,7 @@ export function ChatConversacion({
                               </button>
                             ) : (
                               <Link
-                                to={m.link}
+                                to={(role !== "cliente" && role !== "contacto" && m.link_equipo) || m.link}
                                 className="inline-flex items-center gap-1.5 rounded-full bg-[#6F40FC] px-3 py-1 text-xs font-semibold text-white"
                               >
                                 {m.link_texto || "Ver"}
