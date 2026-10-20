@@ -13,6 +13,7 @@ import { hoyAR, sumarDias } from "./fecha";
 import { resumenPauta } from "./ia-pauta";
 import { benchmarksPauta, benchmarksTexto, labelRubro, labelZona, rubroPauta, zonaPauta } from "./pauta-benchmarks";
 import { evaluarPauta, monedaFilas, reglasActivas, type FilaPautaRegla } from "./pauta-reglas";
+import { segmentosPauta } from "./meta-segmentos";
 
 const t = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -98,6 +99,8 @@ ${filas.length ? resumenPauta(filas, hoy) : "Todavía no hay pauta traída de Me
 
 ${await anunciosTexto(pid, hoy, moneda)}
 
+${await segmentosTexto(pid, p, hoy, moneda)}
+
 ${p.meta_sync?.frecuencia?.length ? `Frecuencia últimos 7 días: ${p.meta_sync.frecuencia.map((x: any) => `"${x.nombre}" ${x.frecuencia}`).join(", ")}` : ""}
 
 ${alertas.length ? `Alertas activas hoy:\n${alertas.map((a) => `- ${a.titulo}: ${a.detalle}`).join("\n")}` : "Sin alertas activas hoy."}
@@ -116,4 +119,13 @@ ${mensajes.map((m) => `${m.rol === "yo" ? "Equipo" : "Vos"}: ${m.texto}`).join("
   );
   const resumen = t(r.resumen_cliente, 2500);
   return { respuesta: t(r.respuesta, 4000) || "No tengo una respuesta, probá preguntarlo de otra forma.", propuesta: resumen ? { resumen_cliente: resumen } : null, recordado: null };
+}
+
+/** Públicos, ubicaciones, zonas, horarios y conjuntos de anuncios de los últimos 90 días (de Meta, en el momento). */
+async function segmentosTexto(pid: string, p: Record<string, any>, hoy: string, moneda: string): Promise<string> {
+  const cuenta = String(p.meta?.ad_account_id ?? "").trim().replace(/^act_/, "");
+  if (!cuenta) return "";
+  const r = await segmentosPauta(pid, cuenta, sumarDias(hoy, -89), hoy, moneda, false).catch(() => null);
+  return r?.texto ? `${r.texto}
+Usá estos datos para ser puntual: nombrá el público, la ubicación, la zona, el horario o el conjunto exacto.` : "";
 }

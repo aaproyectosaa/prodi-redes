@@ -7,14 +7,22 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  Clock,
   Flame,
   FlaskConical,
+  Image,
+  LayoutGrid,
+  Lightbulb,
   ListChecks,
   Loader2,
+  MapPin,
+  Megaphone,
   RefreshCw,
   Scissors,
   Sparkles,
   TrendingUp,
+  Users,
+  Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -31,6 +39,8 @@ interface Sugerencia {
   accion?: string;
   porque?: string;
   detalle: string;
+  /** A qué apunta (campaña, anuncio, público…); sin esto, es un consejo general. */
+  sobre?: { tipo: string; nombre: string } | null;
   tipo: "mantener" | "mejorar" | "cortar" | "probar";
   prioridad: "alta" | "media" | "baja";
 }
@@ -46,8 +56,24 @@ interface Consejos {
   numeros?: Numero[];
   resumen: string;
   sugerencias: Sugerencia[];
+  base?: { campanias: number; conjuntos: number; anuncios: number; gasto: number; moneda: string; leido: string[] };
   generado_at: string;
 }
+
+/** Ícono y texto de "a qué apunta" cada consejo. */
+const SOBRE: Record<string, { icono: React.ElementType; label: string }> = {
+  campaña: { icono: Megaphone, label: "Campaña" },
+  conjunto: { icono: Users, label: "Conjunto" },
+  anuncio: { icono: Image, label: "Anuncio" },
+  público: { icono: Users, label: "Público" },
+  ubicación: { icono: LayoutGrid, label: "Ubicación" },
+  zona: { icono: MapPin, label: "Zona" },
+  horario: { icono: Clock, label: "Horario" },
+  presupuesto: { icono: Wallet, label: "Presupuesto" },
+  general: { icono: Lightbulb, label: "General" },
+};
+
+const plata = (n: number, moneda: string) => `${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(n)} ${moneda}`;
 
 const TIPO: Record<Sugerencia["tipo"], { label: string; icono: React.ElementType; chip: string; barra: string; caja: string }> = {
   cortar: { label: "Cortar", icono: Scissors, chip: "bg-red-500/15 text-red-600 dark:text-red-300", barra: "bg-red-500", caja: "bg-red-500/15 text-red-500" },
@@ -190,6 +216,20 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
                 })}
               </div>
             )}
+            {datos.base && (
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span className="font-medium text-foreground">Se basó en:</span>
+                <span className="rounded-full bg-muted px-2 py-0.5">{datos.base.campanias} campañas</span>
+                {datos.base.conjuntos > 0 && <span className="rounded-full bg-muted px-2 py-0.5">{datos.base.conjuntos} conjuntos</span>}
+                {datos.base.anuncios > 0 && <span className="rounded-full bg-muted px-2 py-0.5">{datos.base.anuncios} anuncios</span>}
+                <span className="rounded-full bg-muted px-2 py-0.5">{plata(datos.base.gasto, datos.base.moneda)} invertidos</span>
+                {datos.base.leido.filter((x) => x !== "cada anuncio").map((x) => (
+                  <span key={x} className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">
+                    {x}
+                  </span>
+                ))}
+              </div>
+            )}
             {datos.resumen && (
               <details className="group">
                 <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-xs font-medium text-primary [&::-webkit-details-marker]:hidden">
@@ -259,6 +299,19 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
                           <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold", t.chip)}>
                             <Icono className="h-3 w-3" /> {t.label}
                           </span>
+                          {s.sobre && (s.sobre.nombre || s.sobre.tipo === "general") && (() => {
+                            const so = SOBRE[s.sobre.tipo] ?? SOBRE.general;
+                            const IconoSobre = so.icono;
+                            return (
+                              <span className="inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground" title={s.sobre.nombre}>
+                                <IconoSobre className="h-3 w-3 shrink-0" />
+                                <span className="truncate">
+                                  {so.label}
+                                  {s.sobre.nombre && s.sobre.tipo !== "general" ? `: ${s.sobre.nombre}` : ""}
+                                </span>
+                              </span>
+                            );
+                          })()}
                           {s.prioridad === "alta" && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold text-red-600 dark:text-red-300">
                               <Flame className="h-3 w-3" /> Urgente
@@ -293,6 +346,9 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
             </ul>
             {!datos.titular && (
               <p className="text-[11px] text-muted-foreground">Tocá “Analizar de nuevo” para verlo con el semáforo y los números clave.</p>
+            )}
+            {datos.titular && !datos.base && (
+              <p className="text-[11px] text-muted-foreground">Tocá “Analizar de nuevo”: ahora la IA también lee públicos, ubicaciones, zonas, horarios y cada anuncio.</p>
             )}
           </div>
         </div>

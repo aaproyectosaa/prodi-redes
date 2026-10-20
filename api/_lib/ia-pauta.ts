@@ -10,6 +10,7 @@ import { marcaTexto } from "./marca";
 import { comercialTexto, memoriaTexto, type MemoriaIA } from "./plan-mes";
 import { hoyAR, sumarDias } from "./fecha";
 import { benchmarksPauta, benchmarksTexto } from "./pauta-benchmarks";
+import { segmentosPauta } from "./meta-segmentos";
 
 export interface SugerenciaPauta {
   titulo: string;
@@ -19,9 +20,14 @@ export interface SugerenciaPauta {
   porque?: string;
   /** La explicación completa (se ve al desplegar). */
   detalle: string;
+  /** A qué apunta: una campaña, un anuncio, un público, una ubicación… o algo general. */
+  sobre?: { tipo: TipoSobre; nombre: string } | null;
   tipo: "mantener" | "mejorar" | "cortar" | "probar";
   prioridad: "alta" | "media" | "baja";
 }
+
+export type TipoSobre = "campaña" | "conjunto" | "anuncio" | "público" | "ubicación" | "zona" | "horario" | "presupuesto" | "general";
+const TIPOS_SOBRE: TipoSobre[] = ["campaña", "conjunto", "anuncio", "público", "ubicación", "zona", "horario", "presupuesto", "general"];
 
 /** Un número clave de la cuenta, para verlo de un vistazo. */
 export interface NumeroPauta {
@@ -40,6 +46,8 @@ export interface ConsejosPauta {
   numeros?: NumeroPauta[];
   resumen: string;
   sugerencias: SugerenciaPauta[];
+  /** En qué se basó el análisis. */
+  base?: { campanias: number; conjuntos: number; anuncios: number; gasto: number; moneda: string; leido: string[] };
   desde: string;
   hasta: string;
   generado_at: string;
@@ -113,6 +121,15 @@ export async function consejosPauta(caller: Caller, pid: string, rehacer: boolea
   const tope = Number(p.pauta_cliente?.monto ?? p.plan_redes_override?.pauta?.monto ?? 0) || null;
   const frecuencia = (p.meta_sync?.frecuencia ?? []) as { nombre: string; frecuencia: number }[];
   const bench = await benchmarksPauta().catch(() => null);
+  // Públicos, ubicaciones, zonas, horarios, conjuntos y anuncios (se leen de Meta en el momento).
+  const moneda = String(filas.find((f) => f.moneda)?.moneda ?? "ARS");
+  const cuenta = String(p.meta?.ad_account_id ?? "").trim().replace(/^act_/, "");
+  const seg = cuenta
+    ? await segmentosPauta(pid, cuenta, desde, hoy, moneda).catch((err) => {
+        console.warn("[ia-pauta] segmentos", pid, err instanceof Error ? err.message : err);
+        return null;
+      })
+    : null;
 
   const prompt = `Sos un media buyer senior de Meta Ads (Instagram y Facebook) en una agencia argentina que trabaja con negocios chicos y medianos. Prodi busca resultados comerciales: mensajes por WhatsApp, ventas y contactos.
 Analizá la pauta de los últimos 90 días de este cliente y decile a la persona que maneja la pauta qué hacer para MANTENER lo que funciona y MEJORAR lo que no.
@@ -122,6 +139,7 @@ Reglas:
 - Sugerencias accionables en Meta Ads Manager: presupuesto (subir/bajar/redistribuir), apagar o escalar campañas, renovar creatividades si cansan, probar públicos, objetivos, ubicaciones, horarios, copy, formato de video, pruebas A/B.
 - Si algo funciona bien, decilo como "mantener" (no todo tiene que cambiar).
 - Si faltan datos para concluir algo, decilo.
+- Usá los datos de público (edad y género), ubicaciones, zonas, horarios, conjuntos de anuncios (a quién apunta cada uno) y anuncios para que los consejos sean PUNTUALES: nombrá el segmento, conjunto o anuncio exacto (ej. "sacá Facebook columna derecha: gastó 18% sin resultados", "concentrá el presupuesto en mujeres de 35 a 54, que traen mensajes a la mitad de costo", "duplicá el anuncio 'Promo julio' en el conjunto nuevo"). Solo recomendá cosas generales si no hay datos para ser concreto, y aclaralo.
 - Español rioplatense con voseo, directo, sin vueltas. Nada de jerga innecesaria.
 - Escribí para alguien que tiene 10 segundos: primero lo corto y claro, el detalle después.
 - "estado": bien, regular o mal (cómo viene la cuenta en general).
@@ -133,6 +151,7 @@ Reglas:
   - accion: qué hacer concretamente en Meta, en UNA oración imperativa de máximo 18 palabras (ej. "Apagá 'Interacciones Octubre' y creá una campaña de mensajes a WhatsApp").
   - porque: el motivo en UNA oración corta con el dato clave (ej. "Cada mensaje cuesta 5,68 USD, el doble que en julio").
   - detalle: la explicación completa con los números, para quien quiera profundizar.
+  - sobre: a qué apunta el consejo. tipo: campaña, conjunto, anuncio, público, ubicación, zona, horario, presupuesto o general. nombre: el nombre exacto (de la campaña, conjunto o anuncio) o el segmento (ej. "mujeres 35-44", "Instagram reels", "Córdoba", "20 a 23 h"); vacío si es general.
 
 ${marcaTexto(p)}
 
@@ -144,6 +163,8 @@ ${tope ? `Presupuesto mensual de pauta acordado con el cliente: ${tope} ARS.` : 
 ${frecuencia.length ? `Frecuencia de los últimos 7 días por campaña: ${frecuencia.map((x) => `"${x.nombre}" ${x.frecuencia}`).join(", ")}` : ""}
 
 ${resumenPauta(filas, hoy)}
+
+${seg?.texto || "(No se pudieron leer los públicos, ubicaciones ni anuncios de esta cuenta.)"}
 
 ${bench ? `${benchmarksTexto(bench, p)}
 Compará contra estos benchmarks cuando sirva para decir si un número es bueno o malo.` : ""}`;
@@ -178,10 +199,15 @@ Compará contra estos benchmarks cuando sirva para decir si un número es bueno 
               accion: { type: "STRING" },
               porque: { type: "STRING" },
               detalle: { type: "STRING" },
+              sobre: {
+                type: "OBJECT",
+                properties: { tipo: { type: "STRING", enum: TIPOS_SOBRE }, nombre: { type: "STRING" } },
+                required: ["tipo", "nombre"],
+              },
               tipo: { type: "STRING", enum: ["mantener", "mejorar", "cortar", "probar"] },
               prioridad: { type: "STRING", enum: ["alta", "media", "baja"] },
             },
-            required: ["titulo", "accion", "porque", "detalle", "tipo", "prioridad"],
+            required: ["titulo", "accion", "porque", "detalle", "sobre", "tipo", "prioridad"],
           },
         },
       },
@@ -212,11 +238,22 @@ Compará contra estos benchmarks cuando sirva para decir si un número es bueno 
         accion: String(s?.accion ?? "").trim().slice(0, 220),
         porque: String(s?.porque ?? "").trim().slice(0, 220),
         detalle: String(s?.detalle ?? "").trim().slice(0, 800),
+        sobre: TIPOS_SOBRE.includes(s?.sobre?.tipo)
+          ? { tipo: s.sobre.tipo as TipoSobre, nombre: String(s.sobre.nombre ?? "").trim().slice(0, 120) }
+          : null,
         tipo: (tipos.includes(s?.tipo) ? s.tipo : "mejorar") as SugerenciaPauta["tipo"],
         prioridad: (prioridades.includes(s?.prioridad) ? s.prioridad : "media") as SugerenciaPauta["prioridad"],
       }))
       .filter((s) => s.titulo)
       .slice(0, 8),
+    base: {
+      campanias: new Set(filas.map((f) => f.campaign_id)).size,
+      conjuntos: seg?.conjuntos ?? 0,
+      anuncios: seg?.anuncios ?? 0,
+      gasto: Math.round(filas.reduce((a, f) => a + Number(f.gasto || 0), 0) * 100) / 100,
+      moneda,
+      leido: seg?.leido ?? [],
+    },
     desde,
     hasta: hoy,
     generado_at: new Date().toISOString(),
