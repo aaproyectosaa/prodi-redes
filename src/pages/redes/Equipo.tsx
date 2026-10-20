@@ -124,26 +124,27 @@ export default function Equipo() {
   const clientesDe = (p: Profile) =>
     clientes.filter((c) => Object.values(c.team_roles ?? {}).some((ids) => (ids ?? []).includes(p.id)));
 
-  // La gente de los clientes va por empresa (una empresa tiene varias personas); el equipo, por rol.
-  const empresaDe = (p: Profile): string | null => {
+  // La gente de los clientes va por empresa (una empresa tiene varias personas; alguien de varias empresas aparece
+  // en cada una); el equipo, por rol.
+  const empresasDe = (p: Profile): string[] | null => {
     if (p.role !== "cliente" && p.role !== "contacto") return null;
-    const id = (p.role === "contacto" ? p.proyecto_id : null) ?? clientesDe(p)[0]?.id ?? null;
-    return `empresa:${id ?? "-"}`;
+    const ids = p.role === "contacto" && p.proyecto_id ? [p.proyecto_id] : clientesDe(p).map((c) => c.id);
+    return ids.length ? ids.map((id) => `empresa:${id}`) : ["empresa:-"];
   };
-  const claveGrupo = (p: Profile) => (esPendiente(p) ? "pending" : empresaDe(p) ?? grupoDe(p));
+  const clavesGrupo = (p: Profile): string[] => (esPendiente(p) ? ["pending"] : empresasDe(p) ?? [grupoDe(p)]);
   const nombreEmpresa = (clave: string) => {
     const id = clave.slice(8);
     return id === "-" ? "Sin empresa asignada" : clientes.find((c) => c.id === id)?.nombre ?? "Empresa";
   };
   const colorEmpresa = (clave: string) => clientes.find((c) => c.id === clave.slice(8))?.color || "#6F40FC";
-  const empresas = Array.from(new Set(filtrados.map(claveGrupo).filter((g) => g.startsWith("empresa:")))).sort(
+  const empresas = Array.from(new Set(filtrados.flatMap(clavesGrupo).filter((g) => g.startsWith("empresa:")))).sort(
     (a, b) => Number(a === "empresa:-") - Number(b === "empresa:-") || nombreEmpresa(a).localeCompare(nombreEmpresa(b))
   );
   const grupos = ORDEN_GRUPOS.filter((g) => g !== "cliente" && g !== "contacto")
-    .concat(filtrados.map(claveGrupo).filter((g) => !ORDEN_GRUPOS.includes(g) && !g.startsWith("empresa:")))
+    .concat(filtrados.flatMap(clavesGrupo).filter((g) => !ORDEN_GRUPOS.includes(g) && !g.startsWith("empresa:")))
     .concat(empresas)
     .filter((g, i, a) => a.indexOf(g) === i)
-    .map((g) => [g, filtrados.filter((p) => claveGrupo(p) === g)] as const)
+    .map((g) => [g, filtrados.filter((p) => clavesGrupo(p).includes(g))] as const)
     .filter(([, gente]) => gente.length > 0);
 
   const accion = async (fn: () => Promise<unknown>, ok: string) => {
@@ -339,6 +340,30 @@ export default function Equipo() {
               </div>
             </section>
           ))}
+          {/* Clientes activos que todavía no tienen a nadie con usuario. */}
+          {!q && (filtro === "todos" || filtro === "cliente") && (() => {
+            const sinGente = clientes
+              .filter((c) => c.enabled !== false && !profiles.some((p) => (p.role === "cliente" || p.role === "contacto") && clavesGrupo(p).includes(`empresa:${c.id}`)))
+              .sort((a, b) => a.nombre.localeCompare(b.nombre));
+            if (!sinGente.length) return null;
+            return (
+              <section className="rounded-3xl border-2 border-dashed p-4 sm:p-5">
+                <p className="flex items-center gap-2 text-sm font-semibold">
+                  <Building2 className="h-4 w-4 text-muted-foreground" /> Clientes sin usuarios
+                  <span className="text-xs font-normal text-muted-foreground">{sinGente.length}</span>
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">Nadie de estas empresas entra todavía. Sumalos desde la ficha del cliente → Integrantes.</p>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {sinGente.map((c) => (
+                    <span key={c.id} className="inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-xs font-medium">
+                      <span className="h-2 w-2 rounded-full" style={{ background: c.color || "#6F40FC" }} />
+                      {c.nombre}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            );
+          })()}
         </div>
       </Section>
 
