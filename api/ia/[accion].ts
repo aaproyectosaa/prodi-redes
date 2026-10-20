@@ -40,7 +40,7 @@ import { adminDb, getPool } from "../_lib/db";
 import { appUrl, assertProjectAccess, body, HttpError, requireCaller, sendError } from "../_lib/http";
 import { sincronizarCalendario } from "../_lib/calendario";
 import { armarMinutaDeLlamada, asegurarTablaTextos as asegurarTablaTextosLlamada } from "../_lib/minuta-llamada";
-import { generarImagen, generarJSON, generarJSONBarato, generarMinutaIA, generarTextos, transcribir, vozNatural } from "../_lib/ia";
+import { type Adjunto, generarImagen, generarJSON, generarJSONBarato, generarMinutaIA, generarTextos, transcribir, vozNatural } from "../_lib/ia";
 import { clienteSoftware, clientesSoftware, esChatSoftware } from "../_lib/software/chat-software";
 import { descargarDrive } from "../_lib/drive-stream";
 import { getAppDriveAccessToken } from "../_lib/drive-connection";
@@ -68,6 +68,7 @@ import {
   aprendizajeCliente,
   aprendizajeEquipo,
   ESQUEMA_PLAN,
+  ESQUEMA_PLAN_CON_CONTEXTO,
   ESQUEMA_RESUMEN,
   ideasDesdeIA,
   notasChatTexto,
@@ -1014,7 +1015,16 @@ async function aprender(pid: string, proj: Record<string, any>, ejemplo: Ejemplo
 async function planMes(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "productor"]);
   await controlarTopeIA(caller, "plan-mes");
-  const b = body<{ proyecto_id?: string; mes?: string; idea_id?: string; pista?: string }>(req);
+  const b = body<{
+    proyecto_id?: string;
+    mes?: string;
+    idea_id?: string;
+    pista?: string;
+    /** Cuántos videos armar (se suman a las ideas que ya hay en el borrador). Sin esto: todos los libres. */
+    cantidad?: number;
+    /** Archivos para darle contexto (imágenes o PDF, en base64). */
+    archivos?: { nombre?: string; mime?: string; data?: string }[];
+  }>(req);
   if (!b.proyecto_id || !MES_RE.test(String(b.mes))) throw new HttpError(400, "Elegí el cliente y el mes");
   await assertProjectAccess(caller, b.proyecto_id);
   const pid = b.proyecto_id;
@@ -1040,7 +1050,36 @@ async function planMes(req: VercelRequest) {
     yaEnElMes: delMes.map((v) => v.titulo),
   };
   const now = new Date().toISOString();
-  const pista = String(b.pista ?? "").trim().slice(0, 300) || null;
+  const pista = String(b.pista ?? "").trim().slice(0, 3000) || null;
+  // Archivos de contexto: imágenes y PDF (hasta 5, ~3 MB en total).
+  const MIMES = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
+  const archivos = (b.archivos ?? []).filter((a) => a?.data && MIMES.includes(String(a.mime))).slice(0, 5);
+  const adjuntos: Adjunto[] = archivos.map((a) => ({ data: Buffer.from(String(a.data), "base64"), mime: a.mime as Adjunto["mime"] }));
+  if (adjuntos.reduce((n, a) => n + a.data.length, 0) > 3_200_000) throw new HttpError(413, "Los archivos pesan mucho: mandá hasta 3 MB en total.");
+  const conContexto = !!pista || adjuntos.length > 0;
+  const pedidoContexto = adjuntos.length
+    ? `
+
+Te adjunto ${adjuntos.length === 1 ? "un archivo" : `${adjuntos.length} archivos`} con contexto (${archivos.map((a) => a.nombre || "archivo").join(", ")}): leelos y usalos para las ideas.`
+    : "";
+  const pedidoRecordar = conContexto
+    ? `
+
+En "recordar" escribí, en 1 a 4 frases, lo que conviene guardar para siempre de este contexto (datos del negocio, productos, públicos, tono, qué evitar). Nada del mes puntual que no sirva después. Si no hay nada nuevo, dejalo vacío.`
+    : "";
+  /** Guarda en la memoria del cliente lo que la IA sacó del contexto que pasó el equipo. */
+  const guardarContexto = async (recordar: unknown) => {
+    const texto = String(recordar ?? "").trim().slice(0, 800);
+    if (!conContexto || !texto) return;
+    const memRef = db.collection("ia_memoria").doc(pid);
+    const previos = (memoria?.contexto_equipo ?? []).slice(-19);
+    await memRef
+      .set(
+        { contexto_equipo: [...previos, { texto, at: now.slice(0, 10), por: caller.uid, archivos: archivos.map((a) => String(a.nombre ?? "archivo").slice(0, 80)) }], actualizado_at: now },
+        { merge: true }
+      )
+      .catch((e) => console.warn("[plan-mes] memoria", pid, e));
+  };
 
   // Rehacer una sola idea.
   if (b.idea_id) {
@@ -1049,8 +1088,14 @@ async function planMes(req: VercelRequest) {
     const vieja = ideas.find((i) => i.id === b.idea_id);
     if (!vieja) throw new HttpError(404, "Esa idea ya no está");
     const otras = ideas.filter((i) => i.id !== vieja.id).map((i) => i.titulo);
-    const r = await generarJSON(promptPlan({ ...ctx, cantidad: 1, evitar: [...otras, vieja.titulo], pista }), ESQUEMA_PLAN, 0.9);
+    const r = await generarJSON<{ recordar?: string }>(
+      promptPlan({ ...ctx, cantidad: 1, evitar: [...otras, vieja.titulo], pista }) + pedidoContexto + pedidoRecordar,
+      conContexto ? ESQUEMA_PLAN_CON_CONTEXTO : ESQUEMA_PLAN,
+      0.9,
+      adjuntos
+    );
     const [nueva] = ideasDesdeIA(r, 1);
+    await guardarContexto(r?.recordar);
     if (!nueva) throw new HttpError(502, "La IA no devolvió una idea. Probá de nuevo.");
     await ref.update({
       ideas: ideas.map((i) => (i.id === vieja.id ? nueva : i)),
@@ -1062,9 +1107,24 @@ async function planMes(req: VercelRequest) {
   }
 
   if (libres <= 0) throw new HttpError(409, `El plan de ${nombreMes(mes)} ya tiene todos sus videos cargados`);
-  const r = await generarJSON(promptPlan({ ...ctx, cantidad: libres, pista }), ESQUEMA_PLAN, 0.85);
-  const ideas = ideasDesdeIA(r, libres);
+  // Solo algunos videos: se suman a las ideas que ya hay en el borrador (no se rehace todo).
+  const yaHay = ((plan?.ideas ?? []) as IdeaPlan[]);
+  const sumar = typeof b.cantidad === "number" && b.cantidad >= 1;
+  const cantidad = sumar ? Math.min(Math.floor(b.cantidad as number), Math.max(libres - yaHay.length, 0)) : libres;
+  if (cantidad <= 0) throw new HttpError(409, "El borrador ya tiene ideas para todos los videos libres. Rehacé alguna o borrala primero.");
+  const r = await generarJSON<{ recordar?: string }>(
+    promptPlan({ ...ctx, cantidad, pista, evitar: sumar ? yaHay.map((i) => i.titulo) : undefined }) + pedidoContexto + pedidoRecordar,
+    conContexto ? ESQUEMA_PLAN_CON_CONTEXTO : ESQUEMA_PLAN,
+    0.85,
+    adjuntos
+  );
+  const ideas = ideasDesdeIA(r, cantidad);
   if (!ideas.length) throw new HttpError(502, "La IA no devolvió ideas. Probá de nuevo.");
+  await guardarContexto(r?.recordar);
+  if (sumar && plan) {
+    await ref.update({ ideas: [...yaHay, ...ideas], ideas_ia: [...(plan.ideas_ia ?? []), ...ideas], updated_at: now });
+    return { ok: true, ideas };
+  }
   // Si rehace todo, las ideas anteriores de la IA cuentan como descartadas.
   const antes = ((plan?.ideas ?? []) as IdeaPlan[]).filter((i) => i.origen === "ia").map((i) => i.titulo);
   await ref.set({
@@ -1491,7 +1551,9 @@ async function memoriaChatQuitar(req: VercelRequest) {
   await adminDb().runTransaction(async (tx) => {
     const m = (await tx.get(ref)).data() ?? {};
     const notas = ((m.chat_notas ?? []) as { texto: string }[]).filter((n) => n.texto !== b.texto);
-    tx.set(ref, { chat_notas: notas }, { merge: true });
+    // También lo que guardó del contexto que pasó el equipo al armar un plan.
+    const contexto = ((m.contexto_equipo ?? []) as { texto: string }[]).filter((n) => n.texto !== b.texto);
+    tx.set(ref, { chat_notas: notas, contexto_equipo: contexto }, { merge: true });
   });
   return { ok: true };
 }

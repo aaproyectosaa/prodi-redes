@@ -241,6 +241,8 @@ export interface MemoriaIA {
   comercial?: ContextoComercial;
   /** Lo que la IA sacó de los chats del cliente (resumen diario o "@prodi acordate que …"). */
   chat_notas?: { texto: string; fuente: "chat"; at: string; chat_id: string; por?: string | null }[];
+  /** Lo que la IA guardó del contexto (texto y archivos) que le pasó el equipo al armar un plan. */
+  contexto_equipo?: { texto: string; at: string; por?: string | null; archivos?: string[] }[];
 }
 
 /** Lo que vende el cliente y cómo le conseguimos consultas (lo usa la IA). Va en ia_memoria/{cliente}. */

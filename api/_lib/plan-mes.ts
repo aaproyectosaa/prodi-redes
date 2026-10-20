@@ -58,6 +58,8 @@ export interface MemoriaIA {
   chat_notas?: NotaChat[];
   /** Hasta qué mensaje se leyó cada chat: { chatId: ISO }. */
   chat_cursor?: Record<string, string>;
+  /** Contexto que el equipo le pasó al armar el plan (texto y archivos), resumido por la IA (máx. 20). */
+  contexto_equipo?: { texto: string; at: string; por?: string | null; archivos?: string[] }[];
 }
 
 /** Datos del chat para el prompt (los más nuevos). */
@@ -217,6 +219,8 @@ export function memoriaTexto(m: MemoriaIA | null | undefined): string {
   const partes: string[] = [];
   if (m.resumen) partes.push(`Lo que ya aprendiste de este cliente:\n${m.resumen}`);
   if (m.notas_equipo) partes.push(`Indicaciones del equipo de Prodi (respetalas siempre):\n${m.notas_equipo}`);
+  const ctxEq = (m.contexto_equipo ?? []).slice(-10);
+  if (ctxEq.length) partes.push(`Contexto que te pasó el equipo (tenelo en cuenta):\n${ctxEq.map((x) => `- ${x.at}: ${x.texto}`).join("\n")}`);
   const chat = notasChatTexto(m.chat_notas);
   if (chat) partes.push(chat);
   const ej = (m.ejemplos ?? []).slice(-6);
@@ -298,6 +302,13 @@ export const ESQUEMA_PLAN = {
     },
   },
   required: ["ideas"],
+};
+
+/** Igual que ESQUEMA_PLAN, más "recordar": lo que conviene guardar del contexto que pasó el equipo. */
+export const ESQUEMA_PLAN_CON_CONTEXTO = {
+  ...ESQUEMA_PLAN,
+  properties: { ...ESQUEMA_PLAN.properties, recordar: { type: "STRING" } },
+  required: ["ideas", "recordar"],
 };
 
 /** Normaliza lo que devuelve la IA. */

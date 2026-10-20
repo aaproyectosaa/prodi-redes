@@ -11,8 +11,10 @@ import {
   Clapperboard,
   Lightbulb,
   Loader2,
+  FileText,
   Megaphone,
   MessageCircle,
+  Paperclip,
   MessageSquareWarning,
   Plus,
   RefreshCw,
@@ -34,8 +36,10 @@ import { useRedes } from "@/contexts/redes-data-context";
 import { hace, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import { usoPlan } from "@/lib/redes/planes";
 import {
+  aBase64,
   ajustarIdea,
   armarPlan,
+  type ArchivoContexto,
   cambiosPendientes,
   enviarPlan,
   ESTADO_PLAN,
@@ -217,11 +221,30 @@ export function PlanMesDialog({
 function SinPlan({ proyectoId, nombre, mes, libres, onCampania }: { proyectoId: string; nombre: string; mes: string; libres: number; onCampania: () => void }) {
   const [busy, setBusy] = useState(false);
   const [pista, setPista] = useState("");
+  // Cuántos videos armar ahora (por defecto, todos los libres).
+  const [cantidad, setCantidad] = useState(libres);
+  useEffect(() => setCantidad(libres), [libres, proyectoId, mes]);
+  const [archivos, setArchivos] = useState<File[]>([]);
+  const inputArchivos = useRef<HTMLInputElement>(null);
+  const sumarArchivos = (lista: FileList | null) => {
+    const nuevos = Array.from(lista ?? []).filter((f) => /^image\/(jpeg|png|gif|webp)$|^application\/pdf$/.test(f.type));
+    if ((lista?.length ?? 0) > nuevos.length) toast.error("Solo imágenes (JPG, PNG, WEBP) o PDF");
+    const todos = [...archivos, ...nuevos].slice(0, 5);
+    if (todos.reduce((n, f) => n + f.size, 0) > 3_000_000) return toast.error("Los archivos pesan mucho: hasta 3 MB en total");
+    setArchivos(todos);
+  };
   const armar = async () => {
     setBusy(true);
     try {
-      const r = await armarPlan(proyectoId, mes, pista.trim() || null);
-      toast.success(`La IA armó ${r.ideas.length} idea${r.ideas.length === 1 ? "" : "s"}. Revisalas antes de mandarlas.`);
+      const adjuntos: ArchivoContexto[] = await Promise.all(archivos.map(async (f) => ({ nombre: f.name, mime: f.type, data: await aBase64(f) })));
+      const r = await armarPlan(proyectoId, mes, pista.trim() || null, {
+        ...(cantidad < libres ? { cantidad } : {}),
+        ...(adjuntos.length ? { archivos: adjuntos } : {}),
+      });
+      setArchivos([]);
+      toast.success(
+        `La IA armó ${r.ideas.length} idea${r.ideas.length === 1 ? "" : "s"}. Revisalas antes de mandarlas.${pista.trim() || adjuntos.length ? " El contexto quedó en su memoria." : ""}`
+      );
     } catch (e) {
       err(e);
     } finally {
@@ -253,22 +276,72 @@ function SinPlan({ proyectoId, nombre, mes, libres, onCampania }: { proyectoId: 
           </p>
         </div>
       </div>
-      <div className="relative mt-4 flex flex-col gap-2 sm:flex-row">
-        <Input
+      {/* Cuántos videos armar ahora */}
+      {libres > 1 && (
+        <div className="relative mt-4 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-muted-foreground">¿Cuántos videos?</span>
+          <div className="flex flex-wrap gap-1 rounded-2xl bg-muted/50 p-1">
+            {Array.from({ length: libres }, (_, n) => n + 1).map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setCantidad(n)}
+                className={cn(
+                  "min-w-9 rounded-xl px-3 py-1.5 text-xs font-bold tabular-nums transition-all",
+                  cantidad === n ? "bg-primary text-primary-foreground shadow-md shadow-primary/25" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {n === libres ? `Los ${n}` : n}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="relative mt-3 space-y-2">
+        <Textarea
           value={pista}
           onChange={(e) => setPista(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && !busy && void armar()}
-          placeholder="¿Algo para tener en cuenta este mes? (opcional) Ej.: lanzan menú nuevo"
-          className="h-11 flex-1 rounded-full px-4"
-          maxLength={300}
+          placeholder={cantidad === 1 ? "Contale de qué tiene que ser el video: el contexto, qué quieren lograr, qué no puede faltar…" : "¿Algo para tener en cuenta este mes? (opcional) Ej.: lanzan menú nuevo"}
+          className="min-h-[88px] rounded-2xl bg-background/60 px-4 py-3 text-sm"
+          maxLength={3000}
         />
+        {archivos.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {archivos.map((f, n) => (
+              <span key={`${f.name}-${n}`} className="inline-flex max-w-[14rem] items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-xs">
+                <FileText className="h-3.5 w-3.5 shrink-0 text-primary" />
+                <span className="truncate">{f.name}</span>
+                <button type="button" onClick={() => setArchivos(archivos.filter((_, i) => i !== n))} className="text-muted-foreground hover:text-foreground" aria-label="Quitar">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="relative mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <input
+          ref={inputArchivos}
+          type="file"
+          multiple
+          accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+          className="hidden"
+          onChange={(e) => {
+            sumarArchivos(e.target.files);
+            e.target.value = "";
+          }}
+        />
+        <Button type="button" variant="outline" onClick={() => inputArchivos.current?.click()} disabled={busy || archivos.length >= 5} className="h-11 rounded-full px-4">
+          <Paperclip className="mr-2 h-4 w-4" /> Adjuntar archivos
+        </Button>
+        <p className="flex-1 text-[11px] leading-snug text-muted-foreground">Imágenes o PDF. Lo que le pases queda guardado en lo que aprendió de {nombre}.</p>
         <Button
           onClick={() => void armar()}
           disabled={busy}
           className="h-11 shrink-0 rounded-full bg-gradient-to-r from-primary to-fuchsia-500 px-5 font-semibold shadow-lg shadow-primary/25 transition-all hover:-translate-y-0.5"
         >
           {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-          {busy ? "Pensando ideas…" : "Armar con IA"}
+          {busy ? "Pensando ideas…" : cantidad === 1 ? "Armar 1 video" : cantidad < libres ? `Armar ${cantidad} videos` : "Armar con IA"}
         </Button>
       </div>
     </div>
@@ -770,6 +843,36 @@ function PanelMemoria({ proyectoId, nombre }: { proyectoId: string; nombre: stri
           <p className="text-xs text-muted-foreground">
             Aprende cada vez que revisás un plan (qué dejás, qué cambiás, qué sacás) y cada vez que el cliente responde.
           </p>
+        )}
+        {!!m?.contexto_equipo?.length && (
+          <div className="space-y-1.5">
+            <p className="flex items-center gap-1.5 text-xs font-medium">
+              <Paperclip className="h-3.5 w-3.5 text-primary" /> Lo que le pasó el equipo
+            </p>
+            <ul className="space-y-1">
+              {[...m.contexto_equipo].reverse().map((n) => (
+                <li key={`${n.at}_${n.texto}`} className="flex items-start gap-2 text-sm">
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/40" />
+                  <span className="flex-1">
+                    {n.texto}{" "}
+                    <span className="text-[11px] text-muted-foreground">
+                      · {n.at.split("-").reverse().slice(0, 2).join("/")}
+                      {n.archivos?.length ? ` · ${n.archivos.join(", ")}` : ""}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void quitarNotaChat(proyectoId, n.texto).catch(err)}
+                    className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive"
+                    aria-label="Quitar este dato"
+                    title="Quitar (si quedó mal o ya no vale)"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         {!!m?.chat_notas?.length && (
           <div className="space-y-1.5">

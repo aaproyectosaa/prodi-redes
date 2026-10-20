@@ -98,8 +98,25 @@ export function useMemoriaIA(proyectoId: string | null | undefined): MemoriaIA |
   return m;
 }
 
-export const armarPlan = (proyectoId: string, mes: string, pista?: string | null) =>
-  callApi<{ ok: true; ideas: IdeaPlan[] }>("/api/ia/plan-mes", { proyecto_id: proyectoId, mes, pista: pista ?? null });
+/** Un archivo para darle contexto a la IA (imagen o PDF, en base64). */
+export interface ArchivoContexto {
+  nombre: string;
+  mime: string;
+  data: string;
+}
+
+/** Arma el plan. Con `cantidad`, solo esos videos (se suman al borrador); con archivos, la IA los lee y guarda lo importante. */
+export const armarPlan = (proyectoId: string, mes: string, pista?: string | null, extra?: { cantidad?: number; archivos?: ArchivoContexto[] }) =>
+  callApi<{ ok: true; ideas: IdeaPlan[] }>("/api/ia/plan-mes", { proyecto_id: proyectoId, mes, pista: pista ?? null, ...(extra ?? {}) });
+
+/** Lee un archivo como base64 (sin el "data:…,"). */
+export const aBase64 = (f: File) =>
+  new Promise<string>((ok, mal) => {
+    const r = new FileReader();
+    r.onload = () => ok(String(r.result).split(",")[1] ?? "");
+    r.onerror = () => mal(r.error);
+    r.readAsDataURL(f);
+  });
 
 export const rehacerIdea = (proyectoId: string, mes: string, ideaId: string, pista?: string | null) =>
   callApi<{ ok: true; idea: IdeaPlan }>("/api/ia/plan-mes", { proyecto_id: proyectoId, mes, idea_id: ideaId, pista: pista ?? null });

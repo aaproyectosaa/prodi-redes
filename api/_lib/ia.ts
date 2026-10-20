@@ -16,6 +16,8 @@ export type { MinutaIA } from "./gemini";
 type Esfuerzo = "low" | "medium" | "high";
 /** Imagen para que Claude la vea (JPEG, PNG, GIF o WebP). */
 export type Imagen = { data: Buffer; mime: "image/jpeg" | "image/png" | "image/gif" | "image/webp" };
+/** Una imagen o un PDF para que la IA lo lea (los PDF solo con Claude). */
+export type Adjunto = { data: Buffer; mime: Imagen["mime"] | "application/pdf" };
 type Ratio = "1:1" | "4:5" | "9:16" | "16:9" | "2:3" | "3:4" | "21:9";
 
 const MODELO = () => process.env.ANTHROPIC_MODEL || "claude-opus-5-5";
@@ -61,7 +63,7 @@ function errorClaude(err: unknown): Error {
 }
 
 /** Una respuesta JSON de Claude con el esquema pedido. */
-async function jsonClaude<T>(prompt: string, schema: unknown, esfuerzo: Esfuerzo, imagenes: Imagen[] = []): Promise<T> {
+async function jsonClaude<T>(prompt: string, schema: unknown, esfuerzo: Esfuerzo, imagenes: Adjunto[] = []): Promise<T> {
   let r: Anthropic.Beta.BetaMessage;
   try {
     r = await claude().beta.messages.create({
@@ -76,7 +78,11 @@ async function jsonClaude<T>(prompt: string, schema: unknown, esfuerzo: Esfuerzo
           role: "user",
           content: imagenes.length
             ? [
-                ...imagenes.map((i) => ({ type: "image" as const, source: { type: "base64" as const, media_type: i.mime, data: i.data.toString("base64") } })),
+                ...imagenes.map((i) =>
+                  i.mime === "application/pdf"
+                    ? { type: "document" as const, source: { type: "base64" as const, media_type: "application/pdf" as const, data: i.data.toString("base64") } }
+                    : { type: "image" as const, source: { type: "base64" as const, media_type: i.mime, data: i.data.toString("base64") } }
+                ),
                 { type: "text" as const, text: prompt },
               ]
             : prompt,
@@ -104,7 +110,7 @@ function sinTexto(): never {
  * Respuesta estructurada. `temperature` viene de cuando era Gemini: Claude no la usa, pero sirve de pista
  * del tipo de pedido. Lo preciso y rápido (@prodi, memoria: ≤ 0,3) va con poco esfuerzo; lo creativo, medio.
  */
-export async function generarJSON<T>(prompt: string, schema: unknown, temperature = 0.6, imagenes: Imagen[] = [], esfuerzo?: Esfuerzo): Promise<T> {
+export async function generarJSON<T>(prompt: string, schema: unknown, temperature = 0.6, imagenes: Adjunto[] = [], esfuerzo?: Esfuerzo): Promise<T> {
   if (hayClaude()) return jsonClaude<T>(prompt, schema, esfuerzo ?? (temperature <= 0.3 ? "low" : "medium"), imagenes);
   if (hayGemini()) return gemini.generarJSON<T>(prompt, schema, temperature);
   sinTexto();
