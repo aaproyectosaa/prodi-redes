@@ -14,7 +14,7 @@ import { useInAppNotifications } from "@/hooks/use-in-app-notifications";
 import { cn } from "@/lib/utils";
 import { usePendientes } from "@/hooks/use-pendientes";
 import type { Profile, UserRole } from "@/integrations/firebase/types";
-import { TituloSeccion, useSeccionesPlegables } from "@/components/SeccionNav";
+import { estiloSeccion, TituloSeccion, useSeccionesPlegables } from "@/components/SeccionNav";
 import { useRedes } from "@/contexts/redes-data-context";
 import { AnilloPerfilMenu } from "@/components/redes/cliente/PerfilCompleto";
 import { PieSidebar } from "@/components/PieSidebar";
@@ -86,11 +86,11 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
         onClick={() => navigate(item.path)}
         title={collapsed ? item.label : undefined}
         className={cn(
-          "relative flex h-9 w-full items-center gap-2.5 rounded-lg text-sm transition-colors",
-          collapsed ? "justify-center px-0" : "px-3",
+          "relative flex h-9 w-full items-center gap-2.5 rounded-xl text-sm transition-all",
+          collapsed ? "justify-center px-0" : "px-2.5",
           active
-            ? "bg-primary text-primary-foreground shadow-[0_6px_18px_-8px_hsl(var(--primary)/0.8)]"
-            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            ? "bg-gradient-to-r from-primary to-fuchsia-500 font-medium text-white shadow-[0_8px_20px_-10px_hsl(var(--primary)/0.9)]"
+            : "text-muted-foreground hover:bg-accent hover:text-foreground"
         )}
       >
         <span className="relative shrink-0">
@@ -139,11 +139,21 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
         )}
       </div>
 
-      <div className="custom-scrollbar flex-1 overflow-y-auto">
+      <div className="custom-scrollbar flex-1 overflow-y-auto pb-2">
         {sections.map((section, idx) => {
           const abierta = collapsed || plegables.abierta(section);
+          const estilo = estiloSeccion(section.title);
           return (
-            <div key={idx} className={cn("space-y-0.5 px-2", section.title ? "py-0.5" : "p-2")}>
+            <div
+              key={idx}
+              className={cn(
+                "space-y-0.5 px-2",
+                section.title ? "py-1" : "p-2",
+                // Separación clara entre el menú principal y cada grupo.
+                section.title && !collapsed && "mx-2 mt-1 rounded-2xl px-0",
+                section.title && !collapsed && abierta && "bg-accent/30 pb-2"
+              )}
+            >
               {!collapsed && section.title && (
                 <TituloSeccion
                   titulo={section.title}
@@ -155,7 +165,13 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
               )}
               {collapsed && idx > 0 && <div className="mx-2 my-1 border-t border-border" />}
               {abierta && (
-                <div className={cn("space-y-0.5", section.title && !collapsed && "pb-1 animate-in fade-in slide-in-from-top-1 duration-150 motion-reduce:animate-none")}>
+                <div
+                  className={cn(
+                    "space-y-0.5",
+                    // Los ítems de un grupo cuelgan de una línea de su color.
+                    section.title && !collapsed && cn("ml-5 mr-1 border-l-2 pl-2 animate-in fade-in slide-in-from-top-1 duration-150 motion-reduce:animate-none", estilo.linea)
+                  )}
+                >
                   {section.items.map((item) =>
                     itemBtn(item, isNavItemActive(item, location.pathname, location.search), pendientes[item.path])
                   )}

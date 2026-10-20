@@ -26,7 +26,7 @@ import { useRedes } from "@/contexts/redes-data-context";
 import { ROLES_DOCK } from "@/lib/redes/chatDock";
 import { AnilloPerfilMenu } from "@/components/redes/cliente/PerfilCompleto";
 import type { Profile, UserRole } from "@/integrations/firebase/types";
-import { TituloSeccion, useSeccionesPlegables } from "@/components/SeccionNav";
+import { estiloSeccion, TituloSeccion, useSeccionesPlegables } from "@/components/SeccionNav";
 import { esCampoDeTexto } from "@/hooks/use-alto-visible";
 
 interface Props {
@@ -115,7 +115,7 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
           </SheetHeader>
           <nav className="flex-1 space-y-3 overflow-y-auto p-3">
             {sections.map((s, i) => (
-              <div key={i} className="space-y-0.5">
+              <div key={i} className={cn("space-y-0.5", s.title && plegables.abierta(s) && "rounded-2xl bg-accent/30 pb-2")}>
                 {s.title && (
                   <TituloSeccion
                     titulo={s.title}
@@ -126,7 +126,9 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
                     className="py-2"
                   />
                 )}
-                {plegables.abierta(s) && s.items.map((item) => {
+                {plegables.abierta(s) && (
+                <div className={cn("space-y-0.5", s.title && cn("ml-5 mr-1 border-l-2 pl-2", estiloSeccion(s.title).linea))}>
+                {s.items.map((item) => {
                   const Icon = item.icon;
                   const active = isNavItemActive(item, location.pathname, location.search);
                   return (
@@ -135,8 +137,8 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
                       type="button"
                       onClick={() => go(item.path)}
                       className={cn(
-                        "flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm",
-                        active ? "bg-primary text-primary-foreground" : "hover:bg-accent"
+                        "flex h-10 w-full items-center gap-3 rounded-xl px-3 text-sm",
+                        active ? "bg-gradient-to-r from-primary to-fuchsia-500 font-medium text-white" : "hover:bg-accent"
                       )}
                     >
                       <Icon className="h-4 w-4" />
@@ -149,6 +151,8 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
                     </button>
                   );
                 })}
+                </div>
+                )}
               </div>
             ))}
           </nav>
