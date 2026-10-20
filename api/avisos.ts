@@ -1,6 +1,7 @@
 // POST /api/avisos — aviso in-app + push + correo a uno o más usuarios.
 // Lo llama la app cuando un video cambia de etapa. El cliente solo puede mandar los de chat y reuniones.
 
+import { PRODI_ID, PRODI_NOMBRE, publicarEnChat } from "./_lib/chat-server";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { adminDb } from "./_lib/db";
 import { appUrl, body, HttpError, requireCaller, sendError, trabajaEn, type Caller } from "./_lib/http";
@@ -114,6 +115,35 @@ interface Body {
   videoId?: string | null;
 }
 
+/** Mensaje de Prodi en el chat del cliente con la tarjeta del video o la pieza para aprobar (una vez por versión). */
+async function paraAprobarEnChat(clave: string, pid: string) {
+  const db = adminDb();
+  const chatId = `cliente_${pid}`;
+  if (!(await db.collection("chats").doc(chatId).get()).exists) return;
+  const esVideo = clave.startsWith("revision_cliente:");
+  const id = clave.slice(clave.indexOf(":") + 1);
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(id)) return;
+  const d = (await db.collection(esVideo ? "videos" : "piezas_ia").doc(id).get()).data();
+  if (!d || d.proyecto_id !== pid) return;
+  if (esVideo ? d.etapa !== "revision_cliente" : d.estado !== "para_aprobar") return;
+  const titulo = String(d.titulo ?? d.producto ?? d.pedido ?? (esVideo ? "Tu video" : "Tu pieza")).slice(0, 120);
+  const version = esVideo ? `r${Number(d.rondas ?? 0)}` : String(d.version_enviada_id ?? "v");
+  await publicarEnChat(
+    chatId,
+    {
+      texto: esVideo
+        ? `🎬 Tu video «${titulo}» está listo para que lo veas. Aprobalo o pedí cambios acá abajo.`
+        : `🎨 Tu pieza «${titulo}» está lista para que la veas. Aprobala o pedí cambios acá abajo.`,
+      by: PRODI_ID,
+      by_nombre: PRODI_NOMBRE,
+      at: new Date().toISOString(),
+      tipo: "bot",
+      referencia: { tipo: esVideo ? "video" : "pieza", id, titulo, detalle: "Para aprobar" },
+    },
+    `aprobar_${esVideo ? "video" : "pieza"}_${id}_${version}`.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 150)
+  );
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
@@ -178,6 +208,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       { destinatarios: permitidos, titulo, cuerpo, link: destino, clave, proyectoId: b.proyectoId ?? null, videoId: b.videoId ?? null },
       appUrl(req)
     );
+    // Video o pieza para aprobar: también queda en el chat del cliente, con botones para aprobar o pedir cambios ahí mismo.
+    if (caller.role !== "cliente" && b.proyectoId && (clave.startsWith("revision_cliente:") || clave.startsWith("pieza_aprobar:"))) {
+      await paraAprobarEnChat(clave, String(b.proyectoId)).catch((err) => console.warn("[avisos] chat para aprobar", err));
+    }
     res.status(200).json({ ok: true });
   } catch (err) {
     sendError(res, err);
