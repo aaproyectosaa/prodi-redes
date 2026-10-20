@@ -222,13 +222,36 @@ async function puedenSumarse(c: Contexto, ids: string[]): Promise<boolean> {
   return clientes.every((id) => permitidos.has(id));
 }
 
-/** chat_prefs/{uid}: archivados, fijados, etiquetas y a qué chat va cada una (de cada persona, nadie más lo ve). */
+/** chat_prefs/{uid}: archivados, fijados, etiquetas y a qué chat va cada una, y los mensajes guardados (de cada persona, nadie más lo ve). */
 const MAX_FIJADOS = 5;
 const MAX_ETIQUETAS = 30;
 function prefsValidas(d: Data): boolean {
   const corto = (x: unknown, max = 200) => typeof x === "string" && x.length > 0 && x.length <= max;
   const ids = (v: unknown, max: number) => Array.isArray(v) && v.length <= max && v.every((x) => corto(x));
-  if (!Object.keys(d).every((k) => ["archivados", "fijados", "etiquetas", "asignaciones", "updated_at"].includes(k))) return false;
+  if (!Object.keys(d).every((k) => ["archivados", "fijados", "etiquetas", "asignaciones", "guardados", "updated_at"].includes(k))) return false;
+  // Mensajes guardados con ⭐ (hasta 200): de qué chat y mensaje, el texto y quién lo mandó.
+  if (
+    d.guardados !== undefined &&
+    !(
+      Array.isArray(d.guardados) &&
+      d.guardados.length <= 200 &&
+      d.guardados.every(
+        (g: unknown) =>
+          !!g &&
+          typeof g === "object" &&
+          Object.keys(g).every((k) => ["chat_id", "msg_id", "texto", "by_nombre", "at", "guardado_at"].includes(k)) &&
+          corto((g as Data).chat_id) &&
+          corto((g as Data).msg_id) &&
+          typeof (g as Data).texto === "string" &&
+          (g as Data).texto.length <= 500 &&
+          typeof (g as Data).by_nombre === "string" &&
+          (g as Data).by_nombre.length <= 120 &&
+          corto((g as Data).at, 40) &&
+          corto((g as Data).guardado_at, 40)
+      )
+    )
+  )
+    return false;
   if (d.archivados !== undefined && !ids(d.archivados, 2000)) return false;
   if (d.fijados !== undefined && !ids(d.fijados, MAX_FIJADOS)) return false;
   if (

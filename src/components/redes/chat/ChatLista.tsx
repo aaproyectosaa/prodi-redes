@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, type ReactNode, type Ref } from "react";
-import { Archive, ArchiveRestore, ArrowLeft, Headphones, ListTodo, MoreHorizontal, Pin, PinOff, Search, SquarePen, Tag, Trash2, UsersRound, X } from "lucide-react";
+import {
+  Star, Archive, ArchiveRestore, ArrowLeft, Headphones, ListTodo, MoreHorizontal, Pin, PinOff, Search, SquarePen, Tag, Trash2, UsersRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,7 @@ import {
   asignarEtiqueta,
   borrarEtiqueta,
   COLORES_ETIQUETA,
+  alternarGuardado,
   crearEtiqueta,
   fijar,
   MAX_FIJADOS,
@@ -173,6 +175,7 @@ export function ChatLista({
   const proyectosSw = useProyectosSoftware(role !== "cliente" && role !== "contacto");
   const esDeSoftware = (c: ChatT) => c.tipo === "software" || (c.tipo === "cliente" && !!c.proyecto_id && proyectosSw.has(c.proyecto_id));
   const prefs = useChatPrefs(uid);
+  const [verGuardados, setVerGuardados] = useState(false);
   const [q, setQ] = useState("");
   const [filtro, setFiltro] = useState<Filtro>("todos");
   const [verArchivados, setVerArchivados] = useState(false);
@@ -313,6 +316,15 @@ export function ChatLista({
                 <Search className="h-5 w-5" />
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => setVerGuardados(true)}
+              className="relative flex h-10 w-10 items-center justify-center rounded-full text-foreground/80 transition-colors hover:bg-muted active:scale-95"
+              aria-label="Mensajes guardados"
+              title="Mensajes guardados"
+            >
+              <Star className={cn("h-5 w-5", prefs.guardados.length > 0 && "fill-amber-400 text-amber-400")} />
+            </button>
             <button
               type="button"
               onClick={onTareas}
@@ -642,6 +654,59 @@ export function ChatLista({
           onClose={() => setEtiquetasDe(null)}
         />
       )}
+      <Dialog open={verGuardados} onOpenChange={setVerGuardados}>
+        <DialogContent className="max-h-[85dvh] w-[calc(100vw-1.5rem)] max-w-lg overflow-hidden rounded-2xl p-0">
+          <DialogHeader className="border-b px-5 pb-3 pt-5 text-left">
+            <DialogTitle className="flex items-center gap-2">
+              <Star className="h-5 w-5 fill-amber-400 text-amber-400" /> Mensajes guardados
+            </DialogTitle>
+            <DialogDescription>Lo importante de todos tus chats, en un solo lugar.</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[65dvh] space-y-2 overflow-y-auto p-4">
+            {prefs.guardados.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                Todavía no guardaste nada. En cualquier mensaje, abrí su menú (mantenelo apretado o tocá la hora) y tocá <b>Guardar</b>.
+              </p>
+            ) : (
+              prefs.guardados.map((g) => {
+                const chatG = chats.find((c) => c.id === g.chat_id);
+                return (
+                  <div key={`${g.chat_id}_${g.msg_id}`} className="group/g relative rounded-xl border bg-card transition-colors hover:border-primary/40">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVerGuardados(false);
+                        onAbrir(g.chat_id);
+                      }}
+                      className="block w-full p-3 pr-10 text-left"
+                    >
+                      <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <span className="truncate font-semibold text-foreground">{chatG ? titulo(chatG) : "Chat"}</span>
+                        <span>·</span>
+                        <span className="shrink-0">{g.by_nombre}</span>
+                        <span>·</span>
+                        <span className="shrink-0">{new Date(g.at).toLocaleDateString("es-AR", { day: "numeric", month: "short" })}</span>
+                      </p>
+                      <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm">{g.texto}</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        guardar(alternarGuardado(uid, { chat_id: g.chat_id, msg_id: g.msg_id, texto: g.texto, by_nombre: g.by_nombre, at: g.at }), "Sacado de guardados")
+                      }
+                      className="absolute right-2 top-2 rounded-full p-1.5 text-amber-400 transition-colors hover:bg-muted hover:text-muted-foreground"
+                      aria-label="Sacar de guardados"
+                      title="Sacar de guardados"
+                    >
+                      <Star className="h-4 w-4 fill-current" />
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

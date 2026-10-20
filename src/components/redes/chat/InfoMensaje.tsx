@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { CheckCheck, ChevronDown, Clock, Copy, CornerUpRight, ListTodo, Loader2, Pencil, Pin, Reply } from "lucide-react";
+import { CheckCheck, ChevronDown, Clock, Copy, CornerUpRight, ListTodo, Loader2, Pencil, Pin, Reply, Star } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -85,6 +85,8 @@ export function InfoMensaje({
   onFijar,
   onReenviar,
   fijado,
+  onGuardar,
+  guardado,
   onReaccionar,
 }: {
   chat: ChatT;
@@ -99,6 +101,9 @@ export function InfoMensaje({
   onFijar?: () => void;
   onReenviar?: () => void;
   fijado?: boolean;
+  /** Guardar con ⭐ (o sacarlo de guardados). */
+  onGuardar?: () => void;
+  guardado?: boolean;
   onReaccionar?: (emoji: string) => void;
 }) {
   const [verFaltan, setVerFaltan] = useState(false);
@@ -126,6 +131,9 @@ export function InfoMensaje({
     ...(onTarea ? [{ icono: <ListTodo className="h-5 w-5" />, label: "Tarea", onClick: onTarea }] : []),
     ...(onReenviar ? [{ icono: <CornerUpRight className="h-5 w-5" />, label: "Reenviar", onClick: onReenviar }] : []),
     ...(onFijar ? [{ icono: <Pin className="h-5 w-5" />, label: fijado ? "Desfijar" : "Fijar", onClick: onFijar }] : []),
+    ...(onGuardar
+      ? [{ icono: <Star className={guardado ? "h-5 w-5 fill-amber-400 text-amber-400" : "h-5 w-5"} />, label: guardado ? "Quitar ⭐" : "Guardar", onClick: onGuardar }]
+      : []),
     ...(onEditar ? [{ icono: <Pencil className="h-5 w-5" />, label: "Editar", onClick: onEditar }] : []),
   ];
   const fila = (id: string, extra: ReactNode) => (

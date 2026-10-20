@@ -5,23 +5,35 @@ import { enModoVista } from "./vistaComo";
 
 /**
  * Preferencias de la lista de chats de cada persona (chat_prefs/{uid}, solo la ve y la cambia esa persona):
- * archivados, fijados (en orden, máx. 5) y etiquetas con color asignadas a cada chat.
+ * archivados, fijados (en orden, máx. 5), etiquetas con color asignadas a cada chat y mensajes guardados (⭐).
  */
 export interface Etiqueta {
   id: string;
   nombre: string;
   color: string;
 }
+/** Un mensaje guardado con ⭐ (lo importante: una dirección, un dato del cliente, un OK). */
+export interface MensajeGuardado {
+  chat_id: string;
+  msg_id: string;
+  texto: string;
+  by_nombre: string;
+  /** Cuándo se mandó el mensaje. */
+  at: string;
+  guardado_at: string;
+}
 export interface ChatPrefs {
   archivados: string[];
   fijados: string[];
   etiquetas: Etiqueta[];
   asignaciones: Record<string, string[]>;
+  guardados: MensajeGuardado[];
 }
 
 export const MAX_FIJADOS = 5;
 export const COLORES_ETIQUETA = ["#6F40FC", "#E040A0", "#EF4444", "#F59E0B", "#10B981", "#0EA5E9", "#64748B"];
-const VACIAS: ChatPrefs = { archivados: [], fijados: [], etiquetas: [], asignaciones: {} };
+const VACIAS: ChatPrefs = { archivados: [], fijados: [], etiquetas: [], asignaciones: {}, guardados: [] };
+export const MAX_GUARDADOS = 200;
 
 // Un solo estado compartido (la lista de /chat y la del chat flotante ven lo mismo, al instante).
 let actual: ChatPrefs = VACIAS;
@@ -36,6 +48,7 @@ function normalizar(d: Partial<ChatPrefs> | undefined): ChatPrefs {
     fijados: Array.isArray(d?.fijados) ? d!.fijados : [],
     etiquetas: Array.isArray(d?.etiquetas) ? d!.etiquetas : [],
     asignaciones: d?.asignaciones && typeof d.asignaciones === "object" ? d.asignaciones : {},
+    guardados: Array.isArray(d?.guardados) ? d!.guardados : [],
   };
 }
 
@@ -77,6 +90,22 @@ async function guardar(uid: string, cambiar: (p: ChatPrefs) => ChatPrefs) {
 }
 
 const sin = (xs: string[], x: string) => xs.filter((y) => y !== x);
+
+/** Guarda o saca un mensaje de los guardados (⭐). Devuelve si quedó guardado. */
+export async function alternarGuardado(uid: string, g: Omit<MensajeGuardado, "guardado_at">): Promise<boolean> {
+  let quedo = false;
+  await guardar(uid, (p) => {
+    const ya = p.guardados.some((x) => x.chat_id === g.chat_id && x.msg_id === g.msg_id);
+    quedo = !ya;
+    return {
+      ...p,
+      guardados: ya
+        ? p.guardados.filter((x) => !(x.chat_id === g.chat_id && x.msg_id === g.msg_id))
+        : [{ ...g, texto: g.texto.slice(0, 500), guardado_at: new Date().toISOString() }, ...p.guardados].slice(0, MAX_GUARDADOS),
+    };
+  });
+  return quedo;
+}
 
 export const fijar = (uid: string, chatId: string, si: boolean) =>
   guardar(uid, (p) => {

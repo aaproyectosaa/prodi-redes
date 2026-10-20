@@ -1,10 +1,12 @@
 import { DibujarImagen } from "./DibujarImagen";
+import { alternarGuardado, useChatPrefs } from "@/lib/redes/chatPrefs";
 import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { collection, limit, onSnapshot, orderBy, query } from "@/lib/db";
 import {
   Plus,
-  Pencil, ArrowLeft, BarChart3, CalendarClock, Camera, Check, CheckCheck, CornerUpRight, FileText, Headphones, Image as ImageIcon, Images, Info, Loader2, Moon, Paperclip, Reply, Search, Send, Sparkles, Upload, Video, X } from "lucide-react";
+  Pencil,
+  Star, ArrowLeft, BarChart3, CalendarClock, Camera, Check, CheckCheck, CornerUpRight, FileText, Headphones, Image as ImageIcon, Images, Info, Loader2, Moon, Paperclip, Reply, Search, Send, Sparkles, Upload, Video, X } from "lucide-react";
 import { esHorarioDescanso, leerDescanso, ROLES_CON_DESCANSO } from "../../../../api/_lib/descanso";
 import { toast } from "sonner";
 import { db } from "@/integrations/firebase/client";
@@ -307,6 +309,9 @@ export function ChatConversacion({
   onSinLeer?: (n: number) => void;
 }) {
   const { clienteById, chats, settings } = useRedes();
+  // Mensajes de este chat que guardé con ⭐.
+  const prefsChat = useChatPrefs(uid);
+  const guardadosAca = useMemo(() => new Set(prefsChat.guardados.filter((g) => g.chat_id === chat.id).map((g) => g.msg_id)), [prefsChat.guardados, chat.id]);
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
   const [cargando, setCargando] = useState(true);
   // Hasta dónde había leído al abrir este chat (se toma una vez, antes de marcarlo leído): ahí va "N mensajes sin leer".
@@ -1155,6 +1160,7 @@ export function ChatConversacion({
                               {textoRico(m.texto, mio, (t) => conMenciones(t, mio))}
                               {!m.previa && (
                                 <span className="invisible ml-2 inline-flex select-none gap-1 text-[10px] leading-none" aria-hidden>
+                                  {guardadosAca.has(m.id) && <span className="w-2.5" />}
                                   {m.editado_at && <span>editado ·</span>}
                                   {hora(m.at)}
                                   {mio && <span className="w-4" />}
@@ -1175,6 +1181,7 @@ export function ChatConversacion({
                         )}
                         aria-label="Info del mensaje"
                       >
+                        {guardadosAca.has(m.id) && <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" aria-label="Guardado" />}
                         {m.editado_at && <span className="italic">editado ·</span>}
                         {hora(m.at)}
                         {mio && <Visto chat={chat} m={m} uid={uid} />}
@@ -1724,6 +1731,24 @@ export function ChatConversacion({
             : undefined
         }
         fijado={!!infoMsg && (chat.fijados ?? []).some((f) => f.id === infoMsg.id)}
+        guardado={!!infoMsg && guardadosAca.has(infoMsg.id)}
+        onGuardar={
+          infoMsg && infoMsg.tipo !== "sistema"
+            ? () => {
+                const m = infoMsg;
+                setInfoMsg(null);
+                void alternarGuardado(uid, {
+                  chat_id: chat.id,
+                  msg_id: m.id,
+                  texto: m.texto || m.leyenda || m.archivo?.name || (m.audio ? "🎤 Audio" : "Mensaje"),
+                  by_nombre: m.by === uid ? "Vos" : nombreDe(m.by, m.by_nombre),
+                  at: m.at,
+                })
+                  .then((si) => toast.success(si ? "⭐ Guardado. Lo ves en la estrella de la lista de chats." : "Sacado de guardados"))
+                  .catch((err) => toast.error(err instanceof Error ? err.message : "No se pudo"));
+              }
+            : undefined
+        }
         onFijar={
           infoMsg && infoMsg.tipo !== "sistema"
             ? () => {
