@@ -51,7 +51,7 @@ function horaCorta(iso: string) {
   return formatearFecha(iso, { day: "numeric", month: "short" });
 }
 
-type Filtro = "todos" | "no-leidos" | "grupos" | "software" | `e:${string}`;
+type Filtro = "todos" | "no-leidos" | "sin-responder" | "grupos" | "software" | `e:${string}`;
 
 /** Etiquetas de un chat: crear (nombre + color), asignar varias y borrar. */
 function EtiquetasDialog({
@@ -206,6 +206,20 @@ export function ChatLista({
   };
 
   const titulo = (c: ChatT) => tituloChat(c, uid, profiles, role);
+  // Cliente que escribió y nadie del equipo le contestó en más de 3 horas: arriba de todo y en rojo (solo el equipo lo ve).
+  const esEquipo = role !== "cliente";
+  const SIN_RESPONDER_MS = 3 * 3600_000;
+  const esDelCliente = (c: ChatT, by: string) =>
+    (c.contactos ?? []).includes(by) || profiles.find((p) => p.id === by)?.role === "cliente";
+  const esperando = (c: ChatT): number | null => {
+    if (!esEquipo || c.tipo !== "cliente" || !c.ultimo || c.ultimo.by === PRODI_ID || !esDelCliente(c, c.ultimo.by)) return null;
+    const ms = Date.now() - new Date(c.ultimo.at).getTime();
+    return ms >= SIN_RESPONDER_MS ? ms : null;
+  };
+  const horasEspera = (ms: number) => {
+    const h = Math.floor(ms / 3600_000);
+    return h < 24 ? `${h} h` : `${Math.floor(h / 24)} d`;
+  };
   // Cuántos mensajes sin leer tiene cada chat (el número verde de WhatsApp; mientras llega, el puntito).
   const conteos = useConteoSinLeer(chats, uid);
   const etiquetaPorId = useMemo(() => new Map(prefs.etiquetas.map((e) => [e.id, e])), [prefs.etiquetas]);
@@ -217,6 +231,8 @@ export function ChatLista({
       ? true
       : filtroOk === "no-leidos"
         ? noLeido(c, uid)
+        : filtroOk === "sin-responder"
+          ? esperando(c) != null
         : filtroOk === "software"
           ? esDeSoftware(c)
         : filtroOk === "grupos"
@@ -235,7 +251,10 @@ export function ChatLista({
   } else {
     const visibles = chats.filter((c) => !archivados.has(c.id) && pasa(c));
     const fijados = prefs.fijados.map((id) => visibles.find((c) => c.id === id)).filter(Boolean) as ChatT[];
-    lista = [...fijados, ...visibles.filter((c) => !prefs.fijados.includes(c.id))];
+    const resto = visibles.filter((c) => !prefs.fijados.includes(c.id));
+    // Los que esperan respuesta van primero (el que más espera, arriba).
+    const enEspera = resto.filter((c) => esperando(c) != null).sort((a, b) => (esperando(b) ?? 0) - (esperando(a) ?? 0));
+    lista = [...fijados, ...enEspera, ...resto.filter((c) => esperando(c) == null)];
   }
   const enArchivo = chats.filter((c) => archivados.has(c.id));
   const archivoSinLeer = enArchivo.filter((c) => noLeido(c, uid)).length;
@@ -247,8 +266,10 @@ export function ChatLista({
     );
 
   const sinLeer = chats.filter((c) => !archivados.has(c.id) && noLeido(c, uid)).length;
-  const chips: { id: Filtro; label: string; color?: string; n?: number }[] = [
+  const sinResponder = chats.filter((c) => !archivados.has(c.id) && esperando(c) != null).length;
+  const chips: { id: Filtro; label: string; color?: string; n?: number; alerta?: boolean }[] = [
     { id: "todos", label: "Todos" },
+    ...(sinResponder ? [{ id: "sin-responder" as Filtro, label: "Sin responder", n: sinResponder, alerta: true }] : []),
     { id: "no-leidos", label: "No leídos", n: sinLeer },
     { id: "grupos", label: "Grupos" },
     ...(chats.some(esDeSoftware) ? [{ id: "software" as Filtro, label: "Software" }] : []),
@@ -362,13 +383,24 @@ export function ChatLista({
                 onClick={() => setFiltro(f.id)}
                 className={cn(
                   "flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition-colors active:scale-95",
-                  filtroOk === f.id ? "bg-primary/15 text-primary" : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  f.alerta
+                    ? filtroOk === f.id
+                      ? "bg-red-500 text-white"
+                      : "bg-red-500/10 text-red-600 hover:bg-red-500/15 dark:text-red-400"
+                    : filtroOk === f.id
+                      ? "bg-primary/15 text-primary"
+                      : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
                 {f.color && <span className="h-2 w-2 rounded-full" style={{ backgroundColor: f.color }} />}
                 {f.label}
                 {!!f.n && (
-                  <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                  <span
+                    className={cn(
+                      "flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-bold",
+                      f.alerta ? (filtroOk === f.id ? "bg-white text-red-600" : "bg-red-500 text-white") : "bg-primary text-primary-foreground"
+                    )}
+                  >
                     {f.n}
                   </span>
                 )}
@@ -395,6 +427,7 @@ export function ChatLista({
         )}
         {lista.map((c) => {
           const unread = noLeido(c, uid);
+          const espera = esperando(c);
           const fijado = prefs.fijados.includes(c.id);
           const archivado = archivados.has(c.id);
           const etiquetas = (prefs.asignaciones[c.id] ?? []).map((id) => etiquetaPorId.get(id)).filter(Boolean) as ChatPrefs["etiquetas"];
@@ -430,7 +463,8 @@ export function ChatLista({
                   setMenuDe(c.id);
                 }}
                 className={cn(
-                  "flex w-full select-none items-center gap-3 border-b border-border/50 px-4 py-3 text-left transition-colors [-webkit-touch-callout:none] hover:bg-muted/50",
+                  "relative flex w-full select-none items-center gap-3 border-b border-border/50 px-4 py-3 text-left transition-colors [-webkit-touch-callout:none] hover:bg-muted/50",
+                  espera != null && "bg-red-500/[0.05] before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-red-500",
                   activoId === c.id && "bg-accent"
                 )}
               >
@@ -450,7 +484,13 @@ export function ChatLista({
                         <Headphones className="h-3.5 w-3.5 animate-pulse text-primary" aria-label="Chat de voz en curso" />
                       )}
                       {fijado && <Pin className="h-3 w-3 rotate-45 text-primary" aria-label="Fijado" />}
-                      {c.ultimo && horaCorta(c.ultimo.at)}
+                      {espera != null ? (
+                        <span className="rounded-full bg-red-500 px-1.5 py-px text-[10px] font-semibold text-white" title="El cliente escribió y nadie le contestó">
+                          Sin responder · {horasEspera(espera)}
+                        </span>
+                      ) : (
+                        c.ultimo && horaCorta(c.ultimo.at)
+                      )}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
