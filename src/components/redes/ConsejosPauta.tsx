@@ -351,7 +351,7 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
                           <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold", t.chip)}>
                             <Icono className="h-3 w-3" /> {t.label}
                           </span>
-                          {s.sobre && (s.sobre.nombre || s.sobre.tipo === "general") && (() => {
+                          {s.sobre && (() => {
                             const so = SOBRE[s.sobre.tipo] ?? SOBRE.general;
                             const IconoSobre = so.icono;
                             return (
