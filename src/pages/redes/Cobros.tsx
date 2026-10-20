@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { CobrosExtras, useExtrasDelMes } from "@/components/redes/admin/CobrosExtras";
 import { useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
@@ -77,7 +78,7 @@ import { DATOS_COBRO_DEFAULT } from "@/lib/redes/types";
 import { cn } from "@/lib/utils";
 
 const err = (e: unknown) => toast.error(e instanceof Error ? e.message : "Algo salió mal");
-type Paso = "emitir" | "cobrar" | "cobradas" | "morosos";
+type Paso = "emitir" | "cobrar" | "cobradas" | "morosos" | "extras";
 
 /**
  * Cobros a clientes, en dos pasos: 1) elegir a quién emitirle la boleta del mes (le llega a su panel
@@ -206,11 +207,14 @@ export default function Cobros() {
   const cobradasV = cobradas.filter((x) => coincide(x.cliente));
   const delAnioV = q.trim() ? delAnio.filter((x) => coincide(x.cliente)) : delAnio;
   const vencidoBoletas = pendientes.filter((f) => f.vencimiento < hoy);
+  // Lo que pagan solos los clientes por Mercado Pago (videos extra, piezas, viáticos) en este mes.
+  const extrasMes = useExtrasDelMes(periodoDe(mes));
   const pestanias: Pestania<Paso>[] = [
     { k: "emitir", label: "Emitir", n: porEmitir.length, listo: vivas.length > 0 && porEmitir.length === 0 },
     { k: "cobrar", label: "Por cobrar", n: pendientes.length, alerta: vencidoBoletas.length > 0, listo: vivas.length > 0 && !pendientes.length && !porEmitir.length },
     { k: "cobradas", label: "Cobradas", n: cobradas.length },
     { k: "morosos", label: "Morosos", n: morosos.filas.length, alerta: morosos.filas.length > 0 },
+    { k: "extras", label: "Extras", n: extrasMes.filter((c) => c.estado === "aprobado").length },
   ];
   const periodo = mesLabel(periodoDe(mes)).split(" ")[0].toLowerCase();
 
@@ -340,6 +344,7 @@ export default function Cobros() {
               ) : (
                 <VacioAdmin icono={Wallet} titulo="Todavía no se cobró nada este mes" texto="Cuando marques una boleta como cobrada (o pague por Mercado Pago) aparece acá." />
               ))}
+            {paso === "extras" && <CobrosExtras mes={periodoDe(mes)} filtro={coincide} />}
             {paso === "morosos" &&
               (morosos.filas.length ? <Morosos facturas={delAnioV} embebido /> : <VacioAdmin icono={Check} titulo="Nadie está atrasado" texto="Todos los clientes están al día con sus boletas." />)}
           </div>
@@ -355,6 +360,10 @@ export default function Cobros() {
               los extras y después la producción (los días se cambian en Ajustes → Mora).
             </p>
             <p>Los que pagan con débito automático se marcan solos cuando Mercado Pago cobra.</p>
+            <p>
+              <b>Extras</b>: los videos extra, piezas aparte y viáticos que el cliente paga por Mercado Pago se cobran solos y aparecen en esa pestaña, con lo que se
+              quedó Mercado Pago y <b>cuándo se libera la plata</b> (Mercado Pago la retiene unos días antes de que se pueda usar).
+            </p>
           </ComoFunciona>
         </div>
       )}
