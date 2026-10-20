@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { BotonAplicar, ChatIA } from "@/components/redes/ChatIA";
+import { HacerConsejo } from "@/components/redes/HacerConsejo";
 import {
   ArrowDownRight,
   ArrowRight,
@@ -412,6 +413,7 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
                           <b>Por qué:</b> <span className="text-muted-foreground">{porque}</span>
                         </p>
                         {s.detalle && s.detalle !== porque && <p className="rounded-xl bg-muted/40 p-2.5 text-xs leading-relaxed text-muted-foreground">{s.detalle}</p>}
+                        {s.tipo !== "mantener" && <HacerConsejo proyectoId={proyectoId} indice={i} />}
                       </div>
                     )}
                   </li>

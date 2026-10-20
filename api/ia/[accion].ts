@@ -58,7 +58,7 @@ import { logosParaPieza, marcaTexto } from "../_lib/marca";
 import { itemsPerfil } from "../_lib/perfil-cliente";
 import { controlarTopeIA } from "../_lib/tope-ia";
 import { charlarIA, cuposDesde, esTipoCharla, ROLES_CHARLA, type PedidoCharla } from "../_lib/ia-charla";
-import { consejosPauta } from "../_lib/ia-pauta";
+import { comoSeHaceConsejo, consejosPauta } from "../_lib/ia-pauta";
 import { chatEspecialista } from "../_lib/ia-especialista";
 import {
   comercialTexto,
@@ -694,6 +694,16 @@ async function pautaConsejos(req: VercelRequest) {
   await assertProjectAccess(caller, b.proyecto_id);
   if (b.rehacer) await controlarTopeIA(caller, "pauta-consejos");
   return consejosPauta(caller, b.proyecto_id, !!b.rehacer);
+}
+
+/** "Cómo se hace": los pasos en el Administrador de anuncios para aplicar un consejo de la IA. */
+async function pautaComo(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "pauta"]);
+  const b = body<{ proyecto_id?: string; indice?: number }>(req);
+  if (!b.proyecto_id || typeof b.indice !== "number" || b.indice < 0) throw new HttpError(400, "Falta el consejo");
+  await assertProjectAccess(caller, b.proyecto_id);
+  await controlarTopeIA(caller, "pauta-como");
+  return comoSeHaceConsejo(b.proyecto_id, Math.floor(b.indice));
 }
 
 /** Charlar con la IA mientras se planifica (plan del mes, guion, texto del posteo, preparar el rodaje). */
@@ -1507,6 +1517,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "guion") res.status(200).json(await guion(req));
     else if (accion === "charla") res.status(200).json(await charla(req));
     else if (accion === "pauta-consejos") res.status(200).json(await pautaConsejos(req));
+    else if (accion === "pauta-como") res.status(200).json(await pautaComo(req));
     else if (accion === "pauta-chat") res.status(200).json(await pautaChat(req));
     else if (accion === "voz-escuchar") res.status(200).json(await vozEscuchar(req));
     else if (accion === "voz-hablar") res.status(200).json(await vozHablar(req));

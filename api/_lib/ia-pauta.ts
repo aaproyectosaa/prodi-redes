@@ -263,3 +263,53 @@ Compará contra estos benchmarks cuando sirva para decir si un número es bueno 
   await ref.set(out);
   return out;
 }
+
+export interface ComoSeHace {
+  /** Pasos en el Administrador de anuncios, en orden. */
+  pasos: string[];
+  /** Algo a tener en cuenta (opcional). */
+  ojo?: string | null;
+  generado_at: string;
+}
+
+/**
+ * "Cómo se hace": la IA explica paso a paso, en el Administrador de anuncios de Meta, cómo aplicar un consejo.
+ * Queda guardado con el análisis (ia_pauta/{cliente}.como.{n}) para no gastar IA cada vez.
+ */
+export async function comoSeHaceConsejo(pid: string, indice: number): Promise<ComoSeHace> {
+  const db = adminDb();
+  const ref = db.collection("ia_pauta").doc(pid);
+  const d = (await ref.get()).data() as (ConsejosPauta & { como?: Record<string, ComoSeHace & { de?: string }> }) | undefined;
+  const s = d?.sugerencias?.[indice];
+  if (!d || !s) throw new HttpError(404, "Ese consejo ya no está: analizá de nuevo.");
+  const guardado = d.como?.[String(indice)];
+  if (guardado && guardado.de === d.generado_at) return guardado;
+
+  const prompt = `Sos especialista en Meta Ads y le explicás a alguien del equipo de una agencia cómo aplicar un consejo en el Administrador de anuncios de Meta (Ads Manager, versión web en español, 2026).
+
+El consejo:
+- Qué hacer: ${s.accion || s.titulo}
+- Por qué: ${s.porque ?? ""}
+- Detalle: ${s.detalle}
+${s.sobre?.nombre ? `- Sobre: ${s.sobre.tipo} "${s.sobre.nombre}"` : ""}
+
+Devolvé los pasos en orden, concretos (qué pestaña, qué botón, qué campo y qué poner), usando los nombres reales de las campañas, conjuntos o anuncios que aparecen en el consejo. Entre 3 y 9 pasos, cada uno en una o dos frases cortas, en español rioplatense (voseo). Si hay algo importante a tener en cuenta (ej. que el cambio reinicia el aprendizaje, o que hay que duplicar el conjunto), ponelo en "ojo" en una frase; si no, dejalo vacío.`;
+
+  const r = await generarJSON<{ pasos?: string[]; ojo?: string }>(
+    prompt,
+    {
+      type: "OBJECT",
+      properties: {
+        pasos: { type: "ARRAY", items: { type: "STRING" } },
+        ojo: { type: "STRING", nullable: true },
+      },
+      required: ["pasos"],
+    },
+    0.3
+  );
+  const pasos = (r.pasos ?? []).map((x) => String(x).trim()).filter(Boolean).slice(0, 12);
+  if (!pasos.length) throw new HttpError(502, "La IA no devolvió los pasos. Probá de nuevo.");
+  const como: ComoSeHace = { pasos, ojo: r.ojo?.trim() || null, generado_at: new Date().toISOString() };
+  await ref.update({ [`como.${indice}`]: { ...como, de: d.generado_at } }).catch((e) => console.warn("[ia-pauta] guardar cómo", pid, e));
+  return como;
+}
