@@ -25,6 +25,10 @@ export interface Paso {
   accion?: { label: string; destino: "video" | "piezas" | "chat" | "resultados" | "plan" | "pedir" | "ideas" | "negocio"; videoId?: string };
   /** true = el cliente tiene que hacer algo; false = solo información. */
   teToca: boolean;
+  /** Lo que hay para ver (ej. los títulos de las ideas del mes). */
+  lista?: string[];
+  /** Cómo hacerlo, en pasos cortos. */
+  comoHacerlo?: string[];
 }
 
 function cuando(fecha: string, hora: string | null): string {
@@ -46,7 +50,7 @@ export function pasosCliente(params: {
   piezas: PiezaIA[];
   cupo: number;
   /** Plan del mes que el equipo le mandó y todavía no respondió. */
-  planPendiente?: { mes: string; ideas: number } | null;
+  planPendiente?: { mes: string; ideas: number; titulos?: string[] } | null;
 }): Paso[] {
   const { cliente, videos, rodajes, piezas, cupo, planPendiente } = params;
   const mes = mesActual();
@@ -85,9 +89,11 @@ export function pasosCliente(params: {
     out.push({
       tipo: "elegir_ideas",
       teToca: true,
-      titulo: `Elegí tus videos de ${nombreMes}`,
-      texto: `Te armamos ${planPendiente.ideas === 1 ? "1 idea" : `${planPendiente.ideas} ideas`}. Marcá cuáles van y, si algo no te convence, contanos qué cambiarías.`,
-      accion: { label: "Ver las ideas", destino: "ideas" },
+      titulo: `Necesitamos tu OK para filmar ${nombreMes}`,
+      texto: `Te mandamos ${planPendiente.ideas === 1 ? "1 idea de video" : `${planPendiente.ideas} ideas de videos`}. Hasta que no nos digas cuáles van, no podemos organizar el rodaje. Te lleva 2 minutos.`,
+      lista: planPendiente.titulos?.slice(0, 4),
+      comoHacerlo: ["Abrí las ideas", "Marcá ✓ las que te gustan", "En las otras, contanos qué cambiarías"],
+      accion: { label: planPendiente.ideas === 1 ? "Ver la idea y responder" : `Ver las ${planPendiente.ideas} ideas y responder`, destino: "ideas" },
     });
   }
 

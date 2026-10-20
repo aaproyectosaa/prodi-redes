@@ -157,7 +157,7 @@ export default function ClientePortal() {
             rodajes,
             piezas,
             cupo: uso.cupo,
-            planPendiente: planPend ? { mes: planPend.mes, ideas: planPend.ideas.length } : null,
+            planPendiente: planPend ? { mes: planPend.mes, ideas: planPend.ideas.length, titulos: planPend.ideas.map((i) => i.titulo) } : null,
           })
         : [],
     [cliente, videos, rodajes, piezas, uso.cupo, planPend]
@@ -305,12 +305,12 @@ export default function ClientePortal() {
                 <Sparkles className="h-4 w-4" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold">Elegí tus videos de {mesLabel(planPend.mes).split(" ")[0].toLowerCase()}</span>
+                <span className="block text-sm font-semibold">Necesitamos tu OK para filmar {mesLabel(planPend.mes).split(" ")[0].toLowerCase()}</span>
                 <span className="block text-xs text-muted-foreground">
-                  Te armamos {planPend.ideas.length === 1 ? "1 idea" : `${planPend.ideas.length} ideas`}. Marcá cuáles van.
+                  Te mandamos {planPend.ideas.length === 1 ? "1 idea" : `${planPend.ideas.length} ideas`}: marcá cuáles van o contanos qué cambiar.
                 </span>
               </span>
-              <span className="shrink-0 text-xs font-semibold text-primary">Ver ideas →</span>
+              <span className="shrink-0 text-xs font-semibold text-primary">Responder →</span>
             </button>
           )}
 

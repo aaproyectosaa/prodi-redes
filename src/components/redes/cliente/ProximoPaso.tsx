@@ -59,6 +59,8 @@ export function ProximoPaso({ pasos, onPedir, onIdeas }: { pasos: Paso[]; onPedi
   const Icon = ICONOS[principal.tipo];
   // Video para aprobar: se muestra el video (miniatura) y queda bien a la vista.
   const aprobar = principal.tipo === "aprobar";
+  // Las ideas del mes también esperan una respuesta: mismo destaque que un video para aprobar.
+  const destacar = aprobar || principal.tipo === "elegir_ideas";
   const videoAprobar = aprobar && principal.accion?.videoId ? videos.find((v) => v.id === principal.accion!.videoId) : undefined;
   const archivo = videoAprobar ? [...(videoAprobar.attachments_finalizado ?? [])].reverse().find((a) => a.mime_type.startsWith("video/") || a.mime_type.startsWith("image/")) : undefined;
   const otrosParaAprobar = pasos.filter((x) => x.tipo === "aprobar").length - (aprobar ? 1 : 0);
@@ -68,7 +70,7 @@ export function ProximoPaso({ pasos, onPedir, onIdeas }: { pasos: Paso[]; onPedi
         className={cn(
           "relative overflow-hidden rounded-2xl border p-5 animate-in fade-in slide-in-from-bottom-3 duration-500 motion-reduce:animate-none sm:p-6",
           principal.teToca
-            ? aprobar
+            ? destacar
               ? "border-2 border-primary bg-gradient-to-br from-primary/[0.22] via-primary/[0.08] to-transparent shadow-[0_0_48px_-12px_hsl(var(--primary)/0.8)]"
               : "border-primary/40 bg-gradient-to-br from-primary/[0.16] via-primary/[0.06] to-transparent"
             : "bg-card"
@@ -92,7 +94,7 @@ export function ProximoPaso({ pasos, onPedir, onIdeas }: { pasos: Paso[]; onPedi
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary-foreground" />
             </span>
           )}
-          {aprobar ? "Para aprobar" : principal.teToca ? "Te toca" : "Todo en marcha"}
+          {aprobar ? "Para aprobar" : principal.tipo === "elegir_ideas" ? "Esperamos tu respuesta" : principal.teToca ? "Te toca" : "Todo en marcha"}
         </p>
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center">
           {archivo ? (
@@ -132,8 +134,29 @@ export function ProximoPaso({ pasos, onPedir, onIdeas }: { pasos: Paso[]; onPedi
           </span>
           )}
           <div className="min-w-0 flex-1">
-            <h2 className={cn("font-bold leading-snug", aprobar ? "text-xl sm:text-2xl" : "text-lg sm:text-xl")}>{principal.titulo}</h2>
+            <h2 className={cn("font-bold leading-snug", destacar ? "text-xl sm:text-2xl" : "text-lg sm:text-xl")}>{principal.titulo}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{principal.texto}</p>
+            {!!principal.lista?.length && (
+              <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
+                {principal.lista.map((t, n) => (
+                  <li key={n} className="flex min-w-0 items-center gap-2 rounded-xl bg-background/60 px-3 py-2 text-sm font-medium ring-1 ring-border">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-bold text-primary">{n + 1}</span>
+                    <span className="truncate">{t}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {!!principal.comoHacerlo?.length && (
+              <ol className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs font-medium">
+                {principal.comoHacerlo.map((p, n) => (
+                  <li key={n} className="flex items-center gap-1.5">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">{n + 1}</span>
+                    {p}
+                    {n < principal.comoHacerlo!.length - 1 && <ArrowRight className="h-3 w-3 text-muted-foreground" />}
+                  </li>
+                ))}
+              </ol>
+            )}
             {otrosParaAprobar > 0 && (
               <p className="mt-1.5 text-xs font-semibold text-primary">
                 Y {otrosParaAprobar === 1 ? "otro más" : `${otrosParaAprobar} más`} esperando tu aprobación
