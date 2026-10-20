@@ -310,7 +310,7 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
                   />
                 </div>
               </div>
-              <div className="flex flex-wrap gap-1 rounded-2xl bg-muted/50 p-1">
+              <div className={cn("flex flex-wrap gap-1 rounded-2xl bg-muted/50 p-1", !listaAbierta && "hidden")}>
                 <button
                   type="button"
                   onClick={() => setFiltro(null)}
