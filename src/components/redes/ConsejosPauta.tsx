@@ -63,6 +63,8 @@ const ESTADO: Record<NonNullable<Consejos["estado"]>, { label: string; clase: st
 };
 
 const PESO = { alta: 0, media: 1, baja: 2 } as const;
+/** Inversión, gasto, impresiones o alcance: subir o bajar no es bueno ni malo (flecha gris). */
+const NEUTRO = /invers|invert|gast|impresi|alcance|visualiz/i;
 
 const fecha = (iso: string) => new Date(iso).toLocaleDateString("es-AR", { day: "numeric", month: "short" });
 /** Primera oración de un texto (para los consejos guardados antes de que existieran "acción" y "por qué"). */
@@ -177,7 +179,10 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
                       <p className="mt-0.5 flex items-center gap-1 text-lg font-bold tabular-nums">
                         {n.valor}
                         {n.tendencia !== "igual" && (
-                          <Flecha className={cn("h-4 w-4 shrink-0", n.bueno ? "text-emerald-500" : "text-red-500")} aria-label={n.bueno ? "mejoró" : "empeoró"} />
+                          <Flecha
+                            className={cn("h-4 w-4 shrink-0", NEUTRO.test(n.etiqueta) ? "text-muted-foreground" : n.bueno ? "text-emerald-500" : "text-red-500")}
+                            aria-label={NEUTRO.test(n.etiqueta) ? n.tendencia : n.bueno ? "mejoró" : "empeoró"}
+                          />
                         )}
                       </p>
                     </div>
