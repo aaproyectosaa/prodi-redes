@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type MutableRefObject, type React
 import { Link } from "react-router-dom";
 import { collection, limit, onSnapshot, orderBy, query } from "@/lib/db";
 import {
+  Plus,
   Pencil, ArrowLeft, BarChart3, CalendarClock, Camera, Check, CheckCheck, CornerUpRight, FileText, Headphones, Image as ImageIcon, Images, Info, Loader2, Moon, Paperclip, Reply, Search, Send, Sparkles, Upload, Video, X } from "lucide-react";
 import { esHorarioDescanso, leerDescanso, ROLES_CON_DESCANSO } from "../../../../api/_lib/descanso";
 import { toast } from "sonner";
@@ -1359,47 +1360,96 @@ export function ChatConversacion({
           </div>
         )}
         {pegados.length > 0 && (
-          <div className="mx-auto mb-2 flex max-w-3xl flex-wrap items-end gap-2 rounded-xl border bg-muted/40 p-2 animate-in fade-in slide-in-from-bottom-1 motion-reduce:animate-none">
-            {pegados.map((x) => (
-              <div key={x.id} className="group/peg relative">
-                <button
-                  type="button"
-                  onClick={() => setVerPegado(x)}
-                  className="block overflow-hidden rounded-lg border bg-background transition-transform hover:scale-[1.03]"
-                  title="Ver grande"
-                >
+          <div className="mx-auto mb-2 max-w-3xl overflow-hidden rounded-2xl border bg-card shadow-lg animate-in fade-in slide-in-from-bottom-2 motion-reduce:animate-none">
+            {/* Qué se va a mandar. */}
+            <div className="flex items-center gap-2 border-b bg-gradient-to-r from-primary/[0.08] to-transparent px-3 py-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                <Paperclip className="h-3.5 w-3.5" />
+              </span>
+              <p className="shrink-0 whitespace-nowrap text-xs font-semibold">
+                {(() => {
+                  const fotos = pegados.filter((x) => x.url).length;
+                  const otros = pegados.length - fotos;
+                  return [fotos ? `${fotos} foto${fotos === 1 ? "" : "s"}` : "", otros ? `${otros} archivo${otros === 1 ? "" : "s"}` : ""].filter(Boolean).join(" y ");
+                })()}{" "}
+                para mandar
+              </p>
+              <span className="hidden min-w-0 truncate text-[11px] text-muted-foreground xl:inline">· escribí algo si querés y tocá Enviar</span>
+              <button
+                type="button"
+                onClick={() => {
+                  pegados.forEach((x) => x.url && URL.revokeObjectURL(x.url));
+                  setPegados([]);
+                }}
+                className="ml-auto shrink-0 rounded-full px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              >
+                Quitar todo
+              </button>
+            </div>
+            <div className="flex gap-2.5 overflow-x-auto p-3 [scrollbar-width:thin]">
+              {pegados.map((x) => (
+                <div key={x.id} className="group/peg relative shrink-0 animate-in fade-in zoom-in-95 duration-200">
                   {x.url ? (
-                    <img src={x.url} alt={x.file.name} className="h-20 w-20 object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setVerPegado(x)}
+                      className="relative block h-24 w-24 overflow-hidden rounded-xl bg-muted ring-1 ring-border transition-all hover:ring-2 hover:ring-primary"
+                      title="Ver grande"
+                    >
+                      <img src={x.url} alt={x.file.name} className="h-full w-full object-cover transition-transform duration-300 group-hover/peg:scale-105" />
+                      <span className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/60 to-transparent" />
+                    </button>
                   ) : (
-                    <span className="flex h-20 w-28 flex-col items-center justify-center gap-1 px-2 text-center text-[10px] text-muted-foreground">
-                      <FileText className="h-5 w-5" />
-                      <span className="line-clamp-2 break-all">{x.file.name}</span>
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setVerPegado(x)}
+                      className="flex h-24 w-36 flex-col justify-between rounded-xl bg-muted/60 p-2.5 text-left ring-1 ring-border transition-all hover:ring-2 hover:ring-primary"
+                      title={x.file.name}
+                    >
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                        <FileText className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-[11px] font-semibold">{x.file.name}</span>
+                        <span className="block text-[10px] text-muted-foreground">
+                          {x.file.size >= 1_048_576 ? `${(x.file.size / 1_048_576).toFixed(1).replace(".", ",")} MB` : `${Math.max(1, Math.round(x.file.size / 1024))} KB`}
+                        </span>
+                      </span>
+                    </button>
                   )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => quitarPegado(x.id)}
-                  className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-foreground text-background shadow"
-                  aria-label="Sacar"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-                {x.url && x.file.type.startsWith("image/") && (
                   <button
                     type="button"
-                    onClick={() => setDibujando(x.id)}
-                    className="absolute bottom-1 left-1/2 flex h-6 -translate-x-1/2 items-center gap-1 rounded-full bg-black/70 px-2 text-[10px] font-semibold text-white shadow backdrop-blur transition-colors hover:bg-primary"
-                    title="Dibujar arriba de la foto"
+                    onClick={() => quitarPegado(x.id)}
+                    className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white shadow backdrop-blur transition-colors hover:bg-destructive"
+                    aria-label="Sacar"
+                    title="Sacar"
                   >
-                    <Pencil className="h-3 w-3" /> Dibujar
+                    <X className="h-3.5 w-3.5" />
                   </button>
-                )}
-              </div>
-            ))}
-            <p className="ml-1 self-center text-[11px] text-muted-foreground">
-              Podés dibujar arriba de las fotos, escribir algo y tocar Enviar (Enter). <button type="button" className="underline" onClick={() => setPegados([])}>Cancelar</button>
-            </p>
+                  {x.url && x.file.type.startsWith("image/") && (
+                    <button
+                      type="button"
+                      onClick={() => setDibujando(x.id)}
+                      className="absolute bottom-1.5 left-1.5 flex h-6 items-center gap-1 rounded-full bg-primary px-2 text-[10px] font-semibold text-primary-foreground shadow-md shadow-black/30 transition-transform hover:scale-105"
+                      title="Dibujar arriba de la foto"
+                    >
+                      <Pencil className="h-3 w-3" /> Dibujar
+                    </button>
+                  )}
+                </div>
+              ))}
+              {pegados.length < 10 && (
+                <button
+                  type="button"
+                  onClick={() => elegirArchivo.current?.click()}
+                  className="flex h-24 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+                  title="Agregar más fotos o archivos"
+                >
+                  <Plus className="h-5 w-5" />
+                  <span className="text-[11px] font-medium">Agregar</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
         <div className="mx-auto flex max-w-3xl items-end gap-1 min-[380px]:gap-2">
