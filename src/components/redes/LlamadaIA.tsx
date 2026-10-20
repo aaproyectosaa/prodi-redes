@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Hand, Mic, MicOff, PhoneOff } from "lucide-react";
+import { Hand, Mic, MicOff, PhoneOff, Volume2 } from "lucide-react";
 import { callApi } from "@/lib/redes/api";
 import { cn } from "@/lib/utils";
 
@@ -9,13 +9,14 @@ import { cn } from "@/lib/utils";
 // la persona hace una pausa y lo pasa a texto el servidor (/api/ia/voz-escuchar). Hablar: la voz natural del servidor
 // (/api/ia/voz-hablar) y, si no hay, la del navegador.
 
-type Estado = "conectando" | "escuchando" | "pensando" | "hablando" | "silenciado" | "error";
+type Estado = "conectando" | "escuchando" | "pensando" | "hablando" | "tocar" | "silenciado" | "error";
 
 const TEXTO: Record<Estado, string> = {
   conectando: "Conectando…",
   escuchando: "Te escucho…",
   pensando: "Pensando…",
   hablando: "Hablando…",
+  tocar: "Tengo la respuesta",
   silenciado: "Micrófono apagado",
   error: "No pude usar el micrófono",
 };
@@ -31,8 +32,30 @@ const aBase64 = (b: Blob) =>
     r.readAsDataURL(b);
   });
 
+// Los navegadores no dejan sonar audio que arranca solo, segundos después de un toque (y la respuesta de la IA tarda).
+// Por eso, en el mismo toque de "Llamar" se destraba un reproductor y la llamada usa siempre ese mismo.
+const SILENCIO = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+let reproductor: HTMLAudioElement | null = null;
+
+/** Llamar desde el toque de "Llamar" (antes de cualquier espera). */
+export function destrabarAudio() {
+  try {
+    reproductor ??= new Audio();
+    reproductor.src = SILENCIO;
+    void reproductor.play().catch(() => undefined);
+    const s = window.speechSynthesis;
+    if (s) {
+      const u = new SpeechSynthesisUtterance(" ");
+      u.volume = 0;
+      s.speak(u);
+    }
+  } catch {
+    /* sin audio: queda el botón "Escuchar" */
+  }
+}
+
 /** Voz del navegador en castellano (la de Argentina si está). */
-function hablarNavegador(texto: string, alTerminar: () => void): () => void {
+function hablarNavegador(texto: string, alTerminar: () => void, alBloquear?: () => void): () => void {
   const s = window.speechSynthesis;
   if (!s) {
     alTerminar();
@@ -44,7 +67,8 @@ function hablarNavegador(texto: string, alTerminar: () => void): () => void {
   u.lang = u.voice?.lang ?? "es-AR";
   u.rate = 1.05;
   u.onend = alTerminar;
-  u.onerror = alTerminar;
+  // "not-allowed": el navegador no la dejó hablar sola (falta un toque).
+  u.onerror = (e) => (e.error === "not-allowed" && alBloquear ? alBloquear() : alTerminar());
   s.cancel();
   s.speak(u);
   return () => s.cancel();
@@ -71,6 +95,9 @@ export function LlamadaIA({
   const rec = useRef<{ stop: () => void } | null>(null);
   const callar = useRef<() => void>(() => undefined);
   const escucharRef = useRef<() => void>(() => undefined);
+  // Si el navegador no dejó sonar la respuesta: se reproduce con un toque.
+  const pendiente = useRef<(() => void) | null>(null);
+  const [respuesta, setRespuesta] = useState("");
 
   /** Volumen del micrófono (0 a 1), para la animación y para saber cuándo hay una pausa. */
   const volumen = useCallback(() => {
@@ -105,30 +132,51 @@ export function LlamadaIA({
         escucharRef.current();
         return;
       }
+      setRespuesta(r);
       setEstado("hablando");
       const seguir = () => {
+        setRespuesta("");
         if (activa.current) escucharRef.current();
       };
+      let fuente: string | null = null;
       try {
         const v = await callApi<{ audio: { data: string; mime: string } | null }>("/api/ia/voz-hablar", { texto: r });
         if (!activa.current) return;
-        if (v.audio) {
-          const audio = new Audio(`data:${v.audio.mime};base64,${v.audio.data}`);
+        if (v.audio) fuente = `data:${v.audio.mime};base64,${v.audio.data}`;
+      } catch {
+        /* sin voz natural: la del navegador */
+      }
+      const sonar = async () => {
+        setEstado("hablando");
+        if (fuente) {
+          const audio = (reproductor ??= new Audio());
+          audio.src = fuente;
+          audio.onended = seguir;
+          audio.onerror = null;
           callar.current = () => {
             audio.pause();
             seguir();
           };
-          audio.onended = seguir;
-          audio.onerror = () => {
-            callar.current = hablarNavegador(r, seguir);
-          };
           await audio.play();
           return;
         }
+        await new Promise<void>((ok, bloqueada) => {
+          callar.current = hablarNavegador(r, seguir, () => bloqueada(new Error("bloqueada")));
+          window.setTimeout(ok, 400);
+        });
+      };
+      try {
+        await sonar();
       } catch {
-        /* sin voz natural: la del navegador */
+        // El navegador no la dejó sonar sola: un toque y suena.
+        pendiente.current = () => {
+          pendiente.current = null;
+          void sonar().catch(() => {
+            callar.current = hablarNavegador(r, seguir);
+          });
+        };
+        setEstado("tocar");
       }
-      callar.current = hablarNavegador(r, seguir);
     },
     [onDecir]
   );
@@ -306,7 +354,15 @@ export function LlamadaIA({
         {TEXTO[estado]}
       </p>
       <p className="relative mx-auto mt-1 min-h-[2.5rem] max-w-md text-center text-xs leading-relaxed text-white/75">
-        {estado === "error" ? "Revisá que el navegador tenga permiso para usar el micrófono." : parcial ? `“${parcial}”` : estado === "escuchando" ? "Hablá tranquilo; cuando hagas una pausa, te contesto." : ""}
+        {estado === "error"
+          ? "Revisá que el navegador tenga permiso para usar el micrófono."
+          : (estado === "hablando" || estado === "tocar") && respuesta
+            ? respuesta
+            : parcial
+              ? `“${parcial}”`
+              : estado === "escuchando"
+                ? "Hablá tranquilo; cuando hagas una pausa, te contesto."
+                : ""}
       </p>
 
       <div className="relative mt-3 flex items-center justify-center gap-3">
@@ -320,6 +376,15 @@ export function LlamadaIA({
         >
           {estado === "silenciado" ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
         </button>
+        {estado === "tocar" && (
+          <button
+            type="button"
+            onClick={() => pendiente.current?.()}
+            className="flex h-11 animate-pulse items-center gap-1.5 rounded-full bg-white px-4 text-sm font-semibold text-[#3b1a8a] shadow-lg"
+          >
+            <Volume2 className="h-4 w-4" /> Tocá para escucharla
+          </button>
+        )}
         {estado === "hablando" && (
           <button
             type="button"

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { callApi } from "@/lib/redes/api";
 import { cn } from "@/lib/utils";
-import { LlamadaIA } from "./LlamadaIA";
+import { destrabarAudio, LlamadaIA } from "./LlamadaIA";
 
 // Charlar con la IA donde se planifica (plan del mes, guion, texto del posteo, preparar el rodaje): pedirle cambios
 // o preguntarle cosas con el contexto del cliente. Lo que propone se aplica con un toque; lo que le contás del
@@ -108,6 +108,8 @@ export function ChatIA({
   };
 
   const llamar = () => {
+    // En el mismo toque: así después el navegador deja sonar las respuestas.
+    destrabarAudio();
     setAbierto(true);
     setLlamada(true);
   };
