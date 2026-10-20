@@ -293,26 +293,27 @@ export default function ClientePortal() {
         <TabsContent value="inicio" className="space-y-8">
           <TarjetaPerfil cliente={cliente} onCompletar={() => setTab("negocio")} />
           <ProximoPaso pasos={pasos} onPedir={() => setPedirVideo(true)} onIdeas={() => planPend && setPlanAbierto(planPend.mes)} />
-          <CupoVideos uso={uso} mes={mes} precioExtra={plan.precioVideoExtra} onPedir={() => setPedirVideo(true)} />
           {/* Si hay algo más urgente arriba, las ideas del mes quedan a un toque igual. */}
           {planPend && pasos[0]?.tipo !== "elegir_ideas" && (
             <button
               type="button"
               onClick={() => setPlanAbierto(planPend.mes)}
-              className="flex w-full items-center gap-3 rounded-2xl border border-primary/30 bg-primary/[0.05] p-3.5 text-left transition-all animate-in fade-in hover:-translate-y-0.5 hover:shadow-sm"
+              className="flex w-full items-center gap-3 rounded-2xl border-2 border-primary/60 bg-gradient-to-r from-primary/[0.14] to-primary/[0.04] p-4 text-left shadow-[0_0_32px_-14px_hsl(var(--primary)/0.9)] transition-all animate-in fade-in hover:-translate-y-0.5"
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
                 <Sparkles className="h-4 w-4" />
               </span>
               <span className="min-w-0 flex-1">
+                <span className="mb-0.5 inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary-foreground" /> Esperamos tu respuesta</span>
                 <span className="block text-sm font-semibold">Necesitamos tu OK para filmar {mesLabel(planPend.mes).split(" ")[0].toLowerCase()}</span>
                 <span className="block text-xs text-muted-foreground">
                   Te mandamos {planPend.ideas.length === 1 ? "1 idea" : `${planPend.ideas.length} ideas`}: marcá cuáles van o contanos qué cambiar.
                 </span>
               </span>
-              <span className="shrink-0 text-xs font-semibold text-primary">Responder →</span>
+              <span className="shrink-0 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-md shadow-primary/30">Responder →</span>
             </button>
           )}
+          <CupoVideos uso={uso} mes={mes} precioExtra={plan.precioVideoExtra} onPedir={() => setPedirVideo(true)} />
 
           <Section
             title={vista === "kanban" ? `Tus videos de ${mesLabel(mes).toLowerCase()}` : "Calendario de tus videos"}
