@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { useRedes } from "@/contexts/redes-data-context";
-import { cargarResultados, guardarMetaId, guardarPauta, publicarVideo } from "@/lib/redes/videos";
+import { cargarResultados, guardarMetaId, guardarPauta, publicarVideo, subidoPorCliente } from "@/lib/redes/videos";
 import { callApi } from "@/lib/redes/api";
 import { hoyISO } from "@/lib/redes/format";
 import type { PautaVideo, ResultadosVideo, Video } from "@/lib/redes/types";
@@ -186,6 +186,20 @@ export function PublicarDialog({
     }
   };
 
+  const loSubioElCliente = async () => {
+    if (!user) return;
+    setSaving(true);
+    try {
+      await subidoPorCliente(video, user.uid);
+      toast.success("Listo: lo subió el cliente");
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo guardar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-h-[92dvh] max-w-lg overflow-y-auto">
@@ -213,7 +227,11 @@ export function PublicarDialog({
           <PautaFields pauta={pauta} setPauta={setPauta} />
           {pauta.activa && <MetaIdField value={metaId} onChange={setMetaId} />}
         </div>
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:justify-between">
+          <Button variant="outline" onClick={() => void loSubioElCliente()} disabled={saving}>
+            Lo subió el cliente
+          </Button>
+          <div className="flex gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
@@ -221,6 +239,7 @@ export function PublicarDialog({
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Publicado
           </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

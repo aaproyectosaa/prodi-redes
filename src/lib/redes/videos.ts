@@ -503,6 +503,14 @@ export async function publicarVideo(
   });
 }
 
+/** El cliente lo subió por su cuenta: sale de "Subir y pautar" sin links ni pauta nuestra. */
+export async function subidoPorCliente(video: Video, by: string) {
+  await moverA(video, "publicado", by, "Lo subió el cliente", {
+    publicacion: { publicado_at: now(), sube_cliente: true, link_instagram: null, link_facebook: null, link_tiktok: null },
+    pauta: null,
+  });
+}
+
 export async function guardarPauta(video: Video, pauta: PautaVideo, by: string) {
   await actualizarVideo(video.id, { pauta }, by, pauta.activa ? "Pauta actualizada" : "Pauta pausada");
 }
