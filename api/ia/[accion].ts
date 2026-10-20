@@ -1263,6 +1263,29 @@ async function planEnviar(req: VercelRequest) {
   return { ok: true };
 }
 
+/** El voto de un integrante del cliente en una idea (cada uno el suyo; los demás lo ven en vivo). */
+async function planVotar(req: VercelRequest) {
+  const caller = await requireCaller(req, ["cliente", "admin"]);
+  const b = body<{ proyecto_id?: string; mes?: string; idea_id?: string; ok?: boolean | null; comentario?: string | null }>(req);
+  if (!b.proyecto_id || !MES_RE.test(String(b.mes)) || !b.idea_id) throw new HttpError(400, "Datos incompletos");
+  await assertProjectAccess(caller, b.proyecto_id);
+  const ref = adminDb().collection("planes_mes").doc(planId(b.proyecto_id, String(b.mes)));
+  const plan = (await ref.get()).data();
+  if (!plan || plan.estado !== "enviado") throw new HttpError(409, "Este plan ya se respondió");
+  if (!((plan.ideas ?? []) as IdeaPlan[]).some((i) => i.id === b.idea_id)) throw new HttpError(404, "Esa idea ya no está");
+  const idea = String(b.idea_id);
+  if (!/^[A-Za-z0-9_-]{1,60}$/.test(idea)) throw new HttpError(400, "Idea inválida");
+  await ref.update({
+    [`votos.${caller.uid}.${idea}`]: {
+      ok: typeof b.ok === "boolean" ? b.ok : null,
+      comentario: String(b.comentario ?? "").trim().slice(0, 600) || null,
+      nombre: caller.nombre || "Cliente",
+      at: new Date().toISOString(),
+    },
+  });
+  return { ok: true };
+}
+
 async function planResponder(req: VercelRequest) {
   const caller = await requireCaller(req, ["cliente", "admin"]);
   const b = body<{ proyecto_id?: string; mes?: string; respuestas?: { id?: string; ok?: boolean; comentario?: string }[]; nota?: string }>(req);
@@ -1588,6 +1611,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "guion") res.status(200).json(await guion(req));
     else if (accion === "charla") res.status(200).json(await charla(req));
     else if (accion === "pauta-consejos") res.status(200).json(await pautaConsejos(req));
+    else if (accion === "plan-votar") res.status(200).json(await planVotar(req));
     else if (accion === "pauta-como") res.status(200).json(await pautaComo(req));
     else if (accion === "pauta-chat") res.status(200).json(await pautaChat(req));
     else if (accion === "voz-escuchar") res.status(200).json(await vozEscuchar(req));

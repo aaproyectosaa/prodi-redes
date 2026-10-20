@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Loader2, Pencil, PartyPopper, ThumbsUp } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { mesLabel } from "@/lib/redes/format";
-import { responderPlan, usePlanMes } from "@/lib/redes/planMes";
+import { useUserProfileContext } from "@/contexts/user-profile-context";
+import { responderPlan, usePlanMes, votarIdea } from "@/lib/redes/planMes";
 import { cn } from "@/lib/utils";
 
 type Resp = { ok: boolean | null; comentario: string };
@@ -28,6 +29,11 @@ export function PlanMesCliente({
   const [busy, setBusy] = useState(false);
   const [intentado, setIntentado] = useState(false);
   const [listo, setListo] = useState<{ aprobadas: number; cambios: number } | null>(null);
+  const { user } = useUserProfileContext();
+  const uid = user?.uid ?? "";
+  // Lo que ya votó cada uno queda guardado: al volver a abrir, aparece como lo dejó.
+  const cargado = useRef(false);
+  const guardarComentario = useRef<Record<string, number>>({});
 
   useEffect(() => {
     if (!open) return;
@@ -35,7 +41,15 @@ export function PlanMesCliente({
     setNota("");
     setIntentado(false);
     setListo(null);
+    cargado.current = false;
   }, [open, mes]);
+
+  useEffect(() => {
+    if (!plan || cargado.current) return;
+    cargado.current = true;
+    const mios = plan.votos?.[uid] ?? {};
+    setResp(Object.fromEntries(Object.entries(mios).map(([id, v]) => [id, { ok: v.ok, comentario: v.comentario ?? "" }])));
+  }, [plan, uid]);
 
   const nombreMes = mes ? mesLabel(mes).split(" ")[0].toLowerCase() : "";
   const ideas = plan?.ideas ?? [];
@@ -43,8 +57,22 @@ export function PlanMesCliente({
     const r = resp[i.id];
     return r?.ok === true || (r?.ok === false && r.comentario.trim().length > 0);
   }).length;
-  const set = (id: string, patch: Partial<Resp>) =>
-    setResp((prev) => ({ ...prev, [id]: { ok: prev[id]?.ok ?? null, comentario: prev[id]?.comentario ?? "", ...patch } }));
+  const set = (id: string, patch: Partial<Resp>) => {
+    const nuevo = { ok: resp[id]?.ok ?? null, comentario: resp[id]?.comentario ?? "", ...patch };
+    setResp((prev) => ({ ...prev, [id]: nuevo }));
+    if (!plan || plan.estado !== "enviado") return;
+    // Se guarda al toque (el texto, cuando deja de escribir) para que lo vean los demás.
+    const guardar = () => void votarIdea(plan.proyecto_id, plan.mes, id, nuevo.ok, nuevo.comentario || null).catch(() => {});
+    window.clearTimeout(guardarComentario.current[id]);
+    if ("comentario" in patch) guardarComentario.current[id] = window.setTimeout(guardar, 700);
+    else guardar();
+  };
+  /** Lo que votaron los demás en una idea. */
+  const deOtros = (ideaId: string) =>
+    Object.entries(plan?.votos ?? {})
+      .filter(([u]) => u !== uid)
+      .map(([, v]) => v[ideaId])
+      .filter((v): v is NonNullable<typeof v> => !!v && v.ok !== null);
 
   const confirmar = async () => {
     setIntentado(true);
@@ -171,6 +199,25 @@ export function PlanMesCliente({
                                 maxLength={600}
                                 className="mt-2 animate-in fade-in slide-in-from-top-1 duration-200"
                               />
+                            )}
+                            {deOtros(i.id).length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {deOtros(i.id).map((v) => (
+                                  <span
+                                    key={v.nombre}
+                                    title={v.comentario ?? undefined}
+                                    className={cn(
+                                      "inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium",
+                                      v.ok ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-orange-500/15 text-orange-700 dark:text-orange-300"
+                                    )}
+                                  >
+                                    {v.ok ? <ThumbsUp className="h-3 w-3 shrink-0" /> : <Pencil className="h-3 w-3 shrink-0" />}
+                                    <span className="truncate">
+                                      {v.nombre.split(" ")[0]}: {v.ok ? "va" : v.comentario ? `cambiaría: ${v.comentario}` : "cambiaría algo"}
+                                    </span>
+                                  </span>
+                                ))}
+                              </div>
                             )}
                             {falta && (
                               <p className="mt-2 text-xs text-destructive">

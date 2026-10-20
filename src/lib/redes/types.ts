@@ -231,6 +231,15 @@ export interface PlanMes {
   respondido_at?: string | null;
   recordatorios?: number;
   updated_at?: string;
+  /** Lo que va votando cada integrante del cliente, idea por idea: { uid: { ideaId: voto } }. Se ve en vivo. */
+  votos?: Record<string, Record<string, VotoIdea>>;
+}
+
+export interface VotoIdea {
+  ok: boolean | null;
+  comentario?: string | null;
+  nombre: string;
+  at: string;
 }
 
 export interface MemoriaIA {

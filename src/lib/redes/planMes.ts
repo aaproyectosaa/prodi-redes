@@ -130,6 +130,10 @@ export async function guardarBorrador(plan: PlanMes, ideas: IdeaPlan[], nota: st
 export const enviarPlan = (proyectoId: string, mes: string, ideas: IdeaPlan[], nota: string | null) =>
   callApi("/api/ia/plan-enviar", { proyecto_id: proyectoId, mes, ideas, nota_equipo: nota });
 
+/** Guarda el voto de quien está mirando en una idea (lo ven los demás integrantes al instante). */
+export const votarIdea = (proyectoId: string, mes: string, ideaId: string, ok: boolean | null, comentario: string | null) =>
+  callApi("/api/ia/plan-votar", { proyecto_id: proyectoId, mes, idea_id: ideaId, ok, comentario });
+
 export const responderPlan = (
   proyectoId: string,
   mes: string,
