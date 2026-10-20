@@ -1,7 +1,9 @@
+import { DibujarImagen } from "./DibujarImagen";
 import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { collection, limit, onSnapshot, orderBy, query } from "@/lib/db";
-import { ArrowLeft, BarChart3, CalendarClock, Camera, Check, CheckCheck, CornerUpRight, FileText, Headphones, Image as ImageIcon, Images, Info, Loader2, Moon, Paperclip, Reply, Search, Send, Sparkles, Upload, Video, X } from "lucide-react";
+import {
+  Pencil, ArrowLeft, BarChart3, CalendarClock, Camera, Check, CheckCheck, CornerUpRight, FileText, Headphones, Image as ImageIcon, Images, Info, Loader2, Moon, Paperclip, Reply, Search, Send, Sparkles, Upload, Video, X } from "lucide-react";
 import { esHorarioDescanso, leerDescanso, ROLES_CON_DESCANSO } from "../../../../api/_lib/descanso";
 import { toast } from "sonner";
 import { db } from "@/integrations/firebase/client";
@@ -411,12 +413,37 @@ export function ChatConversacion({
         })),
       ].slice(0, 10)
     );
+  const reemplazarPegado = (id: string, f: File) =>
+    setPegados((ps) =>
+      ps.map((x) => {
+        if (x.id !== id) return x;
+        if (x.url) URL.revokeObjectURL(x.url);
+        return { ...x, file: f, url: URL.createObjectURL(f) };
+      })
+    );
+  const [dibujando, setDibujando] = useState<string | null>(null);
   const quitarPegado = (id: string) =>
     setPegados((ps) => {
       const x = ps.find((y) => y.id === id);
       if (x?.url) URL.revokeObjectURL(x.url);
       return ps.filter((y) => y.id !== id);
     });
+
+  useEffect(() => {
+    const alPegar = (e: ClipboardEvent) => {
+      if (e.defaultPrevented) return;
+      const t = e.target as HTMLElement | null;
+      // En otro campo de texto (buscador, etc.) se deja pegar normal.
+      if (t && t !== caja.current && (t.closest("input, textarea, [contenteditable=true]") || t.isContentEditable)) return;
+      const files = Array.from(e.clipboardData?.files ?? []);
+      if (!files.length) return;
+      e.preventDefault();
+      pegar(files);
+      caja.current?.focus();
+    };
+    document.addEventListener("paste", alPegar);
+    return () => document.removeEventListener("paste", alPegar);
+  }, [chat.id]);
 
   const mandarArchivos = (files: File[]) => {
     if (!files.length) return;
@@ -431,7 +458,8 @@ export function ChatConversacion({
   const mandarCaptura = async (files: File[]) => {
     if (!files.length) return;
     const listos = await Promise.all(files.map((f) => (f.type.startsWith("image/") ? comprimirFoto(f) : Promise.resolve(f))));
-    mandarArchivos(listos);
+    // Primero se ven (y se puede dibujar arriba); se mandan con Enviar.
+    pegar(listos);
   };
 
   /** Elige una sugerencia de "@": inserta "@Nombre " y la anota para avisarle (si sigue en el texto al mandar). */
@@ -765,13 +793,13 @@ export function ChatConversacion({
         if (!e.dataTransfer.files.length) return;
         e.preventDefault();
         setArrastrando(false);
-        mandarArchivos(Array.from(e.dataTransfer.files));
+        pegar(Array.from(e.dataTransfer.files));
       }}
     >
       {arrastrando && (
         <div className="pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary bg-background/90 text-primary">
           <Upload className="h-8 w-8" />
-          <p className="text-sm font-semibold">Soltá para mandar al chat</p>
+          <p className="text-sm font-semibold">Soltá para agregar al mensaje</p>
           <p className="text-xs text-muted-foreground">Fotos, videos, PDF o documentos · hasta {CHAT_MAX_MB} MB</p>
         </div>
       )}
@@ -1357,10 +1385,20 @@ export function ChatConversacion({
                 >
                   <X className="h-3 w-3" />
                 </button>
+                {x.url && x.file.type.startsWith("image/") && (
+                  <button
+                    type="button"
+                    onClick={() => setDibujando(x.id)}
+                    className="absolute bottom-1 left-1/2 flex h-6 -translate-x-1/2 items-center gap-1 rounded-full bg-black/70 px-2 text-[10px] font-semibold text-white shadow backdrop-blur transition-colors hover:bg-primary"
+                    title="Dibujar arriba de la foto"
+                  >
+                    <Pencil className="h-3 w-3" /> Dibujar
+                  </button>
+                )}
               </div>
             ))}
             <p className="ml-1 self-center text-[11px] text-muted-foreground">
-              Escribí algo si querés y tocá Enviar (Enter). <button type="button" className="underline" onClick={() => setPegados([])}>Cancelar</button>
+              Podés dibujar arriba de las fotos, escribir algo y tocar Enviar (Enter). <button type="button" className="underline" onClick={() => setPegados([])}>Cancelar</button>
             </p>
           </div>
         )}
@@ -1381,7 +1419,7 @@ export function ChatConversacion({
             multiple
             className="hidden"
             onChange={(e) => {
-              mandarArchivos(Array.from(e.target.files ?? []));
+              pegar(Array.from(e.target.files ?? []));
               e.target.value = "";
             }}
           />
@@ -1596,6 +1634,12 @@ export function ChatConversacion({
         </div>
       </footer>
       {!enCelular && <CamaraDialog open={camara} onOpenChange={setCamara} onFoto={(f) => mandarArchivos([f])} />}
+      <DibujarImagen
+        open={!!dibujando}
+        file={pegados.find((x) => x.id === dibujando)?.file ?? null}
+        onOpenChange={(v) => !v && setDibujando(null)}
+        onListo={(f) => dibujando && reemplazarPegado(dibujando, f)}
+      />
       <Dialog open={!!verPegado} onOpenChange={(v) => !v && setVerPegado(null)}>
         <DialogContent className="max-w-[95vw] gap-3 p-3 sm:max-w-4xl">
           <DialogTitle className="truncate pr-8 text-sm">{verPegado?.file.name}</DialogTitle>
