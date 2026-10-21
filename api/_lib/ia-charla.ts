@@ -10,6 +10,19 @@
 import { adminDb } from "./db";
 import { HttpError, type Caller } from "./http";
 import { generarJSON } from "./ia";
+import { estudiarWeb, linksEnTexto } from "./leer-web";
+
+/** Páginas ya leídas (en esta instancia, 30 min): la charla sigue teniendo la web sin volver a bajarla en cada mensaje. */
+const webLeidas = new Map<string, { at: number; r: Awaited<ReturnType<typeof estudiarWeb>> }>();
+async function webDe(u: URL) {
+  const k = u.toString();
+  const c = webLeidas.get(k);
+  if (c && Date.now() - c.at < 30 * 60_000) return c.r;
+  const r = await estudiarWeb(u).catch(() => null);
+  if (webLeidas.size > 50) webLeidas.clear();
+  webLeidas.set(k, { at: Date.now(), r });
+  return r;
+}
 import { marcaTexto } from "./marca";
 import { comercialTexto, ideasDesdeIA, memoriaTexto, nombreMes, nuevoIdIdea, rangoMes, type MemoriaIA } from "./plan-mes";
 import { fechaAR, sumarDias } from "./fecha";
@@ -207,6 +220,13 @@ export async function charlarIA(caller: Caller, b: PedidoCharla): Promise<{ resp
   const p = proj.data() ?? {};
   const memoria = (mem.data() ?? null) as MemoriaIA | null;
   const ctx = await contextoDe(tipo, b, pid);
+  // Si en la charla pegaron el link de una página (la web del cliente, su tienda), se lee: productos, servicios y lo que dice.
+  const urls = [...new Map(mensajes.filter((m) => m.rol === "yo").flatMap((m) => linksEnTexto(m.texto)).map((u) => [u.toString(), u])).values()].slice(-2);
+  const webs = (await Promise.all(urls.map(webDe))).filter((w): w is NonNullable<typeof w> => !!w);
+  const sinLeer = urls.filter((u) => !webs.some((w) => w.url.includes(u.hostname)));
+  const webTexto = webs.length
+    ? `Página web que te pasaron (la leíste recién; usala para conocer los productos, servicios, precios y cómo habla el negocio. No inventes lo que no diga):\n${webs.map((w) => w.texto).join("\n\n").slice(0, 24_000)}`
+    : "";
   const rango: [string, string] =
     tipo === "copy"
       ? [fechaAR(new Date()), sumarDias(fechaAR(new Date()), 30)]
@@ -220,7 +240,9 @@ Cómo responder:
 - "respuesta": lo que le decís a la persona, corto y claro (1 a 4 frases), en español rioplatense con voseo. Si cambiaste algo, contá qué cambiaste. Si te pregunta algo, respondé la pregunta.
 - Completá el contenido nuevo SOLO si te piden cambios o algo nuevo. Si es solo una pregunta o un comentario, dejalo vacío.
 - "recordar": si la persona te cuenta un dato del cliente que sirve para siempre (ej. "no quiere mostrar precios", "el dueño no sale en cámara", "abren solo a la noche"), escribilo en una frase corta para anotarlo en su memoria. Si no, vacío.
-- No inventes precios, promociones ni datos que no estén abajo o en la charla. Si te falta un dato para hacerlo bien, preguntalo en la respuesta.
+- No inventes precios, promociones ni datos que no estén abajo o en la charla. Si te falta un dato para hacerlo bien, preguntalo en la respuesta.${webs.length ? `
+- Te pasaron una página web: en "resumen_web" resumí en 3 a 6 frases qué vende el negocio (productos o servicios principales, precios si figuran, a quién le vende y cómo se presenta) para guardarlo en su memoria. En la respuesta contá brevemente que la leíste y qué encontraste.` : ""}${sinLeer.length ? `
+- No pudiste abrir ${sinLeer.map((u) => u.hostname).join(", ")} (puede estar caída o armada de una forma que no se puede leer): decilo en la respuesta y pedí que te cuenten los productos o que peguen el texto.` : ""}
 
 ${marcaTexto(p)}
 
@@ -230,13 +252,15 @@ ${memoriaTexto(memoria)}
 
 Lo que se está trabajando:
 ${ctx.texto}
-
+${webTexto ? `
+${webTexto}
+` : ""}
 ${b.voz ? `${VOZ}\n\n` : ""}Charla con la persona del equipo (lo último es lo que te pide ahora):
 ${mensajes.map((m) => `${m.rol === "yo" ? "Equipo" : "Vos"}: ${m.texto}`).join("\n")}`;
 
   const r = await generarJSON<Record<string, any>>(
     prompt,
-    { type: "OBJECT", properties: { respuesta: { type: "STRING" }, recordar: { type: "STRING" }, ...ESQUEMAS[tipo] }, required: ["respuesta"] },
+    { type: "OBJECT", properties: { respuesta: { type: "STRING" }, recordar: { type: "STRING" }, resumen_web: { type: "STRING" }, ...ESQUEMAS[tipo] }, required: ["respuesta"] },
     0.7
   );
 
@@ -292,6 +316,20 @@ ${mensajes.map((m) => `${m.rol === "yo" ? "Equipo" : "Vos"}: ${m.texto}`).join("
         .set({ proyecto_id: pid, notas_equipo: notas, notas_at: new Date().toISOString(), notas_por: caller.uid }, { merge: true });
       recordado = nuevo;
     }
+  }
+  // Lo que se sacó de la web queda en la memoria del cliente (como el contexto que pasa el equipo al armar el mes).
+  const resumenWeb = t(r.resumen_web, 800);
+  if (resumenWeb && webs.length) {
+    const previos = (memoria?.contexto_equipo ?? []).filter((x) => !(x.archivos ?? []).some((a) => webs.some((w) => w.url === a))).slice(-19);
+    await db
+      .collection("ia_memoria")
+      .doc(pid)
+      .set(
+        { contexto_equipo: [...previos, { texto: `Su página web: ${resumenWeb}`, at: fechaAR(new Date()), por: caller.uid, archivos: webs.map((w) => w.url) }] },
+        { merge: true }
+      )
+      .catch((e) => console.warn("[charla] web en memoria", pid, e));
+    recordado = recordado ?? "Lo que vende según su página web";
   }
   return { respuesta, propuesta, recordado };
 }
