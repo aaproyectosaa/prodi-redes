@@ -33,6 +33,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useOpenVideo } from "@/components/redes/VideoCard";
 import { ResumenComercial } from "@/components/redes/ContextoComercial";
 import { useRedes } from "@/contexts/redes-data-context";
+import { callApi } from "@/lib/redes/api";
 import { hace, mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import { usoPlan } from "@/lib/redes/planes";
 import {
@@ -759,7 +760,23 @@ function EstadoIdea({ idea }: { idea: IdeaPlan }) {
 function AjusteIdea({ plan, idea }: { plan: PlanMes; idea: IdeaPlan }) {
   const [titulo, setTitulo] = useState(idea.titulo);
   const [texto, setTexto] = useState(idea.idea);
-  const [busy, setBusy] = useState<null | "crear" | "descartar">(null);
+  const [busy, setBusy] = useState<null | "crear" | "descartar" | "ia">(null);
+  const [aplicada, setAplicada] = useState(false);
+  // La IA reescribe la idea con lo que pidió el cliente (queda en los campos para revisarla antes de crear el video).
+  const aplicarConIA = async () => {
+    setBusy("ia");
+    try {
+      const r = await callApi<{ titulo: string; idea: string }>("/api/ia/plan-reescribir", { proyecto_id: plan.proyecto_id, mes: plan.mes, idea_id: idea.id });
+      setTitulo(r.titulo);
+      setTexto(r.idea);
+      setAplicada(true);
+      toast.success("Listo: revisala y creá el video");
+    } catch (e) {
+      err(e);
+    } finally {
+      setBusy(null);
+    }
+  };
   const run = async (accion: "crear" | "descartar") => {
     if (accion === "crear" && titulo.trim().length < 3) {
       toast.error("Poné un título");
@@ -783,6 +800,13 @@ function AjusteIdea({ plan, idea }: { plan: PlanMes; idea: IdeaPlan }) {
           <b>Pidió cambios:</b> “{idea.respuesta?.comentario}”
         </span>
       </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="outline" className="h-8 rounded-full border-primary/40 bg-background text-xs" onClick={() => void aplicarConIA()} disabled={!!busy}>
+          {busy === "ia" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5 text-primary" />}
+          {aplicada ? "Rehacer con IA" : "Aplicar con IA"}
+        </Button>
+        <span className="text-[11px] text-muted-foreground">{aplicada ? "Ya tiene el cambio: revisala y creá el video." : "Reescribe la idea con lo que pidió el cliente."}</span>
+      </div>
       <Input value={titulo} onChange={(e) => setTitulo(e.target.value)} className="h-9 font-semibold" maxLength={120} />
       <Textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={3} className="text-sm" maxLength={1200} />
       <div className="flex flex-wrap justify-end gap-2">

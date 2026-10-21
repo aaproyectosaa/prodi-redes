@@ -874,6 +874,10 @@ function IdeaBlock({ video, editable, uid }: { video: Video; editable: boolean; 
     }
   };
 
+  // Lo que pidió cambiar el cliente en la idea del plan (los videos de antes lo tienen en el historial).
+  const ajusteCliente =
+    video.ajuste_cliente ?? video.historial?.find((h) => h.accion.includes("ajustada con el pedido del cliente"))?.nota ?? null;
+
   return (
     <Block
       icon={Sparkles}
@@ -909,6 +913,11 @@ function IdeaBlock({ video, editable, uid }: { video: Video; editable: boolean; 
             <p className="rounded-lg bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary">
               {video.pedido_cliente ? "Lo pidió el cliente" : "Fecha pedida"}
               {video.fecha_deseada ? ` · lo necesita publicado para el ${fechaCorta(video.fecha_deseada)}` : ""}
+            </p>
+          )}
+          {ajusteCliente && (
+            <p className="whitespace-pre-wrap rounded-lg border border-orange-500/30 bg-orange-500/[0.07] px-2.5 py-2 text-xs">
+              <b className="text-orange-700 dark:text-orange-300">Pidió el cliente:</b> “{ajusteCliente}”
             </p>
           )}
           <p className="whitespace-pre-wrap">{video.idea || <span className="text-muted-foreground">Sin guion cargado.</span>}</p>

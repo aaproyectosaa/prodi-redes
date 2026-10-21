@@ -154,6 +154,8 @@ export interface Video {
   material_cliente_avisado_at?: string | null;
   /** Links que mandó el cliente a su propio Drive (o similar) con el material (lo escribe el servidor). */
   material_links?: { url: string; at: string; by: string }[];
+  /** Idea del plan que el cliente pidió cambiar: lo que pidió (para que lo vea quien lo hace). */
+  ajuste_cliente?: string | null;
   historial: HistorialVideo[];
   created_at: string;
   created_by: string;

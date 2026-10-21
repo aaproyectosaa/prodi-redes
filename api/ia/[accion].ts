@@ -1397,7 +1397,8 @@ async function planAjustar(req: VercelRequest) {
         "Idea del plan ajustada con el pedido del cliente"
       );
       (v.historial[0] as { nota: string | null }).nota = i.respuesta?.comentario ?? null;
-      tx.set(vRef, { ...v, pedido_cliente: false, plan_idea_id: i.id, ...(p.demo_ejemplo ? { demo_ejemplo: true } : {}) });
+      // Lo que pidió cambiar el cliente queda a la vista en el video (para la editora y producción).
+      tx.set(vRef, { ...v, pedido_cliente: false, plan_idea_id: i.id, ajuste_cliente: i.respuesta?.comentario ?? null, ...(p.demo_ejemplo ? { demo_ejemplo: true } : {}) });
     }
     const nuevas = ideas.map((x) =>
       x.id === i.id ? (descartar ? { ...x, descartada: true } : { ...x, titulo, idea: texto, video_id }) : x
@@ -1409,6 +1410,40 @@ async function planAjustar(req: VercelRequest) {
 
   await aprender(pid, proj, aprendizajeAjuste(mes, antes, { titulo, idea: texto }, descartar), false);
   return { ok: true, video_id: videoId };
+}
+
+/** "Aplicar con IA": reescribe una idea del plan con lo que pidió cambiar el cliente (no guarda: lo revisa el equipo). */
+async function planReescribir(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "productor"]);
+  await controlarTopeIA(caller, "plan-reescribir");
+  const b = body<{ proyecto_id?: string; mes?: string; idea_id?: string }>(req);
+  if (!b.proyecto_id || !MES_RE.test(String(b.mes)) || !b.idea_id) throw new HttpError(400, "Datos incompletos");
+  await assertProjectAccess(caller, b.proyecto_id);
+  const db = adminDb();
+  const plan = (await db.collection("planes_mes").doc(planId(b.proyecto_id, String(b.mes))).get()).data();
+  const i = ((plan?.ideas ?? []) as IdeaPlan[]).find((x) => x.id === b.idea_id);
+  if (!i) throw new HttpError(404, "Esa idea ya no está");
+  const pedido = String(i.respuesta?.comentario ?? "").trim();
+  if (!pedido) throw new HttpError(409, "El cliente no pidió cambios en esta idea");
+  const proj = (await db.collection("projects").doc(b.proyecto_id).get()).data() ?? {};
+  const r = await generarJSON<{ titulo?: string; idea?: string }>(
+    `Sos el equipo creativo de Prodi (agencia argentina de videos para redes). Le mandamos al cliente esta idea de video y nos pidió cambios. Reescribila aplicando TODO lo que pidió, sin perder lo que no tocó. Si pide cambiar frases o palabras, usá exactamente las que propone. Mismo largo y estilo que la original (qué se ve, qué se dice, cómo cierra). Español rioplatense.
+
+${marcaTexto(proj)}
+
+Idea original:
+Título: ${i.titulo}
+${i.idea}
+
+Lo que pidió cambiar el cliente:
+${pedido}`,
+    { type: "OBJECT", properties: { titulo: { type: "STRING" }, idea: { type: "STRING" } }, required: ["titulo", "idea"] },
+    0.4
+  );
+  const titulo = String(r.titulo ?? "").trim().slice(0, 120);
+  const idea = String(r.idea ?? "").trim().slice(0, 1200);
+  if (titulo.length < 3 || !idea) throw new HttpError(502, "La IA no devolvió la idea. Probá de nuevo.");
+  return { titulo, idea };
 }
 
 async function comercialGuardar(req: VercelRequest) {
@@ -1631,6 +1666,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "plan-enviar") res.status(200).json(await planEnviar(req));
     else if (accion === "plan-responder") res.status(200).json(await planResponder(req));
     else if (accion === "plan-ajustar") res.status(200).json(await planAjustar(req));
+    else if (accion === "plan-reescribir") res.status(200).json(await planReescribir(req));
     else if (accion === "plan-campania") res.status(200).json(await planCampania(req));
     else if (accion === "plan-cupos") res.status(200).json(await planCupos(req));
     else if (accion === "memoria-notas") res.status(200).json(await memoriaNotas(req));
