@@ -44,8 +44,37 @@ const aBase64 = (b: Blob) =>
   });
 const nuevoId = () => `a${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
-/** Lee lo que se adjunta: fotos (achicadas), PDF, el .txt del chat o el .zip que exporta WhatsApp. */
-async function leer(f: File): Promise<Archivo[]> {
+const MIME_AUDIO: Record<string, string> = { opus: "audio/ogg", ogg: "audio/ogg", m4a: "audio/mp4", mp3: "audio/mpeg", aac: "audio/aac", wav: "audio/wav", amr: "audio/amr" };
+
+/**
+ * Los audios del chat exportado "con archivos": se pasan a texto y cada uno queda en el chat donde estaba
+ * (WhatsApp deja el nombre del archivo en esa línea). Hasta 15 audios de hasta 3 MB.
+ */
+async function transcribirAudios(
+  chat: string,
+  audios: { nombre: string; blob: Blob; mime: string }[],
+  progreso?: (n: number, total: number) => void
+): Promise<string> {
+  let texto = chat;
+  const lista = audios.filter((a) => a.blob.size <= 3 * 1024 * 1024).slice(0, 15);
+  for (let i = 0; i < lista.length; i++) {
+    progreso?.(i + 1, lista.length);
+    const a = lista[i];
+    try {
+      const r = await callApi<{ texto: string }>("/api/ia/voz-escuchar", { data: await aBase64(a.blob), mime: a.mime });
+      const dicho = (r.texto || "(no se entendió)").trim();
+      const corto = a.nombre.split("/").pop() ?? a.nombre;
+      if (texto.includes(corto)) texto = texto.split(corto).join(`${corto} → AUDIO TRANSCRIPTO: "${dicho}"`);
+      else texto += `\n[Audio ${corto}: "${dicho}"]`;
+    } catch {
+      /* si uno falla, siguen los demás */
+    }
+  }
+  return texto;
+}
+
+/** Lee lo que se adjunta: fotos (achicadas), PDF, el .txt del chat o el .zip que exporta WhatsApp (con sus audios). */
+async function leer(f: File, progreso?: (n: number, total: number) => void): Promise<Archivo[]> {
   const nombre = f.name || "archivo";
   if (f.type.startsWith("image/")) {
     const chica = await comprimirFoto(f, 1600, 0.82);
@@ -60,7 +89,20 @@ async function leer(f: File): Promise<Archivo[]> {
     const zip = await JSZip.loadAsync(f);
     const out: Archivo[] = [];
     const txts = Object.values(zip.files).filter((z) => !z.dir && /\.txt$/i.test(z.name));
-    for (const z of txts.slice(0, 2)) out.push({ id: nuevoId(), nombre: `${nombre} · ${z.name.split("/").pop()}`, tipo: "chat", texto: await z.async("string") });
+    const audios = await Promise.all(
+      Object.values(zip.files)
+        .filter((z) => !z.dir && /\.(opus|ogg|m4a|mp3|aac|wav|amr)$/i.test(z.name))
+        .map(async (z) => ({ nombre: z.name, blob: await z.async("blob"), mime: MIME_AUDIO[z.name.split(".").pop()!.toLowerCase()] ?? "audio/ogg" }))
+    );
+    for (const z of txts.slice(0, 1)) {
+      const chat = await z.async("string");
+      out.push({
+        id: nuevoId(),
+        nombre: `${nombre}${audios.length ? ` · ${audios.length} audio${audios.length === 1 ? "" : "s"}` : ""}`,
+        tipo: "chat",
+        texto: audios.length ? await transcribirAudios(chat, audios, progreso) : chat,
+      });
+    }
     // Las fotos del chat también ayudan (hasta 4).
     const fotos = Object.values(zip.files).filter((z) => !z.dir && /\.(jpe?g|png|webp)$/i.test(z.name)).slice(0, 4);
     for (const z of fotos) {
@@ -72,6 +114,12 @@ async function leer(f: File): Promise<Archivo[]> {
     return out;
   }
   if (/\.txt$/i.test(nombre) || f.type.startsWith("text/")) return [{ id: nuevoId(), nombre, tipo: "chat", texto: await f.text() }];
+  // Un audio suelto (nota de voz descargada): se pasa a texto.
+  if (f.type.startsWith("audio/") || /\.(opus|ogg|m4a|mp3|aac|wav|amr)$/i.test(nombre)) {
+    const mime = f.type || MIME_AUDIO[nombre.split(".").pop()!.toLowerCase()] || "audio/ogg";
+    const texto = await transcribirAudios("", [{ nombre, blob: f, mime }], progreso);
+    return [{ id: nuevoId(), nombre: `Audio: ${nombre}`, tipo: "chat", texto }];
+  }
   throw new Error(`${nombre}: mandá capturas, PDF o el chat de WhatsApp (.txt o .zip)`);
 }
 
@@ -82,6 +130,7 @@ export function PresupuestoIA({ actual, onResultado }: { actual: unknown; onResu
   const [texto, setTexto] = useState("");
   const [archivos, setArchivos] = useState<Archivo[]>([]);
   const [leyendo, setLeyendo] = useState(false);
+  const [progreso, setProgreso] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [resultado, setResultado] = useState<Pick<ResultadoPresupuestoIA, "resumen" | "faltantes"> | null>(null);
   const [dictando, setDictando] = useState(false);
@@ -95,10 +144,15 @@ export function PresupuestoIA({ actual, onResultado }: { actual: unknown; onResu
     if (!files.length) return;
     setLeyendo(true);
     try {
-      const listos = (await Promise.all(files.map((f) => leer(f).catch((e) => (toast.error(e instanceof Error ? e.message : "No se pudo leer"), []))))).flat();
+      const listos = (
+        await Promise.all(
+          files.map((f) => leer(f, (n, total) => setProgreso(`Escuchando los audios del chat (${n} de ${total})…`)).catch((e) => (toast.error(e instanceof Error ? e.message : "No se pudo leer"), [])))
+        )
+      ).flat();
       setArchivos((prev) => [...prev, ...listos].slice(0, 10));
     } finally {
       setLeyendo(false);
+      setProgreso(null);
     }
   };
   const quitar = (id: string) =>
@@ -187,7 +241,9 @@ export function PresupuestoIA({ actual, onResultado }: { actual: unknown; onResu
         </span>
         <div className="min-w-0">
           <p className="text-sm font-semibold">Armalo con IA</p>
-          <p className="text-[11px] text-muted-foreground">Contale, dictale o pasale capturas, un PDF o el chat de WhatsApp exportado.</p>
+          <p className="text-[11px] text-muted-foreground">
+            Contale, dictale o pasale capturas, un PDF o el chat de WhatsApp exportado <b>con archivos</b> (así escucha los audios).
+          </p>
         </div>
       </div>
 
@@ -220,6 +276,11 @@ export function PresupuestoIA({ actual, onResultado }: { actual: unknown; onResu
         </button>
       </div>
       {dictando && <p className="mt-1 text-[11px] font-medium text-red-500">Te escucho… hablá tranquilo y tocá el micrófono para terminar.</p>}
+      {progreso && (
+        <p className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-primary">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> {progreso}
+        </p>
+      )}
 
       {archivos.length > 0 && (
         <div className="mt-2.5 flex flex-wrap gap-2">
@@ -250,7 +311,7 @@ export function PresupuestoIA({ actual, onResultado }: { actual: unknown; onResu
         ref={input}
         type="file"
         multiple
-        accept="image/*,application/pdf,.pdf,.txt,text/plain,.zip,application/zip"
+        accept="image/*,application/pdf,.pdf,.txt,text/plain,.zip,application/zip,audio/*,.opus,.ogg,.m4a"
         className="hidden"
         onChange={(e) => {
           void agregar(Array.from(e.target.files ?? []));

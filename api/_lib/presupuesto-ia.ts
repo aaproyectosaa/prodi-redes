@@ -31,11 +31,32 @@ export async function presupuestoIA(b: PedidoPresupuestoIA) {
   if (!texto && !chat && !adjuntos.length) throw new HttpError(400, "Contale a la IA de qué se trata o mandale capturas o el chat");
 
   const db = adminDb();
-  const [planesSnap, previosSnap, cfg] = await Promise.all([
+  const [planesSnap, previosSnap, cfg, clientesSnap] = await Promise.all([
     db.collection("planes_redes").get(),
     db.collection("presupuestos").get(),
     db.collection("app_settings").doc("redes").get(),
+    db.collection("projects").get(),
   ]);
+  // Lo que pagan hoy los clientes (sin nombres): la mejor referencia cuando no hay planes generales.
+  const porPlan = new Map<string, any>(planesSnap.docs.map((d) => [d.id, d.data()]));
+  const actuales = clientesSnap.docs
+    .map((d) => d.data() as any)
+    .filter((c) => c.enabled !== false && !c.demo_ejemplo)
+    .map((c) => {
+      const base = c.plan_redes_id ? porPlan.get(c.plan_redes_id) ?? {} : {};
+      const o = c.plan_redes_override ?? {};
+      const videos = Number(o.videos_mes ?? base.videos_mes ?? 0);
+      const precio = Number(o.precio_mensual ?? base.precio_mensual ?? 0);
+      if (!videos || !precio) return null;
+      const piezas = Number(o.piezas_mes ?? base.piezas_mes ?? 0);
+      const extra = Number(o.precio_video_extra ?? base.precio_video_extra ?? 0);
+      const pauta = o.pauta?.incluida ? `, pauta incluida${o.pauta.monto ? ` (inversión ${o.pauta.monto})` : ""}` : "";
+      const moneda = c.facturacion?.moneda === "USD" || c.moneda === "USD" ? "US$" : "$";
+      return `- ${videos} videos/mes${piezas ? ` + ${piezas} piezas` : ""}${pauta}: ${moneda}${precio.toLocaleString("es-AR")} por mes${extra ? ` · video extra ${moneda}${extra.toLocaleString("es-AR")}` : ""}`;
+    })
+    .filter(Boolean)
+    .slice(0, 25)
+    .join("\n");
   const planes = planesSnap.docs
     .map((d) => ({ id: d.id, ...d.data() }) as any)
     .filter((p) => p.activo !== false)
@@ -56,16 +77,19 @@ Reglas:
 - Sacá del material: nombre de la empresa, nombre del contacto, su WhatsApp/teléfono y email si aparecen.
 - Si lo que pide encaja con un plan de Prodi, elegí ese plan en "plan_id" (exacto, de la lista) y NO lo repitas en "items". Si no encaja, "plan_id" vacío y armá los ítems.
 - "items": lo que se cobra aparte del plan (jornada de filmación extra, edición, piezas gráficas, manejo de pauta, producción especial, etc.). Cada ítem: concepto corto, detalle (qué incluye, 1 frase), cantidad, precio (número entero sin símbolos, en la moneda elegida) y periodo ("mensual" o "unico").
-- Precios: si en el material se habló de un precio, usalo. Si no, usá los de los planes y presupuestos anteriores como referencia. No inventes descuentos.
+- Precios: si en el material se habló de un precio, usalo. Si no, basate en lo que pagan hoy los clientes de Prodi (abajo), los planes y los presupuestos anteriores: elegí el más parecido a lo que pide este cliente por cantidad de videos y servicios. No inventes descuentos.
 - "moneda": "ARS" salvo que se hable en dólares. "tipo": "factura" (con IVA ${iva}%) salvo que pidan sin factura → "boleta".
 - "validez_dias": cuántos días vale (por defecto 15).
 - "nota": mensaje corto y cálido para el cliente (2 a 3 frases, voseo), que retome lo que charlaron.
 - "resumen": 1 o 2 frases para el admin explicando qué armaste y por qué.
-- "faltantes": datos importantes que no pudiste deducir (ej. "No encontré el WhatsApp del contacto", "No se habló de precio de la jornada: usé el de referencia"). Vacío si no falta nada.
+- "faltantes": SOLO lo importante para cerrar el presupuesto que no pudiste deducir (máximo 4): qué servicio exactamente, cantidades, precios que tuviste que estimar, fechas o presupuesto de pauta. NO pongas cosas menores como email, apellido o teléfono del contacto. Si hubo audios que no se pudieron escuchar, decilo una sola vez. Vacío si no falta nada.
 - Español rioplatense.
 
 Planes de Prodi:
 ${planes || "(no hay planes cargados)"}
+
+Lo que pagan hoy los clientes de Prodi (referencia real, sin nombres):
+${actuales || "(no hay datos)"}
 
 Precios usados en presupuestos anteriores (referencia):
 ${previos || "(todavía no hay presupuestos)"}
