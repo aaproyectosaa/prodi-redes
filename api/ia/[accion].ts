@@ -26,6 +26,7 @@
 // POST /api/ia/dueno { mensajes } (super admin) → asistente del dueño, ve todo (ver api/_lib/dueno.ts)
 // POST /api/ia/links-chat { chat_id, mensaje_id } → links del mensaje: a la ficha del cliente y a la memoria de la IA
 // POST /api/ia/memoria-chat-quitar { proyecto_id, texto } → saca un dato que la IA aprendió del chat
+// POST /api/ia/presupuesto-ia { texto?, chat?, adjuntos?: [{ data, mime }], actual? } (admin) → presupuesto armado por la IA
 // POST /api/ia/chat-resumen { chat_id, desde } → "¿Qué me perdí?": resumen de los mensajes sin leer de un chat
 // POST /api/ia/voz-escuchar { data (base64), mime } → lo que dijo (llamada de voz con la IA)
 // POST /api/ia/voz-hablar { texto } → { audio: { data, mime } | null } con la voz natural (si no hay, el navegador lee)
@@ -35,6 +36,7 @@
 // POST /api/ia/software-tarea-sugerir { chat_id, mensaje_id } → Software: la IA (barata) mira si el mensaje es una tarea y
 //      deja una sugerencia en el mensaje ("¿Crear tarea?"). Nunca crea la tarea: la confirma una persona.
 
+import { presupuestoIA, type PedidoPresupuestoIA } from "../_lib/presupuesto-ia";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { FieldValue, type Data } from "../_lib/db";
 import { adminDb, getPool } from "../_lib/db";
@@ -1618,6 +1620,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "voz-escuchar") res.status(200).json(await vozEscuchar(req));
     else if (accion === "voz-hablar") res.status(200).json(await vozHablar(req));
     else if (accion === "chat-resumen") res.status(200).json(await chatResumen(req));
+    else if (accion === "presupuesto-ia") res.status(200).json(await presupuestoConIA(req));
     else if (accion === "preparar") res.status(200).json(await preparar(req));
     else if (accion === "marca-subir") res.status(200).json(await marcaSubir(req));
     else if (accion === "marca-quitar") res.status(200).json(await marcaQuitar(req));
@@ -1723,6 +1726,13 @@ async function resumenVoz(req: VercelRequest) {
 }
 
 const ROLES_VOZ = ["admin", "productor", "editor", "pauta", "diseno"];
+
+/** Presupuesto armado por la IA con lo que cuenta el admin, capturas, PDF o un chat de WhatsApp (ver api/_lib/presupuesto-ia.ts). */
+async function presupuestoConIA(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin"]);
+  await controlarTopeIA(caller, "presupuesto-ia");
+  return presupuestoIA(body<PedidoPresupuestoIA>(req));
+}
 
 /** "¿Qué me perdí?": los mensajes sin leer de un chat, resumidos en pocas viñetas (IA barata). */
 async function chatResumen(req: VercelRequest) {

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Copy, ExternalLink, FileText, Loader2, MessageCircle, Pencil, Plus, Trash2 } from "lucide-react";
+import { Building2, CalendarDays, Copy, ExternalLink, FileText, Loader2, MessageCircle, Package, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageShell } from "@/components/redes/PageShell";
 import { FilaKpis, Kpi, Vacio } from "@/components/redes/admin/AdminUI";
@@ -25,6 +25,7 @@ import {
   type Presupuesto,
 } from "@/lib/redes/presupuestos";
 import { cn } from "@/lib/utils";
+import { PresupuestoIA, type ResultadoPresupuestoIA } from "@/components/redes/PresupuestoIA";
 
 // Presupuestos para clientes nuevos: se arman acá, se manda el link y el cliente lo acepta, crea su usuario y queda
 // como cliente (api/_lib/presupuestos.ts).
@@ -37,6 +38,18 @@ const nuevoItem = (periodo: ItemPresupuesto["periodo"] = "mensual"): ItemPresupu
 
 type Borrador = Omit<Presupuesto, "id" | "token" | "created_at" | "estado" | "numero" | "created_by">;
 
+/** Bloque del formulario con su título (afuera del Editor: si no, los campos pierden el foco al escribir). */
+function Seccion({ icono: Icono, titulo, children }: { icono: React.ElementType; titulo: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-3 rounded-2xl border bg-card p-4">
+      <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <Icono className="h-3.5 w-3.5 text-primary" /> {titulo}
+      </p>
+      {children}
+    </section>
+  );
+}
+
 function Editor({ inicial, id, onClose }: { inicial: Borrador; id: string | null; onClose: () => void }) {
   const { planes, settings } = useRedes();
   const { user } = useUserProfileContext();
@@ -46,6 +59,36 @@ function Editor({ inicial, id, onClose }: { inicial: Borrador; id: string | null
   const set = <K extends keyof Borrador>(k: K, v: Borrador[K]) => setP((x) => ({ ...x, [k]: v }));
   const setItem = (iid: string, cambios: Partial<ItemPresupuesto>) => set("items", p.items.map((i) => (i.id === iid ? { ...i, ...cambios } : i)));
   const tot = totalesPresupuesto(p.items, p.tipo, settings.iva_pct ?? 21);
+
+  const itemDePlan = (plan: (typeof planes)[number]): ItemPresupuesto => ({
+    id: `plan-${plan.id}`,
+    concepto: `Plan ${plan.nombre}`,
+    detalle: `${plan.videos_mes} videos por mes${plan.piezas_mes ? ` + ${plan.piezas_mes} piezas gráficas` : ""}, publicación y pauta en Meta`,
+    cantidad: 1,
+    precio: plan.precio_mensual,
+    periodo: "mensual",
+  });
+
+  // Lo que armó la IA: se carga en el formulario para revisarlo (no se guarda solo).
+  const aplicarIA = (r: ResultadoPresupuestoIA) => {
+    const plan = r.plan_id ? planes.find((x) => x.id === r.plan_id) : undefined;
+    setP((x) => ({
+      ...x,
+      empresa: r.empresa || x.empresa,
+      contacto: {
+        ...x.contacto,
+        nombre: r.contacto.nombre || x.contacto.nombre || null,
+        telefono: r.contacto.telefono || x.contacto.telefono || null,
+        email: r.contacto.email || x.contacto.email || null,
+      },
+      plan_id: plan?.id ?? null,
+      items: [...(plan ? [itemDePlan(plan)] : []), ...r.items.map((i) => ({ ...nuevoItem(i.periodo), concepto: i.concepto, detalle: i.detalle, cantidad: i.cantidad, precio: i.precio }))],
+      moneda: r.moneda,
+      tipo: r.tipo,
+      validez: enDias(r.validez_dias || 15),
+      nota: r.nota || x.nota,
+    }));
+  };
 
   const elegirPlan = (planId: string) => {
     const plan = planes.find((x) => x.id === planId);
@@ -82,6 +125,9 @@ function Editor({ inicial, id, onClose }: { inicial: Borrador; id: string | null
 
   return (
     <div className="space-y-4">
+      <PresupuestoIA actual={p} onResultado={aplicarIA} />
+
+      <Seccion icono={Building2} titulo="Cliente">
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5 sm:col-span-2">
           <Label>Empresa</Label>
@@ -96,6 +142,9 @@ function Editor({ inicial, id, onClose }: { inicial: Borrador; id: string | null
           <Input value={p.contacto.telefono ?? ""} onChange={(e) => set("contacto", { ...p.contacto, telefono: e.target.value })} placeholder="Ej.: 3492 123456" />
         </div>
       </div>
+      </Seccion>
+
+      <Seccion icono={Package} titulo="Qué incluye">
 
       <div className="space-y-1.5">
         <Label>Plan</Label>
@@ -141,6 +190,9 @@ function Editor({ inicial, id, onClose }: { inicial: Borrador; id: string | null
           </Button>
         </div>
       </div>
+      </Seccion>
+
+      <Seccion icono={CalendarDays} titulo="Condiciones y mensaje">
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="space-y-1.5">
@@ -166,28 +218,29 @@ function Editor({ inicial, id, onClose }: { inicial: Borrador; id: string | null
         <Label>Mensaje para el cliente (opcional)</Label>
         <Textarea value={p.nota ?? ""} onChange={(e) => set("nota", e.target.value)} rows={3} placeholder="Ej.: ¡Hola Martín! Como charlamos, arrancamos con 4 videos por mes y la pauta en Instagram." />
       </div>
+      </Seccion>
 
-      <div className="rounded-xl border bg-muted/30 p-3 text-sm">
+      <div className="space-y-1 rounded-2xl border-2 border-primary/30 bg-gradient-to-br from-primary/[0.08] to-transparent p-4 text-sm">
         {tot.mensual > 0 && (
           <p className="flex justify-between">
             <span>Por mes{tot.iva_pct ? ` (+ IVA ${tot.iva_pct}%)` : ""}</span>
-            <b className="tabular-nums">{plata(tot.mensual_final, p.moneda)}</b>
+            <b className="text-lg tabular-nums">{plata(tot.mensual_final, p.moneda)}</b>
           </p>
         )}
         {tot.unico > 0 && (
           <p className="flex justify-between">
             <span>Una vez{tot.iva_pct ? ` (+ IVA ${tot.iva_pct}%)` : ""}</span>
-            <b className="tabular-nums">{plata(tot.unico_final, p.moneda)}</b>
+            <b className="text-lg tabular-nums">{plata(tot.unico_final, p.moneda)}</b>
           </p>
         )}
         {!tot.mensual && !tot.unico && <p className="text-muted-foreground">Agregá ítems para ver el total.</p>}
       </div>
 
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" onClick={onClose}>
+      <div className="sticky bottom-0 -mx-6 -mb-6 flex justify-end gap-2 border-t bg-background/95 px-6 py-3 backdrop-blur">
+        <Button variant="ghost" className="rounded-full" onClick={onClose}>
           Cancelar
         </Button>
-        <Button onClick={() => void guardar()} disabled={busy}>
+        <Button onClick={() => void guardar()} disabled={busy} className="rounded-full bg-gradient-to-r from-primary to-fuchsia-500 px-6 font-semibold shadow-md shadow-primary/25">
           {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Guardar
         </Button>
@@ -310,10 +363,15 @@ export default function Presupuestos() {
       )}
 
       <Dialog open={!!editando} onOpenChange={(o) => !o && setEditando(null)}>
-        <DialogContent className="max-h-[92dvh] max-w-xl overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editando?.id ? "Editar presupuesto" : "Nuevo presupuesto"}</DialogTitle>
-            <DialogDescription>Al guardar, copiá el link o mandalo por WhatsApp. El cliente lo acepta y crea su usuario ahí mismo.</DialogDescription>
+        <DialogContent className="max-h-[92dvh] w-[calc(100vw-1.5rem)] max-w-2xl overflow-y-auto rounded-3xl">
+          <DialogHeader className="text-left">
+            <DialogTitle className="flex items-center gap-2.5 text-xl">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-fuchsia-500 text-white shadow-md shadow-primary/25">
+                <FileText className="h-4 w-4" />
+              </span>
+              {editando?.id ? "Editar presupuesto" : "Nuevo presupuesto"}
+            </DialogTitle>
+            <DialogDescription>Armalo a mano o con la IA. Al guardar, copiá el link o mandalo por WhatsApp: el cliente lo acepta y crea su usuario ahí mismo.</DialogDescription>
           </DialogHeader>
           {editando && <Editor key={editando.id ?? "nuevo"} inicial={editando.datos} id={editando.id} onClose={() => setEditando(null)} />}
         </DialogContent>
