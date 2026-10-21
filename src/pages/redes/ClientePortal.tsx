@@ -320,9 +320,8 @@ export default function ClientePortal() {
             </button>
           )}
           {/* Las ideas ya respondidas se pueden volver a leer. */}
-          {!planPend &&
-            [planProx, planEste]
-              .filter((p): p is NonNullable<typeof p> => !!p && p.estado !== "borrador" && p.ideas.length > 0)
+          {[planProx, planEste]
+              .filter((p): p is NonNullable<typeof p> => !!p && p.id !== planPend?.id && !["borrador", "enviado"].includes(p.estado) && p.ideas.length > 0)
               .slice(0, 1)
               .map((p) => (
                 <button
