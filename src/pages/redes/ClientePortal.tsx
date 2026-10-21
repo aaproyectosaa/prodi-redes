@@ -284,7 +284,13 @@ export default function ClientePortal() {
         cliente={cliente}
         soloEdicion={soloEdicion}
       />
-      <PlanMesCliente proyectoId={cliente.id} mes={planAbierto} open={!!planAbierto} onOpenChange={(o) => !o && setPlanAbierto(null)} />
+      <PlanMesCliente
+        proyectoId={cliente.id}
+        mes={planAbierto}
+        open={!!planAbierto}
+        onOpenChange={(o) => !o && setPlanAbierto(null)}
+        integrantes={cliente.team_roles?.cliente ?? []}
+      />
       {/* Pagos atrasados: lo que debe y qué se le frena (arriba de todo, en cualquier sección). */}
       <AvisoMoraCliente cliente={cliente} onPagar={tab === "plan" ? undefined : () => setTab("plan")} />
       {/* Las secciones se eligen desde el menú: sin pestañas repetidas. */}
@@ -313,6 +319,30 @@ export default function ClientePortal() {
               <span className="shrink-0 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-md shadow-primary/30">Responder →</span>
             </button>
           )}
+          {/* Las ideas ya respondidas se pueden volver a leer. */}
+          {!planPend &&
+            [planProx, planEste]
+              .filter((p): p is NonNullable<typeof p> => !!p && p.estado !== "borrador" && p.ideas.length > 0)
+              .slice(0, 1)
+              .map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setPlanAbierto(p.mes)}
+                  className="flex w-full items-center gap-3 rounded-2xl border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/40"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                    <Sparkles className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold">Las ideas de {mesLabel(p.mes).split(" ")[0].toLowerCase()}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {p.ideas.length === 1 ? "1 idea" : `${p.ideas.length} ideas`} · ya respondidas. Tocá para volver a leerlas y ver en qué quedó cada una.
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs font-semibold text-primary">Ver →</span>
+                </button>
+              ))}
           <CupoVideos uso={uso} mes={mes} precioExtra={plan.precioVideoExtra} onPedir={() => setPedirVideo(true)} />
 
           <Section

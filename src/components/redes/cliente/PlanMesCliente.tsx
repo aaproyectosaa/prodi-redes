@@ -17,11 +17,14 @@ export function PlanMesCliente({
   mes,
   open,
   onOpenChange,
+  integrantes = [],
 }: {
   proyectoId: string;
   mes: string | null;
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  /** Los usuarios de la empresa (para avisar si alguien todavía no votó antes de confirmar). */
+  integrantes?: string[];
 }) {
   const { plan, loading } = usePlanMes(open && mes ? proyectoId : null, mes ?? "");
   const [resp, setResp] = useState<Record<string, Resp>>({});
@@ -80,6 +83,16 @@ export function PlanMesCliente({
       toast.error("Decinos qué te parece cada idea (y qué cambiarías, si algo no te convence)");
       return;
     }
+    // Al confirmar se cierra para todos: si hay compañeros que todavía no votaron, que lo sepa antes.
+    const votaron = new Set(Object.keys(plan.votos ?? {}));
+    const faltan = integrantes.filter((u) => u !== uid && !votaron.has(u)).length;
+    if (
+      faltan > 0 &&
+      !window.confirm(
+        `${faltan === 1 ? "Una persona de tu equipo todavía no votó" : `${faltan} personas de tu equipo todavía no votaron`}. Al confirmar se cierran las ideas para todos. ¿Confirmar igual?`
+      )
+    )
+      return;
     setBusy(true);
     try {
       const r = await responderPlan(
@@ -239,6 +252,9 @@ export function PlanMesCliente({
                               </span>
                             ) : (
                               <span className="text-orange-700 dark:text-orange-300">La estamos ajustando con lo que nos pediste</span>
+                            )}
+                            {i.respuesta?.comentario && (
+                              <span className="mt-1.5 block whitespace-pre-wrap rounded-xl bg-muted/60 p-2 font-normal text-muted-foreground">“{i.respuesta.comentario}”</span>
                             )}
                           </p>
                         )}
