@@ -88,6 +88,7 @@ Cómo trabajás:
 - Estructura habitual: 01 Qué hacemos (tarjetas), 02… Inversión (una o más), y al final Condiciones esenciales (Pago, Alcance, Baja y actualización; agregá Desarrollo si hay plataformas). Ajustá las condiciones a lo que se ofrece.
 - "titulo": nombre del cliente o de los comercios (ej. "Hornos Cian"). "etiqueta": de qué trata en pocas palabras ("Propuesta · Campaña y administración de redes").
 - "respuesta" para Lucas: ${b.voz ? "MUY corta (1 o 2 frases, se dice en voz alta), sin listas ni símbolos" : "corta (2 a 4 frases): qué armaste o cambiaste y, si falta algo importante, UNA o DOS preguntas concretas (cantidades, plazos, qué incluye cada opción, precios)"}. Tuteo rioplatense con Lucas.
+- En cada sección completá solo los campos de su tipo; los demás van vacíos ("" o []). "total" vacío (etiqueta, detalle y valor "") si no hay total destacado.
 - "empresa" y "contacto": el nombre del negocio y de la persona con la que habla y su WhatsApp, si aparecen (vacío si no).
 
 ${EJEMPLO}
@@ -109,7 +110,7 @@ ${mensajes.map((m) => `${m.rol === "yo" ? "Lucas" : "Vos"}: ${m.texto}`).join("\
       properties: {
         respuesta: texto,
         empresa: texto,
-        contacto: { type: "OBJECT", properties: { nombre: texto, telefono: texto } },
+        contacto: { type: "OBJECT", properties: { nombre: texto, telefono: texto }, required: ["nombre", "telefono"] },
         propuesta: {
           type: "OBJECT",
           properties: {
@@ -124,22 +125,23 @@ ${mensajes.map((m) => `${m.rol === "yo" ? "Lucas" : "Vos"}: ${m.texto}`).join("\
                   id: texto,
                   tipo: { type: "STRING", enum: ["detalle", "inversion", "condiciones", "texto"] },
                   titulo: texto,
-                  tarjetas: { type: "ARRAY", items: { type: "OBJECT", properties: { id: texto, titulo: texto, resumen: texto, vinetas: { type: "ARRAY", items: texto } } } },
+                  tarjetas: { type: "ARRAY", items: { type: "OBJECT", properties: { id: texto, titulo: texto, resumen: texto, vinetas: { type: "ARRAY", items: texto } }, required: ["id", "titulo", "resumen", "vinetas"] } },
                   columna: texto,
-                  filas: { type: "ARRAY", items: { type: "OBJECT", properties: { id: texto, concepto: texto, detalle: texto, valor: texto } } },
-                  total: { type: "OBJECT", properties: { etiqueta: texto, detalle: texto, valor: texto } },
+                  filas: { type: "ARRAY", items: { type: "OBJECT", properties: { id: texto, concepto: texto, detalle: texto, valor: texto }, required: ["id", "concepto", "detalle", "valor"] } },
+                  total: { type: "OBJECT", properties: { etiqueta: texto, detalle: texto, valor: texto }, required: ["etiqueta", "detalle", "valor"] },
                   nota: texto,
-                  items: { type: "ARRAY", items: { type: "OBJECT", properties: { id: texto, titulo: texto, texto } } },
+                  items: { type: "ARRAY", items: { type: "OBJECT", properties: { id: texto, titulo: texto, texto }, required: ["id", "titulo", "texto"] } },
                   texto,
                 },
-                required: ["tipo", "titulo"],
+                // Todo obligatorio (Claude limita los campos opcionales): lo que no aplica va vacío.
+                required: ["id", "tipo", "titulo", "tarjetas", "columna", "filas", "total", "nota", "items", "texto"],
               },
             },
           },
-          required: ["titulo", "intro", "secciones"],
+          required: ["etiqueta", "titulo", "intro", "secciones"],
         },
       },
-      required: ["respuesta", "propuesta"],
+      required: ["respuesta", "empresa", "contacto", "propuesta"],
     },
     0.5,
     adjuntos

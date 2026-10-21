@@ -58,7 +58,10 @@ function errorClaude(err: unknown): Error {
   }
   if (err instanceof Anthropic.PermissionDeniedError) return new Error("IA: la clave de Claude no tiene permiso o la cuenta no tiene saldo.");
   if (err instanceof Anthropic.RateLimitError) return new Error("IA: muchos pedidos seguidos. Probá en un minuto.");
-  if (err instanceof Anthropic.APIError) return new Error(`IA: Claude respondió ${err.status ?? "con un error"}. Probá de nuevo.`);
+  if (err instanceof Anthropic.APIError) {
+    console.error(`[ia] Claude ${err.status}: ${err.message}`);
+    return new Error(`IA: Claude respondió ${err.status ?? "con un error"}. Probá de nuevo.`);
+  }
   return err instanceof Error ? err : new Error(String(err));
 }
 
