@@ -152,6 +152,8 @@ export interface Video {
   viatico?: import("../../../api/_lib/viaticos").ViaticoVideo | null;
   /** Última vez que el cliente avisó "Listo, ya subí todo" (lo escribe el servidor). */
   material_cliente_avisado_at?: string | null;
+  /** Links que mandó el cliente a su propio Drive (o similar) con el material (lo escribe el servidor). */
+  material_links?: { url: string; at: string; by: string }[];
   historial: HistorialVideo[];
   created_at: string;
   created_by: string;

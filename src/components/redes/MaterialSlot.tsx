@@ -162,8 +162,28 @@ export function MaterialSlot({
   const activeUploads = uploads.filter((u) => u.status !== "done");
   // Videos de los sistemas anteriores: el material estaba en una carpeta de Drive (link), no subido al video.
   const linkViejo = String((slot === "crudo" ? video._viejo?.material_crudo : video._viejo?.material_finalizado) ?? "").trim();
+  // Links que mandó el cliente a su propio Drive (o WeTransfer, Dropbox…) en vez de subir los archivos.
+  const linksCliente = slot === "crudo" ? (video.material_links ?? []) : [];
   const carpetaVieja =
-    audience === "team" && /^https?:\/\//.test(linkViejo) ? (
+    linksCliente.length > 0 || (audience === "team" && /^https?:\/\//.test(linkViejo)) ? (
+      <div className="space-y-2">
+        {linksCliente.map((l) => (
+          <a
+            key={l.url}
+            href={l.url}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2.5 rounded-xl border border-primary/30 bg-primary/[0.05] px-3 py-2.5 text-sm transition-colors hover:border-primary/60"
+          >
+            <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
+            <span className="min-w-0 flex-1">
+              <span className="block font-medium">{/drive\.google|docs\.google/.test(l.url) ? "Material en el Drive del cliente" : "Link al material del cliente"}</span>
+              <span className="block truncate text-[11px] text-muted-foreground">{l.url}</span>
+            </span>
+            <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          </a>
+        ))}
+        {audience === "team" && /^https?:\/\//.test(linkViejo) && (
       <a
         href={linkViejo}
         target="_blank"
@@ -179,6 +199,8 @@ export function MaterialSlot({
         </span>
         <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       </a>
+        )}
+      </div>
     ) : null;
 
   if (compacto) {

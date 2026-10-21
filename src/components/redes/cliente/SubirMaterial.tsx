@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { CheckCircle2, Loader2, RotateCcw, Send, Upload, X } from "lucide-react";
+import { CheckCircle2, Link2, Loader2, RotateCcw, Send, Upload, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { MiniaturaMaterial } from "@/components/redes/cliente/MiniaturaMaterial";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -37,6 +39,11 @@ export function SubirMaterial({ video }: { video: Video }) {
   const desde = video.material_cliente_avisado_at ?? "";
   const sinAvisar = mios.filter((a) => (a.uploaded_at ?? "") > desde).length;
   const subiendo = subidas.some((s) => s.estado === "subiendo" || s.estado === "esperando");
+  // Si el material ya está en su Drive (o WeTransfer, Dropbox…), alcanza con pegar el link.
+  const [link, setLink] = useState("");
+  const linkOk = /^https:\/\/\S+$/i.test(link.trim());
+  const linksMandados = video.material_links ?? [];
+  const hayAlgo = mios.length > 0 || linksMandados.length > 0 || linkOk;
 
   const elegir = (files: File[]) => {
     if (enModoVista()) {
@@ -49,7 +56,8 @@ export function SubirMaterial({ video }: { video: Video }) {
   const listo = async () => {
     setAvisando(true);
     try {
-      await avisarMaterialListo(video.id);
+      await avisarMaterialListo(video.id, linkOk ? [link.trim()] : []);
+      setLink("");
       toast.success(espera ? (pauta ? "¡Gracias! Ya lo preparamos para publicar y pautar." : "¡Gracias! Ya lo empezamos a editar.") : "Listo, le avisamos al equipo.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo avisar");
@@ -88,9 +96,16 @@ export function SubirMaterial({ video }: { video: Video }) {
       </div>
 
       {mios.length > 0 && (
-        <p className="flex items-center gap-1.5 text-xs font-medium text-success">
-          <CheckCircle2 className="h-3.5 w-3.5" /> Ya subiste {mios.length} archivo{mios.length === 1 ? "" : "s"}
-        </p>
+        <div className="space-y-1.5">
+          <p className="flex items-center gap-1.5 text-xs font-medium text-success">
+            <CheckCircle2 className="h-3.5 w-3.5" /> Ya subiste {mios.length} archivo{mios.length === 1 ? "" : "s"}
+          </p>
+          <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6">
+            {mios.map((a) => (
+              <MiniaturaMaterial key={a.drive_file_id} fileId={a.drive_file_id} mime={a.mime_type} nombre={a.name} />
+            ))}
+          </div>
+        </div>
       )}
 
       {subidas.length > 0 && (
@@ -98,6 +113,7 @@ export function SubirMaterial({ video }: { video: Video }) {
           {subidas.map((s) => (
             <li key={s.id} className="rounded-lg border bg-card px-2.5 py-2">
               <div className="flex items-center gap-2">
+                <MiniaturaMaterial file={s.file} mime={s.mime} nombre={s.nombre} className="h-11 w-11 shrink-0 rounded-lg" />
                 <span className="min-w-0 flex-1 truncate text-xs font-medium">{s.nombre}</span>
                 <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
                   {s.estado === "listo"
@@ -129,16 +145,37 @@ export function SubirMaterial({ video }: { video: Video }) {
         </ul>
       )}
 
+      {/* O el link a su propio Drive. */}
+      <div className="space-y-1.5">
+        {linksMandados.map((l) => (
+          <a key={l.url} href={l.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 truncate text-xs font-medium text-primary hover:underline">
+            <Link2 className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{l.url}</span>
+          </a>
+        ))}
+        <div className="relative">
+          <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
+            placeholder="¿Lo tenés en tu Drive? Pegá el link acá"
+            inputMode="url"
+            className="h-10 rounded-xl bg-background pl-9 text-sm"
+          />
+        </div>
+        {link.trim() && !linkOk && <p className="text-[11px] text-destructive">Pegá el link completo (empieza con https://).</p>}
+        {linkOk && <p className="text-[11px] text-muted-foreground">Acordate de compartirlo con “Cualquier persona con el link”.</p>}
+      </div>
+
       <div className="flex flex-col gap-2 sm:flex-row">
         <Button variant={espera && mios.length ? "outline" : "default"} className="sm:flex-1" onClick={() => pickMediaFiles(elegir)}>
           <Upload className="mr-2 h-4 w-4" /> {mios.length ? "Subir más" : "Subir material"}
         </Button>
-        {(espera || sinAvisar > 0) && (
+        {(espera || sinAvisar > 0 || linkOk) && (
           <Button
             className="sm:flex-1"
-            variant={espera && mios.length ? "default" : "outline"}
-            disabled={!mios.length || subiendo || avisando}
-            title={subiendo ? "Esperá a que terminen de subir" : !mios.length ? "Primero subí al menos un archivo" : undefined}
+            variant={espera && hayAlgo ? "default" : "outline"}
+            disabled={!hayAlgo || subiendo || avisando}
+            title={subiendo ? "Esperá a que terminen de subir" : !hayAlgo ? "Primero subí al menos un archivo o pegá el link" : undefined}
             onClick={listo}
           >
             {avisando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}

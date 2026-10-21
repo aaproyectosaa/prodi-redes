@@ -198,11 +198,13 @@ export async function videoListo(req: VercelRequest, res: VercelResponse) {
   }
   try {
     const caller = await requireCaller(req, ROLES);
-    const b = body<{ video_id?: string }>(req);
+    const b = body<{ video_id?: string; links?: string[] }>(req);
     const { id } = await videoParaMaterial(caller, b.video_id);
     const db = adminDb();
     const ref = db.collection("videos").doc(id);
     const ahora = new Date().toISOString();
+    // Links a su propio Drive (o WeTransfer, Dropbox…): solo https, hasta 5.
+    const links = [...new Set((b.links ?? []).map((l) => String(l ?? "").trim()).filter((l) => /^https:\/\/\S+$/i.test(l) && l.length <= 600))].slice(0, 5);
 
     // Solo pauta: el cliente manda el video terminado, así que va directo a subir y pautar (sin edición).
     const v0 = (await ref.get()).data();
@@ -212,18 +214,25 @@ export async function videoListo(req: VercelRequest, res: VercelResponse) {
       const v = (await tx.get(ref)).data();
       if (!v) throw new HttpError(404, "El video ya no existe");
       const crudo = (v.attachments_crudo ?? []) as { origen?: string; uploaded_by?: string; uploaded_at?: string }[];
+      const linksAntes = (v.material_links ?? []) as { url: string }[];
+      const linksNuevos = links.filter((l) => !linksAntes.some((x) => x.url === l));
       // Lo que mandó el cliente desde el último aviso (para no avisar dos veces lo mismo).
       const desde = String(v.material_cliente_avisado_at ?? "");
       const delCliente = crudo.filter((a) => a.origen === "cliente" || a.uploaded_by === caller.uid);
-      const nuevos = delCliente.filter((a) => String(a.uploaded_at ?? "") > desde).length;
-      if (!delCliente.length) throw new HttpError(409, "Primero subí al menos un archivo");
+      const nuevos = delCliente.filter((a) => String(a.uploaded_at ?? "") > desde).length + linksNuevos.length;
+      if (!delCliente.length && !linksAntes.length && !linksNuevos.length) throw new HttpError(409, "Primero subí al menos un archivo o pegá el link");
       const paso = v.etapa === "material_cliente";
       if (!paso && !nuevos) throw new HttpError(409, "Ya le avisamos al equipo. Si subís más archivos, avisá de nuevo.");
       const evento = {
         at: ahora,
         by: caller.uid,
         accion: paso ? (pauta ? "El cliente mandó el video terminado, pasa a pauta" : "El cliente subió su material, pasa a edición") : "El cliente mandó material extra",
-        nota: `${nuevos || delCliente.length} archivo${(nuevos || delCliente.length) === 1 ? "" : "s"}`,
+        nota: [
+          delCliente.length ? `${delCliente.length} archivo${delCliente.length === 1 ? "" : "s"}` : "",
+          linksNuevos.length ? `link${linksNuevos.length === 1 ? "" : "s"}: ${linksNuevos.join(" ")}` : "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
       };
       tx.update(ref, {
         // Pasa a edición con la fecha de entrega sugerida (producción la puede cambiar).
@@ -234,6 +243,7 @@ export async function videoListo(req: VercelRequest, res: VercelResponse) {
             ? { etapa: "edicion", etapa_desde: ahora, entrega_edicion: entregaSugerida(v.fecha_deseada), entrega_aviso: null }
             : {}),
         material_cliente_avisado_at: ahora,
+        ...(linksNuevos.length ? { material_links: [...linksAntes, ...linksNuevos.map((url) => ({ url, at: ahora, by: caller.uid }))] } : {}),
         updated_at: ahora,
         historial: FieldValue.arrayUnion(evento),
       });
@@ -247,7 +257,7 @@ export async function videoListo(req: VercelRequest, res: VercelResponse) {
       {
         destinatarios: (pauta ? [...uno(v.productor_id, "productor"), ...uno(v.pauta_id, "pauta")] : [...uno(v.productor_id, "productor"), ...uno(v.editor_id, "editor")]).filter((x) => x !== caller.uid),
         titulo: paso ? (pauta ? "El cliente mandó el video: listo para pautar" : "El cliente subió su material: a editar") : "El cliente mandó material extra",
-        cuerpo: `${p.nombre ?? "Cliente"} · ${v.titulo} · ${nuevos} archivo${nuevos === 1 ? "" : "s"}`,
+        cuerpo: `${p.nombre ?? "Cliente"} · ${v.titulo} · ${links.length && !nuevos ? "mandó un link" : `${nuevos} archivo${nuevos === 1 ? "" : "s"}`}`,
         link: `/videos?video=${id}`,
         clave: `material_cliente:${id}:${ahora}`,
         proyectoId: String(v.proyecto_id),

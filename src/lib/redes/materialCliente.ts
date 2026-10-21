@@ -166,7 +166,7 @@ export function reintentarSubidaMaterial(id: string) {
 }
 
 /** "Listo, ya subí todo": pasa a edición (si esperaba el material) y le avisa al equipo. */
-export function avisarMaterialListo(videoId: string) {
+export function avisarMaterialListo(videoId: string, links: string[] = []) {
   assertEditable();
-  return callApi<{ ok: boolean; etapa: string }>("/api/drive/video-listo", { video_id: videoId });
+  return callApi<{ ok: boolean; etapa: string }>("/api/drive/video-listo", { video_id: videoId, links });
 }
