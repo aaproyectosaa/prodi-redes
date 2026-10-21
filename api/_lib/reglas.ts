@@ -659,6 +659,8 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
     case "chat_prefs":
       // Solo las propias (ni el super admin toca las de otro).
       return c.uid === id && (borra || prefsValidas(despues!));
+    case "presupuestos": // los arma el admin; lo aceptado lo escribe el servidor
+      return esAdmin(c) && (crea || antes!.estado !== "aceptado" || borra);
     case "in_app_notifications":
       if (crea) return false;
       if (borra) return antes!.recipient_user_id === c.uid;

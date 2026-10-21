@@ -22,7 +22,7 @@ import {
   Store,
   FolderOpen,
   Sparkles,
-  ListTodo, Inbox, Globe, Megaphone } from "lucide-react";
+  ListTodo, Inbox, Globe, Megaphone, FileText } from "lucide-react";
 import type { UserRole } from "@/integrations/firebase/types";
 
 export interface NavItem {
@@ -107,6 +107,7 @@ export function navForRole(role: UserRole | undefined): NavSection[] {
             { label: "Tablero", icon: Gauge, path: "/tablero", mobile: true },
             { label: "Pedidos", icon: Inbox, path: "/pedidos" },
             { label: "Clientes", icon: Building2, path: "/clientes", mobile: true },
+            { label: "Presupuestos", icon: FileText, path: "/presupuestos" },
             { label: "Web", icon: Globe, path: "/web" },
             { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
             { label: "Mi asistente", icon: Sparkles, path: "/mi-asistente" },

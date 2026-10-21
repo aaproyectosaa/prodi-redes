@@ -185,6 +185,13 @@ export async function usarLinkDeClave(token: string, nueva: string) {
   return { user: auth.currentUser! };
 }
 
+/** Entrar con una sesión que ya dio el servidor (ej. al aceptar un presupuesto y crear el usuario). */
+export async function entrarConToken(token: string) {
+  const yo = await llamar<{ uid: string; email: string; nombre: string | null }>("yo", {}, token);
+  setSesion({ token, uid: yo.uid, email: yo.email, nombre: yo.nombre });
+  return { user: auth.currentUser! };
+}
+
 /** Avisos push de este dispositivo. */
 export async function guardarPush(suscripcion: PushSubscriptionJSON | null, quitar?: string | true, app: "chat" | "sistema" = "sistema") {
   const g = leer();

@@ -14,6 +14,7 @@ import { leerTokenAprobacion, linkAprobacion } from "../_lib/aprobacion";
 import { leerVideoPublico, responderCliente } from "../_lib/videos-server";
 import { streamDriveFile } from "../_lib/drive-stream";
 import { responderPiezaApp, responderVideoApp, type PedidoPieza, type PedidoVideo } from "../_lib/aprobar-cliente";
+import { aceptarPresupuesto, verPresupuesto } from "../_lib/presupuestos";
 
 export const config = { maxDuration: 60 };
 
@@ -68,6 +69,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     else if (accion === "responder") res.status(200).json(await responder(req));
     else if (accion === "link") res.status(200).json(await link(req));
+    // Presupuesto por link: verlo y aceptarlo (crea el usuario y la ficha del cliente).
+    else if (accion === "presupuesto") res.status(200).json(await verPresupuesto(String(body<{ t?: string }>(req).t ?? "")));
+    else if (accion === "presupuesto-aceptar") res.status(200).json(await aceptarPresupuesto(body(req), appUrl(req)));
     else if (accion === "video-cliente") {
       const caller = await requireCaller(req, ["admin", "productor", "cliente"]);
       res.status(200).json(await responderVideoApp(caller, body<PedidoVideo>(req), appUrl(req)));

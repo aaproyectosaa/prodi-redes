@@ -31,6 +31,9 @@ const Administracion = lazy(() => import("./pages/redes/Administracion"));
 const Circuito = lazy(() => import("./pages/redes/Circuito"));
 const Pedidos = lazy(() => import("./pages/redes/Pedidos"));
 const Pauta = lazy(() => import("./pages/redes/Pauta"));
+const Presupuestos = lazy(() => import("./pages/redes/Presupuestos"));
+const PresupuestoPublico = lazy(() => import("./pages/PresupuestoPublico"));
+const Bienvenida = lazy(() => import("./pages/Bienvenida"));
 const Rodajes = lazy(() => import("./pages/redes/Rodajes"));
 const ClientePortal = lazy(() => import("./pages/redes/ClientePortal"));
 const Clientes = lazy(() => import("./pages/redes/Clientes"));
@@ -107,6 +110,9 @@ const App = () => (
               <Route path="/auth" element={<Auth />} />
               {/* Público: el cliente aprueba desde el link del aviso sin entrar al sistema */}
               <Route path="/aprobar/:token" element={<Aprobar />} />
+              {/* Público: el presupuesto por link (lo acepta y crea su usuario) y la bienvenida para instalar las apps */}
+              <Route path="/p/:token" element={<PresupuestoPublico />} />
+              <Route path="/bienvenida" element={<Bienvenida />} />
 
               <Route element={<AppLayout />}>
                 <Route path="/" element={<RoleRedirect />} />
@@ -136,6 +142,7 @@ const App = () => (
                 {/* Equipo */}
                 <Route path="/pedidos" element={<RequireRole roles={["admin", "productor"]}><Pedidos /></RequireRole>} />
                 <Route path="/pauta" element={<RequireRole roles={["admin", "pauta"]}><Pauta /></RequireRole>} />
+                <Route path="/presupuestos" element={<RequireRole roles={["admin"]}><Presupuestos /></RequireRole>} />
                 <Route path="/videos" element={<RequireRole roles={["admin", "productor", "editor", "pauta"]}><Circuito /></RequireRole>} />
                 <Route path="/rodajes" element={<RequireRole roles={["admin", "productor"]}><Rodajes /></RequireRole>} />
                 <Route path="/piezas" element={<RequireRole roles={["admin", "productor", "diseno"]}><Piezas /></RequireRole>} />
