@@ -103,6 +103,7 @@ export function navForRole(role: UserRole | undefined): NavSection[] {
       // El tablero del dueño es el del negocio: plata, clientes y equipo. Producción queda aparte.
       return [
         {
+          title: "Inicio",
           items: [
             { label: "Tablero", icon: Gauge, path: "/tablero", mobile: true },
             { label: "Pedidos", icon: Inbox, path: "/pedidos" },

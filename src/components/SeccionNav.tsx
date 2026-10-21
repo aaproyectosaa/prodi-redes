@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useLocation } from "react-router-dom";
-import { Briefcase, ChevronDown, Clapperboard, Landmark, Layers, type LucideIcon } from "lucide-react";
+import { Briefcase, ChevronDown, Clapperboard, House, Landmark, Layers, type LucideIcon } from "lucide-react";
 import type { NavSection } from "@/lib/redes/nav";
 import { isNavItemActive } from "@/components/AppSidebar";
 import { cn } from "@/lib/utils";
 
 /**
- * Los grupos con título del menú (Administración, Producción, Gestión) van como acordeón: uno abierto por vez, así no
+ * Los grupos con título del menú (Inicio, Administración, Producción, Gestión) van como acordeón: uno abierto por vez, así no
  * se mezclan. Arranca abierto el grupo donde estás parado; cada uno se abre o cierra con un toque.
  */
 export function useSeccionesPlegables() {
@@ -22,6 +22,8 @@ export function useSeccionesPlegables() {
 /** Color e ícono de cada grupo, para distinguirlos de un vistazo. */
 export function estiloSeccion(titulo?: string): { icono: LucideIcon; chip: string; linea: string; texto: string } {
   switch (titulo) {
+    case "Inicio":
+      return { icono: House, chip: "bg-sky-500/15 text-sky-500", linea: "border-sky-500/30", texto: "text-sky-500" };
     case "Administración":
       return { icono: Landmark, chip: "bg-emerald-500/15 text-emerald-500", linea: "border-emerald-500/30", texto: "text-emerald-500" };
     case "Producción":
