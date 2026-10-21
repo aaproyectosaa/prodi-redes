@@ -1145,6 +1145,70 @@ async function pedirVideo(req: VercelRequest) {
   return { estado: "pago", init_point: pref.init_point, cobro_id: cobroRef.id, monto: total };
 }
 
+/** Cuánto tiempo tiene el cliente para corregir o borrar un video que pidió (si cargó algo mal). */
+const CORREGIR_PEDIDO_MS = 2 * 60 * 60_000;
+
+/**
+ * El cliente corrige (título, idea, objetivo, fecha dentro del mismo mes) o borra un video que pidió, en las primeras
+ * 2 horas y mientras no se haya empezado: sin material subido, sin rodaje y sin cobros (un extra pago o un viático
+ * no se borran acá: se escribe al equipo).
+ */
+async function pedidoCorregir(req: VercelRequest) {
+  const caller = await requireCaller(req, ["cliente", "admin"]);
+  const b = body<{ video_id?: string; accion?: string; titulo?: string; idea?: string; objetivo?: string; fecha_deseada?: string | null }>(req);
+  if (!b.video_id || !["editar", "borrar"].includes(String(b.accion))) throw new HttpError(400, "Datos incompletos");
+  const db = adminDb();
+  const ref = db.collection("videos").doc(b.video_id);
+  const v = (await ref.get()).data();
+  if (!v) throw new HttpError(404, "El video ya no existe");
+  await assertProjectAccess(caller, String(v.proyecto_id));
+  const esAdmin = caller.role === "admin";
+  if (!esAdmin && (v.pedido_cliente !== true || v.created_by !== caller.uid)) throw new HttpError(403, "Solo lo puede cambiar quien lo pidió");
+  if (!esAdmin && Date.now() - new Date(String(v.created_at)).getTime() > CORREGIR_PEDIDO_MS)
+    throw new HttpError(409, "Pasaron más de 2 horas: escribile al equipo por el chat y lo cambiamos.");
+  if (!["material_cliente", "planificado"].includes(String(v.etapa)) || v.rodaje_id || ((v.attachments_crudo ?? []) as unknown[]).length)
+    throw new HttpError(409, "Ya lo empezamos: escribile al equipo por el chat y lo cambiamos.");
+  const now = new Date().toISOString();
+  const proj = (await db.collection("projects").doc(String(v.proyecto_id)).get()).data() ?? {};
+  const team = (proj.team_roles ?? {}) as Record<string, string[]>;
+  const avisarEquipo = (titulo: string, cuerpo: string) =>
+    enviarAviso(
+      {
+        destinatarios: [...(v.productor_id ? [String(v.productor_id)] : team.productor ?? [])].filter((x) => x !== caller.uid),
+        titulo,
+        cuerpo,
+        link: `/videos?video=${b.video_id}`,
+        clave: `pedido_corregido:${b.video_id}:${now}`,
+        proyectoId: String(v.proyecto_id),
+      },
+      appUrl(req)
+    ).catch((e) => console.warn("[pedido-corregir] aviso", e));
+
+  if (b.accion === "borrar") {
+    if (v.extra_pagado === true || (v.viatico && Number((v.viatico as { monto?: number }).monto) > 0))
+      throw new HttpError(409, "Este video tiene un pago: escribile al equipo por el chat y lo vemos.");
+    await ref.delete();
+    await avisarEquipo("El cliente borró un video que había pedido", `${proj.nombre ?? "Cliente"} · ${v.titulo}`);
+    return { ok: true, borrado: true };
+  }
+
+  const titulo = String(b.titulo ?? "").trim().slice(0, 140);
+  if (titulo.length < 3) throw new HttpError(400, "Poné un título");
+  const fecha = /^\d{4}-\d{2}-\d{2}$/.test(String(b.fecha_deseada ?? "")) ? String(b.fecha_deseada) : null;
+  // La fecha, solo dentro del mismo mes (cambiar de mes cambia el cupo del plan).
+  if (fecha && fecha.slice(0, 7) !== String(v.mes)) throw new HttpError(409, "Para pasarlo a otro mes, escribile al equipo por el chat.");
+  await ref.update({
+    titulo,
+    idea: String(b.idea ?? "").trim().slice(0, 4000) || null,
+    objetivo: String(b.objetivo ?? "").trim().slice(0, 300) || null,
+    fecha_deseada: fecha,
+    updated_at: now,
+    historial: FieldValue.arrayUnion({ at: now, by: caller.uid, accion: "El cliente corrigió el pedido", nota: v.titulo !== titulo ? `Antes: ${v.titulo}` : null }),
+  });
+  await avisarEquipo("El cliente corrigió un video que pidió", `${proj.nombre ?? "Cliente"} · ${titulo}`);
+  return { ok: true };
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const accion = String(req.query.accion ?? "");
   if (req.method !== "POST" && !(accion === "webhook" && req.method === "GET")) {
@@ -1166,6 +1230,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "arca-estado") res.status(200).json(await arcaEstado(req));
     else if (accion === "mp-detalle") res.status(200).json(await mpDetalle(req));
     else if (accion === "pieza-idea") res.status(200).json(await piezaIdea(req));
+    else if (accion === "pedido-corregir") res.status(200).json(await pedidoCorregir(req));
     else if (accion === "mora-recalcular") res.status(200).json(await moraRecalcular(req));
     else if (accion === "mora-recordar") res.status(200).json(await moraRecordar(req));
     else res.status(404).json({ error: "Acción desconocida" });

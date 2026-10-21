@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { BotonAplicar, ChatIA } from "@/components/redes/ChatIA";
 import { esExtra, loSubeElCliente } from "@/lib/redes/extra";
+import { CorregirPedido } from "@/components/redes/cliente/CorregirPedido";
 import { AvisoPausaEquipo } from "@/components/redes/MoraAvisos";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -1530,6 +1531,7 @@ function ClienteView({ video, parte }: { video: Video; parte: "media" | "conteni
 
   return (
     <>
+      <CorregirPedido video={video} />
       {video.etapa === "revision_cliente" && (
         <ol className="space-y-1.5 rounded-2xl border border-primary/30 bg-primary/[0.06] p-4 text-sm">
           {["Mirá el video completo.", "Leé el texto que va a acompañar la publicación.", "Abajo: tocá “Aprobar” o “Pedir cambios” y contanos qué."].map((t, i) => (
