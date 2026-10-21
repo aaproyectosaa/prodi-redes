@@ -1150,7 +1150,7 @@ const CORREGIR_PEDIDO_MS = 2 * 60 * 60_000;
 
 /**
  * El cliente corrige (título, idea, objetivo, fecha dentro del mismo mes) o borra un video que pidió, en las primeras
- * 2 horas y mientras no se haya empezado: sin material subido, sin rodaje y sin cobros (un extra pago o un viático
+ * 2 horas y mientras no se haya empezado (esperando su material o planificado sin rodaje) y sin cobros (un extra pago o un viático
  * no se borran acá: se escribe al equipo).
  */
 async function pedidoCorregir(req: VercelRequest) {
@@ -1166,7 +1166,8 @@ async function pedidoCorregir(req: VercelRequest) {
   if (!esAdmin && (v.pedido_cliente !== true || v.created_by !== caller.uid)) throw new HttpError(403, "Solo lo puede cambiar quien lo pidió");
   if (!esAdmin && Date.now() - new Date(String(v.created_at)).getTime() > CORREGIR_PEDIDO_MS)
     throw new HttpError(409, "Pasaron más de 2 horas: escribile al equipo por el chat y lo cambiamos.");
-  if (!["material_cliente", "planificado"].includes(String(v.etapa)) || v.rodaje_id || ((v.attachments_crudo ?? []) as unknown[]).length)
+  // Mientras espera el material (aunque ya haya subido algo) o está planificado sin rodaje.
+  if (!["material_cliente", "planificado"].includes(String(v.etapa)) || v.rodaje_id)
     throw new HttpError(409, "Ya lo empezamos: escribile al equipo por el chat y lo cambiamos.");
   const now = new Date().toISOString();
   const proj = (await db.collection("projects").doc(String(v.proyecto_id)).get()).data() ?? {};

@@ -15,7 +15,7 @@ const VENTANA_MS = 2 * 60 * 60_000;
 /** ¿Quien mira puede todavía corregir o borrar este pedido? (lo pidió él, hace menos de 2 h y no se empezó). */
 export function puedeCorregirPedido(video: Video, uid: string | undefined): boolean {
   if (!uid || video.pedido_cliente !== true || video.created_by !== uid) return false;
-  if (!["material_cliente", "planificado"].includes(video.etapa) || video.rodaje_id || (video.attachments_crudo ?? []).length) return false;
+  if (!["material_cliente", "planificado"].includes(video.etapa) || video.rodaje_id) return false;
   return Date.now() - new Date(video.created_at).getTime() < VENTANA_MS;
 }
 
@@ -56,7 +56,8 @@ export function CorregirPedido({ video, onBorrado }: { video: Video; onBorrado?:
     }
   };
   const borrar = async () => {
-    if (!window.confirm(`¿Borrar “${video.titulo}”? Si era del plan, te queda el lugar libre para pedir otro.`)) return;
+    const conMaterial = (video.attachments_crudo ?? []).length > 0;
+    if (!window.confirm(`¿Borrar “${video.titulo}”?${conMaterial ? " Lo que subiste se borra con el video." : ""} Si era del plan, te queda el lugar libre para pedir otro.`)) return;
     setBusy("borrar");
     try {
       assertEditable();
