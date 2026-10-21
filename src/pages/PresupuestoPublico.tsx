@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { entrarConToken } from "@/lib/auth";
 import type { ItemPresupuesto } from "@/lib/redes/presupuestos";
 import { cn } from "@/lib/utils";
-import { PropuestaVista } from "@/components/redes/PropuestaVista";
+import { estiloTema, PropuestaVista } from "@/components/redes/PropuestaVista";
 import type { Propuesta } from "../../api/_lib/propuesta";
 
 // El link del presupuesto (/p/:token): el cliente lo ve sin usuario, lo acepta, crea su usuario y contraseña y entra.
@@ -98,11 +98,11 @@ export default function PresupuestoPublico() {
   const unicos = p.items.filter((i) => i.periodo === "unico");
 
   const aceptar_ = cerrado ? (
-      <div className={cn("flex items-center gap-3 rounded-2xl p-5", p.estado === "aceptado" ? "bg-emerald-500/15" : "bg-white/[0.06]")}>
+      <div className={cn("flex items-center gap-3 rounded-2xl p-5", p.estado === "aceptado" ? "bg-emerald-500/15" : "bg-[var(--p-tarjeta,rgba(255,255,255,0.06))]")}>
         {p.estado === "aceptado" ? <CheckCircle2 className="h-6 w-6 text-emerald-400" /> : <Clock className="h-6 w-6 text-amber-300" />}
         <div>
           <p className="font-semibold">{p.estado === "aceptado" ? "¡Ya lo aceptaste!" : p.estado === "vencido" ? "Este presupuesto venció" : "Este presupuesto ya no está vigente"}</p>
-          <p className="text-sm text-white/70">{p.estado === "aceptado" ? "Entrá con tu mail y tu contraseña." : "Escribinos y te mandamos uno actualizado."}</p>
+          <p className="text-sm text-[color:var(--p-suave,rgba(255,255,255,0.7))]">{p.estado === "aceptado" ? "Entrá con tu mail y tu contraseña." : "Escribinos y te mandamos uno actualizado."}</p>
         </div>
         {p.estado === "aceptado" && (
           <Button className="ml-auto" onClick={() => navigate("/auth")}>
@@ -156,11 +156,11 @@ export default function PresupuestoPublico() {
   // Formato propuesta comercial (como los PDF de Prodi): se ve igual que el PDF y abajo se acepta.
   if (p.propuesta) {
     return (
-      <div className="min-h-dvh bg-black text-white [-webkit-print-color-adjust:exact] [print-color-adjust:exact]">
+      <div style={estiloTema(p.propuesta.tema)} className="min-h-dvh bg-[var(--p-fondo)] text-[color:var(--p-fuerte)] [-webkit-print-color-adjust:exact] [print-color-adjust:exact]">
         <PropuestaVista p={p.propuesta} validez={p.validez} className="mx-auto max-w-[860px]" />
         <div className="mx-auto max-w-[860px] space-y-3 px-6 pb-16 sm:px-12 print:hidden">
           {aceptar_}
-          <button type="button" onClick={() => window.print()} className="mx-auto flex items-center gap-1.5 text-sm text-white/60 hover:text-white">
+          <button type="button" onClick={() => window.print()} className="mx-auto flex items-center gap-1.5 text-sm text-[color:var(--p-suave)] hover:text-[color:var(--p-fuerte)]">
             <Download className="h-4 w-4" /> Descargar en PDF
           </button>
         </div>

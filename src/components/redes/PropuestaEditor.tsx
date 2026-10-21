@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, ArrowLeft, Eye, FileText, Image as ImageIcon, Loader2, MessageCircle, Mic, MicOff, Paperclip, Phone, Send, Sparkles, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Eye, Moon, Sun, FileText, Image as ImageIcon, Loader2, MessageCircle, Mic, MicOff, Paperclip, Phone, Send, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -233,6 +233,16 @@ export function PropuestaEditor({ id: idInicial, inicial, onClose }: { id: strin
               <AlertTriangle className="h-3.5 w-3.5" /> Faltan {faltan} precio{faltan === 1 ? "" : "s"}
             </span>
           )}
+          <Button
+            size="sm"
+            variant="outline"
+            className="rounded-full"
+            onClick={() => cambiar({ propuesta: { ...d.propuesta, tema: d.propuesta.tema === "claro" ? "oscuro" : "claro" } })}
+            title="Cambiar el fondo del presupuesto"
+          >
+            {d.propuesta.tema === "claro" ? <Sun className="mr-1.5 h-3.5 w-3.5" /> : <Moon className="mr-1.5 h-3.5 w-3.5" />}
+            Fondo {d.propuesta.tema === "claro" ? "blanco" : "oscuro"}
+          </Button>
           {actual && (
             <Button size="sm" variant="outline" className="rounded-full" onClick={() => void verComoCliente()}>
               <Eye className="mr-1.5 h-3.5 w-3.5" /> Como el cliente

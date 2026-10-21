@@ -52,6 +52,8 @@ export interface Propuesta {
   intro: string;
   secciones: SeccionPropuesta[];
   contacto: string;
+  /** Fondo negro (como los PDF) o blanco. */
+  tema?: "oscuro" | "claro";
 }
 
 export const nuevoIdP = () => `x${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -124,6 +126,7 @@ export function limpiarPropuesta(raw: unknown): Propuesta {
     intro: s(r.intro, 2000),
     secciones,
     contacto: s(r.contacto, 300),
+    tema: r.tema === "claro" ? "claro" : "oscuro",
   };
 }
 
