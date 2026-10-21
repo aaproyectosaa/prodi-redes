@@ -235,7 +235,8 @@ export async function atenderMencion(caller: Caller, chatId: unknown, mensajeId:
 }
 
 /** Quiénes pueden cargar la marca de un cliente desde el chat (igual que en su ficha). El cliente, solo en su grupo. */
-const CARGAN_MARCA = ["admin", "productor", "diseno"];
+// Todo el equipo puede pasarle el logo de un cliente a Prodi (no los clientes de otros ni los contactos).
+const CARGAN_MARCA = ["admin", "productor", "diseno", "editor", "pauta"];
 
 /**
  * "Te mando el logo para que lo tengas": la última foto que mandó quien pide queda en la marca del cliente
@@ -424,7 +425,17 @@ Devolvé las acciones (máximo ${MAX_ACCIONES}; una por cada cosa: si pide 5 vid
 Español rioplatense con voseo.`;
 
   // Con fotos (capturas de un guion) se piensa con más detalle: hay que leer texto chico.
-  const r = await generarJSON<{ acciones?: AccionIA[] }>(prompt, ESQUEMA, 0.2, imagenes, imagenes.length ? "medium" : undefined);
+  // Si la IA no puede abrir alguna foto (muy grande, rara), se vuelve a pedir sin las fotos: igual se entiende el
+  // pedido por el texto (ej. "guardá este logo"), y las acciones que usan la foto la toman del chat.
+  const r = await generarJSON<{ acciones?: AccionIA[] }>(prompt, ESQUEMA, 0.2, imagenes, imagenes.length ? "medium" : undefined).catch((err) => {
+    if (!imagenes.length) throw err;
+    console.warn("[prodi] con fotos falló, sin fotos", err instanceof Error ? err.message : err);
+    return generarJSON<{ acciones?: AccionIA[] }>(
+      `${prompt}\n\n(Mandó ${imagenes.length === 1 ? "una foto" : `${imagenes.length} fotos`} que no pudiste ver: guiate por lo que dice el pedido. Si es un logo para guardar, usá guardar_logo igual.)`,
+      ESQUEMA,
+      0.2
+    );
+  });
   let acciones = (r.acciones ?? []).slice(0, MAX_ACCIONES);
   if (!acciones.length) return [{ texto: "No entendí qué necesitás. ¿Me lo decís de otra forma?" }];
 
@@ -474,7 +485,7 @@ Español rioplatense con voseo.`;
         .filter((x, i, arr) => x?.drive_file_id && arr.findIndex((y) => y.drive_file_id === x.drive_file_id) === i)
         .slice(0, 6);
       if (!archivos.length) {
-        out.push({ texto: `${cli.nombre} no tiene el logo cargado. Se sube en su ficha → Configuración → Marca.` });
+        out.push({ texto: `${cli.nombre} no tiene el logo cargado. Mandámelo acá (la imagen, PNG o JPG) y lo guardo en su marca.` });
         continue;
       }
       for (const [k, f] of archivos.entries()) {
