@@ -1,3 +1,4 @@
+import { PedirFotoPerfil } from "./PedirFotoPerfil";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useAlertasPauta } from "@/components/redes/AlertasPauta";
 import { auditoriaPauta } from "@/lib/redes/auditoriaPauta";
@@ -415,5 +416,11 @@ export function MiDia() {
   }, [delEquipo, uid, misRoles, videos, piezas, clientes, plata, facturas, obligaciones, mias, reuniones, navigate, alertasMeta]);
 
   if (!delEquipo) return null;
-  return <MiDiaCartel items={items} />;
+  return (
+    <>
+      <MiDiaCartel items={items} />
+      {/* Sin foto de perfil: se la pide (estilo LinkedIn). */}
+      <PedirFotoPerfil />
+    </>
+  );
 }
