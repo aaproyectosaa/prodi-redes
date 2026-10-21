@@ -15,6 +15,7 @@ import { RedesDataProvider } from "@/contexts/redes-data-context";
 import { BadgeApp } from "@/components/BadgeApp";
 import { AvisoTarde } from "@/components/AvisoTarde";
 import { LeerAvisosALaVista } from "@/components/LeerAvisosALaVista";
+import { LatidoMiTiempo } from "@/components/LatidoMiTiempo";
 import { MiDia } from "@/components/redes/MiDia";
 import { SidebarExtrasProvider, useSidebarExtras } from "@/hooks/use-sidebar-extras";
 import { useAltoVisible } from "@/hooks/use-alto-visible";
@@ -82,6 +83,7 @@ const LayoutInner = () => {
         <RecorridoAuto />
         <AvisoTarde />
         <LeerAvisosALaVista uid={viewingAs ? undefined : user?.uid} />
+        <LatidoMiTiempo />
         <MiDia />
         <DriveUploadStatusBar />
         <VideoSheet />

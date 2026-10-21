@@ -25,6 +25,7 @@ import { appUrl, body, HttpError, olvidarPerfil, requireCaller, rolesDe, sendErr
 import { enviarMailsLote } from "../_lib/informe";
 import { mailAvisoHtml } from "../_lib/mail-aviso";
 import { borrarEjemplo, cargarEjemplo } from "../_lib/ejemplo";
+import { anotarMinuto, nuevoToken, resumenTiempo, tieneToken, uidDelToken } from "../_lib/mi-tiempo";
 
 export const config = { maxDuration: 60 };
 
@@ -364,6 +365,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   try {
     const accion = String(req.query.accion ?? "");
+    // Mi tiempo: Claude Code avisa con el token personal (no tiene la sesión de la app).
+    if (accion === "tiempo-cc") {
+      const uid = await uidDelToken(String(req.headers["x-prodi-token"] ?? ""));
+      const b = body<{ que?: string; proyecto?: string }>(req);
+      await anotarMinuto(uid, "claude", String(b.que ?? "").trim() || null, String(b.proyecto ?? "").trim() || null);
+      res.status(200).json({ ok: true });
+      return;
+    }
+    if (accion.startsWith("tiempo-")) {
+      // Solo se mide (y lo ve) el admin, a sí mismo.
+      const yo = await requireCaller(req, ["admin"]);
+      if (accion === "tiempo-latido") {
+        const b = body<{ que?: string }>(req);
+        await anotarMinuto(yo.uid, "app", String(b.que ?? "").trim() || null, null);
+        res.status(200).json({ ok: true });
+      } else if (accion === "tiempo-ver") {
+        const b = body<{ dias?: number }>(req);
+        const dias = Math.min(Math.max(Math.floor(Number(b.dias) || 14), 1), 90);
+        res.status(200).json({ dias: await resumenTiempo(yo.uid, dias), conectado: await tieneToken(yo.uid) });
+      } else if (accion === "tiempo-token") {
+        res.status(200).json({ token: await nuevoToken(yo.uid) });
+      } else res.status(404).json({ error: "Acción desconocida" });
+      return;
+    }
     if (accion.startsWith("contacto-")) {
       const caller = await requireCaller(req, ["admin", "productor"]);
       if (accion === "contacto-crear") res.status(200).json(await contactoCrear(req, caller));
