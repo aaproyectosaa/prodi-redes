@@ -193,6 +193,12 @@ export function PresupuestoIA({ actual, onResultado }: { actual: unknown; onResu
     setDictando(true);
   };
 
+  // Audios que figuran en el chat pero no vinieron (exportado sin archivos o desde la compu).
+  const audiosFaltantes = archivos
+    .filter((a) => a.tipo === "chat")
+    .reduce((n, a) => n + ((a.texto ?? "").match(/mensaje de voz omitido|\[mensaje de voz\]|audio omitido|<adjunto omitido>/gi)?.length ?? 0), 0);
+  const audiosSueltos = archivos.filter((a) => a.nombre.startsWith("Audio:")).length;
+
   const armar = async () => {
     rec.current?.stop();
     const chat = archivos
@@ -282,6 +288,14 @@ export function PresupuestoIA({ actual, onResultado }: { actual: unknown; onResu
         </p>
       )}
 
+      {audiosFaltantes > audiosSueltos && (
+        <div className="mt-2.5 flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/[0.08] p-2.5 text-xs">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <p>
+            <b>El chat tiene {audiosFaltantes} audio{audiosFaltantes === 1 ? "" : "s"} que no vinieron</b>, y ahí suele estar lo importante. Exportalo desde el celular con <b>“Incluir archivos”</b>, o descargá los audios y arrastralos acá (los escucho y los paso a texto).
+          </p>
+        </div>
+      )}
       {archivos.length > 0 && (
         <div className="mt-2.5 flex flex-wrap gap-2">
           {archivos.map((a) => (
