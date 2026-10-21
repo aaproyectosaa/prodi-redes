@@ -276,6 +276,13 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
   const feedback = video.etapa === "edicion" ? video.feedback_cliente || video.feedback_interno : null;
   const feedbackDe = video.feedback_cliente ? "el cliente" : "producción";
   const trabado = !isCliente && estaTrabado(video, settings.dias_alerta);
+  // En el celular, al bajar, la cabecera se achica (queda el título) para dejar lugar; al volver arriba, vuelve.
+  // Con margen entre achicar y agrandar para que no tiemble cuando cambia el alto.
+  const [achicado, setAchicado] = useState(false);
+  const alScrollear = (e: React.UIEvent<HTMLDivElement>) => {
+    const y = e.currentTarget.scrollTop;
+    setAchicado((a) => (a ? y > 8 : y > 60));
+  };
   const filma = quienFilma(cliente);
   const delCliente = (video.attachments_crudo ?? []).filter((a) => a.origen === "cliente").length;
 
@@ -316,10 +323,15 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
     <>
       {/* Encabezado: cliente, plan/mes, título, estado y cerrar. En el celular, con el teclado abierto se esconden
           el encabezado, las pestañas y los botones de abajo: queda todo el lugar para escribir (vuelven al cerrarlo). */}
-      <header className="shrink-0 border-b px-4 pb-4 [.teclado-abierto_&]:hidden pt-[max(0.875rem,env(safe-area-inset-top))] lg:col-start-2 lg:row-start-1 lg:border-b-0 lg:px-7 lg:pb-2 lg:pt-6">
-        <div className="flex items-start gap-3">
-          <div className="min-w-0 flex-1 space-y-2.5 lg:space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
+      <header
+        className={cn(
+          "shrink-0 border-b px-4 [.teclado-abierto_&]:hidden pt-[max(0.875rem,env(safe-area-inset-top))] transition-[padding] duration-200 lg:col-start-2 lg:row-start-1 lg:border-b-0 lg:px-7 lg:pb-2 lg:pt-6",
+          achicado ? "pb-2.5" : "pb-4"
+        )}
+      >
+        <div className={cn("flex gap-3", achicado ? "items-center" : "items-start")}>
+          <div className={cn("min-w-0 flex-1 lg:space-y-3", achicado ? "space-y-0" : "space-y-2.5")}>
+            <div className={cn("flex flex-wrap items-center gap-2", achicado && "max-lg:hidden")}>
               <span className="inline-flex min-w-0 items-center rounded-full bg-muted/60 px-3 py-1">
                 <ClienteTag cliente={cliente} size="md" className="font-medium text-foreground" />
               </span>
@@ -330,11 +342,11 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
                 </span>
               )}
             </div>
-            <DialogPrimitive.Title className="text-xl font-bold leading-tight tracking-tight lg:text-[28px]">
+            <DialogPrimitive.Title className={cn("font-bold leading-tight tracking-tight lg:text-[28px]", achicado ? "truncate text-base lg:whitespace-normal" : "text-xl")}>
               {video.titulo}
             </DialogPrimitive.Title>
             <DialogPrimitive.Description asChild>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className={cn("flex flex-wrap items-center gap-2", achicado && "max-lg:hidden")}>
                 <EtapaBadge etapa={video.etapa} vista={isCliente ? "cliente" : "equipo"} />
                 {!isCliente && <EntregaChip video={video} />}
                 {!isCliente && esExtra(video) && (
@@ -372,7 +384,7 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
       </header>
 
       {/* En el celular scrollea todo junto (media, pestañas y contenido); en la compu cada columna por su lado. */}
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain lg:contents">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain lg:contents" onScroll={alScrollear}>
         {isCliente ? (
           <ClienteView video={video} parte="media" />
         ) : finalPrimario ? (
