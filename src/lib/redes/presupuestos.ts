@@ -3,6 +3,7 @@ import { addDoc, collection, deleteDoc, doc, onSnapshot, updateDoc } from "@/lib
 import { db } from "@/integrations/firebase/client";
 import { assertEditable } from "@/lib/redes/vistaComo";
 import type { ItemPresupuesto } from "../../../api/_lib/presupuesto-calc";
+import type { Propuesta } from "../../../api/_lib/propuesta";
 
 export { totalesPresupuesto, type ItemPresupuesto } from "../../../api/_lib/presupuesto-calc";
 
@@ -22,6 +23,8 @@ export interface Presupuesto {
   /** Hasta cuándo vale (YYYY-MM-DD). */
   validez: string;
   nota?: string | null;
+  /** Formato propuesta comercial (como los PDF de Prodi). Sin esto es un presupuesto viejo por ítems. */
+  propuesta?: Propuesta | null;
   estado: EstadoPresupuesto;
   token: string;
   created_at: string;

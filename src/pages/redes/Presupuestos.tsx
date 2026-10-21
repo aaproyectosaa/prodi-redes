@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Building2, CalendarDays, Copy, ExternalLink, FileText, Loader2, MessageCircle, Package, Pencil, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, Building2, CalendarDays, Copy, CopyPlus, ExternalLink, FileText, Loader2, MessageCircle, Package, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageShell } from "@/components/redes/PageShell";
 import { FilaKpis, Kpi, Vacio } from "@/components/redes/admin/AdminUI";
@@ -25,7 +25,8 @@ import {
   type Presupuesto,
 } from "@/lib/redes/presupuestos";
 import { cn } from "@/lib/utils";
-import { PresupuestoIA, type ResultadoPresupuestoIA } from "@/components/redes/PresupuestoIA";
+import { PropuestaEditor, type DatosPropuesta } from "@/components/redes/PropuestaEditor";
+import { plantillaPropuesta, preciosFaltantes } from "../../../api/_lib/propuesta";
 
 // Presupuestos para clientes nuevos: se arman acá, se manda el link y el cliente lo acepta, crea su usuario y queda
 // como cliente (api/_lib/presupuestos.ts).
@@ -59,36 +60,6 @@ function Editor({ inicial, id, onClose }: { inicial: Borrador; id: string | null
   const set = <K extends keyof Borrador>(k: K, v: Borrador[K]) => setP((x) => ({ ...x, [k]: v }));
   const setItem = (iid: string, cambios: Partial<ItemPresupuesto>) => set("items", p.items.map((i) => (i.id === iid ? { ...i, ...cambios } : i)));
   const tot = totalesPresupuesto(p.items, p.tipo, settings.iva_pct ?? 21);
-
-  const itemDePlan = (plan: (typeof planes)[number]): ItemPresupuesto => ({
-    id: `plan-${plan.id}`,
-    concepto: `Plan ${plan.nombre}`,
-    detalle: `${plan.videos_mes} videos por mes${plan.piezas_mes ? ` + ${plan.piezas_mes} piezas gráficas` : ""}, publicación y pauta en Meta`,
-    cantidad: 1,
-    precio: plan.precio_mensual,
-    periodo: "mensual",
-  });
-
-  // Lo que armó la IA: se carga en el formulario para revisarlo (no se guarda solo).
-  const aplicarIA = (r: ResultadoPresupuestoIA) => {
-    const plan = r.plan_id ? planes.find((x) => x.id === r.plan_id) : undefined;
-    setP((x) => ({
-      ...x,
-      empresa: r.empresa || x.empresa,
-      contacto: {
-        ...x.contacto,
-        nombre: r.contacto.nombre || x.contacto.nombre || null,
-        telefono: r.contacto.telefono || x.contacto.telefono || null,
-        email: r.contacto.email || x.contacto.email || null,
-      },
-      plan_id: plan?.id ?? null,
-      items: [...(plan ? [itemDePlan(plan)] : []), ...r.items.map((i) => ({ ...nuevoItem(i.periodo), concepto: i.concepto, detalle: i.detalle, cantidad: i.cantidad, precio: i.precio }))],
-      moneda: r.moneda,
-      tipo: r.tipo,
-      validez: enDias(r.validez_dias || 15),
-      nota: r.nota || x.nota,
-    }));
-  };
 
   const elegirPlan = (planId: string) => {
     const plan = planes.find((x) => x.id === planId);
@@ -125,8 +96,6 @@ function Editor({ inicial, id, onClose }: { inicial: Borrador; id: string | null
 
   return (
     <div className="space-y-4">
-      <PresupuestoIA actual={p} onResultado={aplicarIA} />
-
       <Seccion icono={Building2} titulo="Cliente">
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5 sm:col-span-2">
@@ -249,7 +218,27 @@ function Editor({ inicial, id, onClose }: { inicial: Borrador; id: string | null
   );
 }
 
-function Fila({ p, onEditar }: { p: Presupuesto; onEditar: () => void }) {
+/** Lo que cobra una propuesta (los totales o los valores de cada sección de inversión) y si falta algún precio. */
+function ResumenPropuesta({ p }: { p: Presupuesto }) {
+  const prop = p.propuesta!;
+  const valores = prop.secciones
+    .filter((s) => s.tipo === "inversion")
+    .map((s) => s.total?.valor || (s.filas ?? []).map((f) => f.valor).filter(Boolean).join(" + "))
+    .filter(Boolean);
+  const faltan = preciosFaltantes(prop);
+  return (
+    <>
+      {valores.join(" · ") || "Sin precios"}
+      {faltan > 0 && (
+        <span className="ml-1 inline-flex items-center gap-0.5 font-semibold text-amber-600 dark:text-amber-400">
+          <AlertTriangle className="h-3 w-3" /> faltan {faltan} precio{faltan === 1 ? "" : "s"}
+        </span>
+      )}
+    </>
+  );
+}
+
+function Fila({ p, onEditar, onDuplicar }: { p: Presupuesto; onEditar: () => void; onDuplicar: () => void }) {
   const navigate = useNavigate();
   const { settings } = useRedes();
   const est = estadoVisible(p);
@@ -272,9 +261,11 @@ function Fila({ p, onEditar }: { p: Presupuesto; onEditar: () => void }) {
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
           <span className="text-muted-foreground">#{p.numero}</span> {p.empresa}
+          {p.propuesta?.etiqueta && <span className="font-normal text-muted-foreground">· {p.propuesta.etiqueta}</span>}
           <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", ESTADO_PRESUPUESTO[est].clase)}>{ESTADO_PRESUPUESTO[est].label}</span>
         </p>
         <p className="text-xs text-muted-foreground">
+          {p.propuesta && <ResumenPropuesta p={p} />}
           {tot.mensual ? `${plata(tot.mensual_final, p.moneda)}/mes` : ""}
           {tot.mensual && tot.unico ? " + " : ""}
           {tot.unico ? `${plata(tot.unico_final, p.moneda)} una vez` : ""}
@@ -302,6 +293,11 @@ function Fila({ p, onEditar }: { p: Presupuesto; onEditar: () => void }) {
             <Button size="icon" variant="ghost" className="h-9 w-9" onClick={onEditar} aria-label="Editar">
               <Pencil className="h-4 w-4" />
             </Button>
+            {p.propuesta && (
+              <Button size="icon" variant="ghost" className="h-9 w-9" onClick={onDuplicar} aria-label="Duplicar" title="Duplicar (para armar otra opción)">
+                <CopyPlus className="h-4 w-4" />
+              </Button>
+            )}
             <Button
               size="icon"
               variant="ghost"
@@ -321,7 +317,36 @@ function Fila({ p, onEditar }: { p: Presupuesto; onEditar: () => void }) {
 export default function Presupuestos() {
   const lista = usePresupuestos(true);
   const [editando, setEditando] = useState<{ id: string | null; datos: Borrador } | null>(null);
-  const nuevo = (): Borrador => ({ empresa: "", contacto: {}, plan_id: null, items: [], moneda: "ARS", tipo: "factura", validez: enDias(15), nota: "" });
+  const [propuesta, setPropuesta] = useState<{ id: string | null; datos: DatosPropuesta } | null>(null);
+  const { user } = useUserProfileContext();
+  const codigo = () => {
+    const n = Math.max(0, ...(lista ?? []).map((x) => x.numero ?? 0)) + 1;
+    return `${enDias(0).slice(0, 7)}-${String(n).padStart(2, "0")}`;
+  };
+  const nuevaPropuesta = () => setPropuesta({ id: null, datos: { empresa: "", contacto: {}, validez: enDias(15), propuesta: { ...plantillaPropuesta("", enDias(0)), codigo: codigo() } } });
+  const duplicar = async (p: Presupuesto) => {
+    const n = Math.max(0, ...(lista ?? []).map((x) => x.numero ?? 0)) + 1;
+    try {
+      await crearPresupuesto(
+        {
+          empresa: p.empresa,
+          contacto: p.contacto ?? {},
+          plan_id: null,
+          items: [],
+          moneda: p.moneda,
+          tipo: p.tipo,
+          validez: enDias(15),
+          nota: "",
+          propuesta: { ...p.propuesta!, codigo: codigo(), fecha: enDias(0) },
+          created_by: user?.uid ?? "",
+        },
+        n
+      );
+      toast.success("Duplicado: editá la copia para la otra opción");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo duplicar");
+    }
+  };
   const kpis = useMemo(() => {
     const l = lista ?? [];
     const est = l.map(estadoVisible);
@@ -336,9 +361,9 @@ export default function Presupuestos() {
   return (
     <PageShell
       title="Presupuestos"
-      subtitle="Armá el presupuesto, mandale el link y el cliente lo acepta, crea su usuario y queda adentro."
+      subtitle="Armalo charlando con la IA, poné los precios, mandale el link y el cliente lo acepta y queda adentro."
       actions={
-        <Button onClick={() => setEditando({ id: null, datos: nuevo() })}>
+        <Button onClick={nuevaPropuesta}>
           <Plus className="mr-2 h-4 w-4" /> Nuevo presupuesto
         </Button>
       }
@@ -353,14 +378,23 @@ export default function Presupuestos() {
           <Loader2 className="h-4 w-4 animate-spin" /> Cargando…
         </div>
       ) : lista.length === 0 ? (
-        <Vacio icono={FileText} titulo="Todavía no hay presupuestos" texto="Tocá «Nuevo presupuesto», elegí el plan y mandale el link al cliente." />
+        <Vacio icono={FileText} titulo="Todavía no hay presupuestos" texto="Tocá «Nuevo presupuesto», contale a la IA qué negociaste, poné los precios y mandale el link al cliente." />
       ) : (
         <div className="overflow-hidden rounded-2xl border bg-card">
           {lista.map((p) => (
-            <Fila key={p.id} p={p} onEditar={() => setEditando({ id: p.id, datos: { empresa: p.empresa, contacto: p.contacto ?? {}, plan_id: p.plan_id ?? null, items: p.items ?? [], moneda: p.moneda, tipo: p.tipo, validez: p.validez, nota: p.nota ?? "" } })} />
+            <Fila
+              key={p.id}
+              p={p}
+              onDuplicar={() => void duplicar(p)}
+              onEditar={() =>
+                p.propuesta
+                  ? setPropuesta({ id: p.id, datos: { empresa: p.empresa, contacto: p.contacto ?? {}, validez: p.validez, propuesta: p.propuesta } })
+                  : setEditando({ id: p.id, datos: { empresa: p.empresa, contacto: p.contacto ?? {}, plan_id: p.plan_id ?? null, items: p.items ?? [], moneda: p.moneda, tipo: p.tipo, validez: p.validez, nota: p.nota ?? "" } })} />
           ))}
         </div>
       )}
+
+      {propuesta && <PropuestaEditor key={propuesta.id ?? "nueva"} id={propuesta.id} inicial={propuesta.datos} onClose={() => setPropuesta(null)} />}
 
       <Dialog open={!!editando} onOpenChange={(o) => !o && setEditando(null)}>
         <DialogContent className="max-h-[92dvh] w-[calc(100vw-1.5rem)] max-w-2xl overflow-y-auto rounded-3xl">

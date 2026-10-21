@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Check, CheckCircle2, Clock, Eye, EyeOff, Loader2, Lock, Sparkles } from "lucide-react";
+import { Check, CheckCircle2, Clock, Download, Eye, EyeOff, Loader2, Lock, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { entrarConToken } from "@/lib/auth";
 import type { ItemPresupuesto } from "@/lib/redes/presupuestos";
 import { cn } from "@/lib/utils";
+import { PropuestaVista } from "@/components/redes/PropuestaVista";
+import type { Propuesta } from "../../api/_lib/propuesta";
 
 // El link del presupuesto (/p/:token): el cliente lo ve sin usuario, lo acepta, crea su usuario y contraseña y entra.
 // Después va a /bienvenida a instalar las apps.
@@ -20,6 +22,7 @@ interface Vista {
   tipo: "factura" | "boleta";
   validez: string | null;
   nota: string | null;
+  propuesta: Propuesta | null;
   estado: string;
   totales: { mensual: number; unico: number; iva_pct: number; mensual_final: number; unico_final: number };
 }
@@ -94,6 +97,77 @@ export default function PresupuestoPublico() {
   const mensuales = p.items.filter((i) => i.periodo === "mensual");
   const unicos = p.items.filter((i) => i.periodo === "unico");
 
+  const aceptar_ = cerrado ? (
+      <div className={cn("flex items-center gap-3 rounded-2xl p-5", p.estado === "aceptado" ? "bg-emerald-500/15" : "bg-white/[0.06]")}>
+        {p.estado === "aceptado" ? <CheckCircle2 className="h-6 w-6 text-emerald-400" /> : <Clock className="h-6 w-6 text-amber-300" />}
+        <div>
+          <p className="font-semibold">{p.estado === "aceptado" ? "¡Ya lo aceptaste!" : p.estado === "vencido" ? "Este presupuesto venció" : "Este presupuesto ya no está vigente"}</p>
+          <p className="text-sm text-white/70">{p.estado === "aceptado" ? "Entrá con tu mail y tu contraseña." : "Escribinos y te mandamos uno actualizado."}</p>
+        </div>
+        {p.estado === "aceptado" && (
+          <Button className="ml-auto" onClick={() => navigate("/auth")}>
+            Entrar
+          </Button>
+        )}
+      </div>
+    ) : !aceptando ? (
+      <Button onClick={() => setAceptando(true)} className="h-14 w-full rounded-2xl bg-gradient-to-r from-[#6F40FC] to-[#E040A0] text-lg font-bold text-white shadow-lg shadow-fuchsia-500/20 hover:opacity-95">
+        <Sparkles className="mr-2 h-5 w-5" /> Aceptar presupuesto
+      </Button>
+    ) : (
+      <div className="space-y-4 rounded-2xl bg-white p-5 text-[#14121F] shadow-xl">
+        <div>
+          <p className="text-lg font-bold">¡Genial! Creá tu usuario</p>
+          <p className="text-sm text-black/60">Con esto entrás a tu panel de Prodi: ahí ves tus videos, los aprobás y hablás con el equipo.</p>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-black/70">Tu nombre</Label>
+          <Input value={nombre} onChange={(e) => setNombre(e.target.value)} className="h-11 border-black/10 bg-white text-black" autoComplete="name" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-black/70">Tu mail</Label>
+          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-11 border-black/10 bg-white text-black" autoComplete="email" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-black/70">Elegí una contraseña</Label>
+          <div className="relative">
+            <Input
+              type={ver ? "text" : "password"}
+              value={clave}
+              onChange={(e) => setClave(e.target.value)}
+              className="h-11 border-black/10 bg-white pr-10 text-black"
+              autoComplete="new-password"
+              placeholder="Al menos 8 caracteres"
+            />
+            <button type="button" onClick={() => setVer(!ver)} className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40" aria-label={ver ? "Ocultar" : "Mostrar"}>
+              {ver ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
+        {errForm && <p className="text-sm font-medium text-red-600">{errForm}</p>}
+        <Button onClick={() => void aceptar()} disabled={busy || !nombre.trim() || !email.trim()} className="h-12 w-full rounded-xl bg-[#6F40FC] text-base font-bold text-white hover:bg-[#6F40FC]/90">
+          {busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Lock className="mr-2 h-4 w-4" />}
+          Aceptar y crear mi usuario
+        </Button>
+        <p className="text-center text-xs text-black/45">Al aceptar, el presupuesto queda confirmado y te contactamos para arrancar.</p>
+      </div>
+    );
+
+  // Formato propuesta comercial (como los PDF de Prodi): se ve igual que el PDF y abajo se acepta.
+  if (p.propuesta) {
+    return (
+      <div className="min-h-dvh bg-black text-white [-webkit-print-color-adjust:exact] [print-color-adjust:exact]">
+        <PropuestaVista p={p.propuesta} validez={p.validez} className="mx-auto max-w-[860px]" />
+        <div className="mx-auto max-w-[860px] space-y-3 px-6 pb-16 sm:px-12 print:hidden">
+          {aceptar_}
+          <button type="button" onClick={() => window.print()} className="mx-auto flex items-center gap-1.5 text-sm text-white/60 hover:text-white">
+            <Download className="h-4 w-4" /> Descargar en PDF
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-dvh bg-[#0B0A12] text-white">
       <div className="relative overflow-hidden bg-gradient-to-br from-[#6F40FC] via-[#9B3FD8] to-[#E040A0] px-5 pb-16 pt-10">
@@ -155,61 +229,7 @@ export default function PresupuestoPublico() {
           </div>
         </div>
 
-        {cerrado ? (
-          <div className={cn("flex items-center gap-3 rounded-2xl p-5", p.estado === "aceptado" ? "bg-emerald-500/15" : "bg-white/[0.06]")}>
-            {p.estado === "aceptado" ? <CheckCircle2 className="h-6 w-6 text-emerald-400" /> : <Clock className="h-6 w-6 text-amber-300" />}
-            <div>
-              <p className="font-semibold">{p.estado === "aceptado" ? "¡Ya lo aceptaste!" : p.estado === "vencido" ? "Este presupuesto venció" : "Este presupuesto ya no está vigente"}</p>
-              <p className="text-sm text-white/70">{p.estado === "aceptado" ? "Entrá con tu mail y tu contraseña." : "Escribinos y te mandamos uno actualizado."}</p>
-            </div>
-            {p.estado === "aceptado" && (
-              <Button className="ml-auto" onClick={() => navigate("/auth")}>
-                Entrar
-              </Button>
-            )}
-          </div>
-        ) : !aceptando ? (
-          <Button onClick={() => setAceptando(true)} className="h-14 w-full rounded-2xl bg-gradient-to-r from-[#6F40FC] to-[#E040A0] text-lg font-bold text-white shadow-lg shadow-fuchsia-500/20 hover:opacity-95">
-            <Sparkles className="mr-2 h-5 w-5" /> Aceptar presupuesto
-          </Button>
-        ) : (
-          <div className="space-y-4 rounded-2xl bg-white p-5 text-[#14121F] shadow-xl">
-            <div>
-              <p className="text-lg font-bold">¡Genial! Creá tu usuario</p>
-              <p className="text-sm text-black/60">Con esto entrás a tu panel de Prodi: ahí ves tus videos, los aprobás y hablás con el equipo.</p>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-black/70">Tu nombre</Label>
-              <Input value={nombre} onChange={(e) => setNombre(e.target.value)} className="h-11 border-black/10 bg-white text-black" autoComplete="name" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-black/70">Tu mail</Label>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-11 border-black/10 bg-white text-black" autoComplete="email" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-black/70">Elegí una contraseña</Label>
-              <div className="relative">
-                <Input
-                  type={ver ? "text" : "password"}
-                  value={clave}
-                  onChange={(e) => setClave(e.target.value)}
-                  className="h-11 border-black/10 bg-white pr-10 text-black"
-                  autoComplete="new-password"
-                  placeholder="Al menos 8 caracteres"
-                />
-                <button type="button" onClick={() => setVer(!ver)} className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40" aria-label={ver ? "Ocultar" : "Mostrar"}>
-                  {ver ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-            {errForm && <p className="text-sm font-medium text-red-600">{errForm}</p>}
-            <Button onClick={() => void aceptar()} disabled={busy || !nombre.trim() || !email.trim()} className="h-12 w-full rounded-xl bg-[#6F40FC] text-base font-bold text-white hover:bg-[#6F40FC]/90">
-              {busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Lock className="mr-2 h-4 w-4" />}
-              Aceptar y crear mi usuario
-            </Button>
-            <p className="text-center text-xs text-black/45">Al aceptar, el presupuesto queda confirmado y te contactamos para arrancar.</p>
-          </div>
-        )}
+        {aceptar_}
       </div>
     </div>
   );

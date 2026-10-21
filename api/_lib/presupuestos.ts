@@ -9,6 +9,7 @@ import { crearUsuario, iniciarSesion, tokenDeSesion, validarClave } from "./cuen
 import { destinatariosDe, enviarAviso } from "./notify";
 import { hoyAR } from "./fecha";
 import { totalesPresupuesto, type ItemPresupuesto } from "./presupuesto-calc";
+import { limpiarPropuesta } from "./propuesta";
 
 const t = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
 
@@ -38,6 +39,7 @@ export async function verPresupuesto(token: string) {
     tipo: p.tipo === "boleta" ? "boleta" : "factura",
     validez: p.validez ?? null,
     nota: p.nota ?? null,
+    propuesta: p.propuesta ? limpiarPropuesta(p.propuesta) : null,
     estado: vencido ? "vencido" : p.estado,
     totales: totalesPresupuesto(p.items ?? [], p.tipo, ivaPct),
     creado: p.created_at,
