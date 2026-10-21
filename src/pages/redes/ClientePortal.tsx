@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { loSubeElCliente } from "@/lib/redes/extra";
+import { HorariosPublicar } from "@/components/redes/cliente/HorariosPublicar";
 import { AvisoMoraCliente } from "@/components/redes/MoraAvisos";
 import { useSearchParams } from "react-router-dom";
 import { HelpCircle, Loader2, Minus, Plus, Sparkles } from "lucide-react";
@@ -378,6 +380,8 @@ export default function ClientePortal() {
                 );
               })}
           <CupoVideos uso={uso} mes={mes} precioExtra={plan.precioVideoExtra} onPedir={() => setPedirVideo(true)} />
+          {/* Los que suben ellos sus videos: a qué hora conviene publicar. */}
+          {(cliente.produccion?.publica === "cliente" || mios.some(loSubeElCliente)) && <HorariosPublicar cliente={cliente} />}
 
           <Section
             title={vista === "kanban" ? `Tus videos de ${mesLabel(mes).toLowerCase()}` : "Calendario de tus videos"}

@@ -11,6 +11,7 @@ import crypto from "crypto";
 import { adminDb } from "./db";
 import { hoyAR, sumarDias } from "./fecha";
 import { sincronizarAnuncios } from "./meta-anuncios";
+import { guardarHorariosIg } from "./ig-horarios";
 import { destinatariosDe, enviarAviso } from "./notify";
 import { evaluarPauta, reglasActivas, type FilaPautaRegla } from "./pauta-reglas";
 
@@ -198,6 +199,8 @@ export async function sincronizarCuentaMeta(pid: string, dias = 3): Promise<Resu
       const n = await igDias(pid, ig, desde, hasta);
       // Seguidores: foto del día (Meta no da el histórico).
       const perfil = await graph(urlDe(ig, { fields: "followers_count,username" }));
+      // Cuándo están conectados sus seguidores (para recomendarle a qué hora publicar).
+      await guardarHorariosIg(pid, ig, (path, params) => graph(urlDe(path, params))).catch(() => 0);
       if (perfil?.followers_count != null) {
         await db
           .collection("metricas_redes")
