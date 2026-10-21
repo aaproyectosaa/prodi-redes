@@ -60,6 +60,14 @@ export default function PresupuestoPublico() {
       .catch((e) => setError(e instanceof Error ? e.message : "No se pudo abrir"));
   }, [token]);
 
+  // Con ?pdf=1 (el botón "PDF" del editor): apenas carga, abre la ventana para guardarlo en PDF.
+  const pdf = new URLSearchParams(window.location.search).get("pdf") === "1";
+  useEffect(() => {
+    if (!pdf || !p) return;
+    const t = window.setTimeout(() => window.print(), 600);
+    return () => window.clearTimeout(t);
+  }, [pdf, p]);
+
   const aceptar = async () => {
     setErrForm(null);
     if (clave.length < 8) return setErrForm("La contraseña tiene que tener al menos 8 caracteres");

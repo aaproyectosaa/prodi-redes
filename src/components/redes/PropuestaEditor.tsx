@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, ArrowLeft, Eye, Moon, Sun, FileText, Image as ImageIcon, Loader2, MessageCircle, Mic, MicOff, Paperclip, Phone, Send, Sparkles, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Download, Eye, Moon, Sun, FileText, Image as ImageIcon, Loader2, MessageCircle, Mic, MicOff, Paperclip, Phone, Send, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -206,6 +206,14 @@ export function PropuestaEditor({ id: idInicial, inicial, onClose }: { id: strin
     else toast.message("Guardalo primero y después lo ves como el cliente");
   };
 
+  // PDF: se guarda (si hace falta) y se abre como lo ve el cliente, con la ventana de guardar en PDF.
+  const descargarPdf = async () => {
+    if (cambios && !(await guardar())) return;
+    const p = id ? lista?.find((x) => x.id === id) : undefined;
+    if (p) window.open(`${linkPresupuesto(p as Presupuesto)}${linkPresupuesto(p as Presupuesto).includes("?") ? "&" : "?"}pdf=1`, "_blank");
+    else toast.message("Guardalo primero y después lo descargás");
+  };
+
   const faltan = preciosFaltantes(d.propuesta);
 
   return (
@@ -243,6 +251,11 @@ export function PropuestaEditor({ id: idInicial, inicial, onClose }: { id: strin
             {d.propuesta.tema === "claro" ? <Sun className="mr-1.5 h-3.5 w-3.5" /> : <Moon className="mr-1.5 h-3.5 w-3.5" />}
             Fondo {d.propuesta.tema === "claro" ? "blanco" : "oscuro"}
           </Button>
+          {actual && (
+            <Button size="sm" variant="outline" className="rounded-full" onClick={() => void descargarPdf()} title="Descargar en PDF">
+              <Download className="mr-1.5 h-3.5 w-3.5" /> PDF
+            </Button>
+          )}
           {actual && (
             <Button size="sm" variant="outline" className="rounded-full" onClick={() => void verComoCliente()}>
               <Eye className="mr-1.5 h-3.5 w-3.5" /> Como el cliente
