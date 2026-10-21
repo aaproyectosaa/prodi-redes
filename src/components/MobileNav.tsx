@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 import { asset } from "@/lib/asset";
 import { useLocation, useNavigate } from "react-router-dom";
 import { signOut } from "@/lib/auth";
-import { Bell, HelpCircle, LogOut, Menu, Moon, Sun, User } from "lucide-react";
+import { Bell, ChevronRight, Eye, EyeOff, HelpCircle, LogOut, Menu, MessageCircle, Moon, Smartphone, Sun, User } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { abrirInstalar } from "@/components/InstalarApp";
+import { abrirInstalarChat } from "@/components/InstalarChat";
+import { useInstalarApp } from "@/lib/instalar";
+import { enModoChat } from "@/lib/chatApp";
+import { useMontosOcultos } from "@/lib/privacidad";
 import { EVENTO_RECORRIDO } from "@/lib/novedades";
 import { auth } from "@/integrations/firebase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -18,9 +24,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { isNavItemActive } from "@/components/AppSidebar";
 import { cn } from "@/lib/utils";
 import { usePendientes } from "@/hooks/use-pendientes";
-import { VerComoBoton, VerComoDialog } from "@/components/redes/VerComo";
-import { BotonInstalar } from "@/components/InstalarApp";
-import { BotonInstalarChat } from "@/components/InstalarChat";
+import { VerComoDialog } from "@/components/redes/VerComo";
 import { BotonOcultarMontos } from "@/components/OcultarMontos";
 import { useRedes } from "@/contexts/redes-data-context";
 import { ROLES_DOCK } from "@/lib/redes/chatDock";
@@ -43,7 +47,12 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
   const [open, setOpen] = useState(false);
   const [verComo, setVerComo] = useState(false);
   const { unreadCount } = useInAppNotifications(profile?.id);
-  const { roles } = useUserProfileContext();
+  const { roles, realRole, viewingAs } = useUserProfileContext();
+  const app = useInstalarApp();
+  const [ocultos, setOcultos] = useMontosOcultos();
+  const finanzas = role === "admin" || roles.includes("administracion");
+  const puedeVerComo = realRole === "admin" && !viewingAs;
+  const oscuro = theme === "dark";
   const { empresa } = useEmpresa();
   const sections = navForRoles(role, roles, empresa);
   const plegables = useSeccionesPlegables();
@@ -97,20 +106,24 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
       </header>
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" className="flex w-[82vw] max-w-xs flex-col p-0">
-          <SheetHeader className="border-b p-4 text-left">
+        <SheetContent side="right" className="flex w-[88vw] max-w-sm flex-col p-0">
+          <SheetHeader className="p-3 pb-0 text-left safe-area-pt">
             <SheetTitle className="sr-only">Menú</SheetTitle>
-            <button type="button" onClick={() => go("/profile")} className="flex items-center gap-3">
-              {profile ? (
-                <UserAvatar profile={profile} size="md" />
-              ) : (
-                <User className="h-8 w-8 text-muted-foreground" />
-              )}
-              <div className="min-w-0 text-left">
+            {/* Tarjeta de la persona: toca y va a su perfil. */}
+            <button
+              type="button"
+              onClick={() => go("/profile")}
+              className="flex items-center gap-3 rounded-2xl bg-gradient-to-br from-primary/15 via-fuchsia-500/10 to-transparent p-3 text-left transition-colors active:bg-primary/20"
+            >
+              {profile ? <UserAvatar profile={profile} size="md" /> : <User className="h-8 w-8 text-muted-foreground" />}
+              <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold">{profile?.nombre ?? "Mi perfil"}</p>
-                <RoleBadge label={getRoleInfo(role).label} />
+                <div className="mt-0.5 flex items-center gap-1.5">
+                  <RoleBadge label={getRoleInfo(role).label} />
+                  <span className="text-[11px] text-muted-foreground">Ver perfil</span>
+                </div>
               </div>
-              {role === "cliente" && <AnilloPerfilMenu cliente={clientes[0]} />}
+              {role === "cliente" ? <AnilloPerfilMenu cliente={clientes[0]} /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
             </button>
           </SheetHeader>
           <nav className="flex-1 space-y-3 overflow-y-auto p-3">
@@ -156,36 +169,64 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
               </div>
             ))}
           </nav>
-          <div className="space-y-0.5 border-t p-3" onClick={() => setOpen(false)}>
-            <VerComoBoton onAbrir={() => setVerComo(true)} />
-            <BotonInstalar className="h-10 gap-3 text-foreground" />
-            <BotonInstalarChat className="h-10 gap-3 text-foreground" />
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                window.dispatchEvent(new Event(EVENTO_RECORRIDO));
-              }}
-              className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm hover:bg-accent"
-            >
-              <HelpCircle className="h-4 w-4" /> ¿Cómo se usa?
-            </button>
-            {(role === "admin" || roles.includes("administracion")) && <BotonOcultarMontos className="h-10 w-full gap-3 px-3" />}
-            <button
-              type="button"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm hover:bg-accent"
-            >
-              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              {theme === "dark" ? "Modo claro" : "Modo oscuro"}
-            </button>
+          <div className="space-y-2.5 border-t bg-muted/30 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            {/* Accesos: tarjetas con su ícono de color. */}
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { ok: true, icono: HelpCircle, color: "from-sky-400 to-blue-500", label: "¿Cómo se usa?", accion: () => window.dispatchEvent(new Event(EVENTO_RECORRIDO)) },
+                { ok: puedeVerComo, icono: Eye, color: "from-violet-500 to-fuchsia-500", label: "Ver como…", accion: () => setVerComo(true) },
+                { ok: !app.instalada, icono: Smartphone, color: "from-emerald-400 to-teal-500", label: "Instalar la app", accion: () => abrirInstalar() },
+                { ok: !(enModoChat() && app.instalada), icono: MessageCircle, color: "from-pink-500 to-rose-500", label: "Prodi Chat", accion: () => abrirInstalarChat() },
+              ]
+                .filter((x) => x.ok)
+                .map((x) => {
+                  const Icono = x.icono;
+                  return (
+                    <button
+                      key={x.label}
+                      type="button"
+                      onClick={() => {
+                        setOpen(false);
+                        x.accion();
+                      }}
+                      className="flex items-center gap-2.5 rounded-2xl border bg-card p-2.5 text-left text-[13px] font-medium shadow-sm transition-transform active:scale-[0.97]"
+                    >
+                      <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white", x.color)}>
+                        <Icono className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0 leading-tight">{x.label}</span>
+                    </button>
+                  );
+                })}
+            </div>
+
+            {/* Interruptores: se ve si están prendidos o apagados. */}
+            <div className="divide-y overflow-hidden rounded-2xl border bg-card">
+              <label className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-muted">{oscuro ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}</span>
+                <span className="flex-1 font-medium">Modo oscuro</span>
+                <Switch checked={oscuro} onCheckedChange={(v) => setTheme(v ? "dark" : "light")} />
+              </label>
+              {finanzas && (
+                <label className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-muted">{ocultos ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">Ocultar montos</span>
+                    <span className="block text-[11px] text-muted-foreground">Para mostrar la pantalla sin que se vea la plata</span>
+                  </span>
+                  <Switch checked={ocultos} onCheckedChange={setOcultos} />
+                </label>
+              )}
+            </div>
+
             <button
               type="button"
               onClick={async () => {
+                setOpen(false);
                 await signOut(auth);
                 navigate("/auth");
               }}
-              className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm text-muted-foreground hover:bg-accent"
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-destructive/30 text-sm font-medium text-destructive transition-colors active:bg-destructive/10"
             >
               <LogOut className="h-4 w-4" /> Cerrar sesión
             </button>
