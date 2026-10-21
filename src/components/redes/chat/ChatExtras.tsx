@@ -355,6 +355,12 @@ export function EncuestaMensaje({ chat, m, uid, mio, nombreDe }: { chat: Chat; m
   const cuenta = e.opciones.map((_, i) => Object.values(votos).filter((v) => v.includes(i)).length);
   const max = Math.max(1, ...cuenta);
   const [verQuien, setVerQuien] = useState(false);
+  const nombre = (u: string) => (u === uid ? "Vos" : nombreDe(u).split(" ")[0]);
+  const inicial = (u: string) => (u === uid ? "Vos" : nombreDe(u).trim().charAt(0).toUpperCase() || "?");
+  const tono = (u: string) => `hsl(${[...u].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7)} 65% 50%)`;
+  const quienesVotaron = (i: number) => Object.entries(votos).filter(([, v]) => v.includes(i)).map(([u]) => u);
+  // Los que todavía no votaron (sin Prodi ni los que ya no están).
+  const faltan = chat.miembros.filter((u) => u !== "prodi" && !votos[u]);
   return (
     <div className="min-w-[230px] space-y-2">
       <p className="flex items-start gap-1.5 font-semibold">
@@ -391,27 +397,70 @@ export function EncuestaMensaje({ chat, m, uid, mio, nombreDe }: { chat: Chat; m
                   />
                   <span className="min-w-0 break-words">{o}</span>
                 </span>
-                <span className="shrink-0 text-xs font-semibold tabular-nums">{cuenta[i]}</span>
+                <span className="flex shrink-0 items-center gap-1.5">
+                  {/* Quiénes la eligieron, a la vista. */}
+                  <span className="flex -space-x-1.5">
+                    {quienesVotaron(i)
+                      .slice(0, 3)
+                      .map((u) => (
+                        <span
+                          key={u}
+                          title={nombre(u)}
+                          className="flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white ring-2 ring-background"
+                          style={{ backgroundColor: tono(u) }}
+                        >
+                          {inicial(u)}
+                        </span>
+                      ))}
+                    {cuenta[i] > 3 && (
+                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1 text-[9px] font-bold text-muted-foreground ring-2 ring-background">
+                        +{cuenta[i] - 3}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-xs font-semibold tabular-nums">{cuenta[i]}</span>
+                </span>
               </span>
             </button>
           );
         })}
       </div>
-      <button type="button" onClick={() => setVerQuien((v) => !v)} className={cn("text-[11px] underline-offset-2 hover:underline", mio ? "text-primary-foreground/80" : "text-muted-foreground")}>
-        {total === 0 ? "Nadie votó todavía" : `${total} ${total === 1 ? "voto" : "votos"} · ${verQuien ? "ocultar" : "ver quién votó"}`}
-      </button>
-      {verQuien && total > 0 && (
-        <div className={cn("space-y-1 rounded-lg p-2 text-[11px]", mio ? "bg-white/10" : "bg-muted/60")}>
+      <div className="flex items-center justify-between gap-2">
+        <span className={cn("text-[11px]", mio ? "text-primary-foreground/80" : "text-muted-foreground")}>
+          {total === 0 ? "Nadie votó todavía" : `${total} ${total === 1 ? "votó" : "votaron"}${faltan.length ? ` · faltan ${faltan.length}` : ""}`}
+        </span>
+        <button
+          type="button"
+          onClick={() => setVerQuien((v) => !v)}
+          className={cn(
+            "rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors",
+            mio ? "bg-white/20 text-primary-foreground hover:bg-white/30" : "bg-primary/10 text-primary hover:bg-primary/15"
+          )}
+        >
+          {verQuien ? "Ocultar" : "Ver quién votó"}
+        </button>
+      </div>
+      {verQuien && (
+        <div className={cn("space-y-2 rounded-xl p-2.5 text-xs animate-in fade-in slide-in-from-top-1", mio ? "bg-white/10" : "bg-muted/60")}>
           {e.opciones.map((o, i) => {
-            const quienes = Object.entries(votos)
-              .filter(([, v]) => v.includes(i))
-              .map(([u]) => (u === uid ? "Vos" : nombreDe(u).split(" ")[0]));
-            return quienes.length ? (
-              <p key={i}>
-                <b>{o}:</b> {quienes.join(", ")}
-              </p>
-            ) : null;
+            const quienes = quienesVotaron(i);
+            return (
+              <div key={i}>
+                <p className="font-semibold">
+                  {o} <span className="font-normal opacity-70">· {quienes.length}</span>
+                </p>
+                <p className={cn("mt-0.5", mio ? "text-primary-foreground/85" : "text-muted-foreground")}>
+                  {quienes.length ? quienes.map(nombre).join(", ") : "Nadie"}
+                </p>
+              </div>
+            );
           })}
+          {faltan.length > 0 && (
+            <div className={cn("border-t pt-2", mio ? "border-white/20" : "")}>
+              <p className="font-semibold">Todavía no votaron</p>
+              <p className={cn("mt-0.5", mio ? "text-primary-foreground/85" : "text-muted-foreground")}>{faltan.map(nombre).join(", ")}</p>
+            </div>
+          )}
         </div>
       )}
     </div>
