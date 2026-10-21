@@ -9,6 +9,7 @@ import {
   ExternalLink,
   FileText,
   Loader2,
+  Pencil,
   Plus,
   Send,
   Sparkles,
@@ -45,6 +46,7 @@ import UserAvatar from "@/components/UserAvatar";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useAppData } from "@/contexts/app-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
+import { avisar } from "@/lib/redes/avisos";
 import { actualizarReunion, compartirMinuta, crearReunion, generarMinuta, minutaVacia } from "@/lib/redes/reuniones";
 import { chatClienteId } from "@/lib/redes/chat";
 import { aInputAR, desdeInputAR, formatearFecha } from "@/lib/fecha";
@@ -251,7 +253,18 @@ function FilaReunion({ reunion: r, onAbrir, compacta = false }: { reunion: Reuni
   );
 }
 
-function NuevaReunionDialog({ open, onOpenChange, onCreada }: { open: boolean; onOpenChange: (v: boolean) => void; onCreada: (id: string) => void }) {
+function NuevaReunionDialog({
+  open,
+  onOpenChange,
+  onCreada,
+  editar,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onCreada?: (id: string) => void;
+  /** Con una reunión: se edita (tema, cliente, día y hora, participantes). */
+  editar?: Reunion | null;
+}) {
   const { clientes, chats, settings } = useRedes();
   const { profiles } = useAppData();
   const { user, profile } = useUserProfileContext();
@@ -262,21 +275,75 @@ function NuevaReunionDialog({ open, onOpenChange, onCreada }: { open: boolean; o
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    if (editar) {
+      setTitulo(editar.titulo);
+      setClienteId(editar.proyecto_id ?? "interna");
+      setFecha(aInputAR(new Date(editar.fecha)));
+      setSel(new Set(editar.participantes.filter((id) => id !== user?.uid)));
+    } else {
       setTitulo("");
       setClienteId("interna");
       setFecha(aInputAR(new Date(Math.ceil(Date.now() / 1800_000) * 1800_000)));
       setSel(new Set());
     }
-  }, [open]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editar?.id]);
 
   const cliente = clientes.find((c) => c.id === clienteId);
   // Al elegir un cliente se proponen su equipo y sus usuarios.
-  useEffect(() => {
-    if (!cliente) return;
-    const t = cliente.team_roles ?? {};
+  const elegirCliente = (id: string) => {
+    setClienteId(id);
+    const c = clientes.find((x) => x.id === id);
+    if (!c) return;
+    const t = c.team_roles ?? {};
     setSel(new Set([...(t.productor ?? []), ...(t.cliente ?? [])]));
-  }, [cliente]);
+  };
+
+  const guardarCambios = async () => {
+    if (!user || !editar) return;
+    setSaving(true);
+    try {
+      const nuevaFecha = desdeInputAR(fecha);
+      const participantes = Array.from(new Set([...sel, editar.creada_por, user.uid]));
+      const nuevoTitulo = titulo.trim() || editar.titulo;
+      await actualizarReunion(editar.id, {
+        titulo: nuevoTitulo,
+        fecha: nuevaFecha,
+        participantes,
+        proyecto_id: cliente?.id ?? null,
+        chat_id: cliente ? (chats.find((c) => c.id === chatClienteId(cliente.id))?.id ?? null) : null,
+      });
+      // Si cambió el día o la hora, les avisamos a todos; a los nuevos, que los invitaron.
+      const cambioFecha = nuevaFecha !== editar.fecha;
+      const nuevos = participantes.filter((id) => !editar.participantes.includes(id) && id !== user.uid);
+      const resto = participantes.filter((id) => editar.participantes.includes(id) && id !== user.uid);
+      if (cambioFecha && resto.length)
+        void avisar({
+          destinatarios: resto,
+          titulo: "Cambió la reunión",
+          cuerpo: `${nuevoTitulo} · ahora es el ${fechaHora(nuevaFecha)}`,
+          link: `/reuniones?r=${editar.id}`,
+          clave: `reunion_cambio:${editar.id}:${nuevaFecha}`,
+          proyectoId: cliente?.id ?? null,
+        });
+      if (nuevos.length)
+        void avisar({
+          destinatarios: nuevos,
+          titulo: "Reunión agendada",
+          cuerpo: `${nuevoTitulo} · ${fechaHora(nuevaFecha)}`,
+          link: `/reuniones?r=${editar.id}`,
+          clave: `reunion:${editar.id}`,
+          proyectoId: cliente?.id ?? null,
+        });
+      onOpenChange(false);
+      toast.success(cambioFecha ? "Reunión cambiada. Les avisamos del nuevo horario." : "Reunión actualizada");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo guardar");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const candidatos = profiles.filter((p) => {
     if (p.id === user?.uid || !p.role || p.role === "pending" || ["cm", "pm", "disenador"].includes(p.role)) return false;
@@ -302,7 +369,7 @@ function NuevaReunionDialog({ open, onOpenChange, onCreada }: { open: boolean; o
         profile?.nombre ?? ""
       );
       onOpenChange(false);
-      onCreada(id);
+      onCreada?.(id);
       if (ahora) window.open(link, "_blank", "noopener");
       toast.success(ahora ? "Videollamada iniciada. Les avisamos a los participantes." : "Reunión agendada. Les avisamos a los participantes.");
     } catch (err) {
@@ -320,8 +387,12 @@ function NuevaReunionDialog({ open, onOpenChange, onCreada }: { open: boolean; o
             <Video className="h-5 w-5" />
           </span>
           <div className="space-y-1">
-            <DialogTitle className="text-[22px] font-bold tracking-tight">Nueva reunión</DialogTitle>
-            <DialogDescription>Se crea un link de videollamada gratis (Jitsi Meet). No hace falta instalar nada.</DialogDescription>
+            <DialogTitle className="text-[22px] font-bold tracking-tight">{editar ? "Editar reunión" : "Nueva reunión"}</DialogTitle>
+            <DialogDescription>
+              {editar
+                ? "Cambiá el tema, el día y la hora o quiénes participan. El link de la videollamada sigue siendo el mismo."
+                : "Se crea un link de videollamada gratis (Jitsi Meet). No hace falta instalar nada."}
+            </DialogDescription>
           </div>
         </DialogHeader>
         <div className="space-y-4">
@@ -332,7 +403,7 @@ function NuevaReunionDialog({ open, onOpenChange, onCreada }: { open: boolean; o
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label className={ETIQUETA}>Cliente</Label>
-              <Select value={clienteId} onValueChange={setClienteId}>
+              <Select value={clienteId} onValueChange={elegirCliente}>
                 <SelectTrigger className={cn(SUAVE, "h-12")}>
                   <SelectValue />
                 </SelectTrigger>
@@ -384,13 +455,22 @@ function NuevaReunionDialog({ open, onOpenChange, onCreada }: { open: boolean; o
           </div>
         </div>
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" onClick={() => save(true)} disabled={saving} className="h-12 rounded-2xl font-semibold">
-            <Video className="mr-2 h-4 w-4" /> Empezar ahora
-          </Button>
-          <Button onClick={() => save(false)} disabled={saving} className="h-12 rounded-2xl px-6 font-semibold shadow-lg shadow-primary/25">
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Agendar
-          </Button>
+          {editar ? (
+            <Button onClick={() => void guardarCambios()} disabled={saving} className="h-12 rounded-2xl px-6 font-semibold shadow-lg shadow-primary/25">
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Guardar cambios
+            </Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => save(true)} disabled={saving} className="h-12 rounded-2xl font-semibold">
+                <Video className="mr-2 h-4 w-4" /> Empezar ahora
+              </Button>
+              <Button onClick={() => save(false)} disabled={saving} className="h-12 rounded-2xl px-6 font-semibold shadow-lg shadow-primary/25">
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Agendar
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -447,6 +527,7 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
   const [minuta, setMinuta] = useState<Minuta | null>(null);
   const [editando, setEditando] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [editarAbierto, setEditarAbierto] = useState(false);
 
   useEffect(() => {
     setNotas(reunion?.notas ?? "");
@@ -484,10 +565,19 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
   });
 
   return (
+    <>
+    <NuevaReunionDialog open={editarAbierto} onOpenChange={setEditarAbierto} editar={reunion} />
     <Sheet open={!!reunion} onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
         <SheetHeader className="space-y-1.5 border-b px-5 pb-4 pt-5 text-left">
-          <SheetTitle className="pr-8 text-[22px] font-bold tracking-tight">{reunion.titulo}</SheetTitle>
+          <div className="flex items-start gap-2 pr-8">
+            <SheetTitle className="min-w-0 flex-1 text-[22px] font-bold tracking-tight">{reunion.titulo}</SheetTitle>
+            {esEquipo && (
+              <Button variant="outline" size="sm" className="h-8 shrink-0 rounded-full" onClick={() => setEditarAbierto(true)}>
+                <Pencil className="mr-1.5 h-3.5 w-3.5" /> Editar
+              </Button>
+            )}
+          </div>
           <SheetDescription asChild>
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span>{fechaHora(reunion.fecha)}</span>
@@ -730,5 +820,6 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
         </div>
       </SheetContent>
     </Sheet>
+    </>
   );
 }
