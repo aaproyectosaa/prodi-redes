@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { CheckCheck, ChevronDown, Clock, Copy, CornerUpRight, ListTodo, Loader2, Pencil, Pin, Reply, Star } from "lucide-react";
+import { CheckCheck, ChevronDown, Clock, Copy, CornerUpRight, ListTodo, Loader2, Pencil, Pin, Reply, Star, Clapperboard } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -87,6 +87,7 @@ export function InfoMensaje({
   fijado,
   onGuardar,
   guardado,
+  onPedidoVideo,
   onReaccionar,
 }: {
   chat: ChatT;
@@ -101,6 +102,8 @@ export function InfoMensaje({
   onFijar?: () => void;
   onReenviar?: () => void;
   fijado?: boolean;
+  /** Convertir el mensaje en un pedido de video del cliente (equipo, chat de cliente). */
+  onPedidoVideo?: () => void;
   /** Guardar con ⭐ (o sacarlo de guardados). */
   onGuardar?: () => void;
   guardado?: boolean;
@@ -129,6 +132,7 @@ export function InfoMensaje({
     ...(onResponder ? [{ icono: <Reply className="h-5 w-5" />, label: "Responder", onClick: onResponder }] : []),
     ...(m?.texto ? [{ icono: <Copy className="h-5 w-5" />, label: "Copiar", onClick: () => void copiar() }] : []),
     ...(onTarea ? [{ icono: <ListTodo className="h-5 w-5" />, label: "Tarea", onClick: onTarea }] : []),
+    ...(onPedidoVideo ? [{ icono: <Clapperboard className="h-5 w-5" />, label: "Pedido de video", onClick: onPedidoVideo }] : []),
     ...(onReenviar ? [{ icono: <CornerUpRight className="h-5 w-5" />, label: "Reenviar", onClick: onReenviar }] : []),
     ...(onFijar ? [{ icono: <Pin className="h-5 w-5" />, label: fijado ? "Desfijar" : "Fijar", onClick: onFijar }] : []),
     ...(onGuardar

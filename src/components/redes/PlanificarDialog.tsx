@@ -48,11 +48,14 @@ export function PlanificarDialog({
   onOpenChange,
   clienteId: clienteInicial,
   modoInicial = "planificar",
+  inicial,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   clienteId?: string;
   modoInicial?: ModoPlanificar;
+  /** Arranca con este video cargado (ej. "Pedido de video" desde un mensaje del chat). */
+  inicial?: Partial<NuevoVideo>;
 }) {
   const { clientes, planes, videos } = useRedes();
   const { user } = useUserProfileContext();
@@ -69,7 +72,7 @@ export function PlanificarDialog({
     if (open) {
       setModo(modoInicial);
       setClienteId(clienteInicial ?? clientes[0]?.id ?? "");
-      setItems([vacio()]);
+      setItems([{ ...vacio(), ...(inicial ?? {}) }]);
       setExtra(false);
       setMes(mesActual());
     }

@@ -1,4 +1,8 @@
 import { DibujarImagen } from "./DibujarImagen";
+import { ResumenSinLeer } from "./ResumenSinLeer";
+import { PlanificarDialog } from "../PlanificarDialog";
+import { useUserProfileContext } from "@/contexts/user-profile-context";
+import type { NuevoVideo } from "@/lib/redes/videos";
 import { alternarGuardado, useChatPrefs } from "@/lib/redes/chatPrefs";
 import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -309,6 +313,9 @@ export function ChatConversacion({
   onSinLeer?: (n: number) => void;
 }) {
   const { clienteById, chats, settings } = useRedes();
+  const { role: miRol } = useUserProfileContext();
+  // "Pedido de video" desde un mensaje: Planificar con el texto del mensaje ya cargado.
+  const [pedidoVideo, setPedidoVideo] = useState<Partial<NuevoVideo> | null>(null);
   // Mensajes de este chat que guardé con ⭐.
   const prefsChat = useChatPrefs(uid);
   const guardadosAca = useMemo(() => new Set(prefsChat.guardados.filter((g) => g.chat_id === chat.id).map((g) => g.msg_id)), [prefsChat.guardados, chat.id]);
@@ -994,6 +1001,7 @@ export function ChatConversacion({
                       <span className="h-px flex-1 bg-primary/30" />
                     </div>
                   )}
+                  {m.id === primerNuevo && corte.hasta && <ResumenSinLeer chatId={chat.id} desde={corte.hasta} cantidad={nuevos.length} />}
                   <DeslizarParaResponder onResponder={() => responder(m)} onInfo={() => setInfoMsg(m)}>
                   <div
                     className={cn(
@@ -1691,6 +1699,14 @@ export function ChatConversacion({
         </div>
       </footer>
       {!enCelular && <CamaraDialog open={camara} onOpenChange={setCamara} onFoto={(f) => mandarArchivos([f])} />}
+      {chat.proyecto_id && (
+        <PlanificarDialog
+          open={!!pedidoVideo}
+          onOpenChange={(v) => !v && setPedidoVideo(null)}
+          clienteId={chat.proyecto_id}
+          inicial={pedidoVideo ?? undefined}
+        />
+      )}
       <DibujarImagen
         open={!!dibujando}
         file={pegados.find((x) => x.id === dibujando)?.file ?? null}
@@ -1732,6 +1748,20 @@ export function ChatConversacion({
         }
         fijado={!!infoMsg && (chat.fijados ?? []).some((f) => f.id === infoMsg.id)}
         guardado={!!infoMsg && guardadosAca.has(infoMsg.id)}
+        onPedidoVideo={
+          infoMsg && chat.tipo === "cliente" && chat.proyecto_id && miRol && miRol !== "cliente" && (infoMsg.texto || infoMsg.leyenda)
+            ? () => {
+                const t = String(infoMsg.texto || infoMsg.leyenda || "").trim();
+                const primera = t.split(/\n|[.!?]/)[0].trim();
+                setPedidoVideo({
+                  titulo: (primera.length > 60 ? `${primera.slice(0, 57)}…` : primera) || "Pedido del chat",
+                  idea: t.slice(0, 1200),
+                  referencias: `Pedido en el chat por ${infoMsg.by === uid ? "vos" : nombreDe(infoMsg.by, infoMsg.by_nombre)} el ${new Date(infoMsg.at).toLocaleDateString("es-AR")}`,
+                });
+                setInfoMsg(null);
+              }
+            : undefined
+        }
         onGuardar={
           infoMsg && infoMsg.tipo !== "sistema"
             ? () => {

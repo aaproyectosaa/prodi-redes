@@ -26,6 +26,7 @@
 // POST /api/ia/dueno { mensajes } (super admin) → asistente del dueño, ve todo (ver api/_lib/dueno.ts)
 // POST /api/ia/links-chat { chat_id, mensaje_id } → links del mensaje: a la ficha del cliente y a la memoria de la IA
 // POST /api/ia/memoria-chat-quitar { proyecto_id, texto } → saca un dato que la IA aprendió del chat
+// POST /api/ia/chat-resumen { chat_id, desde } → "¿Qué me perdí?": resumen de los mensajes sin leer de un chat
 // POST /api/ia/voz-escuchar { data (base64), mime } → lo que dijo (llamada de voz con la IA)
 // POST /api/ia/voz-hablar { texto } → { audio: { data, mime } | null } con la voz natural (si no hay, el navegador lee)
 // POST /api/ia/estado (admin) → qué claves de IA están cargadas (sí/no, nunca la clave) y con qué modelo de Claude
@@ -1616,6 +1617,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "pauta-chat") res.status(200).json(await pautaChat(req));
     else if (accion === "voz-escuchar") res.status(200).json(await vozEscuchar(req));
     else if (accion === "voz-hablar") res.status(200).json(await vozHablar(req));
+    else if (accion === "chat-resumen") res.status(200).json(await chatResumen(req));
     else if (accion === "preparar") res.status(200).json(await preparar(req));
     else if (accion === "marca-subir") res.status(200).json(await marcaSubir(req));
     else if (accion === "marca-quitar") res.status(200).json(await marcaQuitar(req));
@@ -1721,6 +1723,44 @@ async function resumenVoz(req: VercelRequest) {
 }
 
 const ROLES_VOZ = ["admin", "productor", "editor", "pauta", "diseno"];
+
+/** "¿Qué me perdí?": los mensajes sin leer de un chat, resumidos en pocas viñetas (IA barata). */
+async function chatResumen(req: VercelRequest) {
+  const caller = await requireCaller(req, ROLES_CHAT);
+  const b = body<{ chat_id?: string; desde?: string }>(req);
+  await chatDeMiembro(b.chat_id, caller.uid);
+  const desde = typeof b.desde === "string" && !Number.isNaN(Date.parse(b.desde)) ? b.desde : null;
+  if (!desde) throw new HttpError(400, "Falta desde cuándo");
+  await controlarTopeIA(caller, "chat-resumen");
+  const snap = await adminDb().collection(`chats/${b.chat_id}/mensajes`).where("at", ">", desde).orderBy("at").limit(300).get();
+  const lineas = snap.docs
+    .map((d) => d.data())
+    .filter((m) => m.tipo !== "sistema")
+    .map((m) => {
+      const quien = m.by === caller.uid ? "Yo" : String(m.by_nombre || (m.by === PRODI_ID ? "Prodi" : "Alguien")).split(" ")[0];
+      const contenido = m.texto
+        ? String(m.texto).slice(0, 600)
+        : m.archivo
+          ? `[mandó un archivo: ${m.archivo.name ?? ""}${m.leyenda ? ` — ${String(m.leyenda).slice(0, 200)}` : ""}]`
+          : m.audio
+            ? "[mandó un audio]"
+            : m.encuesta
+              ? `[encuesta: ${String(m.encuesta.pregunta ?? "")}]`
+              : "";
+      return contenido ? `${quien}: ${contenido}` : "";
+    })
+    .filter(Boolean);
+  if (lineas.length < 3) return { puntos: [] as string[] };
+  const prompt = `Resumí esta charla de un chat de trabajo de Prodi (agencia argentina de videos y redes) para alguien que no la leyó.
+- De 2 a 5 viñetas cortas (máximo 20 palabras cada una), en español rioplatense.
+- Lo importante: qué se pidió, qué se decidió, fechas o datos concretos, y qué quedó pendiente y para quién.
+- Sin saludos ni relleno. Si algo es para "Yo", decilo ("te piden…").
+
+Mensajes (del más viejo al más nuevo):
+${lineas.join("\n").slice(-12000)}`;
+  const r = await generarJSONBarato<{ puntos?: string[] }>(prompt, { type: "OBJECT", properties: { puntos: { type: "ARRAY", items: { type: "STRING" } } }, required: ["puntos"] });
+  return { puntos: (r.puntos ?? []).map((x) => String(x).trim()).filter(Boolean).slice(0, 5) };
+}
 
 /** Llamada de voz con la IA: lo que dijo la persona, en texto (cuando el navegador no lo entiende solo). */
 async function vozEscuchar(req: VercelRequest) {
