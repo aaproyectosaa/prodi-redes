@@ -877,6 +877,21 @@ function IdeaBlock({ video, editable, uid }: { video: Video; editable: boolean; 
   // Lo que pidió cambiar el cliente en la idea del plan (los videos de antes lo tienen en el historial).
   const ajusteCliente =
     video.ajuste_cliente ?? video.historial?.find((h) => h.accion.includes("ajustada con el pedido del cliente"))?.nota ?? null;
+  // La IA reescribe la idea con ese pedido; queda en los campos para revisarla y tocar Guardar.
+  const [aplicando, setAplicando] = useState(false);
+  const aplicarConIA = async () => {
+    setAplicando(true);
+    try {
+      const r = await callApi<{ titulo: string; idea: string }>("/api/ia/video-reescribir", { video_id: video.id });
+      setTitulo(r.titulo);
+      setIdea(r.idea);
+      toast.success("Listo: revisala y tocá Guardar");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "La IA no respondió");
+    } finally {
+      setAplicando(false);
+    }
+  };
 
   return (
     <Block
@@ -893,8 +908,19 @@ function IdeaBlock({ video, editable, uid }: { video: Video; editable: boolean; 
     >
       {editing ? (
         <div className="space-y-2">
+          {ajusteCliente && (
+            <div className="space-y-2 rounded-lg border border-orange-500/30 bg-orange-500/[0.07] px-2.5 py-2 text-xs">
+              <p className="whitespace-pre-wrap">
+                <b className="text-orange-700 dark:text-orange-300">Pidió el cliente:</b> “{ajusteCliente}”
+              </p>
+              <Button size="sm" variant="outline" className="h-8 rounded-full bg-background text-xs" disabled={aplicando} onClick={() => void aplicarConIA()}>
+                {aplicando ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5 text-primary" />}
+                Aplicar con IA
+              </Button>
+            </div>
+          )}
           <Input value={titulo} onChange={(e) => setTitulo(e.target.value)} />
-          <Textarea value={idea} onChange={(e) => setIdea(e.target.value)} rows={4} placeholder="Idea / guion" />
+          <Textarea value={idea} onChange={(e) => setIdea(e.target.value)} rows={6} placeholder="Idea / guion" />
           <Input value={objetivo} onChange={(e) => setObjetivo(e.target.value)} placeholder="Objetivo" />
           <Input value={refs} onChange={(e) => setRefs(e.target.value)} placeholder="Referencias" />
           <div className="flex justify-end gap-2">

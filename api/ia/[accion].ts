@@ -1426,14 +1426,35 @@ async function planReescribir(req: VercelRequest) {
   const pedido = String(i.respuesta?.comentario ?? "").trim();
   if (!pedido) throw new HttpError(409, "El cliente no pidió cambios en esta idea");
   const proj = (await db.collection("projects").doc(b.proyecto_id).get()).data() ?? {};
+  return reescribirConPedido(proj, i.titulo, i.idea, pedido);
+}
+
+/** "Aplicar con IA" desde el video: reescribe su idea con lo que había pedido cambiar el cliente. */
+async function videoReescribir(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "productor"]);
+  await controlarTopeIA(caller, "plan-reescribir");
+  const b = body<{ video_id?: string; pedido?: string }>(req);
+  if (!b.video_id) throw new HttpError(400, "Falta el video");
+  const db = adminDb();
+  const v = (await db.collection("videos").doc(b.video_id).get()).data();
+  if (!v) throw new HttpError(404, "El video ya no existe");
+  await assertProjectAccess(caller, String(v.proyecto_id));
+  const hist = ((v.historial ?? []) as { accion?: string; nota?: string | null }[]).find((h) => String(h.accion ?? "").includes("ajustada con el pedido del cliente"));
+  const pedido = String(v.ajuste_cliente ?? hist?.nota ?? b.pedido ?? "").trim();
+  if (!pedido) throw new HttpError(409, "No hay un pedido del cliente para aplicar");
+  const proj = (await db.collection("projects").doc(String(v.proyecto_id)).get()).data() ?? {};
+  return reescribirConPedido(proj, String(v.titulo ?? ""), String(v.idea ?? ""), pedido);
+}
+
+async function reescribirConPedido(proj: Record<string, unknown>, tituloOriginal: string, ideaOriginal: string, pedido: string) {
   const r = await generarJSON<{ titulo?: string; idea?: string }>(
     `Sos el equipo creativo de Prodi (agencia argentina de videos para redes). Le mandamos al cliente esta idea de video y nos pidió cambios. Reescribila aplicando TODO lo que pidió, sin perder lo que no tocó. Si pide cambiar frases o palabras, usá exactamente las que propone. Mismo largo y estilo que la original (qué se ve, qué se dice, cómo cierra). Español rioplatense.
 
 ${marcaTexto(proj)}
 
 Idea original:
-Título: ${i.titulo}
-${i.idea}
+Título: ${tituloOriginal}
+${ideaOriginal}
 
 Lo que pidió cambiar el cliente:
 ${pedido}`,
@@ -1667,6 +1688,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "plan-responder") res.status(200).json(await planResponder(req));
     else if (accion === "plan-ajustar") res.status(200).json(await planAjustar(req));
     else if (accion === "plan-reescribir") res.status(200).json(await planReescribir(req));
+    else if (accion === "video-reescribir") res.status(200).json(await videoReescribir(req));
     else if (accion === "plan-campania") res.status(200).json(await planCampania(req));
     else if (accion === "plan-cupos") res.status(200).json(await planCupos(req));
     else if (accion === "memoria-notas") res.status(200).json(await memoriaNotas(req));
