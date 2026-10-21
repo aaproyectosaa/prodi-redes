@@ -323,25 +323,60 @@ export default function ClientePortal() {
           {[planProx, planEste]
               .filter((p): p is NonNullable<typeof p> => !!p && p.id !== planPend?.id && !["borrador", "enviado"].includes(p.estado) && p.ideas.length > 0)
               .slice(0, 1)
-              .map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setPlanAbierto(p.mes)}
-                  className="flex w-full items-center gap-3 rounded-2xl border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/40"
-                >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
-                    <Sparkles className="h-4 w-4" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold">Las ideas de {mesLabel(p.mes).split(" ")[0].toLowerCase()}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {p.ideas.length === 1 ? "1 idea" : `${p.ideas.length} ideas`} · ya respondidas. Tocá para volver a leerlas y ver en qué quedó cada una.
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-xs font-semibold text-primary">Ver →</span>
-                </button>
-              ))}
+              .map((p) => {
+                // En qué quedó cada idea, dicho para el cliente.
+                const estadoIdea = (i: (typeof p.ideas)[number]) =>
+                  i.descartada
+                    ? { label: "Descartada", clase: "bg-muted text-muted-foreground", tipo: "descartada" as const }
+                    : i.video_id
+                      ? { label: "Ya es un video", clase: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", tipo: "lista" as const }
+                      : i.respuesta?.ok === false
+                        ? { label: "La estamos ajustando", clase: "bg-orange-500/15 text-orange-700 dark:text-orange-300", tipo: "ajuste" as const }
+                        : i.respuesta?.ok
+                          ? { label: "Aprobada", clase: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", tipo: "lista" as const }
+                          : { label: "Sin respuesta", clase: "bg-muted text-muted-foreground", tipo: "otra" as const };
+                const estados = p.ideas.map(estadoIdea);
+                const listas = estados.filter((e) => e.tipo === "lista").length;
+                const ajuste = estados.filter((e) => e.tipo === "ajuste").length;
+                const resumen = [
+                  listas ? `${listas} ${listas === 1 ? "aprobada" : "aprobadas"}` : "",
+                  ajuste ? `${ajuste} la${ajuste === 1 ? "" : "s"} estamos ajustando` : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+                return (
+                  <section key={p.id} className="overflow-hidden rounded-2xl border bg-card">
+                    <div className="flex items-center gap-3 border-b bg-gradient-to-r from-primary/[0.08] to-transparent px-4 py-3">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-fuchsia-500 text-white shadow-md shadow-primary/25">
+                        <Sparkles className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold">Tus ideas de {mesLabel(p.mes).split(" ")[0].toLowerCase()}</p>
+                        <p className="text-xs text-muted-foreground">{resumen || "Ya las respondiste"} · gracias por responder</p>
+                      </div>
+                    </div>
+                    <ul className="divide-y">
+                      {p.ideas.slice(0, 5).map((i, n) => {
+                        const e = estados[n];
+                        return (
+                          <li key={i.id} className="flex items-center gap-3 px-4 py-2.5">
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-bold text-muted-foreground">{n + 1}</span>
+                            <span className={cn("min-w-0 flex-1 truncate text-sm", e.tipo === "descartada" && "text-muted-foreground line-through")}>{i.titulo}</span>
+                            <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold", e.clase)}>{e.label}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <button
+                      type="button"
+                      onClick={() => setPlanAbierto(p.mes)}
+                      className="flex w-full items-center justify-center gap-1 border-t px-4 py-2.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/[0.05]"
+                    >
+                      {p.ideas.length > 5 ? `Ver las ${p.ideas.length} ideas y el detalle` : "Ver el detalle de cada idea"} →
+                    </button>
+                  </section>
+                );
+              })}
           <CupoVideos uso={uso} mes={mes} precioExtra={plan.precioVideoExtra} onPedir={() => setPedirVideo(true)} />
 
           <Section
