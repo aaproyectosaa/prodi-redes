@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Loader2, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ export function puedeCorregirPedido(video: Video, uid: string | undefined): bool
  */
 export function CorregirPedido({ video, onBorrado }: { video: Video; onBorrado?: () => void }) {
   const { user } = useUserProfileContext();
+  const [params, setParams] = useSearchParams();
   const [, setTick] = useState(0);
   const [editando, setEditando] = useState(false);
   const [titulo, setTitulo] = useState(video.titulo);
@@ -63,6 +65,10 @@ export function CorregirPedido({ video, onBorrado }: { video: Video; onBorrado?:
       assertEditable();
       await callApi("/api/pagos/pedido-corregir", { video_id: video.id, accion: "borrar" });
       toast.success("Listo, lo borramos");
+      // Se cierra la ficha (si no, queda "Cargando video…" de un video que ya no existe).
+      const next = new URLSearchParams(params);
+      next.delete("video");
+      setParams(next, { replace: true });
       onBorrado?.();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo borrar");
