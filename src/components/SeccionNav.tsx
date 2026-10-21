@@ -56,13 +56,13 @@ export function TituloSeccion({
       onClick={onClick}
       aria-expanded={abierta}
       className={cn(
-        "group flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-[13px] font-semibold transition-colors hover:bg-accent/60",
+        "group flex w-full items-center gap-2 rounded-lg px-2 py-1 text-[12.5px] font-semibold transition-colors hover:bg-accent/60",
         abierta || activa ? "text-foreground" : "text-muted-foreground",
         className
       )}
     >
-      <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-transform group-hover:scale-105", e.chip)}>
-        <Icono className="h-4 w-4" />
+      <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-transform group-hover:scale-105", e.chip)}>
+        <Icono className="h-3.5 w-3.5" />
       </span>
       <span className="flex-1 text-left">{titulo}</span>
       {!abierta && pendientes > 0 && (

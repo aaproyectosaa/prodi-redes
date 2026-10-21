@@ -86,7 +86,7 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
         onClick={() => navigate(item.path)}
         title={collapsed ? item.label : undefined}
         className={cn(
-          "relative flex h-9 w-full items-center gap-2.5 rounded-xl text-sm transition-all",
+          "relative flex h-8 w-full items-center gap-2 rounded-lg text-[13px] transition-all",
           collapsed ? "justify-center px-0" : "px-2.5",
           active
             ? "bg-gradient-to-r from-primary to-fuchsia-500 font-medium text-white shadow-[0_8px_20px_-10px_hsl(var(--primary)/0.9)]"
@@ -94,7 +94,7 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
         )}
       >
         <span className="relative shrink-0">
-          <Icon className="h-4 w-4" />
+          <Icon className="h-[15px] w-[15px]" />
           {collapsed && !!badge && (
             <span className={cn("absolute -right-1.5 -top-1.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-destructive px-0.5 text-[9px] font-bold text-destructive-foreground ring-2 ring-card", item.path === "/pedidos" && "motion-safe:animate-pulse ring-2 ring-destructive/40")}>
               {badge > 99 ? "99+" : badge}
@@ -115,7 +115,7 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
     <aside
       className={cn(
         "relative hidden h-full shrink-0 flex-col border-r border-border bg-sidebar transition-all duration-200 md:flex",
-        collapsed ? "w-[64px]" : "w-60"
+        collapsed ? "w-[64px]" : "w-56"
       )}
     >
       <button
@@ -169,7 +169,7 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
                   className={cn(
                     "space-y-0.5",
                     // Los ítems de un grupo cuelgan de una línea de su color.
-                    section.title && !collapsed && cn("ml-5 mr-1 border-l-2 pl-2 animate-in fade-in slide-in-from-top-1 duration-150 motion-reduce:animate-none", estilo.linea)
+                    section.title && !collapsed && cn("ml-4 mr-1 border-l-2 pl-1.5 animate-in fade-in slide-in-from-top-1 duration-150 motion-reduce:animate-none", estilo.linea)
                   )}
                 >
                   {section.items.map((item) =>
