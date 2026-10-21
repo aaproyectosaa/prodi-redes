@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import type { PiezaIA } from "@/lib/redes/types";
 
 /**
- * Borrar piezas desde el tablero (admin y producción, como los videos): se activa "Borrar", se tocan las tarjetas y se confirma.
+ * Borrar piezas desde el tablero (admin, producción y diseño): se activa "Borrar", se tocan las tarjetas y se confirma.
  * Los archivos de Drive no se tocan.
  */
 export function useBorrarPiezas(piezas: PiezaIA[]) {

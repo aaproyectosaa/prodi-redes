@@ -156,7 +156,7 @@ export default function Piezas() {
   const filtros = useFiltrosTablero(`piezas-${role}`);
   const { cliente: filtroCliente, orden } = filtros;
   const piezas = useMemo(() => (filtroCliente === "todos" ? todas : todas.filter((p) => p.proyecto_id === filtroCliente)), [todas, filtroCliente]);
-  // Borrar piezas desde el tablero: el admin y producción (como los videos y las reglas del servidor).
+  // Borrar piezas desde el tablero: el admin, producción y diseño (como las reglas del servidor).
   const borrar = useBorrarPiezas(piezas);
   const [params, setParams] = useSearchParams();
   const [abierta, setAbierta] = useState<string | null>(null);
@@ -309,7 +309,7 @@ export default function Piezas() {
         <>
           <FiltrosTablero {...filtros} clientes={clientes} conOrden={vista === "kanban"} />
           {todas.length > 0 && <SelectorVista vista={vista} onChange={setVista} />}
-          {revisa && vista === "kanban" && todas.length > 0 && borrar.boton}
+          {(revisa || tieneRol("diseno")) && vista === "kanban" && todas.length > 0 && borrar.boton}
           {enHistorial.length > 0 && (
             <Button variant="outline" onClick={() => setHistorial(true)}>
               <History className="mr-2 h-4 w-4" /> Historial ({enHistorial.length})

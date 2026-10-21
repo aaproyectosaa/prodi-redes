@@ -516,8 +516,8 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
     case "piezas_ia":
       // El cliente aprueba o pide cambios solo por /api/publico/pieza-cliente.
       if (crea) return esAdmin(c);
-      // Borrar: el admin o la productora del cliente (como los videos).
-      if (borra) return produceEn(c, antes!.proyecto_id);
+      // Borrar: el admin, la productora o la diseñadora del cliente.
+      if (borra) return produceEn(c, antes!.proyecto_id) || (tiene(c, "diseno") && equipoDe(c, antes!.proyecto_id));
       if (!esAdmin(c)) {
         if (tocaAlguna(antes, despues, ["incluida", "cupo_usado", "precio", "cobro_id", "proyecto_id", "solicitado_por", "mes"])) return false;
         // Sin pagar o rechazada (con reembolso): solo el servidor o el admin. Cancelar, solo las que no se pagaron
