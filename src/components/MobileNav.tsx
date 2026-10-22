@@ -169,7 +169,7 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
               </div>
             ))}
           </nav>
-          <div className="space-y-2.5 border-t bg-muted/30 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="space-y-2 border-t bg-muted/30 px-3 pt-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
             {/* Accesos: solo los íconos de color, en una fila. */}
             <div className="flex gap-2">
               {[
@@ -191,28 +191,25 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
                       }}
                       title={x.label}
                       aria-label={x.label}
-                      className={cn("flex h-12 flex-1 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-sm transition-transform active:scale-[0.94]", x.color)}
+                      className={cn("flex h-9 flex-1 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-sm transition-transform active:scale-[0.94]", x.color)}
                     >
-                      <Icono className="h-5 w-5" />
+                      <Icono className="h-4 w-4" />
                     </button>
                   );
                 })}
             </div>
 
             {/* Interruptores: se ve si están prendidos o apagados. */}
-            <div className="divide-y overflow-hidden rounded-2xl border bg-card">
-              <label className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm">
-                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-muted">{oscuro ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}</span>
+            <div className="divide-y overflow-hidden rounded-xl border bg-card">
+              <label className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 text-sm">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted">{oscuro ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}</span>
                 <span className="flex-1 font-medium">Modo oscuro</span>
                 <Switch checked={oscuro} onCheckedChange={(v) => setTheme(v ? "dark" : "light")} />
               </label>
               {finanzas && (
-                <label className="flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-muted">{ocultos ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-medium">Ocultar montos</span>
-                    <span className="block text-[11px] text-muted-foreground">Para mostrar la pantalla sin que se vea la plata</span>
-                  </span>
+                <label className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 text-sm">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted">{ocultos ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</span>
+                  <span className="min-w-0 flex-1 font-medium">Ocultar montos</span>
                   <Switch checked={ocultos} onCheckedChange={setOcultos} />
                 </label>
               )}
@@ -225,7 +222,7 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
                 await signOut(auth);
                 navigate("/auth");
               }}
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-destructive/30 text-sm font-medium text-destructive transition-colors active:bg-destructive/10"
+              className="flex h-9 w-full items-center justify-center gap-2 rounded-xl border border-destructive/30 text-sm font-medium text-destructive transition-colors active:bg-destructive/10"
             >
               <LogOut className="h-4 w-4" /> Cerrar sesión
             </button>
