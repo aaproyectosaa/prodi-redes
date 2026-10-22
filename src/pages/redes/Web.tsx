@@ -35,6 +35,8 @@ import { callApi } from "@/lib/redes/api";
 import { fechaHora, hace, hoyISO } from "@/lib/redes/format";
 import { cn } from "@/lib/utils";
 import { BuscadorMapa, linkMapa, mapaEmbebido, MapaMovible } from "@/components/redes/BuscadorMapa";
+import { ProximoPasoChip, SeguimientoLead, type EventoLead } from "@/components/redes/crm/SeguimientoLead";
+import { useSearchParams } from "react-router-dom";
 
 // Reservas de la landing de la campaña «No empezamos de cero» (somosprodi.com).
 // Las crea el servidor (/api/web/aplicar); acá se mueven y se anotan (/api/web/estado y /notas).
@@ -59,7 +61,10 @@ interface LeadWeb {
   dudoso: boolean;
   estado: Estado;
   notas?: string;
-  historial?: { at: string; de: string | null; a: string; por_nombre?: string }[];
+  historial?: EventoLead[];
+  /** CRM: qué hay que hacer y para cuándo, y cuándo fue el último contacto. */
+  proximo_paso?: { texto: string; fecha: string | null; at: string } | null;
+  ultimo_contacto_at?: string | null;
   /** Cargado a mano desde el panel (no vino del formulario de la web). */
   manual?: boolean;
   fuente?: string;
@@ -152,6 +157,17 @@ export default function Web() {
   const { leads, config } = useLeadsWeb();
   const [vista, setVista] = useVista("web");
   const [abierto, setAbierto] = useState<string | null>(null);
+  // /web?lead=… (desde "Mi día" o un aviso): abre ese lead.
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const id = params.get("lead");
+    if (!id) return;
+    setAbierto(id);
+    const next = new URLSearchParams(params);
+    next.delete("lead");
+    setParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
   const [ajustes, setAjustes] = useState(false);
   const [nuevo, setNuevo] = useState(false);
   const [arrastrando, setArrastrando] = useState<string | null>(null);
@@ -336,6 +352,7 @@ function LeadCard({ lead: l, onAbrir }: { lead: LeadWeb; onAbrir: () => void }) 
           <Dato k="Pautó" v={l.ya_pauto} />
         </span>
         {l.notas && <span className="mt-1 line-clamp-2 block text-[11px] italic text-muted-foreground">“{l.notas}”</span>}
+        <ProximoPasoChip lead={l} />
       </button>
       <div className="mt-2 flex items-center gap-1">
         {l.email && (
@@ -595,19 +612,7 @@ function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => v
             {guardando ? "Guardando…" : "Guardar notas"}
           </Button>
         </div>
-        {(lead.historial?.length ?? 0) > 0 && (
-          <details className="rounded-xl border px-3 py-2 text-xs">
-            <summary className="cursor-pointer font-medium text-muted-foreground">Historial</summary>
-            <ol className="mt-2 space-y-1">
-              {[...(lead.historial ?? [])].reverse().map((h, i) => (
-                <li key={i}>
-                  <span className="font-medium">{NOMBRE_ESTADO[h.a as Estado] ?? h.a}</span>
-                  {h.por_nombre ? ` · ${h.por_nombre}` : ""} · <span className="text-muted-foreground">{fechaHora(h.at)}</span>
-                </li>
-              ))}
-            </ol>
-          </details>
-        )}
+        <SeguimientoLead lead={lead} />
       </DialogContent>
     </Dialog>
   );

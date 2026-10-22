@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { db, doc, getDoc } from "@/lib/db";
 import { AlertTriangle, Building2, CalendarDays, Copy, CopyPlus, ExternalLink, FileText, Loader2, MessageCircle, Package, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageShell } from "@/components/redes/PageShell";
@@ -287,7 +288,7 @@ function Fila({ p, onEditar, onDuplicar }: { p: Presupuesto; onEditar: () => voi
             <Button size="sm" variant="outline" onClick={() => void copiar()}>
               <Copy className="mr-1.5 h-3.5 w-3.5" /> Link
             </Button>
-            <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => window.open(link, "_blank")} aria-label="Ver como el cliente">
+            <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => window.open(`${link}?equipo=1`, "_blank")} aria-label="Ver como el cliente">
               <ExternalLink className="h-4 w-4" />
             </Button>
             <Button size="icon" variant="ghost" className="h-9 w-9" onClick={onEditar} aria-label="Editar">
@@ -324,6 +325,44 @@ export default function Presupuestos() {
     return `${enDias(0).slice(0, 7)}-${String(n).padStart(2, "0")}`;
   };
   const nuevaPropuesta = () => setPropuesta({ id: null, datos: { empresa: "", contacto: {}, validez: enDias(15), propuesta: { ...plantillaPropuesta("", enDias(0)), codigo: codigo() } } });
+  // Desde el CRM: /presupuestos?lead=… arma uno nuevo con los datos del lead (y queda vinculado);
+  // /presupuestos?abrir=… abre uno que ya existe.
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const leadId = params.get("lead");
+    const abrir = params.get("abrir");
+    if (!leadId && !abrir) return;
+    if (abrir && !lista) return;
+    const limpiar = () => {
+      const next = new URLSearchParams(params);
+      next.delete("lead");
+      next.delete("abrir");
+      setParams(next, { replace: true });
+    };
+    if (abrir) {
+      const p = lista?.find((x) => x.id === abrir);
+      if (p?.propuesta) setPropuesta({ id: p.id, datos: { empresa: p.empresa, contacto: p.contacto ?? {}, validez: p.validez, propuesta: p.propuesta } });
+      limpiar();
+      return;
+    }
+    void getDoc(doc(db, "leads_web", leadId!))
+      .then((s) => {
+        const l = (s.data() ?? {}) as { negocio?: string; nombre?: string; email?: string; telefono?: string };
+        setPropuesta({
+          id: null,
+          datos: {
+            empresa: l.negocio ?? "",
+            contacto: { nombre: l.nombre ?? null, email: l.email ?? null, telefono: l.telefono ?? null },
+            validez: enDias(15),
+            propuesta: { ...plantillaPropuesta(l.negocio ?? "", enDias(0)), codigo: codigo() },
+            lead_id: leadId,
+          },
+        });
+      })
+      .catch(() => toast.error("No se pudo abrir el lead"))
+      .finally(limpiar);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params, lista]);
   const duplicar = async (p: Presupuesto) => {
     const n = Math.max(0, ...(lista ?? []).map((x) => x.numero ?? 0)) + 1;
     try {

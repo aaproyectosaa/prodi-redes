@@ -22,6 +22,8 @@ export interface DatosPropuesta {
   contacto: { nombre?: string | null; telefono?: string | null; email?: string | null };
   validez: string;
   propuesta: Propuesta;
+  /** Si sale de un lead del CRM: queda vinculado (lo abre → se anota; lo acepta → pasa a Ganado). */
+  lead_id?: string | null;
 }
 
 interface Mensaje {
@@ -179,8 +181,13 @@ export function PropuestaEditor({ id: idInicial, inicial, onClose }: { id: strin
       if (id) await guardarPresupuesto(id, datos);
       else {
         const numero = Math.max(0, ...(lista ?? []).map((x) => x.numero ?? 0)) + 1;
-        nuevoId = await crearPresupuesto({ ...datos, created_by: user?.uid ?? "" }, numero);
+        nuevoId = await crearPresupuesto({ ...datos, ...(d.lead_id ? { lead_id: d.lead_id } : {}), created_by: user?.uid ?? "" }, numero);
         setId(nuevoId);
+        // En el lead: queda en su línea de tiempo y, si estaba antes, pasa a "Propuesta".
+        if (d.lead_id) {
+          void callApi("/api/web/actividad", { id: d.lead_id, tipo: "presupuesto", texto: `Armaste el presupuesto #${numero}` }).catch(() => {});
+          void callApi("/api/web/estado", { id: d.lead_id, estado: "propuesta" }).catch(() => {});
+        }
       }
       setCambios(false);
       toast.success("Presupuesto guardado");
@@ -202,7 +209,7 @@ export function PropuestaEditor({ id: idInicial, inicial, onClose }: { id: strin
   const verComoCliente = async () => {
     if (cambios && !(await guardar())) return;
     const p = id ? lista?.find((x) => x.id === id) : undefined;
-    if (p) window.open(linkPresupuesto(p as Presupuesto), "_blank");
+    if (p) window.open(`${linkPresupuesto(p as Presupuesto)}?equipo=1`, "_blank");
     else toast.message("Guardalo primero y después lo ves como el cliente");
   };
 
@@ -210,7 +217,7 @@ export function PropuestaEditor({ id: idInicial, inicial, onClose }: { id: strin
   const descargarPdf = async () => {
     if (cambios && !(await guardar())) return;
     const p = id ? lista?.find((x) => x.id === id) : undefined;
-    if (p) window.open(`${linkPresupuesto(p as Presupuesto)}${linkPresupuesto(p as Presupuesto).includes("?") ? "&" : "?"}pdf=1`, "_blank");
+    if (p) window.open(`${linkPresupuesto(p as Presupuesto)}?pdf=1&equipo=1`, "_blank");
     else toast.message("Guardalo primero y después lo descargás");
   };
 

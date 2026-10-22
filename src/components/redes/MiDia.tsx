@@ -1,6 +1,7 @@
 import { PedirFotoPerfil } from "./PedirFotoPerfil";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useAlertasPauta } from "@/components/redes/AlertasPauta";
+import { useLeadsDelDia } from "@/components/redes/crm/SeguimientoLead";
 import { auditoriaPauta } from "@/lib/redes/auditoriaPauta";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, CalendarClock, ChevronDown, Sun, X } from "lucide-react";
@@ -313,6 +314,7 @@ export function MiDia() {
   const { facturas } = useFacturas(sumarMeses(mesActual(), -3), plata);
   const obligaciones = useObligaciones(plata);
   const { alertas: alertasMeta } = useAlertasPauta(misRoles.includes("pauta"));
+  const leadsDelDia = useLeadsDelDia(misRoles.includes("admin"));
 
   const items = useMemo(() => {
     if (!delEquipo || !uid) return [];
@@ -393,6 +395,17 @@ export function MiDia() {
         });
       }
     }
+    // CRM: leads con el próximo paso para hoy o atrasado, y los que se están enfriando.
+    for (const x of leadsDelDia)
+      out.push({
+        id: `lead-${x.lead.id}`,
+        titulo: x.lead.negocio,
+        sub: "Lead",
+        fecha: x.fecha,
+        etiqueta: x.etiqueta,
+        tarea: x.tarea,
+        onAbrir: () => navigate(`/web?lead=${x.lead.id}`),
+      });
     // Todos: las tareas que le dejaron en el chat…
     for (const ta of mias.filter((x) => !x.hecha)) {
       out.push({
@@ -413,7 +426,7 @@ export function MiDia() {
       out.push({ id: r.id, titulo: r.titulo, clienteId: r.proyecto_id, sub: "Reunión", fecha: hoy, etiqueta: `Hoy ${hh}`, tarea: "Reunión", onAbrir: () => navigate(`/reuniones?r=${r.id}`) });
     }
     return out;
-  }, [delEquipo, uid, misRoles, videos, piezas, clientes, plata, facturas, obligaciones, mias, reuniones, navigate, alertasMeta]);
+  }, [delEquipo, uid, misRoles, videos, piezas, clientes, plata, facturas, obligaciones, mias, reuniones, navigate, alertasMeta, leadsDelDia]);
 
   if (!delEquipo) return null;
   return (

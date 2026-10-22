@@ -51,7 +51,8 @@ export default function PresupuestoPublico() {
   const [errForm, setErrForm] = useState<string | null>(null);
 
   useEffect(() => {
-    pedir<Vista>("presupuesto", { t: token })
+    // ?equipo=1: lo está mirando alguien de Prodi (no cuenta como que lo abrió el cliente).
+    pedir<Vista>("presupuesto", { t: token, equipo: new URLSearchParams(window.location.search).get("equipo") === "1" })
       .then((v) => {
         setP(v);
         setNombre(v.contacto.nombre ?? "");
