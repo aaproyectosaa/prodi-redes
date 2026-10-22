@@ -191,6 +191,12 @@ export async function recibirWebhook(b: any, base: string) {
   const ids: string[] = [];
   for (const e of Array.isArray(b?.entry) ? b.entry : [])
     for (const c of Array.isArray(e?.changes) ? e.changes : []) if (c?.field === "leadgen" && c.value?.leadgen_id) ids.push(String(c.value.leadgen_id));
+  // Un mensaje directo (Instagram o Messenger): se traen las conversaciones al momento.
+  const hayMensaje = (Array.isArray(b?.entry) ? b.entry : []).some((e: any) => Array.isArray(e?.messaging) || (e?.changes ?? []).some((c: any) => c?.field === "messages"));
+  if (hayMensaje) {
+    const r = await importarMensajes(base, true).catch((err) => ({ nuevos: 0, error: String(err) }));
+    if (!ids.length) return { ok: true, ...r };
+  }
   if (!ids.length) return { ok: true, nuevos: 0 };
   const temporada = await temporadaActual();
   let token = process.env.META_ACCESS_TOKEN ?? "";
@@ -244,7 +250,7 @@ export async function conectarFormularios(base: string) {
 // alguien escribe. Se revisa al abrir Leads (cada 10 minutos como mucho), con "Traer mensajes" y todos los días.
 // El token de la página tiene que tener pages_messaging (Facebook) e instagram_manage_messages (Instagram).
 
-const DIEZ_MIN = 10 * 60_000;
+const DIEZ_MIN = 2 * 60_000;
 
 /** Trae las conversaciones nuevas (últimos 30 días) y crea un lead por cada persona que escribió. */
 export async function importarMensajes(base: string, forzar = false) {

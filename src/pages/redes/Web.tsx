@@ -158,11 +158,16 @@ async function mover(lead: LeadWeb, estado: Estado) {
 
 export default function Web() {
   const { leads, config } = useLeadsWeb();
-  // Los mensajes nuevos al Instagram y Facebook de Prodi entran como leads (el servidor revisa cada 10 min como mucho).
+  // Los mensajes nuevos al Instagram y Facebook de Prodi entran como leads: al abrir y cada 2 minutos con Leads abierto
+  // (además del aviso al momento de Meta, si el webhook de mensajes está suscripto).
   useEffect(() => {
-    callApi<{ nuevos: number }>("/api/web/meta-mensajes", {})
-      .then((r) => r.nuevos > 0 && toast.success(`${r.nuevos} lead${r.nuevos === 1 ? "" : "s"} nuevo${r.nuevos === 1 ? "" : "s"} por mensaje`))
-      .catch(() => undefined);
+    const revisar = () =>
+      callApi<{ nuevos: number }>("/api/web/meta-mensajes", {})
+        .then((r) => r.nuevos > 0 && toast.success(`${r.nuevos} lead${r.nuevos === 1 ? "" : "s"} nuevo${r.nuevos === 1 ? "" : "s"} por mensaje`))
+        .catch(() => undefined);
+    void revisar();
+    const t = setInterval(() => document.visibilityState === "visible" && void revisar(), 2 * 60_000);
+    return () => clearInterval(t);
   }, []);
   const [vista, setVista] = useVista("web");
   const [abierto, setAbierto] = useState<string | null>(null);
