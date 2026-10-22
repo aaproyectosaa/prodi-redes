@@ -1,5 +1,36 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CalendarCheck, Copy, ExternalLink, FileText, Globe, Loader2, Phone, Plus, Settings2, Trophy, XCircle, Sparkles } from "lucide-react";
+import {
+  AlertTriangle,
+  AtSign,
+  Briefcase,
+  CalendarCheck,
+  CalendarDays,
+  Copy,
+  Ellipsis,
+  ExternalLink,
+  Factory,
+  FileText,
+  Globe,
+  Handshake,
+  HeartPulse,
+  Instagram,
+  Loader2,
+  Mail,
+  MessageCircle,
+  Phone,
+  PhoneCall,
+  Plus,
+  Repeat,
+  Settings2,
+  ShoppingBag,
+  Sparkles,
+  Store,
+  Trophy,
+  User,
+  UserPlus,
+  UtensilsCrossed,
+  XCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -500,8 +531,47 @@ function AjustesTemporada({ open, onOpenChange, config }: { open: boolean; onOpe
   );
 }
 
-const FUENTES = ["Recomendación", "WhatsApp", "Instagram", "Llamada", "Evento", "Cliente actual", "Otro"];
-const RUBROS = ["Comercio", "Industria / fábrica", "Gastronomía", "Servicios profesionales", "Salud y bienestar", "Otro"];
+const FUENTES: { id: string; icono: React.ElementType }[] = [
+  { id: "Recomendación", icono: Handshake },
+  { id: "WhatsApp", icono: MessageCircle },
+  { id: "Instagram", icono: Instagram },
+  { id: "Llamada", icono: PhoneCall },
+  { id: "Evento", icono: CalendarDays },
+  { id: "Cliente actual", icono: Repeat },
+  { id: "Otro", icono: Ellipsis },
+];
+const RUBROS: { id: string; icono: React.ElementType }[] = [
+  { id: "Comercio", icono: ShoppingBag },
+  { id: "Industria / fábrica", icono: Factory },
+  { id: "Gastronomía", icono: UtensilsCrossed },
+  { id: "Servicios profesionales", icono: Briefcase },
+  { id: "Salud y bienestar", icono: HeartPulse },
+  { id: "Otro", icono: Ellipsis },
+];
+
+/** Bloque del formulario con número y título (afuera del componente: si no, los campos pierden el foco). */
+function PasoLead({ n, titulo, ayuda, children }: { n: number; titulo: string; ayuda?: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-2.5">
+      <div className="flex items-center gap-2">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[11px] font-bold text-primary">{n}</span>
+        <p className="text-sm font-semibold">{titulo}</p>
+        {ayuda && <span className="text-xs text-muted-foreground">· {ayuda}</span>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** Campo con su ícono adentro. */
+function CampoIcono({ icono: Icono, className, ...props }: React.ComponentProps<typeof Input> & { icono: React.ElementType }) {
+  return (
+    <div className={cn("relative", className)}>
+      <Icono className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <Input {...props} className="h-11 rounded-xl pl-9" />
+    </div>
+  );
+}
 
 /** Cargar un lead a mano (un contacto que llegó por WhatsApp, una recomendación, un evento…): va al mismo tablero. */
 function NuevoLead({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
@@ -525,63 +595,97 @@ function NuevoLead({ open, onOpenChange }: { open: boolean; onOpenChange: (o: bo
       setGuardando(false);
     }
   };
-  const chip = (activo: boolean) =>
-    cn("rounded-full border px-3 py-1.5 text-xs font-medium transition-colors", activo ? "border-primary bg-primary text-primary-foreground" : "bg-background hover:border-primary/50");
+  const opcion = (activo: boolean) =>
+    cn(
+      "flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-all",
+      activo ? "border-primary bg-primary/10 text-primary shadow-sm ring-1 ring-primary/40" : "bg-background text-foreground/80 hover:border-primary/40 hover:bg-muted/50"
+    );
+  const etapa = COLUMNAS.find((c) => c.id === f.estado);
+  const listo = f.negocio.trim().length >= 2;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg overflow-y-auto sm:max-h-[92dvh] sm:rounded-2xl">
-        <DialogHeader>
-          <DialogTitle>Nuevo lead</DialogTitle>
-          <DialogDescription>Un contacto que llegó por fuera de la web. Queda en el tablero junto con las aplicaciones.</DialogDescription>
+      <DialogContent className="max-h-[92dvh] w-[calc(100vw-1.5rem)] max-w-xl gap-0 overflow-y-auto rounded-3xl p-0">
+        <DialogHeader className="space-y-1 px-6 pb-4 pt-6 text-left">
+          <DialogTitle className="flex items-center gap-2.5 text-xl">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-fuchsia-500 text-white shadow-md shadow-primary/25">
+              <UserPlus className="h-4 w-4" />
+            </span>
+            Nuevo lead
+          </DialogTitle>
+          <DialogDescription>Alguien que llegó por fuera de la web. Queda en el tablero junto con los que aplicaron.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Input value={f.negocio} onChange={(e) => set("negocio", e.target.value)} placeholder="Negocio *" maxLength={80} autoFocus />
-            <Input value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Nombre del contacto" maxLength={80} />
-            <Input value={f.telefono} onChange={(e) => set("telefono", e.target.value)} placeholder="WhatsApp" inputMode="tel" maxLength={40} />
-            <Input value={f.email} onChange={(e) => set("email", e.target.value)} placeholder="Email" inputMode="email" maxLength={120} />
-            <Input value={f.instagram} onChange={(e) => set("instagram", e.target.value)} placeholder="Instagram o web" maxLength={120} className="sm:col-span-2" />
-          </div>
-          <div className="space-y-1.5">
-            <p className="text-xs font-semibold text-muted-foreground">¿De dónde vino?</p>
+
+        <div className="space-y-5 px-6 pb-4">
+          <PasoLead n={1} titulo="El negocio">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <CampoIcono icono={Store} value={f.negocio} onChange={(e) => set("negocio", e.target.value)} placeholder="Nombre del negocio" maxLength={80} autoFocus />
+              <CampoIcono icono={AtSign} value={f.instagram} onChange={(e) => set("instagram", e.target.value)} placeholder="Instagram o web" maxLength={120} />
+            </div>
             <div className="flex flex-wrap gap-1.5">
-              {FUENTES.map((x) => (
-                <button key={x} type="button" className={chip(f.fuente === x)} onClick={() => set("fuente", x)}>
-                  {x}
+              {RUBROS.map(({ id, icono: I }) => (
+                <button key={id} type="button" className={opcion(f.rubro === id)} onClick={() => set("rubro", f.rubro === id ? "" : id)}>
+                  <I className="h-3.5 w-3.5" /> {id}
                 </button>
               ))}
             </div>
-          </div>
-          <div className="space-y-1.5">
-            <p className="text-xs font-semibold text-muted-foreground">Rubro</p>
+          </PasoLead>
+
+          <PasoLead n={2} titulo="Con quién hablaste" ayuda="opcional">
+            <div className="grid gap-2 sm:grid-cols-3">
+              <CampoIcono icono={User} value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Nombre" maxLength={80} />
+              <CampoIcono icono={Phone} value={f.telefono} onChange={(e) => set("telefono", e.target.value)} placeholder="WhatsApp" inputMode="tel" maxLength={40} />
+              <CampoIcono icono={Mail} value={f.email} onChange={(e) => set("email", e.target.value)} placeholder="Email" inputMode="email" maxLength={120} />
+            </div>
+          </PasoLead>
+
+          <PasoLead n={3} titulo="¿Cómo llegó?">
             <div className="flex flex-wrap gap-1.5">
-              {RUBROS.map((x) => (
-                <button key={x} type="button" className={chip(f.rubro === x)} onClick={() => set("rubro", f.rubro === x ? "" : x)}>
-                  {x}
+              {FUENTES.map(({ id, icono: I }) => (
+                <button key={id} type="button" className={opcion(f.fuente === id)} onClick={() => set("fuente", id)}>
+                  <I className="h-3.5 w-3.5" /> {id}
                 </button>
               ))}
             </div>
-          </div>
-          <div className="space-y-1.5">
-            <p className="text-xs font-semibold text-muted-foreground">¿En qué etapa está?</p>
-            <div className="flex flex-wrap gap-1.5">
-              {(["calificado", "reunion_agendada", "propuesta", "ganado", "perdido"] as Estado[]).map((x) => (
-                <button key={x} type="button" className={chip(f.estado === x)} onClick={() => set("estado", x)}>
-                  {NOMBRE_ESTADO[x]}
+          </PasoLead>
+
+          <PasoLead n={4} titulo="¿En qué etapa está?">
+            <div className="grid grid-cols-5 gap-1 rounded-2xl bg-muted/60 p-1">
+              {COLUMNAS.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => set("estado", c.id)}
+                  className={cn(
+                    "flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-[11px] font-medium leading-tight transition-all",
+                    f.estado === c.id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <span className={cn("h-2 w-2 rounded-full", c.dot)} />
+                  <span className="text-center">{c.titulo}</span>
                 </button>
               ))}
             </div>
-          </div>
-          <Textarea value={f.notas} onChange={(e) => set("notas", e.target.value)} rows={3} placeholder="Notas: qué necesita, qué hablaron, cuándo volver a llamar…" />
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={() => void guardar()} disabled={guardando || f.negocio.trim().length < 2}>
-              {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Guardar lead
-            </Button>
-          </div>
+            {etapa && <p className="text-xs text-muted-foreground">{etapa.ayuda}</p>}
+          </PasoLead>
+
+          <PasoLead n={5} titulo="Notas" ayuda="opcional">
+            <Textarea value={f.notas} onChange={(e) => set("notas", e.target.value)} rows={3} placeholder="Qué necesita, qué hablaron, cuándo volver a llamar…" className="rounded-xl" />
+          </PasoLead>
+        </div>
+
+        <div className="sticky bottom-0 flex items-center gap-2 border-t bg-background/95 px-6 py-3 backdrop-blur">
+          <p className="flex-1 text-xs text-muted-foreground">{listo ? "" : "Poné el nombre del negocio para guardar."}</p>
+          <Button variant="ghost" className="rounded-full" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={() => void guardar()}
+            disabled={guardando || !listo}
+            className="rounded-full bg-gradient-to-r from-primary to-fuchsia-500 px-6 font-semibold shadow-md shadow-primary/25"
+          >
+            {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Guardar lead
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
