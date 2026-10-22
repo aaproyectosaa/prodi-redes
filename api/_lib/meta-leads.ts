@@ -309,9 +309,14 @@ export async function importarMensajes(base: string, forzar = false, todo = fals
       if ((Date.parse(resumen.updated_time) || 0) <= visto) continue;
       if (Date.parse(resumen.updated_time) < desde) continue;
       const id = idDeLead(`conversacion:${resumen.id}`);
-      if (await leerDoc(pool, COL, id)) continue;
+      const existente = await leerDoc(pool, COL, id);
       const c = await graph(resumen.id, { fields: "id,participants,messages.limit(20){message,from,created_time}" }, token).catch(() => null);
       if (!c) continue;
+      if (existente) {
+        // Ya es lead y volvió a escribir: lo nuevo va a su línea de tiempo, con aviso.
+        if (await sumarMensajesNuevos(id, existente, c, propios, plataforma, base)) nuevos++;
+        continue;
+      }
       const persona = (c.participants?.data ?? []).find((p: any) => !propios.has(String(p.id)));
       if (!persona) continue;
       // Del más viejo al más nuevo; lo que escribió la persona en los últimos 30 días (no las respuestas de Prodi).
@@ -343,7 +348,7 @@ export async function importarMensajes(base: string, forzar = false, todo = fals
         manual: true,
         fuente: `Mensaje ${red}`,
         origen: "meta:mensaje",
-        meta: { conversacion_id: String(c.id), plataforma },
+        meta: { conversacion_id: String(c.id), plataforma, ultimo_mensaje_at: recientes[recientes.length - 1]?.created_time ?? at },
         historial: [{ at, de: null, a: "calificado", por: null, por_nombre: `Mensaje de ${red}` }],
       });
       nuevos++;
@@ -365,6 +370,37 @@ export async function importarMensajes(base: string, forzar = false, todo = fals
   await guardarDoc(pool, SECRETO.col, SECRETO.id, { ...actual, mensajes_vistos: vistos });
   if (errores.length && !detalle.some((d) => d.includes("conversaciones"))) throw new HttpError(502, errores.join(" · "));
   return { revisado: true, nuevos, errores, detalle, cada };
+}
+
+/** Mensajes nuevos de alguien que ya es lead: se suman a su línea de tiempo y se avisa. Devuelve true si había. */
+async function sumarMensajesNuevos(id: string, lead: any, c: any, propios: Set<string>, plataforma: string, base: string): Promise<boolean> {
+  // Los que ya estaban cuando se creó el lead quedaron en sus notas.
+  const desde = Date.parse(lead.meta?.ultimo_mensaje_at ?? lead.updated_at ?? lead.created_at ?? "") || 0;
+  const nuevos = [...(c.messages?.data ?? [])]
+    .reverse()
+    .filter((m: any) => m?.from && !propios.has(String(m.from.id)) && m.message && Date.parse(m.created_time) > desde);
+  if (!nuevos.length) return false;
+  const red = plataforma === "instagram" ? "Instagram" : "Facebook";
+  const ultimo = nuevos[nuevos.length - 1].created_time;
+  const eventos = nuevos.slice(-5).map((m: any) => ({ at: new Date(m.created_time).toISOString(), tipo: "whatsapp", texto: `Escribió por ${red}: «${limpio(m.message, 500)}»`, por: null, por_nombre: red }));
+  await guardarDoc(getPool(), COL, id, {
+    ...lead,
+    updated_at: new Date().toISOString(),
+    meta: { ...(lead.meta ?? {}), ultimo_mensaje_at: ultimo },
+    historial: [...(Array.isArray(lead.historial) ? lead.historial : []), ...eventos].slice(-100),
+  });
+  const admins = (await adminDb().collection("profiles").where("role", "==", "admin").get()).docs.filter((d) => d.data().activo !== false).map((d) => d.id);
+  await enviarAviso(
+    {
+      destinatarios: admins,
+      titulo: `💬 ${lead.negocio || lead.nombre || "Un lead"} volvió a escribir por ${red}`,
+      cuerpo: `«${limpio(nuevos[nuevos.length - 1].message, 140)}»`,
+      link: `/web?lead=${id}`,
+      clave: `lead-mensaje:${c.id}:${ultimo}`,
+    },
+    base
+  ).catch(() => undefined);
+  return true;
 }
 
 /** Para la pantalla: cuándo avisó Meta por última vez (formulario o mensaje) y cuándo se revisó. */
