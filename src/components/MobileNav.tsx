@@ -170,8 +170,8 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
             ))}
           </nav>
           <div className="space-y-2.5 border-t bg-muted/30 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-            {/* Accesos: tarjetas con su ícono de color. */}
-            <div className="grid grid-cols-2 gap-2">
+            {/* Accesos: solo los íconos de color, en una fila. */}
+            <div className="flex gap-2">
               {[
                 { ok: true, icono: HelpCircle, color: "from-sky-400 to-blue-500", label: "¿Cómo se usa?", accion: () => window.dispatchEvent(new Event(EVENTO_RECORRIDO)) },
                 { ok: puedeVerComo, icono: Eye, color: "from-violet-500 to-fuchsia-500", label: "Ver como…", accion: () => setVerComo(true) },
@@ -189,12 +189,11 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
                         setOpen(false);
                         x.accion();
                       }}
-                      className="flex items-center gap-2.5 rounded-2xl border bg-card p-2.5 text-left text-[13px] font-medium shadow-sm transition-transform active:scale-[0.97]"
+                      title={x.label}
+                      aria-label={x.label}
+                      className={cn("flex h-12 flex-1 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-sm transition-transform active:scale-[0.94]", x.color)}
                     >
-                      <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white", x.color)}>
-                        <Icono className="h-4 w-4" />
-                      </span>
-                      <span className="min-w-0 leading-tight">{x.label}</span>
+                      <Icono className="h-5 w-5" />
                     </button>
                   );
                 })}
