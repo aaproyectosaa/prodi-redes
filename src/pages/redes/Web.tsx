@@ -2,33 +2,22 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   AtSign,
-  Briefcase,
+  ChevronDown,
   CalendarCheck,
-  CalendarDays,
   Copy,
-  Ellipsis,
   ExternalLink,
-  Factory,
   FileText,
   Globe,
-  Handshake,
-  HeartPulse,
-  Instagram,
   Loader2,
   Mail,
-  MessageCircle,
   Phone,
-  PhoneCall,
   Plus,
-  Repeat,
   Settings2,
-  ShoppingBag,
   Sparkles,
   Store,
   Trophy,
   User,
   UserPlus,
-  UtensilsCrossed,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -531,37 +520,8 @@ function AjustesTemporada({ open, onOpenChange, config }: { open: boolean; onOpe
   );
 }
 
-const FUENTES: { id: string; icono: React.ElementType }[] = [
-  { id: "Recomendación", icono: Handshake },
-  { id: "WhatsApp", icono: MessageCircle },
-  { id: "Instagram", icono: Instagram },
-  { id: "Llamada", icono: PhoneCall },
-  { id: "Evento", icono: CalendarDays },
-  { id: "Cliente actual", icono: Repeat },
-  { id: "Otro", icono: Ellipsis },
-];
-const RUBROS: { id: string; icono: React.ElementType }[] = [
-  { id: "Comercio", icono: ShoppingBag },
-  { id: "Industria / fábrica", icono: Factory },
-  { id: "Gastronomía", icono: UtensilsCrossed },
-  { id: "Servicios profesionales", icono: Briefcase },
-  { id: "Salud y bienestar", icono: HeartPulse },
-  { id: "Otro", icono: Ellipsis },
-];
-
-/** Bloque del formulario con número y título (afuera del componente: si no, los campos pierden el foco). */
-function PasoLead({ n, titulo, ayuda, children }: { n: number; titulo: string; ayuda?: string; children: React.ReactNode }) {
-  return (
-    <section className="space-y-2.5">
-      <div className="flex items-center gap-2">
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[11px] font-bold text-primary">{n}</span>
-        <p className="text-sm font-semibold">{titulo}</p>
-        {ayuda && <span className="text-xs text-muted-foreground">· {ayuda}</span>}
-      </div>
-      {children}
-    </section>
-  );
-}
+const FUENTES = ["WhatsApp", "Recomendación", "Instagram", "Llamada", "Evento", "Cliente actual", "Otro"];
+const RUBROS = ["Comercio", "Industria / fábrica", "Gastronomía", "Servicios profesionales", "Salud y bienestar", "Otro"];
 
 /** Campo con su ícono adentro. */
 function CampoIcono({ icono: Icono, className, ...props }: React.ComponentProps<typeof Input> & { icono: React.ElementType }) {
@@ -570,6 +530,43 @@ function CampoIcono({ icono: Icono, className, ...props }: React.ComponentProps<
       <Icono className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input {...props} className="h-11 rounded-xl pl-9" />
     </div>
+  );
+}
+
+/** Desplegable chico con forma de etiqueta ("Llegó por WhatsApp ▾"). */
+function Etiqueta({
+  icono: Icono,
+  prefijo,
+  valor,
+  opciones,
+  onCambiar,
+  vacio,
+  punto,
+}: {
+  icono?: React.ElementType;
+  prefijo: string;
+  valor: string;
+  opciones: { id: string; label: string }[];
+  onCambiar: (v: string) => void;
+  vacio?: string;
+  punto?: string;
+}) {
+  const actual = opciones.find((o) => o.id === valor);
+  return (
+    <label className="relative flex cursor-pointer items-center gap-1.5 rounded-full border bg-background px-3 py-1.5 text-xs transition-colors hover:border-primary/50">
+      {punto ? <span className={cn("h-2 w-2 rounded-full", punto)} /> : Icono && <Icono className="h-3.5 w-3.5 text-muted-foreground" />}
+      <span className="text-muted-foreground">{prefijo}</span>
+      <span className="font-semibold">{actual?.label ?? vacio}</span>
+      <ChevronDown className="h-3 w-3 text-muted-foreground" />
+      <select value={valor} onChange={(e) => onCambiar(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" aria-label={prefijo}>
+        {vacio && <option value="">{vacio}</option>}
+        {opciones.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -595,86 +592,56 @@ function NuevoLead({ open, onOpenChange }: { open: boolean; onOpenChange: (o: bo
       setGuardando(false);
     }
   };
-  const opcion = (activo: boolean) =>
-    cn(
-      "flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-all",
-      activo ? "border-primary bg-primary/10 text-primary shadow-sm ring-1 ring-primary/40" : "bg-background text-foreground/80 hover:border-primary/40 hover:bg-muted/50"
-    );
-  const etapa = COLUMNAS.find((c) => c.id === f.estado);
+  const [mas, setMas] = useState(false);
+  useEffect(() => {
+    if (open) setMas(false);
+  }, [open]);
   const listo = f.negocio.trim().length >= 2;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92dvh] w-[calc(100vw-1.5rem)] max-w-xl gap-0 overflow-y-auto rounded-3xl p-0">
-        <DialogHeader className="space-y-1 px-6 pb-4 pt-6 text-left">
+      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md gap-0 rounded-3xl p-0">
+        <DialogHeader className="px-6 pb-3 pt-6 text-left">
           <DialogTitle className="flex items-center gap-2.5 text-xl">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-fuchsia-500 text-white shadow-md shadow-primary/25">
               <UserPlus className="h-4 w-4" />
             </span>
             Nuevo lead
           </DialogTitle>
-          <DialogDescription>Alguien que llegó por fuera de la web. Queda en el tablero junto con los que aplicaron.</DialogDescription>
+          <DialogDescription className="sr-only">Un contacto que llegó por fuera de la web.</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5 px-6 pb-4">
-          <PasoLead n={1} titulo="El negocio">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <CampoIcono icono={Store} value={f.negocio} onChange={(e) => set("negocio", e.target.value)} placeholder="Nombre del negocio" maxLength={80} autoFocus />
+        <div className="space-y-2.5 px-6 pb-5">
+          <CampoIcono icono={Store} value={f.negocio} onChange={(e) => set("negocio", e.target.value)} placeholder="¿Qué negocio es?" maxLength={80} autoFocus />
+          <div className="grid grid-cols-2 gap-2">
+            <CampoIcono icono={User} value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Con quién" maxLength={80} />
+            <CampoIcono icono={Phone} value={f.telefono} onChange={(e) => set("telefono", e.target.value)} placeholder="WhatsApp" inputMode="tel" maxLength={40} />
+          </div>
+          {mas ? (
+            <div className="grid grid-cols-2 gap-2">
+              <CampoIcono icono={Mail} value={f.email} onChange={(e) => set("email", e.target.value)} placeholder="Email" inputMode="email" maxLength={120} />
               <CampoIcono icono={AtSign} value={f.instagram} onChange={(e) => set("instagram", e.target.value)} placeholder="Instagram o web" maxLength={120} />
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {RUBROS.map(({ id, icono: I }) => (
-                <button key={id} type="button" className={opcion(f.rubro === id)} onClick={() => set("rubro", f.rubro === id ? "" : id)}>
-                  <I className="h-3.5 w-3.5" /> {id}
-                </button>
-              ))}
-            </div>
-          </PasoLead>
+          ) : (
+            <button type="button" onClick={() => setMas(true)} className="text-xs font-medium text-primary hover:underline">
+              + Email o Instagram
+            </button>
+          )}
+          <Textarea value={f.notas} onChange={(e) => set("notas", e.target.value)} rows={2} placeholder="Notas (qué necesita, cuándo volver a llamar…)" className="rounded-xl" />
 
-          <PasoLead n={2} titulo="Con quién hablaste" ayuda="opcional">
-            <div className="grid gap-2 sm:grid-cols-3">
-              <CampoIcono icono={User} value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Nombre" maxLength={80} />
-              <CampoIcono icono={Phone} value={f.telefono} onChange={(e) => set("telefono", e.target.value)} placeholder="WhatsApp" inputMode="tel" maxLength={40} />
-              <CampoIcono icono={Mail} value={f.email} onChange={(e) => set("email", e.target.value)} placeholder="Email" inputMode="email" maxLength={120} />
-            </div>
-          </PasoLead>
-
-          <PasoLead n={3} titulo="¿Cómo llegó?">
-            <div className="flex flex-wrap gap-1.5">
-              {FUENTES.map(({ id, icono: I }) => (
-                <button key={id} type="button" className={opcion(f.fuente === id)} onClick={() => set("fuente", id)}>
-                  <I className="h-3.5 w-3.5" /> {id}
-                </button>
-              ))}
-            </div>
-          </PasoLead>
-
-          <PasoLead n={4} titulo="¿En qué etapa está?">
-            <div className="grid grid-cols-5 gap-1 rounded-2xl bg-muted/60 p-1">
-              {COLUMNAS.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => set("estado", c.id)}
-                  className={cn(
-                    "flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-[11px] font-medium leading-tight transition-all",
-                    f.estado === c.id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <span className={cn("h-2 w-2 rounded-full", c.dot)} />
-                  <span className="text-center">{c.titulo}</span>
-                </button>
-              ))}
-            </div>
-            {etapa && <p className="text-xs text-muted-foreground">{etapa.ayuda}</p>}
-          </PasoLead>
-
-          <PasoLead n={5} titulo="Notas" ayuda="opcional">
-            <Textarea value={f.notas} onChange={(e) => set("notas", e.target.value)} rows={3} placeholder="Qué necesita, qué hablaron, cuándo volver a llamar…" className="rounded-xl" />
-          </PasoLead>
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            <Etiqueta prefijo="Llegó por" valor={f.fuente} opciones={FUENTES.map((x) => ({ id: x, label: x }))} onCambiar={(v) => set("fuente", v)} />
+            <Etiqueta prefijo="Rubro" valor={f.rubro} vacio="elegir" opciones={RUBROS.map((x) => ({ id: x, label: x }))} onCambiar={(v) => set("rubro", v)} />
+            <Etiqueta
+              prefijo="Etapa"
+              valor={f.estado}
+              punto={COLUMNAS.find((c) => c.id === f.estado)?.dot}
+              opciones={COLUMNAS.map((c) => ({ id: c.id, label: c.titulo }))}
+              onCambiar={(v) => set("estado", v)}
+            />
+          </div>
         </div>
 
-        <div className="sticky bottom-0 flex items-center gap-2 border-t bg-background/95 px-6 py-3 backdrop-blur">
-          <p className="flex-1 text-xs text-muted-foreground">{listo ? "" : "Poné el nombre del negocio para guardar."}</p>
+        <div className="flex items-center justify-end gap-2 border-t px-6 py-3">
           <Button variant="ghost" className="rounded-full" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
@@ -684,7 +651,7 @@ function NuevoLead({ open, onOpenChange }: { open: boolean; onOpenChange: (o: bo
             className="rounded-full bg-gradient-to-r from-primary to-fuchsia-500 px-6 font-semibold shadow-md shadow-primary/25"
           >
             {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Guardar lead
+            Guardar
           </Button>
         </div>
       </DialogContent>
