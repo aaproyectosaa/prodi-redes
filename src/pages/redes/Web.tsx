@@ -115,8 +115,8 @@ function origenDe(l: LeadWeb): Origen {
 
 const NOMBRE_ESTADO: Record<Estado, string> = {
   no_califica: "No califica",
-  calificado: "Calificado",
-  reunion_agendada: "Reunión agendada",
+  calificado: "Nuevo",
+  reunion_agendada: "Reunión",
   propuesta: "Propuesta",
   ganado: "Ganado",
   perdido: "Perdido",
@@ -534,34 +534,6 @@ function DatosLead({ lead }: { lead: LeadWeb }) {
       setGuardando(false);
     }
   };
-  const accion = (k: CampoLead, v: string) => {
-    const clase = "text-xs font-medium text-primary hover:underline";
-    if (k === "telefono")
-      return (
-        <a href={`https://wa.me/${v.replace(/\D/g, "").replace(/^0/, "54")}`} target="_blank" rel="noopener noreferrer" className={clase}>
-          Escribir
-        </a>
-      );
-    if (k === "email")
-      return (
-        <button type="button" onClick={() => copiarEmail(v)} className={clase}>
-          Copiar
-        </button>
-      );
-    if (k === "instagram" && linkDe(v))
-      return (
-        <a href={linkDe(v)!} target="_blank" rel="noopener noreferrer" className={clase}>
-          Abrir
-        </a>
-      );
-    if (k === "ubicacion")
-      return (
-        <a href={linkMapa(v)} target="_blank" rel="noopener noreferrer" className={clase}>
-          Google Maps
-        </a>
-      );
-    return null;
-  };
   const presentes = CAMPOS_LEAD.filter((c) => String(lead[c.k] ?? "").trim() || editando === c.k);
   const faltan = CAMPOS_LEAD.filter((c) => !presentes.includes(c));
   const extra = [
@@ -571,87 +543,130 @@ function DatosLead({ lead }: { lead: LeadWeb }) {
     ["Quiere arrancar", lead.cuando],
   ].filter(([, v]) => v);
 
+  const tel = (lead.telefono ?? "").replace(/\D/g, "");
+  const ig = linkDe(lead.instagram);
+  // Lo que se puede hacer con un toque (solo con los datos que hay).
+  const acciones = [
+    tel && { label: "WhatsApp", icono: MessageCircle, href: `https://wa.me/${tel.replace(/^0/, "54")}`, clase: "bg-emerald-500 text-white hover:bg-emerald-600" },
+    tel && { label: "Llamar", icono: Phone, href: `tel:${tel}`, clase: "" },
+    lead.email && { label: "Copiar mail", icono: Mail, onClick: () => copiarEmail(lead.email), clase: "" },
+    ig && { label: ig.includes("instagram.com") ? "Instagram" : "Web", icono: ig.includes("instagram.com") ? Instagram : ExternalLink, href: ig, clase: "" },
+    lead.ubicacion && { label: "Cómo llegar", icono: MapPin, href: linkMapa(lead.ubicacion), clase: "" },
+  ].filter(Boolean) as { label: string; icono: React.ElementType; href?: string; onClick?: () => void; clase: string }[];
+
+  const editor = (k: CampoLead, placeholder: string) => (
+    <div className="col-span-full flex items-start gap-2 rounded-xl border border-primary/50 bg-primary/[0.04] p-2">
+      {k === "rubro" ? (
+        <select value={valor} onChange={(e) => setValor(e.target.value)} className="h-9 flex-1 rounded-lg border bg-background px-2 text-sm" autoFocus>
+          <option value="">Sin rubro</option>
+          {RUBROS.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
+      ) : k === "ubicacion" ? (
+        <BuscadorMapa valor={valor} onCambiar={setValor} onEnter={() => void guardar()} className="min-w-0 flex-1" autoFocus />
+      ) : (
+        <Input
+          value={valor}
+          onChange={(e) => setValor(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void guardar();
+            if (e.key === "Escape") setEditando(null);
+          }}
+          placeholder={placeholder}
+          className="h-9 flex-1 bg-background"
+          autoFocus
+        />
+      )}
+      <Button size="sm" className="h-9 rounded-lg" onClick={() => void guardar()} disabled={guardando}>
+        {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : "Guardar"}
+      </Button>
+      <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0" onClick={() => setEditando(null)} aria-label="Cancelar">
+        <XCircle className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+
   return (
-    <div className="space-y-3 rounded-2xl border p-3">
-      <div className="divide-y">
+    <div className="space-y-3">
+      {acciones.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {acciones.map((a) => {
+            const clase = cn(
+              "flex h-9 items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition-colors",
+              a.clase || "bg-card text-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+            );
+            const Icono = a.icono;
+            return a.href ? (
+              <a key={a.label} href={a.href} target={a.href.startsWith("tel:") ? undefined : "_blank"} rel="noopener noreferrer" className={clase}>
+                <Icono className="h-3.5 w-3.5" /> {a.label}
+              </a>
+            ) : (
+              <button key={a.label} type="button" onClick={a.onClick} className={clase}>
+                <Icono className="h-3.5 w-3.5" /> {a.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-2">
         {presentes.map(({ k, label, icono: Icono, placeholder }) => {
+          if (editando === k) return <div key={k} className="col-span-2">{editor(k, placeholder)}</div>;
           const v = String(lead[k] ?? "");
+          const ancho = k === "ubicacion" || k === "email" || v.length > 22;
           return (
-            <div key={k} className="py-2 first:pt-0 last:pb-0">
-              {editando === k ? (
-                <div className={cn("flex gap-2", k === "ubicacion" ? "items-start" : "items-center")}>
-                  <Icono className={cn("h-4 w-4 shrink-0 text-primary", k === "ubicacion" && "mt-3.5")} />
-                  {k === "rubro" ? (
-                    <select value={valor} onChange={(e) => setValor(e.target.value)} className="h-9 flex-1 rounded-lg border bg-background px-2 text-sm" autoFocus>
-                      <option value="">Sin rubro</option>
-                      {RUBROS.map((r) => (
-                        <option key={r} value={r}>
-                          {r}
-                        </option>
-                      ))}
-                    </select>
-                  ) : k === "ubicacion" ? (
-                    <BuscadorMapa valor={valor} onCambiar={setValor} onEnter={() => void guardar()} className="min-w-0 flex-1" autoFocus />
-                  ) : (
-                    <Input
-                      value={valor}
-                      onChange={(e) => setValor(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") void guardar();
-                        if (e.key === "Escape") setEditando(null);
-                      }}
-                      placeholder={placeholder}
-                      className="h-9 flex-1"
-                      autoFocus
-                    />
-                  )}
-                  <Button size="sm" className="h-9" onClick={() => void guardar()} disabled={guardando}>
-                    {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : "Guardar"}
-                  </Button>
-                  <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0" onClick={() => setEditando(null)} aria-label="Cancelar">
-                    <XCircle className="h-4 w-4" />
-                  </Button>
-                </div>
-              ) : (
-                <div className="group flex items-center gap-2 text-sm">
-                  <Icono className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span className="w-28 shrink-0 text-xs text-muted-foreground">{label}</span>
-                  <span className="min-w-0 flex-1 truncate">{k === "ubicacion" && /^https?:/i.test(v) ? "Link de Google Maps" : v}</span>
-                  {accion(k, v)}
-                  <button type="button" onClick={() => abrir(k)} className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={`Cambiar ${label}`}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              )}
-              {k === "ubicacion" && editando !== k && mapaEmbebido(v) && (
-                <MapaMovible ubicacion={v} className="mt-2 h-48" />
-              )}
+            <div key={k} className={cn("group relative min-w-0 rounded-xl border bg-card px-3 py-2", ancho && "col-span-2")}>
+              <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <Icono className="h-3 w-3" /> {label}
+              </p>
+              <p className="mt-0.5 truncate pr-6 text-sm font-medium" title={v}>
+                {k === "ubicacion" && /^https?:/i.test(v) ? "Link de Google Maps" : v}
+              </p>
+              <button
+                type="button"
+                onClick={() => abrir(k)}
+                className="absolute right-1.5 top-1.5 rounded-md p-1 text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground md:opacity-0 md:group-hover:opacity-100"
+                aria-label={`Cambiar ${label}`}
+                title={`Cambiar ${label.toLowerCase()}`}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              {k === "ubicacion" && mapaEmbebido(v) && <MapaMovible ubicacion={v} className="mt-2 h-36 overflow-hidden rounded-lg" />}
             </div>
           );
         })}
       </div>
+
       {faltan.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-muted-foreground">Falta:</span>
           {faltan.map(({ k, label, icono: Icono }) => (
             <button
               key={k}
               type="button"
               onClick={() => abrir(k)}
-              className="flex items-center gap-1.5 rounded-full border border-dashed border-primary/40 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+              className="flex items-center gap-1 rounded-full border border-dashed border-primary/40 px-2.5 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/10"
             >
               <Plus className="h-3 w-3" />
-              <Icono className="h-3.5 w-3.5" /> {label}
+              <Icono className="h-3 w-3" /> {label}
             </button>
           ))}
         </div>
       )}
+
       {extra.length > 0 && (
-        <div className="space-y-0.5 rounded-xl bg-muted/50 p-2.5 text-xs">
-          <p className="mb-1 font-semibold text-muted-foreground">Lo que puso en la web</p>
+        <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted/50 p-2.5">
+          <p className="col-span-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Lo que puso en la web</p>
           {extra.map(([k, v]) => (
-            <p key={k}>
-              <span className="text-muted-foreground">{k}:</span> {v}
-            </p>
+            <div key={k} className="min-w-0">
+              <p className="text-[10px] text-muted-foreground">{k}</p>
+              <p className="truncate text-xs font-medium" title={v}>
+                {v}
+              </p>
+            </div>
           ))}
         </div>
       )}
@@ -756,7 +771,7 @@ function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => v
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className={cn("flex max-h-[92dvh] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden rounded-3xl p-0", conChat ? "h-[min(860px,92dvh)] max-w-5xl" : "max-w-xl")}>
+      <DialogContent className={cn("flex max-h-[92dvh] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden rounded-3xl bg-background p-0", conChat ? "h-[min(860px,92dvh)] max-w-5xl" : "max-w-xl")}>
         {/* Encabezado */}
         <DialogHeader className="shrink-0 flex-row items-center gap-3 space-y-0 border-b bg-gradient-to-r from-primary/[0.08] via-fuchsia-500/[0.05] to-transparent px-5 py-3.5 pr-12 text-left">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-fuchsia-500 text-sm font-bold text-white shadow-md shadow-primary/25">

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarClock, Check, FileText, Flame, Loader2, Mail, MessageCircle, Phone, Snowflake, StickyNote, Users, X } from "lucide-react";
+import { CalendarClock, Check, ChevronDown, FileText, Flame, Loader2, Mail, MessageCircle, Pencil, Phone, Snowflake, StickyNote, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { collection, db, onSnapshot } from "@/lib/db";
 import { callApi } from "@/lib/redes/api";
-import { fechaHora, hoyISO } from "@/lib/redes/format";
+import { fechaHora, hace, hoyISO } from "@/lib/redes/format";
 import { ESTADO_PRESUPUESTO, estadoVisible, usePresupuestos } from "@/lib/redes/presupuestos";
 import { cn } from "@/lib/utils";
 
@@ -43,8 +43,8 @@ export interface LeadSeguimiento {
 const VIVOS = ["calificado", "reunion_agendada", "propuesta"];
 const NOMBRES_ESTADO: Record<string, string> = {
   no_califica: "No califica",
-  calificado: "Calificado",
-  reunion_agendada: "Reunión agendada",
+  calificado: "Nuevo",
+  reunion_agendada: "Reunión",
   propuesta: "Propuesta",
   ganado: "Ganado",
   perdido: "Perdido",
@@ -154,6 +154,37 @@ function mensajesPara(l: LeadSeguimiento, yo: string): { label: string; texto: s
 }
 
 const ICONO_TIPO: Record<string, React.ElementType> = { llamada: Phone, whatsapp: MessageCircle, email: Mail, reunion: Users, nota: StickyNote, presupuesto: FileText, paso: CalendarClock };
+/** Color del ícono de cada cosa en la línea de tiempo. */
+const COLOR_TIPO: Record<string, string> = {
+  whatsapp: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+  llamada: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
+  reunion: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
+  email: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+  presupuesto: "bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-400",
+  paso: "bg-primary/15 text-primary",
+  nota: "bg-muted text-muted-foreground",
+};
+
+/** Título chico de cada parte (igual que en la ficha). */
+function Titulo({ children, accion }: { children: React.ReactNode; accion?: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{children}</p>
+      {accion}
+    </div>
+  );
+}
+
+const fechaLinda = (f: string | null) => {
+  if (!f) return "Sin fecha";
+  const hoy = hoyISO();
+  if (f === hoy) return "Hoy";
+  if (f < hoy) return "Atrasado";
+  const d = new Date(`${f}T12:00:00`);
+  const dias = Math.round((d.getTime() - new Date(`${hoy}T12:00:00`).getTime()) / 86400_000);
+  if (dias === 1) return "Mañana";
+  return d.toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" });
+};
 
 async function registrar(id: string, tipo: string, texto: string, cumplido = false) {
   await callApi("/api/web/actividad", { id, tipo, texto, cumplido });
@@ -171,6 +202,8 @@ export function SeguimientoLead({ lead }: { lead: LeadSeguimiento }) {
   const [textoRegistro, setTextoRegistro] = useState("");
   const [busy, setBusy] = useState(false);
   const [verMensajes, setVerMensajes] = useState(false);
+  const [editandoPaso, setEditandoPaso] = useState(false);
+  const [verTodo, setVerTodo] = useState(false);
   const presupuestos = usePresupuestos(true);
   const suyos = (presupuestos ?? []).filter((p) => (p as { lead_id?: string }).lead_id === lead.id);
 
@@ -185,6 +218,7 @@ export function SeguimientoLead({ lead }: { lead: LeadSeguimiento }) {
       await callApi("/api/web/seguimiento", { id: lead.id, texto: borrar ? "" : paso, fecha: borrar ? null : fecha });
       toast.success(borrar ? "Próximo paso sacado" : "Próximo paso guardado");
       if (borrar) setPaso("");
+      setEditandoPaso(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo guardar");
     } finally {
@@ -223,12 +257,23 @@ export function SeguimientoLead({ lead }: { lead: LeadSeguimiento }) {
   const historial = useMemo(() => [...(lead.historial ?? [])].reverse(), [lead.historial]);
   const frio = frioDe(lead);
 
+  const pasoVencido = lead.proximo_paso?.fecha && lead.proximo_paso.fecha < hoyISO();
+  const pasoHoy = lead.proximo_paso?.fecha === hoyISO();
+  const mostrarFormPaso = !lead.proximo_paso || editandoPaso;
+  const registros = [
+    { t: "llamada" as const, label: "Llamé" },
+    { t: "reunion" as const, label: "Reunión" },
+    { t: "email" as const, label: "Mail" },
+    { t: "nota" as const, label: "Nota" },
+  ];
+  const visibles = verTodo ? historial : historial.slice(0, 5);
+
   return (
     <div className="space-y-4">
       {frio && (
         <p
           className={cn(
-            "flex items-center gap-2 rounded-xl p-3 text-sm font-medium",
+            "flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium",
             frio.nivel === "urgente" ? "bg-red-500/10 text-red-700 dark:text-red-300" : "bg-sky-500/10 text-sky-700 dark:text-sky-300"
           )}
         >
@@ -238,79 +283,126 @@ export function SeguimientoLead({ lead }: { lead: LeadSeguimiento }) {
       )}
 
       {/* Próximo paso */}
-      <div className="space-y-2 rounded-2xl border bg-muted/20 p-3">
-        <p className="flex items-center gap-1.5 text-sm font-semibold">
-          <CalendarClock className="h-4 w-4 text-primary" /> Próximo paso
-        </p>
-        <Input value={paso} onChange={(e) => setPaso(e.target.value)} placeholder="Ej.: llamarlo para agendar la reunión" maxLength={200} className="bg-background" />
-        <div className="flex flex-wrap items-center gap-1.5">
-          {rapidas.map((r) => (
-            <button
-              key={r.label}
-              type="button"
-              onClick={() => setFecha(r.f)}
+      <section className="space-y-2">
+        <Titulo>Próximo paso</Titulo>
+        {!mostrarFormPaso && lead.proximo_paso ? (
+          <div
+            className={cn(
+              "flex items-center gap-3 rounded-xl border p-3",
+              pasoVencido ? "border-red-500/40 bg-red-500/5" : pasoHoy ? "border-amber-500/40 bg-amber-500/5" : "bg-card"
+            )}
+          >
+            <span
               className={cn(
-                "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
-                fecha === r.f ? "border-primary bg-primary text-primary-foreground" : "bg-background hover:border-primary/50"
+                "flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-xl text-[10px] font-bold leading-tight",
+                pasoVencido ? "bg-red-500 text-white" : pasoHoy ? "bg-amber-500 text-white" : "bg-primary/10 text-primary"
               )}
             >
-              {r.label}
-            </button>
-          ))}
-          <input type="date" value={fecha ?? ""} onChange={(e) => setFecha(e.target.value || null)} className="h-7 rounded-full border bg-background px-2 text-xs" />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => void guardarPaso()} disabled={guardandoPaso || paso.trim().length < 3}>
-            {guardandoPaso && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-            Guardar
-          </Button>
-          {lead.proximo_paso && (
-            <>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => void registrar(lead.id, "nota", `Hecho: ${lead.proximo_paso!.texto}`, true).then(() => toast.success("¡Listo! Poné el siguiente paso"))}
-              >
-                <Check className="mr-1.5 h-3.5 w-3.5" /> Ya lo hice
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => void guardarPaso(true)} disabled={guardandoPaso}>
-                <X className="mr-1.5 h-3.5 w-3.5" /> Sacar
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Contactar y anotar */}
-      <div className="space-y-2">
-        <div className="flex flex-wrap gap-2">
-          {lead.telefono ? (
-            <Button size="sm" className="bg-[#25D366] text-white hover:bg-[#25D366]/90" onClick={() => setVerMensajes(!verMensajes)}>
-              <MessageCircle className="mr-1.5 h-4 w-4" /> WhatsApp
+              <CalendarClock className="mb-0.5 h-3.5 w-3.5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{lead.proximo_paso.texto}</p>
+              <p className={cn("text-[11px]", pasoVencido ? "font-semibold text-red-600 dark:text-red-400" : "text-muted-foreground")}>{fechaLinda(lead.proximo_paso.fecha)}</p>
+            </div>
+            <Button
+              size="sm"
+              className="h-8 rounded-full bg-emerald-500 px-3 text-xs text-white hover:bg-emerald-600"
+              onClick={() => void registrar(lead.id, "nota", `Hecho: ${lead.proximo_paso!.texto}`, true).then(() => toast.success("¡Listo! Poné el siguiente paso"))}
+              title="Marcar como hecho"
+            >
+              <Check className="mr-1 h-3.5 w-3.5" /> Hecho
             </Button>
-          ) : (
-            <span className="self-center text-xs text-muted-foreground">Cargale el WhatsApp arriba para escribirle desde acá.</span>
-          )}
-          {(["llamada", "reunion", "email", "nota"] as const).map((t) => {
+            <button type="button" onClick={() => setEditandoPaso(true)} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" title="Cambiar" aria-label="Cambiar">
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2 rounded-xl border bg-card p-2.5">
+            <Input
+              value={paso}
+              onChange={(e) => setPaso(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && paso.trim().length >= 3 && void guardarPaso()}
+              placeholder="¿Qué sigue? Ej.: llamarlo para agendar la reunión"
+              maxLength={200}
+              className="h-9 border-0 bg-muted/50 focus-visible:ring-1"
+            />
+            <div className="flex flex-wrap items-center gap-1">
+              {rapidas.map((r) => (
+                <button
+                  key={r.label}
+                  type="button"
+                  onClick={() => setFecha(r.f)}
+                  className={cn(
+                    "h-7 rounded-full px-2.5 text-[11px] font-medium transition-colors",
+                    fecha === r.f ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  {r.label}
+                </button>
+              ))}
+              <input type="date" value={fecha ?? ""} onChange={(e) => setFecha(e.target.value || null)} className="h-7 rounded-full border bg-background px-2 text-[11px]" aria-label="Otra fecha" />
+              <div className="ml-auto flex items-center gap-1">
+                {lead.proximo_paso && (
+                  <>
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => void guardarPaso(true)} disabled={guardandoPaso} title="Sacar el próximo paso">
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setEditandoPaso(false)}>
+                      Cancelar
+                    </Button>
+                  </>
+                )}
+                <Button size="sm" className="h-7 rounded-full px-3 text-[11px]" onClick={() => void guardarPaso()} disabled={guardandoPaso || paso.trim().length < 3}>
+                  {guardandoPaso ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Guardar"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Registrar lo que pasó */}
+      <section className="space-y-2">
+        <Titulo>Registrar</Titulo>
+        <div className="grid grid-cols-5 gap-1.5">
+          <button
+            type="button"
+            onClick={() => lead.telefono && setVerMensajes(!verMensajes)}
+            disabled={!lead.telefono}
+            title={lead.telefono ? "Escribirle por WhatsApp con un mensaje armado" : "Cargale el WhatsApp en Datos para escribirle desde acá"}
+            className={cn(
+              "flex flex-col items-center gap-1 rounded-xl border py-2 text-[11px] font-medium transition-colors",
+              lead.telefono
+                ? verMensajes
+                  ? "border-emerald-500 bg-emerald-500 text-white"
+                  : "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
+                : "cursor-not-allowed opacity-40"
+            )}
+          >
+            <MessageCircle className="h-4 w-4" /> WhatsApp
+          </button>
+          {registros.map(({ t, label }) => {
             const Icono = ICONO_TIPO[t];
-            const label = t === "llamada" ? "Llamé" : t === "reunion" ? "Reunión" : t === "email" ? "Mail" : "Nota";
             return (
-              <Button key={t} size="sm" variant={registro === t ? "default" : "outline"} onClick={() => setRegistro(registro === t ? null : t)}>
-                <Icono className="mr-1.5 h-3.5 w-3.5" /> {label}
-              </Button>
+              <button
+                key={t}
+                type="button"
+                onClick={() => setRegistro(registro === t ? null : t)}
+                className={cn(
+                  "flex flex-col items-center gap-1 rounded-xl border py-2 text-[11px] font-medium transition-colors",
+                  registro === t ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                )}
+              >
+                <Icono className="h-4 w-4" /> {label}
+              </button>
             );
           })}
         </div>
         {verMensajes && lead.telefono && (
-          <div className="space-y-1.5 rounded-2xl border p-2">
-            <p className="px-1 text-[11px] font-semibold text-muted-foreground">Elegí el mensaje (lo podés cambiar en WhatsApp antes de mandarlo)</p>
+          <div className="space-y-1 rounded-xl border bg-card p-1.5">
+            <p className="px-2 pt-1 text-[11px] text-muted-foreground">Elegí el mensaje (lo podés cambiar en WhatsApp antes de mandarlo)</p>
             {mensajesPara(lead, yo).map((m) => (
-              <button
-                key={m.label}
-                type="button"
-                onClick={() => mandarWhatsApp(m.texto, m.label)}
-                className="block w-full rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-muted"
-              >
+              <button key={m.label} type="button" onClick={() => mandarWhatsApp(m.texto, m.label)} className="block w-full rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted">
                 <span className="block text-xs font-semibold">{m.label}</span>
                 <span className="line-clamp-2 block text-[11px] text-muted-foreground">{m.texto}</span>
               </button>
@@ -321,38 +413,49 @@ export function SeguimientoLead({ lead }: { lead: LeadSeguimiento }) {
           </div>
         )}
         {registro && (
-          <div className="space-y-2 rounded-2xl border p-2.5">
+          <div className="flex items-end gap-2 rounded-xl border bg-card p-2">
             <Textarea
               autoFocus
               rows={2}
               value={textoRegistro}
               onChange={(e) => setTextoRegistro(e.target.value)}
               placeholder={registro === "llamada" ? "¿Qué hablaron?" : registro === "reunion" ? "¿Cómo fue la reunión?" : registro === "email" ? "¿Qué le mandaste?" : "Escribí la nota"}
+              className="min-h-[56px] resize-none border-0 bg-muted/50 text-sm focus-visible:ring-1"
             />
-            <div className="flex justify-end gap-2">
-              <Button size="sm" variant="ghost" onClick={() => setRegistro(null)}>
-                Cancelar
+            <div className="flex flex-col gap-1">
+              <Button size="sm" className="h-8 rounded-full px-3 text-xs" onClick={() => void guardarRegistro()} disabled={busy || (registro === "nota" && !textoRegistro.trim())}>
+                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Anotar"}
               </Button>
-              <Button size="sm" onClick={() => void guardarRegistro()} disabled={busy || (registro === "nota" && !textoRegistro.trim())}>
-                {busy && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-                Anotar
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setRegistro(null)}>
+                Cancelar
               </Button>
             </div>
           </div>
         )}
-      </div>
+      </section>
 
       {/* Presupuesto conectado */}
-      <div className="space-y-2 rounded-2xl border p-3">
-        <div className="flex items-center gap-2">
-          <FileText className="h-4 w-4 text-primary" />
-          <p className="flex-1 text-sm font-semibold">Presupuesto</p>
-          <Button size="sm" variant="outline" onClick={() => navigate(`/presupuestos?lead=${lead.id}`)}>
-            {suyos.length ? "Armar otro" : "Armar presupuesto"}
-          </Button>
-        </div>
+      <section className="space-y-2">
+        <Titulo
+          accion={
+            <button type="button" onClick={() => navigate(`/presupuestos?lead=${lead.id}`)} className="text-[11px] font-semibold text-primary hover:underline">
+              {suyos.length ? "+ Armar otro" : "+ Armar presupuesto"}
+            </button>
+          }
+        >
+          Presupuesto
+        </Titulo>
         {suyos.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Cuando lo armes desde acá, vas a ver si lo abrió y, si lo acepta, el lead pasa solo a Ganado.</p>
+          <button
+            type="button"
+            onClick={() => navigate(`/presupuestos?lead=${lead.id}`)}
+            className="flex w-full items-center gap-3 rounded-xl border border-dashed p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400">
+              <FileText className="h-4 w-4" />
+            </span>
+            <span className="text-xs text-muted-foreground">Armalo desde acá: vas a ver si lo abrió y, si lo acepta, el lead pasa solo a Ganados.</span>
+          </button>
         ) : (
           <ul className="space-y-1.5">
             {suyos.map((p) => {
@@ -360,41 +463,52 @@ export function SeguimientoLead({ lead }: { lead: LeadSeguimiento }) {
               const aperturas = Number((p as { aperturas?: number }).aperturas ?? 0);
               return (
                 <li key={p.id}>
-                  <button type="button" onClick={() => navigate(`/presupuestos?abrir=${p.id}`)} className="flex w-full items-center gap-2 rounded-xl bg-muted/40 px-2.5 py-2 text-left text-xs hover:bg-muted">
+                  <button type="button" onClick={() => navigate(`/presupuestos?abrir=${p.id}`)} className="flex w-full items-center gap-2 rounded-xl border bg-card px-3 py-2 text-left text-xs hover:border-primary/40">
+                    <FileText className="h-3.5 w-3.5 text-fuchsia-500" />
                     <span className="font-semibold">#{p.numero}</span>
                     <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", ESTADO_PRESUPUESTO[e].clase)}>{ESTADO_PRESUPUESTO[e].label}</span>
-                    <span className="ml-auto text-muted-foreground">{aperturas ? `Lo abrió ${aperturas === 1 ? "1 vez" : `${aperturas} veces`}` : "Todavía no lo abrió"}</span>
+                    <span className="ml-auto text-muted-foreground">{aperturas ? `Lo abrió ${aperturas === 1 ? "1 vez" : `${aperturas} veces`}` : "Sin abrir"}</span>
                   </button>
                 </li>
               );
             })}
           </ul>
         )}
-      </div>
+      </section>
 
       {/* Línea de tiempo */}
       {historial.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-sm font-semibold">Línea de tiempo</p>
-          <ol className="relative space-y-3 border-l-2 border-muted pl-4">
-            {historial.map((h, i) => {
-              const Icono = (h.tipo && ICONO_TIPO[h.tipo]) || CalendarClock;
+        <section className="space-y-2">
+          <Titulo>Actividad</Titulo>
+          <ol className="relative space-y-0.5">
+            {visibles.map((h, i) => {
+              const tipo = h.tipo || (h.a ? "paso" : "nota");
+              const Icono = ICONO_TIPO[tipo] || CalendarClock;
               const texto = h.texto || (h.a ? `${h.de ? `${NOMBRES_ESTADO[h.de] ?? h.de} → ` : "Entró como "}${NOMBRES_ESTADO[h.a] ?? h.a}` : "");
               return (
-                <li key={i} className="relative">
-                  <span className="absolute -left-[1.6rem] top-0 flex h-5 w-5 items-center justify-center rounded-full border bg-background text-muted-foreground">
-                    <Icono className="h-3 w-3" />
+                <li key={i} className="relative flex gap-2.5 pb-2.5">
+                  {i < visibles.length - 1 && <span className="absolute bottom-0 left-[13px] top-7 w-px bg-border" />}
+                  <span className={cn("relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full", COLOR_TIPO[tipo] ?? COLOR_TIPO.nota)}>
+                    <Icono className="h-3.5 w-3.5" />
                   </span>
-                  <p className="whitespace-pre-wrap text-xs">{texto}</p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {h.por_nombre ? `${h.por_nombre} · ` : ""}
-                    {fechaHora(h.at)}
-                  </p>
+                  <div className="min-w-0 flex-1 pt-0.5">
+                    <p className="whitespace-pre-wrap break-words text-xs leading-snug">{texto}</p>
+                    <p className="mt-0.5 text-[10px] text-muted-foreground" title={fechaHora(h.at)}>
+                      {h.por_nombre ? `${h.por_nombre} · ` : ""}
+                      {hace(h.at)}
+                    </p>
+                  </div>
                 </li>
               );
             })}
           </ol>
-        </div>
+          {historial.length > 5 && (
+            <button type="button" onClick={() => setVerTodo(!verTodo)} className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline">
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", verTodo && "rotate-180")} />
+              {verTodo ? "Ver menos" : `Ver las ${historial.length} actividades`}
+            </button>
+          )}
+        </section>
       )}
     </div>
   );
