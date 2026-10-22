@@ -145,10 +145,20 @@ export async function guardarTokenUsuario(tokenUsuario: string, base: string) {
   const secret = process.env.META_APP_SECRET?.replace(/[\s"']/g, "");
   let largo: any = { access_token: corto };
   if (secret) {
+    // La app del identificador (la que hay que usar para canjearlo).
+    const app = await fetch(`https://graph.facebook.com/${VERSION()}/debug_token?${new URLSearchParams({ input_token: corto, access_token: corto })}`)
+      .then((r) => r.json() as Promise<any>)
+      .then((d) => String(d?.data?.app_id ?? ""))
+      .catch(() => "");
+    const clientId = app || APP_ID();
     largo = await fetch(
-      `https://graph.facebook.com/${VERSION()}/oauth/access_token?${new URLSearchParams({ grant_type: "fb_exchange_token", client_id: APP_ID(), client_secret: secret, fb_exchange_token: corto })}`
+      `https://graph.facebook.com/${VERSION()}/oauth/access_token?${new URLSearchParams({ grant_type: "fb_exchange_token", client_id: clientId, client_secret: secret, fb_exchange_token: corto })}`
     ).then((r) => r.json() as Promise<any>);
-    if (!largo?.access_token) throw new HttpError(400, `Meta: ${largo?.error?.message ?? "no aceptó el identificador"}`);
+    if (!largo?.access_token)
+      throw new HttpError(
+        400,
+        `Meta: ${largo?.error?.message ?? "no aceptó el identificador"} · App del identificador: ${clientId}. La clave secreta en Vercel (META_APP_SECRET, ${secret.length} caracteres) tiene que ser la de esa app.`
+      );
   }
   const id = (process.env.META_PRODI_PAGE_ID ?? "").trim();
   const cuentas = (await graph("me/accounts", { fields: "id,name,access_token", limit: "100" }, largo.access_token)).data ?? [];
