@@ -655,7 +655,7 @@ function FormulariosMeta() {
       </Button>
       <div className="space-y-1.5 border-t pt-2">
         <p className="text-[11px] text-muted-foreground">
-          Si Meta pide <b>leads_retrieval</b>: pegá acá el identificador de acceso de tu usuario (Meta para desarrolladores → Gestor Prodi → Herramientas) y tocá Usar.
+          Si Meta pide <b>leads_retrieval</b>: pegá acá el identificador de acceso de tu usuario (Gestor Prodi → Herramientas), ampliado en el Depurador de tokens de Meta, y tocá Usar.
         </p>
         <div className="flex gap-1.5">
           <Input value={token} onChange={(e) => setToken(e.target.value)} placeholder="EAA…" className="h-9 text-xs" type="password" autoComplete="off" />

@@ -140,13 +140,16 @@ async function tokenGuardado(): Promise<{ id: string; nombre: string; token: str
 export async function guardarTokenUsuario(tokenUsuario: string, base: string) {
   const corto = tokenUsuario.trim();
   if (!/^EAA[\w-]{20,}$/.test(corto)) throw new HttpError(400, "Pegá el identificador completo (empieza con EAA)");
+  // Token de usuario de 60 días: las páginas que salen de él no vencen. Con la clave secreta de la app se canjea acá;
+  // sin ella, tiene que venir ya ampliado (Depurador de tokens de Meta → "Ampliar token de acceso").
   const secret = process.env.META_APP_SECRET;
-  if (!secret) throw new HttpError(500, "Falta META_APP_SECRET en Vercel");
-  // Token de usuario de 60 días: las páginas que salen de él no vencen.
-  const largo = await fetch(
-    `https://graph.facebook.com/${VERSION()}/oauth/access_token?${new URLSearchParams({ grant_type: "fb_exchange_token", client_id: APP_ID(), client_secret: secret, fb_exchange_token: corto })}`
-  ).then((r) => r.json() as Promise<any>);
-  if (!largo?.access_token) throw new HttpError(400, `Meta: ${largo?.error?.message ?? "no aceptó el identificador"}`);
+  let largo: any = { access_token: corto };
+  if (secret) {
+    largo = await fetch(
+      `https://graph.facebook.com/${VERSION()}/oauth/access_token?${new URLSearchParams({ grant_type: "fb_exchange_token", client_id: APP_ID(), client_secret: secret, fb_exchange_token: corto })}`
+    ).then((r) => r.json() as Promise<any>);
+    if (!largo?.access_token) throw new HttpError(400, `Meta: ${largo?.error?.message ?? "no aceptó el identificador"}`);
+  }
   const id = (process.env.META_PRODI_PAGE_ID ?? "").trim();
   const cuentas = (await graph("me/accounts", { fields: "id,name,access_token", limit: "100" }, largo.access_token)).data ?? [];
   const pagina = cuentas.find((p: any) => p.id === id) ?? (id ? null : cuentas[0]);
