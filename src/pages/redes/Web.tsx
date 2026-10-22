@@ -38,6 +38,7 @@ import { fechaHora, hace, hoyISO } from "@/lib/redes/format";
 import { cn } from "@/lib/utils";
 import { BuscadorMapa, linkMapa, mapaEmbebido, MapaMovible } from "@/components/redes/BuscadorMapa";
 import { ProximoPasoChip, SeguimientoLead, type EventoLead } from "@/components/redes/crm/SeguimientoLead";
+import { ChatLead } from "@/components/redes/crm/ChatLead";
 import { useSearchParams } from "react-router-dom";
 
 // Reservas de la landing de la campaña «No empezamos de cero» (somosprodi.com).
@@ -75,6 +76,8 @@ interface LeadWeb {
   telefono?: string;
   /** Dirección del local o link de Google Maps. */
   ubicacion?: string;
+  /** Los que llegaron por Meta: la conversación (mensajes) o el formulario. */
+  meta?: { conversacion_id?: string; plataforma?: string } | null;
 }
 
 interface Columna {
@@ -656,6 +659,44 @@ function DatosLead({ lead }: { lead: LeadWeb }) {
   );
 }
 
+/** Etapa del lead: botones con su color (en vez de un desplegable). */
+function SelectorEtapa({ lead }: { lead: LeadWeb }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {COLUMNAS.map((c) => {
+        const activa = lead.estado === c.id;
+        return (
+          <button
+            key={c.id}
+            type="button"
+            onClick={() => void mover(lead, c.id)}
+            title={c.ayuda}
+            className={cn(
+              "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+              activa ? "border-transparent bg-foreground text-background shadow-sm" : "bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
+            )}
+          >
+            <span className={cn("h-2 w-2 rounded-full", c.dot)} />
+            {c.titulo}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function Bloque({ titulo, children, accion }: { titulo: string; children: React.ReactNode; accion?: React.ReactNode }) {
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{titulo}</p>
+        {accion}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => void }) {
   const [notas, setNotas] = useState("");
   const [guardando, setGuardando] = useState(false);
@@ -672,39 +713,72 @@ function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => v
       setGuardando(false);
     }
   };
+  const o = ORIGENES[origenDe(lead)];
+  const IconoOrigen = o.icono;
+  const conChat = lead.origen === "meta:mensaje" && !!lead.meta?.conversacion_id;
+  const iniciales = (lead.negocio || lead.nombre || "?").replace(/^@/, "").slice(0, 2).toUpperCase();
+  const cambioNotas = notas !== (lead.notas ?? "");
+
+  const datos = (
+    <div className="space-y-5">
+      {lead.dudoso && (
+        <p className="flex items-center gap-2 rounded-xl border border-orange-500/50 bg-orange-500/10 p-3 text-sm font-medium text-orange-700 dark:text-orange-300">
+          <AlertTriangle className="h-4 w-4 shrink-0" /> Revisar: dice que invierte más de $700.000 pero factura menos de $10M por mes.
+        </p>
+      )}
+      <Bloque titulo="Etapa">
+        <SelectorEtapa lead={lead} />
+      </Bloque>
+      <Bloque titulo="Datos">
+        <DatosLead lead={lead} />
+      </Bloque>
+      <Bloque
+        titulo="Notas"
+        accion={
+          cambioNotas && (
+            <Button onClick={() => void guardar()} disabled={guardando} size="sm" className="h-7 rounded-full px-3 text-xs">
+              {guardando ? "Guardando…" : "Guardar"}
+            </Button>
+          )
+        }
+      >
+        <Textarea rows={3} value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Cómo fue la reunión, qué propuesta le mandaste…" className="rounded-xl" />
+      </Bloque>
+      <SeguimientoLead lead={lead} />
+    </div>
+  );
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[92dvh] w-[calc(100vw-1.5rem)] max-w-lg overflow-y-auto rounded-2xl">
-        <DialogHeader className="text-left">
-          <DialogTitle className="pr-6">{lead.negocio}</DialogTitle>
-          <DialogDescription>
-            {lead.nombre} · aplicó {fechaHora(lead.created_at)} · {NOMBRE_ESTADO[lead.estado]}
-          </DialogDescription>
+      <DialogContent className={cn("max-h-[92dvh] w-[calc(100vw-1.5rem)] gap-0 overflow-hidden rounded-3xl p-0", conChat ? "max-w-5xl" : "max-w-xl")}>
+        {/* Encabezado */}
+        <DialogHeader className="flex-row items-center gap-3 space-y-0 border-b bg-gradient-to-r from-primary/[0.07] to-fuchsia-500/[0.05] px-5 py-4 pr-12 text-left">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-fuchsia-500 text-sm font-bold text-white shadow-md shadow-primary/25">
+            {iniciales}
+          </span>
+          <div className="min-w-0 flex-1">
+            <DialogTitle className="truncate text-lg">{lead.negocio}</DialogTitle>
+            <DialogDescription className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+              <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold", o.clase)}>
+                <IconoOrigen className="h-3 w-3" /> {o.label}
+              </span>
+              {lead.nombre && lead.nombre !== lead.negocio.replace(/^@/, "") && <span>{lead.nombre}</span>}
+              <span>· llegó {hace(lead.created_at)}</span>
+              <span className="hidden sm:inline">· {fechaHora(lead.created_at)}</span>
+            </DialogDescription>
+          </div>
         </DialogHeader>
-        {lead.dudoso && (
-          <p className="flex items-center gap-2 rounded-xl border border-orange-500/50 bg-orange-500/10 p-3 text-sm font-medium text-orange-700 dark:text-orange-300">
-            <AlertTriangle className="h-4 w-4 shrink-0" /> Revisar: dice que invierte más de $700.000 pero factura menos de $10M por mes.
-          </p>
+
+        {conChat ? (
+          <div className="grid max-h-[calc(92dvh-80px)] min-h-0 md:grid-cols-[1.1fr_1fr]">
+            <div className="min-h-0 border-b p-4 md:border-b-0 md:border-r">
+              <ChatLead leadId={lead.id} usuario={lead.instagram} />
+            </div>
+            <div className="min-h-0 overflow-y-auto p-5">{datos}</div>
+          </div>
+        ) : (
+          <div className="max-h-[calc(92dvh-80px)] overflow-y-auto p-5">{datos}</div>
         )}
-        <DatosLead lead={lead} />
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium">Mover a</span>
-          <select value={lead.estado} onChange={(e) => void mover(lead, e.target.value as Estado)} className="h-10 w-full rounded-lg border bg-background px-2 text-sm">
-            {(Object.keys(NOMBRE_ESTADO) as Estado[]).map((e) => (
-              <option key={e} value={e}>
-                {NOMBRE_ESTADO[e]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="space-y-2">
-          <p className="text-sm font-medium">Notas</p>
-          <Textarea rows={4} value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Cómo fue la reunión, qué propuesta le mandaste…" />
-          <Button onClick={() => void guardar()} disabled={guardando || notas === (lead.notas ?? "")} size="sm">
-            {guardando ? "Guardando…" : "Guardar notas"}
-          </Button>
-        </div>
-        <SeguimientoLead lead={lead} />
       </DialogContent>
     </Dialog>
   );

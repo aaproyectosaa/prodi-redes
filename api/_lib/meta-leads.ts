@@ -419,3 +419,70 @@ export async function estadoMeta() {
     ultima_revision: d?.mensajes_at ?? null,
   };
 }
+
+// ── Responder desde el CRM ────────────────────────────────────────────────────────────────────────────────────────
+// La conversación de un lead que llegó por mensaje (Instagram o Messenger) se ve en su ficha y se le contesta desde
+// ahí con el token de la página. Meta solo deja responder dentro de las 24 h del último mensaje de la persona.
+
+const VENTANA_MS = 24 * 3600_000;
+
+async function contextoConversacion(leadId: string) {
+  const lead = await leerDoc(getPool(), COL, leadId);
+  if (!lead) throw new HttpError(404, "No encontramos ese lead");
+  const convId = String((lead.meta as any)?.conversacion_id ?? "");
+  if (!convId) throw new HttpError(400, "Este lead no llegó por mensaje de Instagram o Facebook");
+  const guardado = await tokenGuardado();
+  if (!guardado) throw new HttpError(400, "Primero conectá la página de Prodi en Temporada y cupos");
+  const ig = (await graph(guardado.id, { fields: "instagram_business_account{id}" }, guardado.token).catch(() => null))?.instagram_business_account ?? null;
+  const propios = new Set([guardado.id, ig?.id].filter(Boolean).map(String));
+  return { lead, convId, plataforma: String((lead.meta as any)?.plataforma ?? "instagram"), propios, ...guardado };
+}
+
+/** Los mensajes de la conversación del lead (del más viejo al más nuevo) y si todavía se le puede responder. */
+export async function conversacionLead(leadId: string) {
+  const c = await contextoConversacion(leadId);
+  const d = await graph(c.convId, { fields: "participants,messages.limit(50){id,message,from,created_time,attachments}" }, c.token);
+  const mensajes = [...(d.messages?.data ?? [])].reverse().map((m: any) => ({
+    id: String(m.id),
+    texto: String(m.message ?? ""),
+    adjunto: !!m.attachments?.data?.length,
+    at: m.created_time,
+    mio: propiosDe(c.propios, m.from?.id),
+  }));
+  const ultimoSuyo = [...mensajes].reverse().find((m) => !m.mio);
+  const vence = ultimoSuyo ? Date.parse(ultimoSuyo.at) + VENTANA_MS : 0;
+  return { plataforma: c.plataforma, mensajes, puede_responder: vence > Date.now(), vence: vence ? new Date(vence).toISOString() : null };
+}
+const propiosDe = (propios: Set<string>, id: unknown) => propios.has(String(id ?? ""));
+
+/** Manda una respuesta al lead por Instagram o Messenger y la anota en su línea de tiempo. */
+export async function responderLead(leadId: string, texto: string, quien: { uid: string; nombre: string }) {
+  const msj = texto.trim().slice(0, 1000);
+  if (!msj) throw new HttpError(400, "Escribí el mensaje");
+  const c = await contextoConversacion(leadId);
+  const d = await graph(c.convId, { fields: "participants" }, c.token);
+  const persona = (d.participants?.data ?? []).find((p: any) => !c.propios.has(String(p.id)));
+  if (!persona?.id) throw new HttpError(400, "No encontramos a quién responderle");
+  try {
+    await graph(
+      `${c.id}/messages`,
+      { recipient: JSON.stringify({ id: persona.id }), message: JSON.stringify({ text: msj }), messaging_type: "RESPONSE" },
+      c.token,
+      "POST"
+    );
+  } catch (err) {
+    const m = err instanceof Error ? err.message : String(err);
+    if (/24|window|outside|fuera/i.test(m)) throw new HttpError(400, "Pasaron más de 24 h desde su último mensaje: Meta no deja responder desde acá. Contestale desde la app de Instagram.");
+    throw err;
+  }
+  const red = c.plataforma === "instagram" ? "Instagram" : "Facebook";
+  const at = new Date().toISOString();
+  const lead = c.lead as any;
+  await guardarDoc(getPool(), COL, leadId, {
+    ...lead,
+    updated_at: at,
+    ultimo_contacto_at: at,
+    historial: [...(Array.isArray(lead.historial) ? lead.historial : []), { at, tipo: "whatsapp", texto: `Le respondiste por ${red}: «${limpio(msj, 500)}»`, por: quien.uid, por_nombre: quien.nombre }].slice(-100),
+  });
+  return { ok: true };
+}
