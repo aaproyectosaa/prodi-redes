@@ -12,7 +12,7 @@ const VERSION = () => process.env.META_GRAPH_VERSION || "v23.0";
 function credenciales(): { token: string; proof?: string } {
   const token = process.env.META_ACCESS_TOKEN;
   if (!token) throw new Error("Falta META_ACCESS_TOKEN en Vercel");
-  const secret = process.env.META_APP_SECRET?.replace(/[s"']/g, "");
+  const secret = process.env.META_APP_SECRET?.replace(/[\s"']/g, "");
   return { token, proof: secret ? crypto.createHmac("sha256", secret).update(token).digest("hex") : undefined };
 }
 

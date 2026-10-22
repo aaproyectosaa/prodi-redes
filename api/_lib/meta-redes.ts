@@ -14,7 +14,7 @@ const VERSION = () => process.env.META_GRAPH_VERSION || "v23.0";
 function token(): { token: string; proof?: string } {
   const t = process.env.META_ACCESS_TOKEN;
   if (!t) throw new Error("Falta META_ACCESS_TOKEN en Vercel (el mismo de la pauta)");
-  const s = process.env.META_APP_SECRET?.replace(/[s"']/g, "");
+  const s = process.env.META_APP_SECRET?.replace(/[\s"']/g, "");
   return { token: t, proof: s ? crypto.createHmac("sha256", s).update(t).digest("hex") : undefined };
 }
 
