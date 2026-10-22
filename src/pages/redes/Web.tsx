@@ -618,6 +618,32 @@ function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => v
   );
 }
 
+/** Los formularios de los anuncios de Prodi en Meta entran solos como leads (api/_lib/meta-leads.ts). */
+function FormulariosMeta() {
+  const [conectando, setConectando] = useState(false);
+  const conectar = async () => {
+    setConectando(true);
+    try {
+      const r = await callApi<{ pagina: string; formularios: number; nuevos: number }>("/api/web/meta-conectar", {});
+      toast.success(`Conectado a ${r.pagina}: ${r.formularios} formulario${r.formularios === 1 ? "" : "s"}, ${r.nuevos} lead${r.nuevos === 1 ? "" : "s"} nuevo${r.nuevos === 1 ? "" : "s"}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo conectar");
+    } finally {
+      setConectando(false);
+    }
+  };
+  return (
+    <div className="space-y-2 rounded-xl border bg-muted/40 p-3">
+      <p className="text-sm font-semibold">Formularios de los anuncios</p>
+      <p className="text-xs text-muted-foreground">Los que llenan el formulario de un anuncio de Prodi en Instagram o Facebook entran solos acá, con aviso. Conectalo una vez; también trae los de los últimos 30 días.</p>
+      <Button size="sm" variant="outline" className="w-full" onClick={() => void conectar()} disabled={conectando}>
+        {conectando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+        Conectar y traer formularios de Meta
+      </Button>
+    </div>
+  );
+}
+
 function AjustesTemporada({ open, onOpenChange, config }: { open: boolean; onOpenChange: (o: boolean) => void; config: { temporada: string; cupos_total: number } }) {
   const [temporada, setTemporada] = useState(config.temporada);
   const [cupos, setCupos] = useState(String(config.cupos_total));
@@ -662,6 +688,7 @@ function AjustesTemporada({ open, onOpenChange, config }: { open: boolean; onOpe
             {guardando ? "Guardando…" : "Guardar"}
           </Button>
         </div>
+        <FormulariosMeta />
       </DialogContent>
     </Dialog>
   );

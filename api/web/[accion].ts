@@ -10,13 +10,16 @@
 // POST /api/web/config    { temporada?, cupos_total? }
 // POST /api/web/seguimiento { id, texto, fecha }             → próximo paso (qué hacer y para cuándo)
 // POST /api/web/actividad   { id, tipo, texto }               → llamada, WhatsApp, mail, reunión o nota (línea de tiempo)
+// GET|POST /api/web/meta-webhook  (Meta: formularios de los anuncios de Prodi → leads)
+// POST /api/web/meta-conectar     (admin) suscribe la página de Prodi y trae los formularios de 30 días
 // POST /api/web/manual    { negocio, nombre?, email?, telefono?, instagram?, ubicacion?, rubro?, fuente?, notas?, estado? } → { id }  (lead cargado a mano)
 // Los leads se guardan en la colección `leads_web`; la configuración en `web_config/general`.
 
 import { createHmac, randomUUID } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { enTransaccion, getPool, guardarDoc, leerDoc } from "../_lib/db";
-import { body, HttpError, requireCaller, sendError } from "../_lib/http";
+import { appUrl, body, HttpError, requireCaller, sendError } from "../_lib/http";
+import { conectarFormularios, recibirWebhook, verificarWebhook } from "../_lib/meta-leads";
 
 const COL = "leads_web";
 const CONFIG = { col: "web_config", id: "general" };
@@ -317,6 +320,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.status(200).json(await cupos());
       return;
     }
+    // Formularios de los anuncios de Prodi (api/_lib/meta-leads.ts): Meta verifica con GET y avisa con POST.
+    if (accion === "meta-webhook") {
+      if (req.method === "GET") res.status(200).setHeader("Content-Type", "text/plain").send(verificarWebhook(req.query as Record<string, unknown>));
+      else res.status(200).json(await recibirWebhook(req.body, appUrl(req)));
+      return;
+    }
     if (req.method !== "POST") {
       res.status(405).json({ error: "Method not allowed" });
       return;
@@ -330,6 +339,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "seguimiento") res.status(200).json(await seguimiento(req));
     else if (accion === "actividad") res.status(200).json(await actividad(req));
     else if (accion === "datos") res.status(200).json(await datos(req));
+    else if (accion === "meta-conectar") {
+      await requireCaller(req, ["admin"]);
+      res.status(200).json(await conectarFormularios(appUrl(req)));
+    }
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {
     sendError(res, err);
