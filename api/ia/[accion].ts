@@ -561,7 +561,15 @@ async function llamadaTexto(req: VercelRequest) {
   if (!inicio || typeof b.data !== "string" || !b.data) throw new HttpError(400, "Faltan datos");
   const audio = Buffer.from(b.data, "base64");
   if (audio.length > 3 * 1024 * 1024) throw new HttpError(413, "Parte de audio demasiado grande");
+  // Solo de la llamada que está abierta ahora en ese chat (no de una hora inventada: así no se puede transcribir sin fin).
+  const activa = await getPool()
+    .query("select 1 from chat_llamadas where chat_id = $1 and abs(extract(epoch from (inicio - $2::timestamptz))) < 2", [b.chat_id, inicio])
+    .catch(() => ({ rowCount: 0 }));
+  if (!activa.rowCount) return { ok: true, texto: "" };
   await asegurarTablaTextos();
+  // Tope por persona y llamada: unas 3 horas hablando.
+  const partes = await getPool().query("select count(*)::int as n from chat_llamada_textos where chat_id = $1 and inicio = $2 and uid = $3", [b.chat_id, inicio, caller.uid]);
+  if (Number(partes.rows[0]?.n ?? 0) >= 720) return { ok: true, texto: "" };
   // Que nadie mande partes de más (una cada 15 s como mucho por persona y llamada).
   const reciente = await getPool().query(
     "select 1 from chat_llamada_textos where chat_id = $1 and inicio = $2 and uid = $3 and at > now() - interval '15 seconds' limit 1",
@@ -617,6 +625,7 @@ async function minutaLlamadaTexto(req: VercelRequest) {
   await chatDeMiembro(b.chat_id, caller.uid);
   const inicio = typeof b.inicio === "string" && !Number.isNaN(Date.parse(b.inicio)) ? new Date(b.inicio).toISOString() : null;
   if (!inicio) throw new HttpError(400, "Falta la llamada");
+  await controlarTopeIA(caller, "minuta-llamada");
   return { ok: true, ...(await armarMinutaDeLlamada(String(b.chat_id), inicio, appUrl(req), Number(b.minutos) || undefined)) };
 }
 
@@ -1501,6 +1510,7 @@ async function pautaSugerir(req: VercelRequest) {
   const b = body<{ proyecto_id?: string }>(req);
   if (!b.proyecto_id) throw new HttpError(400, "Falta el cliente");
   await assertProjectAccess(caller, b.proyecto_id);
+  await controlarTopeIA(caller, "pauta-sugerir");
   const { db, proj, comercial } = await datosPauta(b.proyecto_id);
   exigirPerfil(proj, comercial);
   // Plan: cuántos videos por mes.
