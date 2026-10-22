@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CalendarCheck, Copy, ExternalLink, FileText, Globe, Settings2, Trophy, XCircle, Sparkles } from "lucide-react";
+import { AlertTriangle, CalendarCheck, Copy, ExternalLink, FileText, Globe, Loader2, Phone, Plus, Settings2, Trophy, XCircle, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,10 @@ interface LeadWeb {
   estado: Estado;
   notas?: string;
   historial?: { at: string; de: string | null; a: string; por_nombre?: string }[];
+  /** Cargado a mano desde el panel (no vino del formulario de la web). */
+  manual?: boolean;
+  fuente?: string;
+  telefono?: string;
 }
 
 interface Columna {
@@ -123,6 +127,7 @@ export default function Web() {
   const [vista, setVista] = useVista("web");
   const [abierto, setAbierto] = useState<string | null>(null);
   const [ajustes, setAjustes] = useState(false);
+  const [nuevo, setNuevo] = useState(false);
   const [arrastrando, setArrastrando] = useState<string | null>(null);
   const [sobre, setSobre] = useState<string | null>(null);
 
@@ -165,6 +170,9 @@ export default function Web() {
           {deTemporada.length > 0 && <SelectorVista vista={vista} onChange={setVista} />}
           <Button variant="outline" onClick={() => setAjustes(true)}>
             <Settings2 className="mr-2 h-4 w-4" /> Temporada y cupos
+          </Button>
+          <Button onClick={() => setNuevo(true)} className="bg-gradient-to-r from-primary to-fuchsia-500 shadow-md shadow-primary/25">
+            <Plus className="mr-2 h-4 w-4" /> Nuevo lead
           </Button>
         </>
       }
@@ -255,6 +263,7 @@ export default function Web() {
       )}
 
       <LeadDetalle lead={lead} onClose={() => setAbierto(null)} />
+      <NuevoLead open={nuevo} onOpenChange={setNuevo} />
       <AjustesTemporada open={ajustes} onOpenChange={setAjustes} config={config} />
     </PageShell>
   );
@@ -286,6 +295,11 @@ function LeadCard({ lead: l, onAbrir }: { lead: LeadWeb; onAbrir: () => void }) 
             <AlertTriangle className="h-3 w-3" /> Revisar: factura menos de $10M
           </span>
         )}
+        {l.manual && (
+          <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold text-sky-700 dark:text-sky-300">
+            Cargado a mano{l.fuente ? ` · ${l.fuente}` : ""}
+          </span>
+        )}
         <span className="block truncate font-semibold">{l.negocio}</span>
         <span className="block truncate text-xs text-muted-foreground">{l.nombre}</span>
         <span className="mt-1.5 block space-y-0.5">
@@ -298,9 +312,22 @@ function LeadCard({ lead: l, onAbrir }: { lead: LeadWeb; onAbrir: () => void }) 
         {l.notas && <span className="mt-1 line-clamp-2 block text-[11px] italic text-muted-foreground">“{l.notas}”</span>}
       </button>
       <div className="mt-2 flex items-center gap-1">
-        <button type="button" onClick={() => copiarEmail(l.email)} className="inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/10" title={l.email}>
-          <Copy className="h-3 w-3" /> Email
-        </button>
+        {l.email && (
+          <button type="button" onClick={() => copiarEmail(l.email)} className="inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/10" title={l.email}>
+            <Copy className="h-3 w-3" /> Email
+          </button>
+        )}
+        {l.telefono && (
+          <a
+            href={`https://wa.me/${l.telefono.replace(/\D/g, "").replace(/^0/, "54")}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/10"
+            title={l.telefono}
+          >
+            <Phone className="h-3 w-3" /> WhatsApp
+          </a>
+        )}
         {link && (
           <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/10">
             <ExternalLink className="h-3 w-3" /> {link.includes("instagram.com") ? "Instagram" : "Web"}
@@ -467,6 +494,94 @@ function AjustesTemporada({ open, onOpenChange, config }: { open: boolean; onOpe
           <Button onClick={() => void guardar()} disabled={guardando}>
             {guardando ? "Guardando…" : "Guardar"}
           </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const FUENTES = ["Recomendación", "WhatsApp", "Instagram", "Llamada", "Evento", "Cliente actual", "Otro"];
+const RUBROS = ["Comercio", "Industria / fábrica", "Gastronomía", "Servicios profesionales", "Salud y bienestar", "Otro"];
+
+/** Cargar un lead a mano (un contacto que llegó por WhatsApp, una recomendación, un evento…): va al mismo tablero. */
+function NuevoLead({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const vacio = { negocio: "", nombre: "", telefono: "", email: "", instagram: "", rubro: "", fuente: "WhatsApp", estado: "calificado" as Estado, notas: "" };
+  const [f, setF] = useState(vacio);
+  const [guardando, setGuardando] = useState(false);
+  useEffect(() => {
+    if (open) setF(vacio);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  const set = (k: keyof typeof vacio, v: string) => setF((x) => ({ ...x, [k]: v }));
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      await callApi("/api/web/manual", f);
+      toast.success("Lead cargado");
+      onOpenChange(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar");
+    } finally {
+      setGuardando(false);
+    }
+  };
+  const chip = (activo: boolean) =>
+    cn("rounded-full border px-3 py-1.5 text-xs font-medium transition-colors", activo ? "border-primary bg-primary text-primary-foreground" : "bg-background hover:border-primary/50");
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg overflow-y-auto sm:max-h-[92dvh] sm:rounded-2xl">
+        <DialogHeader>
+          <DialogTitle>Nuevo lead</DialogTitle>
+          <DialogDescription>Un contacto que llegó por fuera de la web. Queda en el tablero junto con las aplicaciones.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Input value={f.negocio} onChange={(e) => set("negocio", e.target.value)} placeholder="Negocio *" maxLength={80} autoFocus />
+            <Input value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Nombre del contacto" maxLength={80} />
+            <Input value={f.telefono} onChange={(e) => set("telefono", e.target.value)} placeholder="WhatsApp" inputMode="tel" maxLength={40} />
+            <Input value={f.email} onChange={(e) => set("email", e.target.value)} placeholder="Email" inputMode="email" maxLength={120} />
+            <Input value={f.instagram} onChange={(e) => set("instagram", e.target.value)} placeholder="Instagram o web" maxLength={120} className="sm:col-span-2" />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-muted-foreground">¿De dónde vino?</p>
+            <div className="flex flex-wrap gap-1.5">
+              {FUENTES.map((x) => (
+                <button key={x} type="button" className={chip(f.fuente === x)} onClick={() => set("fuente", x)}>
+                  {x}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-muted-foreground">Rubro</p>
+            <div className="flex flex-wrap gap-1.5">
+              {RUBROS.map((x) => (
+                <button key={x} type="button" className={chip(f.rubro === x)} onClick={() => set("rubro", f.rubro === x ? "" : x)}>
+                  {x}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-muted-foreground">¿En qué etapa está?</p>
+            <div className="flex flex-wrap gap-1.5">
+              {(["calificado", "reunion_agendada", "propuesta", "ganado", "perdido"] as Estado[]).map((x) => (
+                <button key={x} type="button" className={chip(f.estado === x)} onClick={() => set("estado", x)}>
+                  {NOMBRE_ESTADO[x]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <Textarea value={f.notas} onChange={(e) => set("notas", e.target.value)} rows={3} placeholder="Notas: qué necesita, qué hablaron, cuándo volver a llamar…" />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={() => void guardar()} disabled={guardando || f.negocio.trim().length < 2}>
+              {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Guardar lead
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

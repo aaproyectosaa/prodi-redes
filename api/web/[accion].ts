@@ -7,6 +7,7 @@
 // POST /api/web/estado    { id, estado }                        → mueve la tarjeta (queda en el historial)
 // POST /api/web/notas     { id, notas }
 // POST /api/web/config    { temporada?, cupos_total? }
+// POST /api/web/manual    { negocio, nombre?, email?, telefono?, instagram?, rubro?, fuente?, notas?, estado? } → { id }  (lead cargado a mano)
 // Los leads se guardan en la colección `leads_web`; la configuración en `web_config/general`.
 
 import { createHmac, randomUUID } from "node:crypto";
@@ -183,6 +184,47 @@ async function cambiar(req: VercelRequest, campo: "estado" | "notas") {
   });
 }
 
+/** De dónde vino un lead cargado a mano. */
+const FUENTES = ["Recomendación", "WhatsApp", "Instagram", "Llamada", "Evento", "Cliente actual", "Otro"];
+
+/** Lead cargado a mano desde el panel (no pasó por el formulario de la web): entra al mismo tablero. */
+async function manual(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin"]);
+  const b = body<Record<string, unknown>>(req);
+  const negocio = texto(b.negocio, 80);
+  const nombre = texto(b.nombre, 80);
+  const email = texto(b.email, 120).toLowerCase();
+  const telefono = texto(b.telefono, 40);
+  if (negocio.length < 2) throw new HttpError(400, "Poné el nombre del negocio");
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new HttpError(400, "Revisá el email");
+  const fuente = FUENTES.includes(texto(b.fuente, 40)) ? texto(b.fuente, 40) : "Otro";
+  const estado = ESTADOS.includes(texto(b.estado, 30)) && texto(b.estado, 30) !== "no_califica" ? texto(b.estado, 30) : "calificado";
+  const { temporada } = await leerConfig();
+  const id = randomUUID();
+  const at = new Date().toISOString();
+  await guardarDoc(getPool(), COL, id, {
+    created_at: at,
+    updated_at: at,
+    temporada,
+    nombre,
+    negocio,
+    email,
+    telefono,
+    instagram: texto(b.instagram, 120),
+    rubro: texto(b.rubro, 60),
+    califica: true,
+    dudoso: false,
+    estado,
+    notas: String(b.notas ?? "").slice(0, 4000),
+    manual: true,
+    fuente,
+    origen: `manual:${fuente}`,
+    creado_por: caller.uid,
+    historial: [{ at, de: null, a: estado, por: caller.uid, por_nombre: caller.nombre || caller.email || "" }],
+  });
+  return { id };
+}
+
 async function config(req: VercelRequest) {
   await requireCaller(req, ["admin"]);
   const b = body<{ temporada?: unknown; cupos_total?: unknown }>(req);
@@ -218,6 +260,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "estado") res.status(200).json(await cambiar(req, "estado"));
     else if (accion === "notas") res.status(200).json(await cambiar(req, "notas"));
     else if (accion === "config") res.status(200).json(await config(req));
+    else if (accion === "manual") res.status(200).json(await manual(req));
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {
     sendError(res, err);
