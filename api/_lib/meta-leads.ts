@@ -296,7 +296,13 @@ export async function importarMensajes(base: string, forzar = false, todo = fals
       // Liviano: solo id y última fecha.
       lista = (await graph(`${paginaId}/conversations`, { platform: plataforma, fields: "id,updated_time", limit: "40" }, token)).data ?? [];
     } catch (err) {
-      errores.push(`${plataforma === "instagram" ? "Instagram" : "Facebook"}: ${err instanceof Error ? err.message : err}`);
+      const msj = err instanceof Error ? err.message : String(err);
+      // Facebook sin pages_messaging es conocido: va como nota, no como error (Instagram anda igual).
+      if (plataforma === "messenger" && /pages_messaging/.test(msj)) {
+        detalle.push("Facebook Messenger: falta el permiso pages_messaging");
+        continue;
+      }
+      errores.push(`${plataforma === "instagram" ? "Instagram" : "Facebook"}: ${msj}`);
       detalle.push(`${plataforma}: error`);
       continue;
     }
