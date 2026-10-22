@@ -164,7 +164,16 @@ export async function recibirWebhook(b: any, base: string) {
 /** Conecta la página de Prodi (suscribe la app a sus formularios) y trae los de los últimos 30 días. */
 export async function conectarFormularios(base: string) {
   const pagina = await tokenPagina();
-  await graph(`${pagina.id}/subscribed_apps`, { subscribed_fields: "leadgen" }, pagina.token, "POST");
+  try {
+    await graph(`${pagina.id}/subscribed_apps`, { subscribed_fields: "leadgen" }, pagina.token, "POST");
+  } catch (err) {
+    // Para saber qué arreglar en Meta: qué permisos tiene de verdad el token que está en Vercel.
+    const t = process.env.META_ACCESS_TOKEN ?? "";
+    const permisos = await graph("debug_token", { input_token: t }, t)
+      .then((d) => (d?.data?.scopes ?? []).join(", ") || "ninguno")
+      .catch(() => "no se pudo ver");
+    throw new HttpError(502, `${err instanceof Error ? err.message : "Meta rechazó la conexión"} · El token de Vercel tiene: ${permisos}`);
+  }
   const desde = Math.floor(Date.now() / 1000) - 30 * 86400;
   const formularios = (await graph(`${pagina.id}/leadgen_forms`, { fields: "id,name,status", limit: "50" }, pagina.token)).data ?? [];
   const temporada = await temporadaActual();
