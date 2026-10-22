@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, MapPin, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { buscarCoordsGoogle, googleMaps, hayGoogleMaps, sugerirLugares } from "@/lib/googleMaps";
 
-// Buscar la ubicación de un local: se escribe la dirección o el nombre del lugar y aparecen sugerencias del mapa
-// (OpenStreetMap, sin clave); al elegir una se ve en el mapa de Google. También acepta pegar un link de Google Maps.
+// Buscar la ubicación de un local: se escribe la dirección o el nombre del lugar, aparecen sugerencias y al elegir una se
+// ve en un mapa que se mueve ahí mismo. Con clave de Google Maps (src/lib/googleMaps.ts) usa Google; sin clave,
+// OpenStreetMap. También acepta pegar un link de Google Maps.
 
 /** Link para abrir la ubicación en Google Maps (si es un link, ese; si es una dirección, la búsqueda). */
 export const linkMapa = (u: string) => (/^https?:\/\//i.test(u.trim()) ? u.trim() : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(u.trim())}`);
@@ -37,7 +39,18 @@ function coordsDe(u: string): Coords | null {
   return m ? [Number(m[1]), Number(m[2])] : null;
 }
 
-/** Dónde queda una dirección (OpenStreetMap). Se guarda en el navegador para no volver a buscarla. */
+const claveGeo = (q: string) => `geo:${q.trim().toLowerCase()}`;
+
+/** Anota dónde queda lo que se eligió (así el mapa no lo vuelve a buscar). */
+function recordarCoords(valor: string, c: Coords | null) {
+  try {
+    if (c) localStorage.setItem(claveGeo(valor), JSON.stringify(c));
+  } catch {
+    /* sin almacenamiento */
+  }
+}
+
+/** Dónde queda una dirección (Google si hay clave; si no, OpenStreetMap). Se guarda en el navegador para no volver a buscarla. */
 async function coordenadas(u: string): Promise<Coords | null> {
   const directas = coordsDe(u);
   if (directas) return directas;
@@ -47,7 +60,7 @@ async function coordenadas(u: string): Promise<Coords | null> {
     if (!lugar) return null;
     q = decodeURIComponent(lugar.replace(/\+/g, " "));
   }
-  const clave = `geo:${q.toLowerCase()}`;
+  const clave = claveGeo(q);
   try {
     const guardado = localStorage.getItem(clave);
     if (guardado) return JSON.parse(guardado) as Coords | null;
@@ -55,9 +68,13 @@ async function coordenadas(u: string): Promise<Coords | null> {
     /* sin almacenamiento */
   }
   try {
-    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ar&q=${encodeURIComponent(q)}`);
-    const [x] = (await r.json()) as { lat: string; lon: string }[];
-    const c: Coords | null = x ? [Number(x.lat), Number(x.lon)] : null;
+    let c: Coords | null = null;
+    if (hayGoogleMaps()) c = await buscarCoordsGoogle(q).catch(() => null);
+    if (!c) {
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ar&q=${encodeURIComponent(q)}`);
+      const [x] = (await r.json()) as { lat: string; lon: string }[];
+      c = x ? [Number(x.lat), Number(x.lon)] : null;
+    }
     try {
       localStorage.setItem(clave, JSON.stringify(c));
     } catch {
@@ -69,7 +86,7 @@ async function coordenadas(u: string): Promise<Coords | null> {
   }
 }
 
-/** Mapa que se mueve y se acerca ahí mismo (Leaflet con OpenStreetMap). Si no encuentra el lugar, muestra el de Google. */
+/** Mapa que se mueve y se acerca ahí mismo (Google con clave; si no, Leaflet con OpenStreetMap). Si no encuentra el lugar, el embebido de Google. */
 export function MapaMovible({ ubicacion, className }: { ubicacion: string; className?: string }) {
   const caja = useRef<HTMLDivElement>(null);
   const [estado, setEstado] = useState<"cargando" | "ok" | "sin">("cargando");
@@ -82,6 +99,18 @@ export function MapaMovible({ ubicacion, className }: { ubicacion: string; class
       const c = await coordenadas(ubicacion);
       if (cancelado) return;
       if (!c) return setEstado("sin");
+      if (hayGoogleMaps()) {
+        try {
+          const maps = await googleMaps();
+          if (cancelado || !caja.current) return;
+          const centro = { lat: c[0], lng: c[1] };
+          const g = new maps.Map(caja.current, { center: centro, zoom: 16, gestureHandling: "greedy", streetViewControl: false, fullscreenControl: true, mapTypeControl: true, clickableIcons: true });
+          new maps.Marker({ position: centro, map: g });
+          return setEstado("ok");
+        } catch {
+          /* si Google falla, sigue con OpenStreetMap */
+        }
+      }
       const L = (await import("leaflet")).default;
       await import("leaflet/dist/leaflet.css");
       if (cancelado || !caja.current) return;
@@ -122,10 +151,12 @@ export function MapaMovible({ ubicacion, className }: { ubicacion: string; class
 }
 
 interface Sugerencia {
-  id: number;
+  id: string | number;
   titulo: string;
   detalle: string;
   valor: string;
+  /** Google: trae la dirección completa y dónde queda recién al elegirla. */
+  elegir?: () => Promise<{ valor: string; coords: Coords | null }>;
 }
 
 /** Dirección corta y legible a partir de lo que devuelve OpenStreetMap. */
@@ -169,18 +200,23 @@ export function BuscadorMapa({
     const t = setTimeout(async () => {
       setBuscando(true);
       try {
-        const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&countrycodes=ar&limit=5&accept-language=es&q=${encodeURIComponent(q)}`, {
-          signal: ctrl.signal,
-        });
-        const lista = (await r.json()) as unknown[];
-        setSugerencias(lista.map(aSugerencia));
+        let lista: Sugerencia[] | null = null;
+        if (hayGoogleMaps()) lista = await sugerirLugares(q).then((l) => l.map((x) => ({ ...x, valor: `${x.titulo}${x.detalle ? `, ${x.detalle}` : ""}` }))).catch(() => null);
+        if (!lista) {
+          const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&countrycodes=ar&limit=5&accept-language=es&q=${encodeURIComponent(q)}`, {
+            signal: ctrl.signal,
+          });
+          lista = ((await r.json()) as unknown[]).map(aSugerencia);
+        }
+        if (ctrl.signal.aborted) return;
+        setSugerencias(lista);
         setAbierto(true);
       } catch {
         /* sin sugerencias: igual se puede guardar lo escrito */
       } finally {
         setBuscando(false);
       }
-    }, 700);
+    }, hayGoogleMaps() ? 300 : 700);
     return () => {
       clearTimeout(t);
       ctrl.abort();
@@ -225,11 +261,13 @@ export function BuscadorMapa({
                 key={s.id}
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  elegido.current = s.valor;
-                  onCambiar(s.valor);
+                onClick={async () => {
                   setSugerencias([]);
                   setAbierto(false);
+                  const r = s.elegir ? await s.elegir().catch(() => ({ valor: s.valor, coords: null })) : { valor: s.valor, coords: null };
+                  recordarCoords(r.valor, r.coords);
+                  elegido.current = r.valor;
+                  onCambiar(r.valor);
                 }}
                 className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
               >
