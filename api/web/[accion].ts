@@ -12,6 +12,7 @@
 // POST /api/web/actividad   { id, tipo, texto }               → llamada, WhatsApp, mail, reunión o nota (línea de tiempo)
 // GET|POST /api/web/meta-webhook  (Meta: formularios de los anuncios de Prodi → leads)
 // POST /api/web/meta-conversacion { id } · meta-responder { id, texto }  (admin) chat del lead por Instagram/Messenger
+// POST /api/web/wa-estado · wa-config { config_id } · wa-conectar { code, waba_id, phone_number_id }  (admin) WhatsApp de Prodi → leads
 // POST /api/web/meta-mensajes     (admin) { forzar? } trae los mensajes nuevos de IG y FB como leads
 // POST /api/web/meta-conectar     (admin) suscribe la página de Prodi y trae los formularios de 30 días
 // POST /api/web/manual    { negocio, nombre?, email?, telefono?, instagram?, ubicacion?, rubro?, fuente?, notas?, estado? } → { id }  (lead cargado a mano)
@@ -21,6 +22,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { enTransaccion, getPool, guardarDoc, leerDoc } from "../_lib/db";
 import { appUrl, body, HttpError, requireCaller, sendError } from "../_lib/http";
+import { conectarWhatsApp, estadoWhatsApp, guardarConfigWhatsApp, recibirWhatsApp } from "../_lib/meta-whatsapp";
 import { conectarFormularios, guardarTokenUsuario, conversacionLead, estadoMeta, guardarRespuestas, sugerirRespuestas, importarMensajes, recibirWebhook, responderLead, verificarWebhook } from "../_lib/meta-leads";
 
 const COL = "leads_web";
@@ -325,6 +327,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Formularios de los anuncios de Prodi (api/_lib/meta-leads.ts): Meta verifica con GET y avisa con POST.
     if (accion === "meta-webhook") {
       if (req.method === "GET") res.status(200).setHeader("Content-Type", "text/plain").send(verificarWebhook(req.query as Record<string, unknown>));
+      else if (req.body?.object === "whatsapp_business_account") res.status(200).json(await recibirWhatsApp(req.body, appUrl(req)));
       else res.status(200).json(await recibirWebhook(req.body, appUrl(req)));
       return;
     }
@@ -341,7 +344,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "seguimiento") res.status(200).json(await seguimiento(req));
     else if (accion === "actividad") res.status(200).json(await actividad(req));
     else if (accion === "datos") res.status(200).json(await datos(req));
-    else if (accion === "meta-sugerir") {
+    else if (accion === "wa-estado") {
+      await requireCaller(req, ["admin"]);
+      res.status(200).json(await estadoWhatsApp());
+    } else if (accion === "wa-config") {
+      await requireCaller(req, ["admin"]);
+      res.status(200).json(await guardarConfigWhatsApp(String(body<{ config_id?: string }>(req).config_id ?? "")));
+    } else if (accion === "wa-conectar") {
+      await requireCaller(req, ["admin"]);
+      res.status(200).json(await conectarWhatsApp(body<{ code?: string; waba_id?: string; phone_number_id?: string }>(req)));
+    } else if (accion === "meta-sugerir") {
       await requireCaller(req, ["admin"]);
       const b = body<{ id?: string; pedido?: string }>(req);
       res.status(200).json(await sugerirRespuestas(texto(b.id, 40), texto(b.pedido, 300)));

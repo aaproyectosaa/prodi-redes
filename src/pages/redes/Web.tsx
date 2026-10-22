@@ -39,6 +39,7 @@ import { cn } from "@/lib/utils";
 import { BuscadorMapa, linkMapa, mapaEmbebido, MapaMovible } from "@/components/redes/BuscadorMapa";
 import { ProximoPasoChip, SeguimientoLead, type EventoLead } from "@/components/redes/crm/SeguimientoLead";
 import { ChatLead } from "@/components/redes/crm/ChatLead";
+import { ConectarWhatsApp } from "@/components/redes/crm/ConectarWhatsApp";
 import { useSearchParams } from "react-router-dom";
 
 // Reservas de la landing de la campaña «No empezamos de cero» (somosprodi.com).
@@ -99,15 +100,17 @@ const COLUMNAS: Columna[] = [
 ];
 
 /** De dónde llegó un lead: para la etiqueta de la tarjeta y el filtro. */
-type Origen = "web" | "instagram" | "formulario" | "mano";
+type Origen = "web" | "instagram" | "whatsapp" | "formulario" | "mano";
 const ORIGENES: Record<Origen, { label: string; icono: React.ElementType; clase: string }> = {
   web: { label: "Web", icono: Globe, clase: "bg-violet-500/12 text-violet-700 dark:text-violet-300" },
   instagram: { label: "Instagram", icono: Instagram, clase: "bg-pink-500/12 text-pink-700 dark:text-pink-300" },
+  whatsapp: { label: "WhatsApp", icono: MessageCircle, clase: "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" },
   formulario: { label: "Formulario", icono: FileText, clase: "bg-blue-500/12 text-blue-700 dark:text-blue-300" },
   mano: { label: "A mano", icono: Hand, clase: "bg-muted text-muted-foreground" },
 };
 function origenDe(l: LeadWeb): Origen {
   if (l.origen === "meta:mensaje") return "instagram";
+  if (l.origen === "meta:whatsapp") return "whatsapp";
   if (l.origen === "meta:leadgen") return "formulario";
   if (l.manual) return "mano";
   return "web";
@@ -241,7 +244,7 @@ export default function Web() {
 
   const deTemporada = useMemo(() => (leads ?? []).filter((l) => l.temporada === config.temporada), [leads, config.temporada]);
   const porOrigen = useMemo(() => {
-    const c: Record<Origen, number> = { web: 0, instagram: 0, formulario: 0, mano: 0 };
+    const c: Record<Origen, number> = { web: 0, instagram: 0, whatsapp: 0, formulario: 0, mano: 0 };
     deTemporada.forEach((l) => c[origenDe(l)]++);
     return c;
   }, [deTemporada]);
@@ -343,7 +346,7 @@ export default function Web() {
             <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar negocio, nombre o teléfono" className="h-9 rounded-full pl-9" />
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {(["todos", "instagram", "formulario", "web", "mano"] as const).map((o) => {
+            {(["todos", "whatsapp", "instagram", "formulario", "web", "mano"] as const).map((o) => {
               const n = o === "todos" ? deTemporada.length : porOrigen[o];
               if (o !== "todos" && !n) return null;
               const Icono = o === "todos" ? null : ORIGENES[o].icono;
@@ -480,7 +483,7 @@ function LeadCard({ lead: l, onAbrir }: { lead: LeadWeb; onAbrir: () => void }) 
   const o = ORIGENES[origenDe(l)];
   const IconoOrigen = o.icono;
   // Un dato clave en vez de la lista entera (el resto está en la ficha).
-  const dato = l.inversion_label ? `Invierte ${l.inversion_label}` : l.rubro || l.fuente || "";
+  const dato = l.inversion_label ? `Invierte ${l.inversion_label}` : l.rubro || (origenDe(l) === "mano" ? l.fuente : "") || "";
   const nota = (l.meta?.ultimo_texto || (l.notas ?? "").replace(/^Escribió por mensaje de \w+:\s*/i, "")).replace(/\s+/g, " ").trim();
   return (
     <div className={cn("group rounded-xl border bg-card p-3 text-sm shadow-sm transition-all hover:-translate-y-px hover:border-primary/40 hover:shadow-md", l.dudoso && "border-orange-500/60")}>
@@ -987,6 +990,7 @@ function AjustesTemporada({ open, onOpenChange, config }: { open: boolean; onOpe
           </Button>
         </div>
         <FormulariosMeta />
+        <ConectarWhatsApp />
       </DialogContent>
     </Dialog>
   );

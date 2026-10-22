@@ -23,7 +23,7 @@ function prueba(token: string) {
   return s ? crypto.createHmac("sha256", s).update(token).digest("hex") : undefined;
 }
 
-async function graph(ruta: string, params: Record<string, string> = {}, token = process.env.META_ACCESS_TOKEN ?? "", metodo: "GET" | "POST" = "GET"): Promise<any> {
+export async function graph(ruta: string, params: Record<string, string> = {}, token = process.env.META_ACCESS_TOKEN ?? "", metodo: "GET" | "POST" = "GET"): Promise<any> {
   if (!token) throw new HttpError(500, "Falta META_ACCESS_TOKEN en Vercel");
   const qs = new URLSearchParams({ ...params, access_token: token });
   const p = prueba(token);
@@ -35,13 +35,13 @@ async function graph(ruta: string, params: Record<string, string> = {}, token = 
 }
 
 /** El mismo lead de Meta siempre da el mismo id (así no entra dos veces). */
-const idDeLead = (leadgenId: string) => {
+export const idDeLead = (leadgenId: string) => {
   const h = crypto.createHash("sha256").update(`meta-lead:${leadgenId}`).digest("hex");
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
 };
 
 // Sin caracteres de control: todo en una línea.
-const limpio = (v: unknown, max: number) =>
+export const limpio = (v: unknown, max: number) =>
   Array.from(String(v ?? ""), (ch) => (ch.charCodeAt(0) < 32 || ch.charCodeAt(0) === 127 ? " " : ch)).join("").trim().slice(0, max);
 
 /** Las respuestas del formulario: lo conocido a su campo, el resto a las notas. */
@@ -67,7 +67,7 @@ function respuestas(campos: { name: string; values?: string[] }[]) {
   return { nombre, telefono, email, negocio, ciudad, instagram, otras };
 }
 
-async function temporadaActual(): Promise<string> {
+export async function temporadaActual(): Promise<string> {
   const d = await leerDoc(getPool(), "web_config", "general");
   return typeof d?.temporada === "string" && d.temporada.trim() ? d.temporada : "Verano 2027";
 }
