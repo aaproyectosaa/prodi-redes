@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { PautaTodos } from "@/components/redes/PautaMeta";
 import { useNavigate, useParams } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, ArrowUpRight, Clock, Eye, MessageCircle } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowUpRight, Clock, Eye, MessageCircle, Sparkles } from "lucide-react";
+import { collection, db, onSnapshot } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -99,6 +100,41 @@ function AlertaPauta({ perfil, mes }: { perfil: Parameters<typeof esPauta>[0] & 
       <span>
         <b>{partes.join(" · ")}</b>
       </span>
+    </div>
+  );
+}
+
+/** Los consejos de la IA de pauta de todos los clientes (con quién marcó cada uno como hecho). */
+function useConsejosPauta() {
+  const [docs, setDocs] = useState<{ proyecto_id: string; sugerencias?: unknown[]; hechos?: Record<string, { uid: string } | null> }[]>([]);
+  useEffect(
+    () =>
+      onSnapshot(
+        collection(db, "ia_pauta"),
+        (s) => setDocs(s.docs.map((d) => d.data() as (typeof docs)[number])),
+        () => setDocs([])
+      ),
+    []
+  );
+  return docs;
+}
+
+/** En la tarjeta de pauta: de los consejos de la IA de sus clientes, cuántos marcó como hechos. */
+function ConsejosAplicados({ perfil, consejos }: { perfil: { id: string }; consejos: ReturnType<typeof useConsejosPauta> }) {
+  const { clientes } = useRedes();
+  const suyos = new Set(clientes.filter((c) => (c.team_roles?.pauta ?? []).includes(perfil.id)).map((c) => c.id));
+  const docs = consejos.filter((d) => suyos.has(d.proyecto_id));
+  const total = docs.reduce((a, d) => a + (d.sugerencias?.length ?? 0), 0);
+  if (!total) return null;
+  const hechos = docs.reduce((a, d) => a + Object.values(d.hechos ?? {}).filter((h) => h?.uid === perfil.id).length, 0);
+  const pct = Math.round((hechos / total) * 100);
+  return (
+    <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-2.5 py-1.5 text-[11px]">
+      <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" />
+      <span className="flex-1">
+        Consejos de la IA: <b>aplicó {hechos} de {total}</b>
+      </span>
+      <span className={cn("font-semibold tabular-nums", pct >= 60 ? "text-emerald-600" : pct >= 30 ? "text-amber-600" : "text-red-600")}>{pct}%</span>
     </div>
   );
 }
@@ -308,6 +344,7 @@ export default function Reportes() {
   const { profiles } = useAppData();
   const [mes, setMes] = useState(mesActual());
   const uso = useUsoEquipo(mes);
+  const consejosPauta = useConsejosPauta();
   const todos = useMemo(() => eventos(videos), [videos]);
 
   const equipo = profiles
@@ -346,6 +383,7 @@ export default function Reportes() {
                 </div>
                 <UsoLinea datos={uso} uid={r.perfil.id} />
                 {esPauta(r.perfil) && <AlertaPauta perfil={r.perfil} mes={mes} />}
+                {esPauta(r.perfil) && <ConsejosAplicados perfil={r.perfil} consejos={consejosPauta} />}
                 <KpiGrid r={r} />
                 <div className="flex items-end justify-between gap-3">
                   <div className="text-xs text-muted-foreground">
