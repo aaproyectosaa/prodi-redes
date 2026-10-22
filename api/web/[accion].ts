@@ -11,6 +11,7 @@
 // POST /api/web/seguimiento { id, texto, fecha }             → próximo paso (qué hacer y para cuándo)
 // POST /api/web/actividad   { id, tipo, texto }               → llamada, WhatsApp, mail, reunión o nota (línea de tiempo)
 // GET|POST /api/web/meta-webhook  (Meta: formularios de los anuncios de Prodi → leads)
+// POST /api/web/meta-mensajes     (admin) { forzar? } trae los mensajes nuevos de IG y FB como leads
 // POST /api/web/meta-conectar     (admin) suscribe la página de Prodi y trae los formularios de 30 días
 // POST /api/web/manual    { negocio, nombre?, email?, telefono?, instagram?, ubicacion?, rubro?, fuente?, notas?, estado? } → { id }  (lead cargado a mano)
 // Los leads se guardan en la colección `leads_web`; la configuración en `web_config/general`.
@@ -19,7 +20,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { enTransaccion, getPool, guardarDoc, leerDoc } from "../_lib/db";
 import { appUrl, body, HttpError, requireCaller, sendError } from "../_lib/http";
-import { conectarFormularios, guardarTokenUsuario, recibirWebhook, verificarWebhook } from "../_lib/meta-leads";
+import { conectarFormularios, guardarTokenUsuario, importarMensajes, recibirWebhook, verificarWebhook } from "../_lib/meta-leads";
 
 const COL = "leads_web";
 const CONFIG = { col: "web_config", id: "general" };
@@ -339,7 +340,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "seguimiento") res.status(200).json(await seguimiento(req));
     else if (accion === "actividad") res.status(200).json(await actividad(req));
     else if (accion === "datos") res.status(200).json(await datos(req));
-    else if (accion === "meta-token") {
+    else if (accion === "meta-mensajes") {
+      await requireCaller(req, ["admin"]);
+      res.status(200).json(await importarMensajes(appUrl(req), body<{ forzar?: boolean }>(req).forzar === true));
+    } else if (accion === "meta-token") {
       await requireCaller(req, ["admin"]);
       res.status(200).json(await guardarTokenUsuario(String(body<{ token?: string }>(req).token ?? ""), appUrl(req)));
     } else if (accion === "meta-conectar") {

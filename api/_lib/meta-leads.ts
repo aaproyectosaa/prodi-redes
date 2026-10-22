@@ -238,3 +238,97 @@ export async function conectarFormularios(base: string) {
   }
   return { pagina: pagina.nombre, formularios: formularios.length, nuevos };
 }
+
+// ── Mensajes directos ─────────────────────────────────────────────────────────────────────────────────────────────
+// Cada conversación nueva con la página de Prodi (Messenger) o su Instagram entra como lead: la primera vez que
+// alguien escribe. Se revisa al abrir Leads (cada 10 minutos como mucho), con "Traer mensajes" y todos los días.
+// El token de la página tiene que tener pages_messaging (Facebook) e instagram_manage_messages (Instagram).
+
+const DIEZ_MIN = 10 * 60_000;
+
+/** Trae las conversaciones nuevas (últimos 30 días) y crea un lead por cada persona que escribió. */
+export async function importarMensajes(base: string, forzar = false) {
+  const guardado = await tokenGuardado();
+  if (!guardado) throw new HttpError(400, "Primero conectá la página de Prodi (pegá el identificador en Temporada y cupos)");
+  const pool = getPool();
+  const secreto = await leerDoc(pool, SECRETO.col, SECRETO.id);
+  if (!forzar && secreto?.mensajes_at && Date.now() - Date.parse(String(secreto.mensajes_at)) < DIEZ_MIN) return { revisado: false, nuevos: 0 };
+  await guardarDoc(pool, SECRETO.col, SECRETO.id, { ...secreto, mensajes_at: new Date().toISOString() });
+
+  const { id: paginaId, token } = guardado;
+  const ig = (await graph(paginaId, { fields: "instagram_business_account{id,username}" }, token).catch(() => null))?.instagram_business_account ?? null;
+  const propios = new Set([paginaId, ig?.id].filter(Boolean).map(String));
+  const desde = Date.now() - 30 * 86400_000;
+  const temporada = await temporadaActual();
+  const errores: string[] = [];
+  let nuevos = 0;
+
+  for (const plataforma of ["messenger", "instagram"] as const) {
+    if (plataforma === "instagram" && !ig) continue;
+    let convs: any[] = [];
+    try {
+      convs =
+        (
+          await graph(
+            `${paginaId}/conversations`,
+            { platform: plataforma, fields: "id,updated_time,participants,messages.limit(20){message,from,created_time}", limit: "40" },
+            token
+          )
+        ).data ?? [];
+    } catch (err) {
+      errores.push(`${plataforma === "instagram" ? "Instagram" : "Facebook"}: ${err instanceof Error ? err.message : err}`);
+      continue;
+    }
+    for (const c of convs) {
+      if (Date.parse(c.updated_time) < desde) continue;
+      const id = idDeLead(`conversacion:${c.id}`);
+      if (await leerDoc(pool, COL, id)) continue;
+      const persona = (c.participants?.data ?? []).find((p: any) => !propios.has(String(p.id)));
+      if (!persona) continue;
+      // Del más viejo al más nuevo; lo que escribió la persona (no las respuestas de Prodi).
+      const mensajes = [...(c.messages?.data ?? [])].reverse();
+      const primero = mensajes[0];
+      if (primero && Date.parse(primero.created_time) < desde) continue;
+      const suyos = mensajes.filter((m: any) => m?.from && !propios.has(String(m.from.id)) && m.message).slice(0, 3);
+      const red = plataforma === "instagram" ? "Instagram" : "Facebook";
+      const usuario = plataforma === "instagram" ? String(persona.username ?? persona.name ?? "") : "";
+      const nombre = limpio(persona.name ?? persona.username ?? "", 80);
+      const at = primero?.created_time ? new Date(primero.created_time).toISOString() : new Date().toISOString();
+      await guardarDoc(pool, COL, id, {
+        created_at: at,
+        updated_at: new Date().toISOString(),
+        temporada,
+        nombre,
+        negocio: limpio(usuario ? `@${usuario}` : nombre || `Mensaje de ${red}`, 80),
+        email: "",
+        telefono: "",
+        instagram: usuario ? `@${usuario}` : "",
+        ubicacion: "",
+        rubro: "",
+        califica: true,
+        dudoso: false,
+        estado: "calificado",
+        notas: [`Escribió por mensaje de ${red}:`, ...suyos.map((m: any) => `«${limpio(m.message, 500)}»`)].join("\n").slice(0, 4000),
+        manual: true,
+        fuente: `Mensaje ${red}`,
+        origen: "meta:mensaje",
+        meta: { conversacion_id: String(c.id), plataforma },
+        historial: [{ at, de: null, a: "calificado", por: null, por_nombre: `Mensaje de ${red}` }],
+      });
+      nuevos++;
+      const admins = (await adminDb().collection("profiles").where("role", "==", "admin").get()).docs.filter((d) => d.data().activo !== false).map((d) => d.id);
+      await enviarAviso(
+        {
+          destinatarios: admins,
+          titulo: `💬 Nuevo lead por ${red}: ${usuario ? `@${usuario}` : nombre || "sin nombre"}`,
+          cuerpo: suyos[0]?.message ? `«${limpio(suyos[0].message, 140)}»` : `Escribió por ${red}.`,
+          link: "/web",
+          clave: `lead-mensaje:${c.id}`,
+        },
+        base
+      ).catch(() => undefined);
+    }
+  }
+  if (errores.length && !nuevos) throw new HttpError(502, errores.join(" · "));
+  return { revisado: true, nuevos, errores };
+}

@@ -10,6 +10,7 @@ import {
   Globe,
   Loader2,
   Mail,
+  MessageCircle,
   MapPin,
   Pencil,
   Phone,
@@ -157,6 +158,12 @@ async function mover(lead: LeadWeb, estado: Estado) {
 
 export default function Web() {
   const { leads, config } = useLeadsWeb();
+  // Los mensajes nuevos al Instagram y Facebook de Prodi entran como leads (el servidor revisa cada 10 min como mucho).
+  useEffect(() => {
+    callApi<{ nuevos: number }>("/api/web/meta-mensajes", {})
+      .then((r) => r.nuevos > 0 && toast.success(`${r.nuevos} lead${r.nuevos === 1 ? "" : "s"} nuevo${r.nuevos === 1 ? "" : "s"} por mensaje`))
+      .catch(() => undefined);
+  }, []);
   const [vista, setVista] = useVista("web");
   const [abierto, setAbierto] = useState<string | null>(null);
   // /web?lead=… (desde "Mi día" o un aviso): abre ese lead.
@@ -341,7 +348,7 @@ function LeadCard({ lead: l, onAbrir }: { lead: LeadWeb; onAbrir: () => void }) 
         )}
         {l.manual && (
           <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold text-sky-700 dark:text-sky-300">
-            {l.origen === "meta:leadgen" ? `Llegó solo · ${l.fuente ?? "Formulario de Meta"}` : `Cargado a mano${l.fuente ? ` · ${l.fuente}` : ""}`}
+            {l.origen === "meta:leadgen" || l.origen === "meta:mensaje" ? `Llegó solo · ${l.fuente ?? "Meta"}` : `Cargado a mano${l.fuente ? ` · ${l.fuente}` : ""}`}
           </span>
         )}
         <span className="block truncate font-semibold">{l.negocio}</span>
@@ -636,6 +643,18 @@ function FormulariosMeta() {
       setConectando(false);
     }
   };
+  const traerMensajes = async () => {
+    setConectando(true);
+    try {
+      const r = await callApi<{ nuevos: number; errores?: string[] }>("/api/web/meta-mensajes", { forzar: true });
+      if (r.errores?.length) toast.warning(r.errores.join(" · "));
+      toast.success(r.nuevos ? `${r.nuevos} lead${r.nuevos === 1 ? "" : "s"} nuevo${r.nuevos === 1 ? "" : "s"} por mensaje` : "No hay conversaciones nuevas");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudieron traer los mensajes");
+    } finally {
+      setConectando(false);
+    }
+  };
   const conectar = async () => {
     setConectando(true);
     try {
@@ -654,6 +673,9 @@ function FormulariosMeta() {
       <Button size="sm" variant="outline" className="w-full" onClick={() => void conectar()} disabled={conectando}>
         {conectando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
         Conectar y traer formularios de Meta
+      </Button>
+      <Button size="sm" variant="outline" className="w-full" onClick={() => void traerMensajes()} disabled={conectando}>
+        <MessageCircle className="mr-2 h-4 w-4" /> Traer mensajes de Instagram y Facebook
       </Button>
       <div className="space-y-1.5 border-t pt-2">
         <p className="text-[11px] text-muted-foreground">
