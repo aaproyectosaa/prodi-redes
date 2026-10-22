@@ -134,7 +134,17 @@ function useLeadsWeb() {
     () =>
       onSnapshot(
         collection(db, "leads_web"),
-        (s) => setLeads(s.docs.map((d: { id: string; data: () => object }) => ({ id: d.id, ...d.data() }) as LeadWeb)),
+        (s) => {
+          const lista = s.docs.map((d: { id: string; data: () => object }) => ({ id: d.id, ...d.data() }) as LeadWeb);
+          let cambio = false;
+          for (const l of lista)
+            if (movidos.get(l.id) === l.estado) {
+              movidos.delete(l.id);
+              cambio = true;
+            }
+          if (cambio) avisarMovidos();
+          setLeads(lista);
+        },
         () => setLeads([])
       ),
     []
@@ -168,18 +178,47 @@ function linkDe(v?: string): string | null {
   }
 }
 
+// Cambios de etapa que se ven al instante, antes de que conteste el servidor (si falla, vuelve atrás).
+const movidos = new Map<string, Estado>();
+const oyentesMovidos = new Set<() => void>();
+const avisarMovidos = () => oyentesMovidos.forEach((f) => f());
+function useMovidos() {
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    const f = () => setVersion((v) => v + 1);
+    oyentesMovidos.add(f);
+    return () => {
+      oyentesMovidos.delete(f);
+    };
+  }, []);
+  return version;
+}
+
 async function mover(lead: LeadWeb, estado: Estado) {
-  if (lead.estado === estado) return;
+  if ((movidos.get(lead.id) ?? lead.estado) === estado) return;
+  const antes = movidos.get(lead.id);
+  movidos.set(lead.id, estado);
+  avisarMovidos();
   try {
     await callApi("/api/web/estado", { id: lead.id, estado });
     toast.success(estado === "ganado" ? "Ganado: ocupa un cupo en la web" : `Pasó a «${NOMBRE_ESTADO[estado]}»`);
   } catch (err) {
+    if (antes) movidos.set(lead.id, antes);
+    else movidos.delete(lead.id);
+    avisarMovidos();
     toast.error(err instanceof Error ? err.message : "No se pudo mover");
   }
 }
 
 export default function Web() {
-  const { leads, config } = useLeadsWeb();
+  const { leads: leadsBase, config } = useLeadsWeb();
+  const versionMovidos = useMovidos();
+  // Los leads con los cambios de etapa que todavía no confirmó el servidor.
+  const leads = useMemo(
+    () => leadsBase?.map((l) => (movidos.has(l.id) ? { ...l, estado: movidos.get(l.id)! } : l)) ?? null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [leadsBase, versionMovidos]
+  );
   const [vista, setVista] = useVista("web");
   const [abierto, setAbierto] = useState<string | null>(null);
   // /web?lead=… (desde "Mi día" o un aviso): abre ese lead.
@@ -687,7 +726,7 @@ function SelectorEtapa({ lead }: { lead: LeadWeb }) {
             onClick={() => void mover(lead, c.id)}
             title={c.ayuda}
             className={cn(
-              "flex min-w-0 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-[11px] font-medium transition-all",
+              "flex min-w-0 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-[11px] font-medium transition-[background-color,box-shadow,color] duration-100 active:scale-95",
               activa ? "bg-background text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground"
             )}
           >
