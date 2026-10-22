@@ -6,8 +6,9 @@
 // Desde el panel (solo el super admin):
 // POST /api/web/estado    { id, estado }                        → mueve la tarjeta (queda en el historial)
 // POST /api/web/notas     { id, notas }
+// POST /api/web/datos     { id, negocio?, nombre?, email?, telefono?, instagram?, ubicacion?, rubro? }  (completar o corregir)
 // POST /api/web/config    { temporada?, cupos_total? }
-// POST /api/web/manual    { negocio, nombre?, email?, telefono?, instagram?, rubro?, fuente?, notas?, estado? } → { id }  (lead cargado a mano)
+// POST /api/web/manual    { negocio, nombre?, email?, telefono?, instagram?, ubicacion?, rubro?, fuente?, notas?, estado? } → { id }  (lead cargado a mano)
 // Los leads se guardan en la colección `leads_web`; la configuración en `web_config/general`.
 
 import { createHmac, randomUUID } from "node:crypto";
@@ -184,6 +185,25 @@ async function cambiar(req: VercelRequest, campo: "estado" | "notas") {
   });
 }
 
+/** Datos del lead que se completan o corrigen después (lo que faltó al cargarlo). Solo cambia los que vienen. */
+const DATOS_EDITABLES: Record<string, number> = { negocio: 80, nombre: 80, email: 120, telefono: 40, instagram: 120, ubicacion: 300, rubro: 60 };
+async function datos(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin"]);
+  const b = body<Record<string, unknown>>(req);
+  const id = texto(b.id, 40);
+  if (!ID_OK.test(id)) throw new HttpError(400, "Falta el id");
+  const cambios: Record<string, string> = {};
+  for (const [k, max] of Object.entries(DATOS_EDITABLES)) if (k in b) cambios[k] = k === "email" ? texto(b[k], max).toLowerCase() : texto(b[k], max);
+  if ("negocio" in cambios && cambios.negocio.length < 2) throw new HttpError(400, "Poné el nombre del negocio");
+  if (cambios.email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(cambios.email)) throw new HttpError(400, "Revisá el email");
+  return enTransaccion(async (cli) => {
+    const d = await leerDoc(cli, COL, id, true);
+    if (!d) throw new HttpError(404, "No encontramos ese lead");
+    await guardarDoc(cli, COL, id, { ...d, ...cambios, updated_at: new Date().toISOString(), updated_by: caller.uid });
+    return { ok: true };
+  });
+}
+
 /** De dónde vino un lead cargado a mano. */
 const FUENTES = ["Recomendación", "WhatsApp", "Instagram", "Llamada", "Evento", "Cliente actual", "Otro"];
 
@@ -211,6 +231,7 @@ async function manual(req: VercelRequest) {
     email,
     telefono,
     instagram: texto(b.instagram, 120),
+    ubicacion: texto(b.ubicacion, 300),
     rubro: texto(b.rubro, 60),
     califica: true,
     dudoso: false,
@@ -261,6 +282,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "notas") res.status(200).json(await cambiar(req, "notas"));
     else if (accion === "config") res.status(200).json(await config(req));
     else if (accion === "manual") res.status(200).json(await manual(req));
+    else if (accion === "datos") res.status(200).json(await datos(req));
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {
     sendError(res, err);

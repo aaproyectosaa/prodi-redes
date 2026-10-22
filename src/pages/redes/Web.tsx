@@ -10,6 +10,8 @@ import {
   Globe,
   Loader2,
   Mail,
+  MapPin,
+  Pencil,
   Phone,
   Plus,
   Settings2,
@@ -61,6 +63,8 @@ interface LeadWeb {
   manual?: boolean;
   fuente?: string;
   telefono?: string;
+  /** Dirección del local o link de Google Maps. */
+  ubicacion?: string;
 }
 
 interface Columna {
@@ -116,6 +120,29 @@ function useLeadsWeb() {
     []
   );
   return { leads, config };
+}
+
+/** Link para abrir la ubicación en Google Maps (si pegaron el link, ese; si es una dirección, la búsqueda). */
+const linkMapa = (u: string) => (/^https?:\/\//i.test(u.trim()) ? u.trim() : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(u.trim())}`);
+
+/** Mapa para mostrar adentro (sin clave de Google). Los links cortos (maps.app.goo.gl) no se pueden mostrar: solo abrir. */
+function mapaEmbebido(u: string): string | null {
+  const t = u.trim();
+  let q = t;
+  if (/^https?:\/\//i.test(t)) {
+    const lugar = t.match(/\/place\/([^/@?]+)/)?.[1];
+    const coords = t.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+    const param = (() => {
+      try {
+        const p = new URL(t).searchParams;
+        return p.get("q") ?? p.get("query");
+      } catch {
+        return null;
+      }
+    })();
+    q = coords ? `${coords[1]},${coords[2]}` : lugar ? decodeURIComponent(lugar.replace(/\+/g, " ")) : param ?? "";
+  }
+  return q.length > 3 ? `https://www.google.com/maps?q=${encodeURIComponent(q)}&output=embed` : null;
 }
 
 /** Lo que puso en "Instagram o web": @usuario → instagram.com/usuario; un dominio → https://dominio. */
@@ -354,6 +381,17 @@ function LeadCard({ lead: l, onAbrir }: { lead: LeadWeb; onAbrir: () => void }) 
             <ExternalLink className="h-3 w-3" /> {link.includes("instagram.com") ? "Instagram" : "Web"}
           </a>
         )}
+        {l.ubicacion && (
+          <a
+            href={linkMapa(l.ubicacion)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/10"
+            title={l.ubicacion}
+          >
+            <MapPin className="h-3 w-3" /> Mapa
+          </a>
+        )}
         <span className="ml-auto text-[10px] text-muted-foreground">{hace(l.created_at)}</span>
       </div>
       {/* En el celular o el iPad: mover con el selector (el arrastre es para la compu). */}
@@ -373,12 +411,167 @@ function LeadCard({ lead: l, onAbrir }: { lead: LeadWeb; onAbrir: () => void }) 
   );
 }
 
+type CampoLead = "nombre" | "telefono" | "email" | "instagram" | "ubicacion" | "rubro";
+const CAMPOS_LEAD: { k: CampoLead; label: string; icono: React.ElementType; placeholder: string }[] = [
+  { k: "nombre", label: "Contacto", icono: User, placeholder: "Con quién hablaste" },
+  { k: "telefono", label: "WhatsApp", icono: Phone, placeholder: "Ej.: 3482 123456" },
+  { k: "email", label: "Email", icono: Mail, placeholder: "nombre@negocio.com" },
+  { k: "instagram", label: "Instagram o web", icono: AtSign, placeholder: "@usuario o sitio web" },
+  { k: "ubicacion", label: "Ubicación", icono: MapPin, placeholder: "Dirección o link de Google Maps" },
+  { k: "rubro", label: "Rubro", icono: Store, placeholder: "" },
+];
+
+/** Los datos del lead: cada uno se toca para corregirlo y lo que falta se agrega con su botón. */
+function DatosLead({ lead }: { lead: LeadWeb }) {
+  const [editando, setEditando] = useState<CampoLead | null>(null);
+  const [valor, setValor] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  useEffect(() => setEditando(null), [lead.id]);
+  const abrir = (k: CampoLead) => {
+    setEditando(k);
+    setValor(String(lead[k] ?? ""));
+  };
+  const guardar = async () => {
+    if (!editando) return;
+    setGuardando(true);
+    try {
+      await callApi("/api/web/datos", { id: lead.id, [editando]: valor });
+      setEditando(null);
+      toast.success("Guardado");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar");
+    } finally {
+      setGuardando(false);
+    }
+  };
+  const accion = (k: CampoLead, v: string) => {
+    const clase = "text-xs font-medium text-primary hover:underline";
+    if (k === "telefono")
+      return (
+        <a href={`https://wa.me/${v.replace(/\D/g, "").replace(/^0/, "54")}`} target="_blank" rel="noopener noreferrer" className={clase}>
+          Escribir
+        </a>
+      );
+    if (k === "email")
+      return (
+        <button type="button" onClick={() => copiarEmail(v)} className={clase}>
+          Copiar
+        </button>
+      );
+    if (k === "instagram" && linkDe(v))
+      return (
+        <a href={linkDe(v)!} target="_blank" rel="noopener noreferrer" className={clase}>
+          Abrir
+        </a>
+      );
+    if (k === "ubicacion")
+      return (
+        <a href={linkMapa(v)} target="_blank" rel="noopener noreferrer" className={clase}>
+          Google Maps
+        </a>
+      );
+    return null;
+  };
+  const presentes = CAMPOS_LEAD.filter((c) => String(lead[c.k] ?? "").trim() || editando === c.k);
+  const faltan = CAMPOS_LEAD.filter((c) => !presentes.includes(c));
+  const extra = [
+    ["Facturación", lead.facturacion_label],
+    ["Inversión mensual", lead.inversion_label],
+    ["Ya pautó", lead.ya_pauto],
+    ["Quiere arrancar", lead.cuando],
+  ].filter(([, v]) => v);
+
+  return (
+    <div className="space-y-3 rounded-2xl border p-3">
+      <div className="divide-y">
+        {presentes.map(({ k, label, icono: Icono, placeholder }) => {
+          const v = String(lead[k] ?? "");
+          return (
+            <div key={k} className="py-2 first:pt-0 last:pb-0">
+              {editando === k ? (
+                <div className="flex items-center gap-2">
+                  <Icono className="h-4 w-4 shrink-0 text-primary" />
+                  {k === "rubro" ? (
+                    <select value={valor} onChange={(e) => setValor(e.target.value)} className="h-9 flex-1 rounded-lg border bg-background px-2 text-sm" autoFocus>
+                      <option value="">Sin rubro</option>
+                      {RUBROS.map((r) => (
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <Input
+                      value={valor}
+                      onChange={(e) => setValor(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void guardar();
+                        if (e.key === "Escape") setEditando(null);
+                      }}
+                      placeholder={placeholder}
+                      className="h-9 flex-1"
+                      autoFocus
+                    />
+                  )}
+                  <Button size="sm" className="h-9" onClick={() => void guardar()} disabled={guardando}>
+                    {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : "Guardar"}
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0" onClick={() => setEditando(null)} aria-label="Cancelar">
+                    <XCircle className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="group flex items-center gap-2 text-sm">
+                  <Icono className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="w-28 shrink-0 text-xs text-muted-foreground">{label}</span>
+                  <span className="min-w-0 flex-1 truncate">{k === "ubicacion" && /^https?:/i.test(v) ? "Link de Google Maps" : v}</span>
+                  {accion(k, v)}
+                  <button type="button" onClick={() => abrir(k)} className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={`Cambiar ${label}`}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+              {k === "ubicacion" && editando !== k && mapaEmbebido(v) && (
+                <iframe title="Mapa" src={mapaEmbebido(v)!} className="mt-2 h-36 w-full rounded-lg border" loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {faltan.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {faltan.map(({ k, label, icono: Icono }) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => abrir(k)}
+              className="flex items-center gap-1.5 rounded-full border border-dashed border-primary/40 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+            >
+              <Plus className="h-3 w-3" />
+              <Icono className="h-3.5 w-3.5" /> {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {extra.length > 0 && (
+        <div className="space-y-0.5 rounded-xl bg-muted/50 p-2.5 text-xs">
+          <p className="mb-1 font-semibold text-muted-foreground">Lo que puso en la web</p>
+          {extra.map(([k, v]) => (
+            <p key={k}>
+              <span className="text-muted-foreground">{k}:</span> {v}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => void }) {
   const [notas, setNotas] = useState("");
   const [guardando, setGuardando] = useState(false);
   useEffect(() => setNotas(lead?.notas ?? ""), [lead?.id, lead?.notas]);
   if (!lead) return null;
-  const link = linkDe(lead.instagram);
   const guardar = async () => {
     setGuardando(true);
     try {
@@ -404,39 +597,7 @@ function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => v
             <AlertTriangle className="h-4 w-4 shrink-0" /> Revisar: dice que invierte más de $700.000 pero factura menos de $10M por mes.
           </p>
         )}
-        <div className="space-y-1.5 rounded-xl border p-3 text-sm">
-          <p>
-            <span className="text-muted-foreground">Email:</span> {lead.email}{" "}
-            <button type="button" onClick={() => copiarEmail(lead.email)} className="ml-1 text-xs font-medium text-primary">
-              Copiar
-            </button>
-          </p>
-          {lead.instagram && (
-            <p>
-              <span className="text-muted-foreground">Instagram / web:</span>{" "}
-              {link ? (
-                <a href={link} target="_blank" rel="noopener noreferrer" className="text-primary underline-offset-2 hover:underline">
-                  {lead.instagram}
-                </a>
-              ) : (
-                lead.instagram
-              )}
-            </p>
-          )}
-          {[
-            ["Rubro", lead.rubro],
-            ["Facturación", lead.facturacion_label],
-            ["Inversión mensual", lead.inversion_label],
-            ["Ya pautó", lead.ya_pauto],
-            ["Quiere arrancar", lead.cuando],
-          ].map(([k, v]) =>
-            v ? (
-              <p key={k}>
-                <span className="text-muted-foreground">{k}:</span> {v}
-              </p>
-            ) : null
-          )}
-        </div>
+        <DatosLead lead={lead} />
         <label className="block text-sm">
           <span className="mb-1 block font-medium">Mover a</span>
           <select value={lead.estado} onChange={(e) => void mover(lead, e.target.value as Estado)} className="h-10 w-full rounded-lg border bg-background px-2 text-sm">
@@ -573,7 +734,7 @@ function Etiqueta({
 
 /** Cargar un lead a mano (un contacto que llegó por WhatsApp, una recomendación, un evento…): va al mismo tablero. */
 function NuevoLead({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
-  const vacio = { negocio: "", nombre: "", telefono: "", email: "", instagram: "", rubro: "", fuente: "WhatsApp", estado: "calificado" as Estado, notas: "" };
+  const vacio = { negocio: "", nombre: "", telefono: "", email: "", instagram: "", ubicacion: "", rubro: "", fuente: "WhatsApp", estado: "calificado" as Estado, notas: "" };
   const [f, setF] = useState(vacio);
   const [guardando, setGuardando] = useState(false);
   useEffect(() => {
@@ -594,7 +755,7 @@ function NuevoLead({ open, onOpenChange }: { open: boolean; onOpenChange: (o: bo
     }
   };
   // Lo opcional aparece de a uno, cuando se pide.
-  const [mas, setMas] = useState<("email" | "instagram" | "notas")[]>([]);
+  const [mas, setMas] = useState<("email" | "instagram" | "ubicacion" | "notas")[]>([]);
   useEffect(() => {
     if (open) setMas([]);
   }, [open]);
@@ -620,15 +781,39 @@ function NuevoLead({ open, onOpenChange }: { open: boolean; onOpenChange: (o: bo
           </div>
           {mas.includes("email") && <CampoIcono icono={Mail} value={f.email} onChange={(e) => set("email", e.target.value)} placeholder="Email" inputMode="email" maxLength={120} autoFocus />}
           {mas.includes("instagram") && <CampoIcono icono={AtSign} value={f.instagram} onChange={(e) => set("instagram", e.target.value)} placeholder="Instagram o web" maxLength={120} autoFocus />}
+          {mas.includes("ubicacion") && (
+            <div className="space-y-1.5">
+              <CampoIcono
+                icono={MapPin}
+                value={f.ubicacion}
+                onChange={(e) => set("ubicacion", e.target.value)}
+                placeholder="Dirección o link de Google Maps"
+                maxLength={300}
+                autoFocus
+              />
+              {f.ubicacion.trim().length > 3 && mapaEmbebido(f.ubicacion) && (
+                <iframe title="Mapa" src={mapaEmbebido(f.ubicacion)!} className="h-36 w-full rounded-xl border" loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+              )}
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([f.negocio, f.ubicacion].filter((x) => x.trim()).join(" "))}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+              >
+                <ExternalLink className="h-3 w-3" /> Buscarlo en Google Maps (y pegar acá el link)
+              </a>
+            </div>
+          )}
           {mas.includes("notas") && (
             <Textarea value={f.notas} onChange={(e) => set("notas", e.target.value)} rows={2} placeholder="Qué necesita, cuándo volver a llamar…" className="rounded-xl" autoFocus />
           )}
-          {mas.length < 3 && (
+          {mas.length < 4 && (
             <div className="flex flex-wrap gap-1.5">
               {(
                 [
                   ["email", Mail, "Email"],
                   ["instagram", AtSign, "Instagram o web"],
+                  ["ubicacion", MapPin, "Ubicación"],
                   ["notas", StickyNote, "Nota"],
                 ] as const
               )
