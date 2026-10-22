@@ -131,6 +131,12 @@ async function companeros(c: Contexto): Promise<Set<string>> {
 /** Un link que se puede abrir sin riesgo: solo https (nada de javascript: ni data:). */
 const linkOk = (v: unknown) => v == null || v === "" || (typeof v === "string" && v.length <= 500 && /^https:\/\/[^\s"<>`]+$/i.test(v));
 /** Lo que la app deja crear como mensaje (archivos, bots y Prodi los escribe solo el servidor). */
+/** Avisos de sistema que arma la app (chat.ts): crear el grupo, cambiar nombre o foto, sumar, sacar, salir. Sin links. */
+const SISTEMA_OK = /^(creó el grupo «[^»]{1,80}»|cambió el nombre a «[^»]{1,80}»|cambió la foto|sacó la foto|sumó a [^\n]{1,300}|sacó a [^\n]{1,80}|salió del grupo)$/;
+const sistemaOk = (m: Data) => {
+  const t = String(m.texto ?? "");
+  return SISTEMA_OK.test(t) && !/https?:|www\.|\.(com|ar|net|org|io|app|link)\b/i.test(t) && (m.link ?? null) === null;
+};
 const TIPOS_MENSAJE = ["texto", "audio", "llamada", "minuta", "sistema", "sticker", "encuesta"];
 
 /** Encuesta: pregunta y de 2 a 10 opciones cortas; los votos arrancan vacíos. */
@@ -308,6 +314,9 @@ function prefsValidas(d: Data): boolean {
 
 /** Privado con alguien: si es un contacto (solo chat), solo quien ya chatea con él o el equipo de su cliente. */
 async function puedenSumarseSiContacto(c: Contexto, otro: string): Promise<boolean> {
+  // Un cliente (o contacto) solo le escribe por privado a quien ya comparte un chat con él: la gente de su empresa y el
+  // equipo de Prodi que lo atiende. No a clientes de otras empresas ni a cualquier usuario.
+  if (c.role === "cliente" || esContacto(c)) return (await companeros(c)).has(otro);
   const r = await c.ex.query("select data->>'role' as role, data->>'proyecto_id' as pid from documentos where coleccion = 'profiles' and id = $1", [otro]);
   const f = r.rows[0] as { role: string | null; pid: string | null } | undefined;
   if (f?.role !== "contacto") return true;
@@ -459,6 +468,8 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
     if (sub === "mensajes" && despues && (!linkOk(despues.link) || (crea && !TIPOS_MENSAJE.includes(String(despues.tipo ?? "texto"))))) return false;
     if (sub === "mensajes" && despues && despues.sticker != null && !STICKER_OK.test(String(despues.sticker))) return false;
     if (esAdmin(c)) return true;
+    // Los avisos grises de sistema solo los que arma la app al tocar el grupo (no un texto cualquiera que parezca oficial).
+    if (sub === "mensajes" && crea && despues!.tipo === "sistema" && !sistemaOk(despues!)) return false;
     // Editar un mensaje de texto propio: solo el texto (y la marca de editado).
     if (
       sub === "mensajes" &&

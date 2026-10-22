@@ -105,7 +105,8 @@ async function consultar(req: VercelRequest) {
         ]);
         const quedan = new Set(visibles.map((v) => v.id));
         // Un usuario pendiente (sin rol todavía) no recibe ids de nada que no pueda ver.
-        const conRol = caller.role !== "pending" && !!caller.role;
+        // Clientes y contactos no reciben ids de perfiles (serían los ids de todos los usuarios del sistema).
+        const conRol = caller.role !== "pending" && !!caller.role && !(coleccion === "profiles" && (caller.role === "cliente" || caller.role === "contacto"));
         const quitar = conRol ? [...cambiados.rows, ...borrados.rows].map((x: { id: string }) => x.id).filter((id) => !quedan.has(id)) : [];
         return { docs: visibles, quitar, parcial: true, rev: marca };
       } catch (err) {
