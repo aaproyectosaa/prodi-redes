@@ -18,7 +18,7 @@ const VERSION = () => process.env.META_GRAPH_VERSION || "v23.0";
 const COL = "leads_web";
 
 function prueba(token: string) {
-  const s = process.env.META_APP_SECRET;
+  const s = process.env.META_APP_SECRET?.replace(/[s"']/g, "");
   return s ? crypto.createHmac("sha256", s).update(token).digest("hex") : undefined;
 }
 
@@ -142,7 +142,7 @@ export async function guardarTokenUsuario(tokenUsuario: string, base: string) {
   if (!/^EAA[\w-]{20,}$/.test(corto)) throw new HttpError(400, "Pegá el identificador completo (empieza con EAA)");
   // Token de usuario de 60 días: las páginas que salen de él no vencen. Con la clave secreta de la app se canjea acá;
   // sin ella, tiene que venir ya ampliado (Depurador de tokens de Meta → "Ampliar token de acceso").
-  const secret = process.env.META_APP_SECRET;
+  const secret = process.env.META_APP_SECRET?.replace(/[s"']/g, "");
   let largo: any = { access_token: corto };
   if (secret) {
     largo = await fetch(

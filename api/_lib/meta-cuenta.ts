@@ -38,7 +38,7 @@ export function urlDe(path: string, params: Record<string, string>): string {
   const token = process.env.META_ACCESS_TOKEN;
   if (!token) throw new Error("Falta META_ACCESS_TOKEN en Vercel");
   const qs = new URLSearchParams({ ...params, access_token: token });
-  const secret = process.env.META_APP_SECRET;
+  const secret = process.env.META_APP_SECRET?.replace(/[s"']/g, "");
   if (secret) qs.set("appsecret_proof", crypto.createHmac("sha256", secret).update(token).digest("hex"));
   return `https://graph.facebook.com/${VERSION()}/${path}?${qs}`;
 }
