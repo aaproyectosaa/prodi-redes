@@ -449,7 +449,7 @@ export function PropuestaVista({ p, onCambiar, validez, className }: { p: Propue
         <p className="mt-6 text-sm text-[color:var(--p-suave)]">
           <Campo valor={p.contacto} onCambiar={ed ? (v) => set({ contacto: v }) : undefined} vacio="Contacto" />
         </p>
-        <div className="mt-8 border-t border-violet-500/30 pt-3 text-xs text-[color:var(--p-suave)]">Prodi · somosprodi.com · @prodisolo · @prodi.software</div>
+        <div className="mt-8 border-t border-violet-500/30 pt-3 text-xs text-[color:var(--p-suave)]">Prodi · somosprodi.com · @prodi.arg · @prodi.software</div>
       </div>
     </div>
   );

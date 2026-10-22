@@ -58,7 +58,7 @@ export interface Propuesta {
 
 export const nuevoIdP = () => `x${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
-export const CONTACTO_PRODI = "Contacto: Lucas Paulón · WhatsApp +54 9 3482 25-6152 · somosprodi.com · @prodisolo";
+export const CONTACTO_PRODI = "Contacto: Lucas Paulón · WhatsApp +54 9 3482 25-6152 · somosprodi.com · @prodi.arg";
 
 /** Condiciones de siempre (se editan en cada propuesta). */
 export const CONDICIONES_BASE: Omit<CondicionPropuesta, "id">[] = [
