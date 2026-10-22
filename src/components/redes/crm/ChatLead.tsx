@@ -311,7 +311,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
   }, [conv]);
 
   return (
-    <div className="flex h-full min-h-[420px] flex-col overflow-hidden bg-background">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
       {/* Barra fina: red, último mensaje y cuánto queda para responder (el nombre ya está arriba de la ficha). */}
       <div className="flex items-center gap-2 border-b px-4 py-2">
         <IconoRed className="h-4 w-4 shrink-0 text-pink-500" />

@@ -756,9 +756,9 @@ function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => v
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className={cn("max-h-[92dvh] w-[calc(100vw-1.5rem)] gap-0 overflow-hidden rounded-3xl p-0", conChat ? "max-w-5xl" : "max-w-xl")}>
+      <DialogContent className={cn("flex max-h-[92dvh] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden rounded-3xl p-0", conChat ? "h-[min(860px,92dvh)] max-w-5xl" : "max-w-xl")}>
         {/* Encabezado */}
-        <DialogHeader className="flex-row items-center gap-3 space-y-0 border-b bg-gradient-to-r from-primary/[0.08] via-fuchsia-500/[0.05] to-transparent px-5 py-3.5 pr-12 text-left">
+        <DialogHeader className="shrink-0 flex-row items-center gap-3 space-y-0 border-b bg-gradient-to-r from-primary/[0.08] via-fuchsia-500/[0.05] to-transparent px-5 py-3.5 pr-12 text-left">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-fuchsia-500 text-sm font-bold text-white shadow-md shadow-primary/25">
             {iniciales}
           </span>
@@ -776,14 +776,14 @@ function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => v
         </DialogHeader>
 
         {conChat ? (
-          <div className="grid max-h-[calc(92dvh-76px)] min-h-0 md:h-[min(780px,calc(92dvh-76px))] md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-            <div className="h-[60dvh] min-h-0 border-b md:h-auto md:border-b-0 md:border-r">
+          <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] overflow-y-auto md:grid-rows-1 md:overflow-hidden md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+            <div className="h-[65dvh] min-h-0 border-b md:h-auto md:border-b-0 md:border-r">
               <ChatLead lead={lead} />
             </div>
             <div className="min-h-0 overflow-y-auto bg-background p-4">{datos}</div>
           </div>
         ) : (
-          <div className="max-h-[calc(92dvh-80px)] overflow-y-auto p-5">{datos}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-5">{datos}</div>
         )}
       </DialogContent>
     </Dialog>
