@@ -13,6 +13,7 @@ interface Mensaje {
   id: string;
   texto: string;
   adjunto: boolean;
+  tipo?: "texto" | "historia" | "publicacion" | "sticker" | "archivo" | "otro";
   at: string;
   mio: boolean;
 }
@@ -113,9 +114,19 @@ export function ChatLead({ leadId, usuario }: { leadId: string; usuario?: string
               )}
             >
               {m.texto ? <span className="whitespace-pre-wrap break-words">{m.texto}</span> : null}
-              {m.adjunto && (
-                <span className={cn("flex items-center gap-1 text-xs", m.texto ? "mt-1 opacity-80" : "")}>
-                  <Paperclip className="h-3 w-3" /> Archivo (miralo en {red})
+              {(m.adjunto || !m.texto) && (
+                <span className={cn("flex items-center gap-1 text-xs italic", m.texto ? "mt-1 opacity-80" : "opacity-80")}>
+                  <Paperclip className="h-3 w-3" />
+                  {m.tipo === "historia"
+                    ? "Respondió a una historia"
+                    : m.tipo === "publicacion"
+                      ? "Compartió una publicación"
+                      : m.tipo === "sticker"
+                        ? "Mandó un sticker"
+                        : m.tipo === "archivo"
+                          ? "Foto, audio o archivo"
+                          : "Reacción o mensaje sin texto"}{" "}
+                  · miralo en {red}
                 </span>
               )}
               <span className={cn("mt-0.5 block text-right text-[10px]", m.mio ? "text-primary-foreground/70" : "text-muted-foreground")}>{hora(m.at)}</span>

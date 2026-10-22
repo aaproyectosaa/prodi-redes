@@ -441,11 +441,13 @@ async function contextoConversacion(leadId: string) {
 /** Los mensajes de la conversación del lead (del más viejo al más nuevo) y si todavía se le puede responder. */
 export async function conversacionLead(leadId: string) {
   const c = await contextoConversacion(leadId);
-  const d = await graph(c.convId, { fields: "participants,messages.limit(50){id,message,from,created_time,attachments}" }, c.token);
+  const d = await graph(c.convId, { fields: "participants,messages.limit(50){id,message,from,created_time,attachments,story,shares,sticker}" }, c.token);
   const mensajes = [...(d.messages?.data ?? [])].reverse().map((m: any) => ({
     id: String(m.id),
     texto: String(m.message ?? ""),
     adjunto: !!m.attachments?.data?.length,
+    // Lo que no es texto: para mostrar algo en vez de una burbuja vacía.
+    tipo: m.story ? "historia" : m.shares?.data?.length ? "publicacion" : m.sticker ? "sticker" : m.attachments?.data?.length ? "archivo" : m.message ? "texto" : "otro",
     at: m.created_time,
     mio: propiosDe(c.propios, m.from?.id),
   }));
