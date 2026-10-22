@@ -42,6 +42,38 @@ export function esSafariIOS(): boolean {
   return plataforma() === "iphone" && /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua);
 }
 
+/**
+ * El navegador, para mostrar los pasos justos: en iPhone cambia dónde está "Compartir" (Safari abajo, Chrome arriba);
+ * en Android, Samsung Internet y Firefox tienen su propio menú; en Mac, Safari se instala desde Archivo.
+ */
+export type Navegador =
+  | "safari-ios"
+  | "chrome-ios"
+  | "otro-ios"
+  | "chromium-android"
+  | "samsung"
+  | "firefox-android"
+  | "safari-mac"
+  | "chromium-compu"
+  | "firefox-compu"
+  | "otro";
+
+export function navegador(): Navegador {
+  if (typeof navigator === "undefined") return "otro";
+  const ua = navigator.userAgent || "";
+  const p = plataforma();
+  if (p === "iphone") return /CriOS/i.test(ua) ? "chrome-ios" : /FxiOS|EdgiOS|OPiOS/i.test(ua) ? "otro-ios" : /Safari/i.test(ua) ? "safari-ios" : "otro-ios";
+  if (p === "android") return /SamsungBrowser/i.test(ua) ? "samsung" : /Firefox/i.test(ua) ? "firefox-android" : /Chrome|Chromium|EdgA/i.test(ua) ? "chromium-android" : "otro";
+  if (/Firefox/i.test(ua)) return "firefox-compu";
+  if (/Edg\/|Chrome|Chromium|OPR\//i.test(ua)) return "chromium-compu";
+  if (/Macintosh/i.test(ua) && /Safari/i.test(ua)) return "safari-mac";
+  return "otro";
+}
+
+/** iPad: Safari tiene "Compartir" arriba a la derecha (en iPhone, abajo al medio). */
+export const esIPad = () =>
+  typeof navigator !== "undefined" && (/iPad/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1));
+
 export function yaInstalada(): boolean {
   if (typeof window === "undefined") return false;
   return (
@@ -67,6 +99,7 @@ export function useInstalarApp() {
     /** El navegador permite instalar con un toque (Android y compu con Chrome/Edge). */
     directa: !!promptGuardado,
     plataforma: plataforma(),
+    navegador: navegador(),
     instalar: async (): Promise<"aceptada" | "cancelada" | "sin_prompt"> => {
       if (!promptGuardado) return "sin_prompt";
       await promptGuardado.prompt();

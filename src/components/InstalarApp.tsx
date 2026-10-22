@@ -1,35 +1,71 @@
 import { useEffect, useState } from "react";
-import { Bell, Download, Loader2, Maximize, MoreVertical, PlusSquare, Share, Smartphone, Zap } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ArrowDown, ArrowUp, Bell, Download, Loader2, Maximize, Menu, MonitorDown, MoreVertical, PlusSquare, Share, Smartphone, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { asset } from "@/lib/asset";
-import { APK_URL, esSafariIOS, useInstalarApp, type Plataforma } from "@/lib/instalar";
+import { APK_URL, esIPad, useInstalarApp, type Navegador, type Plataforma } from "@/lib/instalar";
 import { cn } from "@/lib/utils";
 
-/** Pasos para cada dispositivo cuando el navegador no permite instalar con un toque. */
-function Pasos({ plataforma }: { plataforma: Plataforma }) {
-  const pasos: { icon: React.ElementType; texto: React.ReactNode }[] =
-    plataforma === "iphone"
-      ? [
-          ...(esSafariIOS()
-            ? []
-            : [{ icon: Smartphone, texto: <>Abrí este link en <b>Safari</b> (en otros navegadores de iPhone no siempre aparece).</> }]),
-          { icon: Share, texto: <>Tocá el botón <b>Compartir</b> (el cuadradito con la flecha para arriba).</> },
-          { icon: PlusSquare, texto: <>Elegí <b>“Agregar a inicio”</b> y después <b>“Agregar”</b>.</> },
-          { icon: Smartphone, texto: <>Listo: Prodi aparece en tu pantalla de inicio como una app más.</> },
-        ]
-      : plataforma === "android"
+type Paso = { icon: React.ElementType; texto: React.ReactNode };
+
+/**
+ * Pasos para cada dispositivo cuando el navegador no permite instalar con un toque. Si la pestaña es la del equipo
+ * en el que está, se usan los del navegador real (Safari o Chrome en iPhone, Samsung o Firefox en Android, Safari en Mac).
+ */
+function Pasos({ plataforma, navegador }: { plataforma: Plataforma; navegador: Navegador | null }) {
+  const listo = { icon: Smartphone, texto: <>Listo: Prodi aparece en tu pantalla de inicio como una app más.</> };
+  let pasos: Paso[];
+  if (plataforma === "iphone") {
+    pasos =
+      navegador === "chrome-ios"
         ? [
-            { icon: MoreVertical, texto: <>Tocá el menú <b>⋮</b> de Chrome (arriba a la derecha).</> },
-            { icon: Download, texto: <>Elegí <b>“Instalar app”</b> (o “Agregar a pantalla principal”).</> },
-            { icon: Smartphone, texto: <>Listo: Prodi queda en tus apps, con su ícono.</> },
+            { icon: Share, texto: <>Tocá el botón <b>Compartir</b> que está en la barra de arriba, a la derecha de la dirección.</> },
+            { icon: PlusSquare, texto: <>Bajá y elegí <b>“Agregar a inicio”</b>, después <b>“Agregar”</b>.</> },
+            listo,
           ]
-        : [
-            { icon: Download, texto: <>En Chrome o Edge, tocá el ícono de <b>instalar</b> que aparece a la derecha de la barra de direcciones.</> },
-            { icon: MoreVertical, texto: <>Si no lo ves: menú <b>⋮</b> → <b>“Transmitir, guardar y compartir”</b> → <b>“Instalar página como app”</b>.</> },
-            { icon: Smartphone, texto: <>Se abre en su propia ventana y queda en el escritorio y en el menú de inicio.</> },
-          ];
+        : navegador === "otro-ios"
+          ? [{ icon: Smartphone, texto: <>Desde este navegador no se puede. Abrí este link en <b>Safari</b> o en <b>Chrome</b> y seguí los pasos.</> }]
+          : [
+              { icon: Share, texto: <>Tocá el botón <b>Compartir</b> (el cuadradito con la flecha para arriba){esIPad() ? ", arriba a la derecha" : ", abajo al medio"}.</> },
+              { icon: PlusSquare, texto: <>Bajá y elegí <b>“Agregar a inicio”</b>, después <b>“Agregar”</b>.</> },
+              listo,
+            ];
+  } else if (plataforma === "android") {
+    pasos =
+      navegador === "samsung"
+        ? [
+            { icon: Menu, texto: <>Tocá el menú <b>≡</b> de abajo a la derecha.</> },
+            { icon: PlusSquare, texto: <>Elegí <b>“Agregar página a”</b> → <b>“Pantalla de inicio”</b>.</> },
+            listo,
+          ]
+        : navegador === "firefox-android"
+          ? [
+              { icon: MoreVertical, texto: <>Tocá el menú <b>⋮</b> de Firefox.</> },
+              { icon: Download, texto: <>Elegí <b>“Instalar”</b> (o “Agregar a pantalla de inicio”).</> },
+              listo,
+            ]
+          : [
+              { icon: MoreVertical, texto: <>Tocá el menú <b>⋮</b> de Chrome (arriba a la derecha).</> },
+              { icon: Download, texto: <>Elegí <b>“Instalar app”</b> (o “Agregar a pantalla principal”).</> },
+              { icon: Smartphone, texto: <>Listo: Prodi queda en tus apps, con su ícono.</> },
+            ];
+  } else if (navegador === "safari-mac") {
+    pasos = [
+      { icon: MonitorDown, texto: <>Arriba, en el menú de la Mac, tocá <b>Archivo</b>.</> },
+      { icon: PlusSquare, texto: <>Elegí <b>“Agregar al Dock”</b> y después <b>“Agregar”</b>.</> },
+      { icon: Smartphone, texto: <>Listo: Prodi queda en el Dock y se abre en su propia ventana.</> },
+    ];
+  } else if (navegador === "firefox-compu" || navegador === "otro") {
+    pasos = [{ icon: Smartphone, texto: <>Este navegador no permite instalar apps. Abrí el sistema en <b>Chrome</b>, <b>Edge</b> o <b>Safari</b> (en Mac) y tocá de nuevo “Instalar app”.</> }];
+  } else {
+    pasos = [
+      { icon: Download, texto: <>En Chrome o Edge, tocá el ícono de <b>instalar</b> que aparece a la derecha de la barra de direcciones.</> },
+      { icon: MoreVertical, texto: <>Si no lo ves: menú <b>⋮</b> → <b>“Transmitir, guardar y compartir”</b> → <b>“Instalar página como app”</b>.</> },
+      { icon: Smartphone, texto: <>Se abre en su propia ventana y queda en el escritorio y en el menú de inicio.</> },
+    ];
+  }
   return (
     <ol className="space-y-2.5">
       {pasos.map((p, i) => (
@@ -135,8 +171,9 @@ export function InstalarDialog({
             {app.directa && plat === app.plataforma ? (
               <p className="text-center text-xs text-muted-foreground">Con el botón de arriba se instala en un toque.</p>
             ) : (
-              <Pasos plataforma={plat} />
+              <Pasos plataforma={plat} navegador={plat === app.plataforma ? app.navegador : null} />
             )}
+            {open && !app.directa && plat === app.plataforma && <FlechaCompartir navegador={app.navegador} />}
             {invitacion && (
               <button
                 type="button"
@@ -159,6 +196,25 @@ export function InstalarDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Flecha animada fuera del diálogo, apuntando a donde está "Compartir" en el navegador del iPhone o iPad. */
+function FlechaCompartir({ navegador }: { navegador: Navegador }) {
+  if (navegador !== "safari-ios" && navegador !== "chrome-ios") return null;
+  const arriba = navegador === "chrome-ios" || esIPad();
+  return createPortal(
+    <div
+      aria-hidden
+      className={cn(
+        "pointer-events-none fixed z-[200] flex flex-col items-center gap-1 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]",
+        arriba ? "right-3 top-1 flex-col-reverse" : "bottom-1 left-1/2 -translate-x-1/2"
+      )}
+    >
+      <span className="rounded-full bg-[#6F40FC] px-3 py-1 text-xs font-bold">Compartir</span>
+      {arriba ? <ArrowUp className="h-9 w-9 animate-bounce" strokeWidth={3} /> : <ArrowDown className="h-9 w-9 animate-bounce" strokeWidth={3} />}
+    </div>,
+    document.body
   );
 }
 
@@ -203,6 +259,7 @@ function cuandoNoHayDialogo(cb: () => void): () => void {
   return () => window.clearTimeout(t);
 }
 
+/** Una vez por sesión (el aviso de notificaciones). */
 const yaMostrado = (clave: string) => {
   try {
     return !!sessionStorage.getItem(clave);
@@ -217,9 +274,26 @@ const marcarMostrado = (clave: string) => {
     /* nada */
   }
 };
+/** El aviso se cerró hace menos de 7 días (queda en este equipo). */
+const pospuesto = () => {
+  try {
+    const at = Number(localStorage.getItem(CLAVE_POPUP) ?? 0);
+    return Date.now() - at < 7 * 86_400_000;
+  } catch {
+    return false;
+  }
+};
+const posponer = () => {
+  try {
+    localStorage.setItem(CLAVE_POPUP, String(Date.now()));
+  } catch {
+    /* nada */
+  }
+};
 
 /**
- * Popup para instalar la app: aparece en cada visita (una vez por sesión) mientras no la tengan instalada.
+ * Popup para instalar la app: aparece solo en el celular, mientras no la tengan instalada; si lo cierran, vuelve a los
+ * 7 días.
  * También es el diálogo que abre el botón "Instalar app" de los menús.
  */
 export function AvisoInstalar() {
@@ -239,15 +313,19 @@ export function AvisoInstalar() {
   }, []);
 
   useEffect(() => {
-    if (app.instalada || yaMostrado(CLAVE_POPUP)) return;
+    if (app.instalada || app.plataforma === "compu" || pospuesto()) return;
     return cuandoNoHayDialogo(() => {
-      marcarMostrado(CLAVE_POPUP);
       setAuto(true);
       setOpen(true);
     });
-  }, [app.instalada]);
+  }, [app.instalada, app.plataforma]);
 
-  return <InstalarDialog open={open} onOpenChange={setOpen} invitacion={auto} />;
+  // Si lo cierra sin instalar, no vuelve a aparecer solo hasta dentro de 7 días.
+  const cambiar = (v: boolean) => {
+    if (!v && auto) posponer();
+    setOpen(v);
+  };
+  return <InstalarDialog open={open} onOpenChange={cambiar} invitacion={auto} />;
 }
 
 /** ¿Este equipo ya está anotado para recibir avisos? (hay una suscripción push en el navegador). */
