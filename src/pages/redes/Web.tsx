@@ -3,11 +3,11 @@ import {
   AlertTriangle,
   AtSign,
   ChevronDown,
-  CalendarCheck,
-  Copy,
   ExternalLink,
   FileText,
   Globe,
+  Hand,
+  Instagram,
   Loader2,
   Mail,
   MessageCircle,
@@ -15,6 +15,7 @@ import {
   Pencil,
   Phone,
   Plus,
+  Search,
   Settings2,
   Sparkles,
   StickyNote,
@@ -29,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { PageShell, EmptyState, StatCard } from "@/components/redes/PageShell";
+import { PageShell, EmptyState } from "@/components/redes/PageShell";
 import { CalendarioEventos, SelectorVista, useVista, type EventoCal, type TipoCal } from "@/components/redes/VistaCalendario";
 import { collection, db, doc, onSnapshot } from "@/lib/db";
 import { callApi } from "@/lib/redes/api";
@@ -81,15 +82,33 @@ interface Columna {
   titulo: string;
   ayuda: string;
   dot: string;
+  /** Raya de color arriba de la columna y número. */
+  borde: string;
+  texto: string;
 }
 
 const COLUMNAS: Columna[] = [
-  { id: "calificado", titulo: "Calificado", ayuda: "Encaja. Falta que reserve la videollamada.", dot: "bg-sky-500" },
-  { id: "reunion_agendada", titulo: "Reunión agendada", ayuda: "Reservó en la agenda de Google.", dot: "bg-primary" },
-  { id: "propuesta", titulo: "Propuesta", ayuda: "Ya tuvo la reunión y le mandaste la propuesta.", dot: "bg-orange-500" },
-  { id: "ganado", titulo: "Ganado", ayuda: "Ocupa un cupo (se ve en la web).", dot: "bg-emerald-500" },
-  { id: "perdido", titulo: "Perdido", ayuda: "No avanzó.", dot: "bg-muted-foreground" },
+  { id: "calificado", titulo: "Nuevos", ayuda: "Encaja. Falta hablarle o que reserve la videollamada.", dot: "bg-sky-500", borde: "border-t-sky-500", texto: "text-sky-600 dark:text-sky-400" },
+  { id: "reunion_agendada", titulo: "Reunión", ayuda: "Tiene la reunión agendada.", dot: "bg-violet-500", borde: "border-t-violet-500", texto: "text-violet-600 dark:text-violet-400" },
+  { id: "propuesta", titulo: "Propuesta", ayuda: "Ya tuvo la reunión y le mandaste la propuesta.", dot: "bg-orange-500", borde: "border-t-orange-500", texto: "text-orange-600 dark:text-orange-400" },
+  { id: "ganado", titulo: "Ganados", ayuda: "Es cliente: ocupa un cupo (se ve en la web).", dot: "bg-emerald-500", borde: "border-t-emerald-500", texto: "text-emerald-600 dark:text-emerald-400" },
+  { id: "perdido", titulo: "Perdidos", ayuda: "No avanzó.", dot: "bg-muted-foreground", borde: "border-t-muted-foreground/50", texto: "text-muted-foreground" },
 ];
+
+/** De dónde llegó un lead: para la etiqueta de la tarjeta y el filtro. */
+type Origen = "web" | "instagram" | "formulario" | "mano";
+const ORIGENES: Record<Origen, { label: string; icono: React.ElementType; clase: string }> = {
+  web: { label: "Web", icono: Globe, clase: "bg-violet-500/12 text-violet-700 dark:text-violet-300" },
+  instagram: { label: "Instagram", icono: Instagram, clase: "bg-pink-500/12 text-pink-700 dark:text-pink-300" },
+  formulario: { label: "Formulario", icono: FileText, clase: "bg-blue-500/12 text-blue-700 dark:text-blue-300" },
+  mano: { label: "A mano", icono: Hand, clase: "bg-muted text-muted-foreground" },
+};
+function origenDe(l: LeadWeb): Origen {
+  if (l.origen === "meta:mensaje") return "instagram";
+  if (l.origen === "meta:leadgen") return "formulario";
+  if (l.manual) return "mano";
+  return "web";
+}
 
 const NOMBRE_ESTADO: Record<Estado, string> = {
   no_califica: "No califica",
@@ -175,10 +194,25 @@ export default function Web() {
   const [nuevo, setNuevo] = useState(false);
   const [arrastrando, setArrastrando] = useState<string | null>(null);
   const [sobre, setSobre] = useState<string | null>(null);
+  const [busca, setBusca] = useState("");
+  const [filtro, setFiltro] = useState<Origen | "todos">("todos");
 
   const deTemporada = useMemo(() => (leads ?? []).filter((l) => l.temporada === config.temporada), [leads, config.temporada]);
+  const porOrigen = useMemo(() => {
+    const c: Record<Origen, number> = { web: 0, instagram: 0, formulario: 0, mano: 0 };
+    deTemporada.forEach((l) => c[origenDe(l)]++);
+    return c;
+  }, [deTemporada]);
+  // Lo que se ve en el tablero (buscador y filtro por origen).
+  const visibles = useMemo(() => {
+    const q = busca.trim().toLowerCase();
+    return deTemporada.filter(
+      (l) =>
+        (filtro === "todos" || origenDe(l) === filtro) &&
+        (!q || [l.negocio, l.nombre, l.email, l.telefono, l.instagram, l.rubro].some((v) => String(v ?? "").toLowerCase().includes(q)))
+    );
+  }, [deTemporada, busca, filtro]);
   const noCalifican = deTemporada.filter((l) => l.estado === "no_califica").sort((a, b) => b.created_at.localeCompare(a.created_at));
-  const calificadas = deTemporada.filter((l) => l.califica).length;
   const ganados = deTemporada.filter((l) => l.estado === "ganado").length;
   const lead = (leads ?? []).find((l) => l.id === abierto) ?? null;
 
@@ -208,13 +242,13 @@ export default function Web() {
   return (
     <PageShell
       title="Leads"
-      subtitle={`Los de somosprodi.com y los que cargás a mano · temporada ${config.temporada}`}
+      subtitle={`Temporada ${config.temporada} · web, Instagram, formularios y los que cargás a mano`}
       className="max-w-none"
       actions={
         <>
           {deTemporada.length > 0 && <SelectorVista vista={vista} onChange={setVista} />}
-          <Button variant="outline" onClick={() => setAjustes(true)}>
-            <Settings2 className="mr-2 h-4 w-4" /> Temporada y cupos
+          <Button variant="outline" size="icon" onClick={() => setAjustes(true)} title="Temporada, cupos y conexión con Meta" aria-label="Temporada, cupos y conexión con Meta">
+            <Settings2 className="h-4 w-4" />
           </Button>
           <Button onClick={() => setNuevo(true)} className="bg-gradient-to-r from-primary to-fuchsia-500 shadow-md shadow-primary/25">
             <Plus className="mr-2 h-4 w-4" /> Nuevo lead
@@ -222,11 +256,74 @@ export default function Web() {
         </>
       }
     >
-      <div className="mb-4 grid grid-cols-3 gap-2 sm:gap-3">
-        <StatCard label="Aplicaciones" value={deTemporada.length} hint={`en ${config.temporada}`} icon={FileText} />
-        <StatCard label="Calificadas" value={calificadas} hint={`${noCalifican.length} no califican`} icon={CalendarCheck} tone="primary" />
-        <StatCard label="Cupos" value={`${ganados} de ${config.cupos_total}`} hint="ocupados (los ganados)" icon={Trophy} tone={ganados >= config.cupos_total ? "success" : "default"} />
+      {/* Resumen: cuántos hay en cada etapa y los cupos de la temporada. */}
+      <div className="mb-3 flex flex-wrap items-stretch gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-2xl border bg-card p-1.5">
+          {COLUMNAS.map((col, i) => {
+            const n = deTemporada.filter((l) => l.estado === col.id).length;
+            return (
+              <div key={col.id} className="flex min-w-[88px] flex-1 items-center gap-2 rounded-xl px-3 py-2">
+                {i > 0 && <span className="-ml-3 mr-1 text-muted-foreground/40">›</span>}
+                <span className={cn("h-2 w-2 shrink-0 rounded-full", col.dot)} />
+                <span className="min-w-0">
+                  <span className={cn("block text-xl font-bold leading-none tabular-nums", n ? col.texto : "text-muted-foreground/50")}>{n}</span>
+                  <span className="block truncate text-[11px] text-muted-foreground">{col.titulo}</span>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          onClick={() => setAjustes(true)}
+          className="flex min-w-[170px] flex-col justify-center gap-1.5 rounded-2xl border bg-card px-4 py-2 text-left transition-colors hover:border-primary/40"
+          title="Cambiar la temporada o los cupos"
+        >
+          <span className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Trophy className="h-3.5 w-3.5" /> Cupos
+            </span>
+            <b className={cn("text-sm tabular-nums", ganados >= config.cupos_total ? "text-emerald-600 dark:text-emerald-400" : "text-foreground")}>
+              {ganados} de {config.cupos_total}
+            </b>
+          </span>
+          <span className="h-1.5 overflow-hidden rounded-full bg-muted">
+            <span className="block h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.min(100, (ganados / Math.max(1, config.cupos_total)) * 100)}%` }} />
+          </span>
+        </button>
       </div>
+
+      {/* Buscar y filtrar por de dónde llegó. */}
+      {deTemporada.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-64">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar negocio, nombre o teléfono" className="h-9 rounded-full pl-9" />
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {(["todos", "instagram", "formulario", "web", "mano"] as const).map((o) => {
+              const n = o === "todos" ? deTemporada.length : porOrigen[o];
+              if (o !== "todos" && !n) return null;
+              const Icono = o === "todos" ? null : ORIGENES[o].icono;
+              return (
+                <button
+                  key={o}
+                  type="button"
+                  onClick={() => setFiltro(o)}
+                  className={cn(
+                    "flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors",
+                    filtro === o ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  )}
+                >
+                  {Icono && <Icono className="h-3.5 w-3.5" />}
+                  {o === "todos" ? "Todos" : ORIGENES[o].label}
+                  <span className={cn("tabular-nums", filtro === o ? "opacity-80" : "opacity-60")}>{n}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {leads === null ? (
         <p className="py-10 text-center text-sm text-muted-foreground">Cargando…</p>
@@ -236,15 +333,16 @@ export default function Web() {
         <CalendarioEventos eventos={eventosCal} tipos={TIPOS_CAL} vacio="No hubo aplicaciones este mes." />
       ) : (
         <div className="-mx-4 snap-x snap-mandatory scroll-px-4 overflow-x-auto px-4 pb-4 md:-mx-8 md:snap-none md:px-8">
-          <div className="flex min-w-max gap-3">
+          <div className="flex min-w-max gap-3 xl:grid xl:min-w-0 xl:grid-cols-5">
             {COLUMNAS.map((col) => {
-              const items = deTemporada.filter((l) => l.estado === col.id).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+              const items = visibles.filter((l) => l.estado === col.id).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
               return (
                 <div
                   key={col.id}
                   data-col={col.id}
                   className={cn(
-                    "flex w-[82vw] shrink-0 snap-start flex-col rounded-2xl border bg-muted/30 transition-colors sm:w-72",
+                    "flex w-[82vw] shrink-0 snap-start flex-col rounded-2xl border border-t-4 bg-muted/40 transition-colors sm:w-72 xl:w-auto",
+                    col.borde,
                     arrastrando && sobre === col.id && "border-primary bg-primary/10 ring-2 ring-primary/30"
                   )}
                   onDragOver={(ev) => {
@@ -260,15 +358,11 @@ export default function Web() {
                     if (id) soltar(col.id, id);
                   }}
                 >
-                  <div className="flex items-center justify-between gap-2 px-3 pt-3">
-                    <div className="flex items-center gap-2">
-                      <span className={cn("h-2 w-2 rounded-full", col.dot)} />
-                      <p className="text-sm font-semibold">{col.titulo}</p>
-                    </div>
-                    <span className="rounded-full bg-background px-2 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground">{items.length}</span>
+                  <div className="flex items-center justify-between gap-2 px-3 pb-2 pt-2.5" title={col.ayuda}>
+                    <p className="text-sm font-semibold">{col.titulo}</p>
+                    <span className={cn("rounded-full bg-background px-2 py-0.5 text-xs font-bold tabular-nums shadow-sm", items.length ? col.texto : "text-muted-foreground")}>{items.length}</span>
                   </div>
-                  <p className="px-3 pb-2 pt-1 text-[11px] leading-snug text-muted-foreground">{col.ayuda}</p>
-                  <div className="flex min-h-[120px] flex-col gap-2 px-2 pb-2 md:max-h-[calc(100dvh-330px)] md:overflow-y-auto">
+                  <div className="flex min-h-[140px] flex-col gap-2 px-2 pb-2 md:max-h-[calc(100dvh-300px)] md:overflow-y-auto">
                     {items.map((l) => (
                       <div
                         key={l.id}
@@ -287,7 +381,11 @@ export default function Web() {
                         <LeadCard lead={l} onAbrir={() => setAbierto(l.id)} />
                       </div>
                     ))}
-                    {items.length === 0 && <p className="py-6 text-center text-xs text-muted-foreground/70">{arrastrando ? "Soltala acá" : "Vacío"}</p>}
+                    {items.length === 0 && (
+                      <p className={cn("m-1 rounded-xl border border-dashed py-8 text-center text-xs text-muted-foreground/70", arrastrando && "border-primary/50 text-primary")}>
+                        {arrastrando ? "Soltalo acá" : busca || filtro !== "todos" ? "Nada con ese filtro" : col.ayuda}
+                      </p>
+                    )}
                   </div>
                 </div>
               );
@@ -321,90 +419,81 @@ function copiarEmail(email: string) {
     .catch(() => toast.error("No se pudo copiar"));
 }
 
-function Dato({ k, v }: { k: string; v?: string }) {
-  if (!v) return null;
-  return (
-    <span className="block truncate text-[11px] text-muted-foreground">
-      {k}: <span className="text-foreground">{v}</span>
-    </span>
+/** Botón de acción chico de la tarjeta (solo ícono, con su nombre al pasar el mouse). */
+function AccionCard({ href, onClick, titulo, children }: { href?: string; onClick?: () => void; titulo: string; children: React.ReactNode }) {
+  const clase = "flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary";
+  return href ? (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={clase} title={titulo} aria-label={titulo} onClick={(e) => e.stopPropagation()}>
+      {children}
+    </a>
+  ) : (
+    <button type="button" className={clase} title={titulo} aria-label={titulo} onClick={onClick}>
+      {children}
+    </button>
   );
 }
 
 function LeadCard({ lead: l, onAbrir }: { lead: LeadWeb; onAbrir: () => void }) {
   const link = linkDe(l.instagram);
+  const o = ORIGENES[origenDe(l)];
+  const IconoOrigen = o.icono;
+  // Un dato clave en vez de la lista entera (el resto está en la ficha).
+  const dato = l.inversion_label ? `Invierte ${l.inversion_label}` : l.rubro || l.fuente || "";
+  const nota = (l.notas ?? "").replace(/^Escribió por mensaje de \w+:\s*/i, "").replace(/\s+/g, " ").trim();
   return (
-    <div className={cn("rounded-xl border bg-card p-2.5 text-sm transition-colors hover:border-primary/50", l.dudoso && "border-orange-500/60")}>
+    <div className={cn("group rounded-xl border bg-card p-3 text-sm shadow-sm transition-all hover:-translate-y-px hover:border-primary/40 hover:shadow-md", l.dudoso && "border-orange-500/60")}>
       <button type="button" onClick={onAbrir} className="block w-full min-w-0 text-left">
+        <span className="flex items-center justify-between gap-2">
+          <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold", o.clase)}>
+            <IconoOrigen className="h-3 w-3" /> {o.label}
+          </span>
+          <span className="shrink-0 text-[10px] text-muted-foreground">{hace(l.created_at)}</span>
+        </span>
         {l.dudoso && (
-          <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+          <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">
             <AlertTriangle className="h-3 w-3" /> Revisar: factura menos de $10M
           </span>
         )}
-        {l.manual && (
-          <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold text-sky-700 dark:text-sky-300">
-            {l.origen === "meta:leadgen" || l.origen === "meta:mensaje" ? `Llegó solo · ${l.fuente ?? "Meta"}` : `Cargado a mano${l.fuente ? ` · ${l.fuente}` : ""}`}
-          </span>
-        )}
-        <span className="block truncate font-semibold">{l.negocio}</span>
-        <span className="block truncate text-xs text-muted-foreground">{l.nombre}</span>
-        <span className="mt-1.5 block space-y-0.5">
-          <Dato k="Rubro" v={l.rubro} />
-          <Dato k="Factura" v={l.facturacion_label} />
-          <Dato k="Invierte" v={l.inversion_label} />
-          <Dato k="Arrancar" v={l.cuando} />
-          <Dato k="Pautó" v={l.ya_pauto} />
-        </span>
-        {l.notas && <span className="mt-1 line-clamp-2 block text-[11px] italic text-muted-foreground">“{l.notas}”</span>}
+        <span className="mt-2 block truncate text-[15px] font-semibold leading-tight">{l.negocio}</span>
+        {l.nombre && l.nombre !== l.negocio.replace(/^@/, "") && <span className="block truncate text-xs text-muted-foreground">{l.nombre}</span>}
+        {dato && <span className="mt-1.5 inline-block max-w-full truncate rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{dato}</span>}
+        {nota && <span className="mt-1.5 line-clamp-2 block text-xs leading-snug text-foreground/80">“{nota}”</span>}
         <ProximoPasoChip lead={l} />
       </button>
-      <div className="mt-2 flex items-center gap-1">
-        {l.email && (
-          <button type="button" onClick={() => copiarEmail(l.email)} className="inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/10" title={l.email}>
-            <Copy className="h-3 w-3" /> Email
-          </button>
-        )}
+      <div className="mt-2 flex items-center gap-0.5 border-t pt-2">
         {l.telefono && (
-          <a
-            href={`https://wa.me/${l.telefono.replace(/\D/g, "").replace(/^0/, "54")}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/10"
-            title={l.telefono}
-          >
-            <Phone className="h-3 w-3" /> WhatsApp
-          </a>
+          <AccionCard href={`https://wa.me/${l.telefono.replace(/\D/g, "").replace(/^0/, "54")}`} titulo={`WhatsApp ${l.telefono}`}>
+            <Phone className="h-3.5 w-3.5" />
+          </AccionCard>
+        )}
+        {l.email && (
+          <AccionCard onClick={() => copiarEmail(l.email)} titulo={`Copiar ${l.email}`}>
+            <Mail className="h-3.5 w-3.5" />
+          </AccionCard>
         )}
         {link && (
-          <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/10">
-            <ExternalLink className="h-3 w-3" /> {link.includes("instagram.com") ? "Instagram" : "Web"}
-          </a>
+          <AccionCard href={link} titulo={link.includes("instagram.com") ? "Abrir Instagram" : "Abrir la web"}>
+            {link.includes("instagram.com") ? <Instagram className="h-3.5 w-3.5" /> : <ExternalLink className="h-3.5 w-3.5" />}
+          </AccionCard>
         )}
         {l.ubicacion && (
-          <a
-            href={linkMapa(l.ubicacion)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/10"
-            title={l.ubicacion}
-          >
-            <MapPin className="h-3 w-3" /> Mapa
-          </a>
+          <AccionCard href={linkMapa(l.ubicacion)} titulo={`Mapa: ${l.ubicacion}`}>
+            <MapPin className="h-3.5 w-3.5" />
+          </AccionCard>
         )}
-        <span className="ml-auto text-[10px] text-muted-foreground">{hace(l.created_at)}</span>
+        {/* Mover de etapa (en la compu también se arrastra la tarjeta). */}
+        <label className="relative ml-auto flex h-7 items-center gap-1 rounded-lg px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+          Mover
+          <ChevronDown className="h-3 w-3" />
+          <select value={l.estado} onChange={(e) => void mover(l, e.target.value as Estado)} aria-label="Mover a" className="absolute inset-0 cursor-pointer opacity-0">
+            {(Object.keys(NOMBRE_ESTADO) as Estado[]).map((e) => (
+              <option key={e} value={e}>
+                {NOMBRE_ESTADO[e]}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
-      {/* En el celular o el iPad: mover con el selector (el arrastre es para la compu). */}
-      <select
-        value={l.estado}
-        onChange={(e) => void mover(l, e.target.value as Estado)}
-        aria-label="Mover a"
-        className="mt-1.5 h-8 w-full rounded-lg border bg-background px-2 text-xs"
-      >
-        {(Object.keys(NOMBRE_ESTADO) as Estado[]).map((e) => (
-          <option key={e} value={e}>
-            {NOMBRE_ESTADO[e]}
-          </option>
-        ))}
-      </select>
     </div>
   );
 }
