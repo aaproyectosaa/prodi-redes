@@ -158,17 +158,6 @@ async function mover(lead: LeadWeb, estado: Estado) {
 
 export default function Web() {
   const { leads, config } = useLeadsWeb();
-  // Los mensajes nuevos al Instagram y Facebook de Prodi entran como leads: al abrir y cada 2 minutos con Leads abierto
-  // (además del aviso al momento de Meta, si el webhook de mensajes está suscripto).
-  useEffect(() => {
-    const revisar = () =>
-      callApi<{ nuevos: number }>("/api/web/meta-mensajes", {})
-        .then((r) => r.nuevos > 0 && toast.success(`${r.nuevos} lead${r.nuevos === 1 ? "" : "s"} nuevo${r.nuevos === 1 ? "" : "s"} por mensaje`))
-        .catch(() => undefined);
-    void revisar();
-    const t = setInterval(() => document.visibilityState === "visible" && void revisar(), 2 * 60_000);
-    return () => clearInterval(t);
-  }, []);
   const [vista, setVista] = useVista("web");
   const [abierto, setAbierto] = useState<string | null>(null);
   // /web?lead=… (desde "Mi día" o un aviso): abre ese lead.
@@ -636,6 +625,13 @@ function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => v
 function FormulariosMeta() {
   const [conectando, setConectando] = useState(false);
   const [token, setToken] = useState("");
+  // Si Meta está avisando al momento (webhook) o el sistema lo va a buscar cada tanto.
+  const [estado, setEstado] = useState<{ conectado: boolean; ultimo_aviso: string | null; ultima_revision: string | null } | null>(null);
+  useEffect(() => {
+    callApi<typeof estado>("/api/web/meta-estado", {})
+      .then(setEstado)
+      .catch(() => undefined);
+  }, [conectando]);
   const usarToken = async () => {
     setConectando(true);
     try {
@@ -679,6 +675,14 @@ function FormulariosMeta() {
         {conectando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
         Conectar y traer formularios de Meta
       </Button>
+      {estado?.conectado && (
+        <p className={cn("rounded-lg px-2.5 py-1.5 text-[11px]", estado.ultimo_aviso ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-700 dark:text-amber-300")}>
+          {estado.ultimo_aviso
+            ? `Al instante: Meta avisó el último mensaje ${hace(estado.ultimo_aviso)}.`
+            : "Meta todavía no avisó ningún mensaje al instante: se revisa solo cada 2 minutos con el sistema abierto."}
+          {estado.ultima_revision ? ` Última revisión ${hace(estado.ultima_revision)}.` : ""}
+        </p>
+      )}
       <Button size="sm" variant="outline" className="w-full" onClick={() => void traerMensajes()} disabled={conectando}>
         <MessageCircle className="mr-2 h-4 w-4" /> Traer mensajes de Instagram y Facebook
       </Button>

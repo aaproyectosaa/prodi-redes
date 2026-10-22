@@ -20,7 +20,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { enTransaccion, getPool, guardarDoc, leerDoc } from "../_lib/db";
 import { appUrl, body, HttpError, requireCaller, sendError } from "../_lib/http";
-import { conectarFormularios, guardarTokenUsuario, importarMensajes, recibirWebhook, verificarWebhook } from "../_lib/meta-leads";
+import { conectarFormularios, guardarTokenUsuario, estadoMeta, importarMensajes, recibirWebhook, verificarWebhook } from "../_lib/meta-leads";
 
 const COL = "leads_web";
 const CONFIG = { col: "web_config", id: "general" };
@@ -340,9 +340,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "seguimiento") res.status(200).json(await seguimiento(req));
     else if (accion === "actividad") res.status(200).json(await actividad(req));
     else if (accion === "datos") res.status(200).json(await datos(req));
-    else if (accion === "meta-mensajes") {
+    else if (accion === "meta-estado") {
       await requireCaller(req, ["admin"]);
-      res.status(200).json(await importarMensajes(appUrl(req), body<{ forzar?: boolean }>(req).forzar === true));
+      res.status(200).json(await estadoMeta());
+    } else if (accion === "meta-mensajes") {
+      await requireCaller(req, ["admin"]);
+      res.status(200).json(await importarMensajes(appUrl(req), body<{ forzar?: boolean }>(req).forzar === true, body<{ forzar?: boolean }>(req).forzar === true));
     } else if (accion === "meta-token") {
       await requireCaller(req, ["admin"]);
       res.status(200).json(await guardarTokenUsuario(String(body<{ token?: string }>(req).token ?? ""), appUrl(req)));

@@ -194,7 +194,7 @@ export async function recibirWebhook(b: any, base: string) {
   // Un mensaje directo (Instagram o Messenger): se traen las conversaciones al momento.
   const hayMensaje = (Array.isArray(b?.entry) ? b.entry : []).some((e: any) => Array.isArray(e?.messaging) || (e?.changes ?? []).some((c: any) => c?.field === "messages"));
   if (hayMensaje) {
-    const r = await importarMensajes(base, true).catch((err) => ({ nuevos: 0, error: String(err) }));
+    const r = await avisoDeMensaje(base).catch((err) => ({ nuevos: 0, error: String(err) }));
     if (!ids.length) return { ok: true, ...r };
   }
   if (!ids.length) return { ok: true, nuevos: 0 };
@@ -222,6 +222,8 @@ export async function conectarFormularios(base: string) {
   const pagina = await tokenPagina();
   try {
     await graph(`${pagina.id}/subscribed_apps`, { subscribed_fields: "leadgen" }, pagina.token, "POST");
+    // Mensajes al momento (Messenger e Instagram). Si falta pages_messaging, sigue andando lo demás.
+    await graph(`${pagina.id}/subscribed_apps`, { subscribed_fields: "leadgen,messages" }, pagina.token, "POST").catch(() => undefined);
   } catch (err) {
     // Para saber qué arreglar en Meta: qué permisos tiene de verdad el token que está en Vercel.
     const t = process.env.META_ACCESS_TOKEN ?? "";
@@ -246,19 +248,35 @@ export async function conectarFormularios(base: string) {
 }
 
 // ── Mensajes directos ─────────────────────────────────────────────────────────────────────────────────────────────
-// Cada conversación nueva con la página de Prodi (Messenger) o su Instagram entra como lead: la primera vez que
-// alguien escribe. Se revisa al abrir Leads (cada 10 minutos como mucho), con "Traer mensajes" y todos los días.
+// Cada conversación con la página de Prodi (Messenger) o su Instagram en la que alguien escribió en los últimos 30 días
+// entra como lead (una vez). Lo dispara el aviso de Meta (webhook "messages") y, de respaldo, el sistema abierto del
+// admin (MensajesMetaFondo), "Traer mensajes" y el cron diario.
+// Para no gastar: primero se pide solo la lista de conversaciones con su última fecha y se abre cada una recién si
+// cambió desde la última revisión; si el webhook está andando, el respaldo del navegador revisa mucho menos seguido.
 // El token de la página tiene que tener pages_messaging (Facebook) e instagram_manage_messages (Instagram).
 
-const DIEZ_MIN = 2 * 60_000;
+const ESPERA_MIN = 2 * 60_000;
+/** Cada cuánto revisa el navegador: seguido si Meta no avisa; poco si el webhook anduvo en los últimos 3 días. */
+const cadaCuanto = (webhookAt?: unknown) => (webhookAt && Date.now() - Date.parse(String(webhookAt)) < 3 * 86400_000 ? 15 * 60_000 : 2 * 60_000);
+
+/** El webhook avisó un mensaje: queda anotado (el navegador baja el ritmo) y se traen al momento. */
+async function avisoDeMensaje(base: string) {
+  const pool = getPool();
+  const secreto = await leerDoc(pool, SECRETO.col, SECRETO.id);
+  if (secreto) await guardarDoc(pool, SECRETO.col, SECRETO.id, { ...secreto, webhook_mensajes_at: new Date().toISOString() });
+  return importarMensajes(base, true);
+}
 
 /** Trae las conversaciones nuevas (últimos 30 días) y crea un lead por cada persona que escribió. */
-export async function importarMensajes(base: string, forzar = false) {
+export async function importarMensajes(base: string, forzar = false, todo = false) {
   const guardado = await tokenGuardado();
   if (!guardado) throw new HttpError(400, "Primero conectá la página de Prodi (pegá el identificador en Temporada y cupos)");
   const pool = getPool();
   const secreto = await leerDoc(pool, SECRETO.col, SECRETO.id);
-  if (!forzar && secreto?.mensajes_at && Date.now() - Date.parse(String(secreto.mensajes_at)) < DIEZ_MIN) return { revisado: false, nuevos: 0 };
+  const cada = cadaCuanto(secreto?.webhook_mensajes_at);
+  if (!forzar && secreto?.mensajes_at && Date.now() - Date.parse(String(secreto.mensajes_at)) < ESPERA_MIN) return { revisado: false, nuevos: 0, cada };
+  // Hasta dónde se miró cada red la vez anterior (solo se abren las conversaciones que cambiaron después).
+  const vistos: Record<string, string> = { ...((secreto?.mensajes_vistos as Record<string, string>) ?? {}) };
   await guardarDoc(pool, SECRETO.col, SECRETO.id, { ...secreto, mensajes_at: new Date().toISOString() });
 
   const { id: paginaId, token } = guardado;
@@ -273,26 +291,27 @@ export async function importarMensajes(base: string, forzar = false) {
 
   for (const plataforma of ["messenger", "instagram"] as const) {
     if (plataforma === "instagram" && !ig) continue;
-    let convs: any[] = [];
+    let lista: any[] = [];
     try {
-      convs =
-        (
-          await graph(
-            `${paginaId}/conversations`,
-            { platform: plataforma, fields: "id,updated_time,participants,messages.limit(20){message,from,created_time}", limit: "40" },
-            token
-          )
-        ).data ?? [];
+      // Liviano: solo id y última fecha.
+      lista = (await graph(`${paginaId}/conversations`, { platform: plataforma, fields: "id,updated_time", limit: "40" }, token)).data ?? [];
     } catch (err) {
       errores.push(`${plataforma === "instagram" ? "Instagram" : "Facebook"}: ${err instanceof Error ? err.message : err}`);
       detalle.push(`${plataforma}: error`);
       continue;
     }
-    detalle.push(`${plataforma === "instagram" ? "Instagram" : "Facebook"}: ${convs.length} conversaciones`);
-    for (const c of convs) {
-      if (Date.parse(c.updated_time) < desde) continue;
-      const id = idDeLead(`conversacion:${c.id}`);
+    detalle.push(`${plataforma === "instagram" ? "Instagram" : "Facebook"}: ${lista.length} conversaciones`);
+    // "Traer mensajes" (todo) mira los 30 días; si no, solo lo que cambió desde la revisión anterior.
+    const visto = todo ? desde : Math.max(desde, Date.parse(vistos[plataforma] ?? "") || 0);
+    const masNueva = lista.reduce((m: number, c: any) => Math.max(m, Date.parse(c.updated_time) || 0), 0);
+    if (masNueva) vistos[plataforma] = new Date(masNueva).toISOString();
+    for (const resumen of lista) {
+      if ((Date.parse(resumen.updated_time) || 0) <= visto) continue;
+      if (Date.parse(resumen.updated_time) < desde) continue;
+      const id = idDeLead(`conversacion:${resumen.id}`);
       if (await leerDoc(pool, COL, id)) continue;
+      const c = await graph(resumen.id, { fields: "id,participants,messages.limit(20){message,from,created_time}" }, token).catch(() => null);
+      if (!c) continue;
       const persona = (c.participants?.data ?? []).find((p: any) => !propios.has(String(p.id)));
       if (!persona) continue;
       // Del más viejo al más nuevo; lo que escribió la persona en los últimos 30 días (no las respuestas de Prodi).
@@ -342,6 +361,19 @@ export async function importarMensajes(base: string, forzar = false) {
     }
   }
   // Si las dos redes fallaron no hay nada que mostrar; si una anduvo, se informa la otra como aviso.
+  const actual = await leerDoc(pool, SECRETO.col, SECRETO.id);
+  await guardarDoc(pool, SECRETO.col, SECRETO.id, { ...actual, mensajes_vistos: vistos });
   if (errores.length && !detalle.some((d) => d.includes("conversaciones"))) throw new HttpError(502, errores.join(" · "));
-  return { revisado: true, nuevos, errores, detalle };
+  return { revisado: true, nuevos, errores, detalle, cada };
+}
+
+/** Para la pantalla: cuándo avisó Meta por última vez (formulario o mensaje) y cuándo se revisó. */
+export async function estadoMeta() {
+  const d = await leerDoc(getPool(), SECRETO.col, SECRETO.id);
+  return {
+    conectado: !!d?.cifrado,
+    pagina: d?.pagina ?? null,
+    ultimo_aviso: d?.webhook_mensajes_at ?? null,
+    ultima_revision: d?.mensajes_at ?? null,
+  };
 }
