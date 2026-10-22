@@ -34,6 +34,7 @@ import { collection, db, doc, onSnapshot } from "@/lib/db";
 import { callApi } from "@/lib/redes/api";
 import { fechaHora, hace, hoyISO } from "@/lib/redes/format";
 import { cn } from "@/lib/utils";
+import { BuscadorMapa, linkMapa, mapaEmbebido } from "@/components/redes/BuscadorMapa";
 
 // Reservas de la landing de la campaña «No empezamos de cero» (somosprodi.com).
 // Las crea el servidor (/api/web/aplicar); acá se mueven y se anotan (/api/web/estado y /notas).
@@ -120,29 +121,6 @@ function useLeadsWeb() {
     []
   );
   return { leads, config };
-}
-
-/** Link para abrir la ubicación en Google Maps (si pegaron el link, ese; si es una dirección, la búsqueda). */
-const linkMapa = (u: string) => (/^https?:\/\//i.test(u.trim()) ? u.trim() : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(u.trim())}`);
-
-/** Mapa para mostrar adentro (sin clave de Google). Los links cortos (maps.app.goo.gl) no se pueden mostrar: solo abrir. */
-function mapaEmbebido(u: string): string | null {
-  const t = u.trim();
-  let q = t;
-  if (/^https?:\/\//i.test(t)) {
-    const lugar = t.match(/\/place\/([^/@?]+)/)?.[1];
-    const coords = t.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-    const param = (() => {
-      try {
-        const p = new URL(t).searchParams;
-        return p.get("q") ?? p.get("query");
-      } catch {
-        return null;
-      }
-    })();
-    q = coords ? `${coords[1]},${coords[2]}` : lugar ? decodeURIComponent(lugar.replace(/\+/g, " ")) : param ?? "";
-  }
-  return q.length > 3 ? `https://www.google.com/maps?q=${encodeURIComponent(q)}&output=embed` : null;
 }
 
 /** Lo que puso en "Instagram o web": @usuario → instagram.com/usuario; un dominio → https://dominio. */
@@ -489,8 +467,8 @@ function DatosLead({ lead }: { lead: LeadWeb }) {
           return (
             <div key={k} className="py-2 first:pt-0 last:pb-0">
               {editando === k ? (
-                <div className="flex items-center gap-2">
-                  <Icono className="h-4 w-4 shrink-0 text-primary" />
+                <div className={cn("flex gap-2", k === "ubicacion" ? "items-start" : "items-center")}>
+                  <Icono className={cn("h-4 w-4 shrink-0 text-primary", k === "ubicacion" && "mt-3.5")} />
                   {k === "rubro" ? (
                     <select value={valor} onChange={(e) => setValor(e.target.value)} className="h-9 flex-1 rounded-lg border bg-background px-2 text-sm" autoFocus>
                       <option value="">Sin rubro</option>
@@ -500,6 +478,8 @@ function DatosLead({ lead }: { lead: LeadWeb }) {
                         </option>
                       ))}
                     </select>
+                  ) : k === "ubicacion" ? (
+                    <BuscadorMapa valor={valor} onCambiar={setValor} onEnter={() => void guardar()} className="min-w-0 flex-1" autoFocus />
                   ) : (
                     <Input
                       value={valor}
@@ -781,29 +761,7 @@ function NuevoLead({ open, onOpenChange }: { open: boolean; onOpenChange: (o: bo
           </div>
           {mas.includes("email") && <CampoIcono icono={Mail} value={f.email} onChange={(e) => set("email", e.target.value)} placeholder="Email" inputMode="email" maxLength={120} autoFocus />}
           {mas.includes("instagram") && <CampoIcono icono={AtSign} value={f.instagram} onChange={(e) => set("instagram", e.target.value)} placeholder="Instagram o web" maxLength={120} autoFocus />}
-          {mas.includes("ubicacion") && (
-            <div className="space-y-1.5">
-              <CampoIcono
-                icono={MapPin}
-                value={f.ubicacion}
-                onChange={(e) => set("ubicacion", e.target.value)}
-                placeholder="Dirección o link de Google Maps"
-                maxLength={300}
-                autoFocus
-              />
-              {f.ubicacion.trim().length > 3 && mapaEmbebido(f.ubicacion) && (
-                <iframe title="Mapa" src={mapaEmbebido(f.ubicacion)!} className="h-36 w-full rounded-xl border" loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
-              )}
-              <a
-                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([f.negocio, f.ubicacion].filter((x) => x.trim()).join(" "))}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-              >
-                <ExternalLink className="h-3 w-3" /> Buscarlo en Google Maps (y pegar acá el link)
-              </a>
-            </div>
-          )}
+          {mas.includes("ubicacion") && <BuscadorMapa valor={f.ubicacion} onCambiar={(v) => set("ubicacion", v)} autoFocus />}
           {mas.includes("notas") && (
             <Textarea value={f.notas} onChange={(e) => set("notas", e.target.value)} rows={2} placeholder="Qué necesita, cuándo volver a llamar…" className="rounded-xl" autoFocus />
           )}
