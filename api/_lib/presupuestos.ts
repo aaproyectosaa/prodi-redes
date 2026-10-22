@@ -24,9 +24,41 @@ async function porToken(token: string) {
 }
 
 /** Lo que ve el cliente en el link (sin datos internos). La primera vez anota que lo vio. */
-export async function verPresupuesto(token: string) {
+/** Al lead del CRM (si el presupuesto salió de uno): una entrada en su línea de tiempo y, si se dice, otro estado. */
+async function anotarEnLead(leadId: unknown, entrada: Record<string, unknown>, cambios: Record<string, unknown> = {}) {
+  if (typeof leadId !== "string" || !/^[0-9a-f-]{36}$/i.test(leadId)) return;
+  const ref = adminDb().collection("leads_web").doc(leadId);
+  const l = (await ref.get()).data();
+  if (!l) return;
+  const historial = [...(Array.isArray(l.historial) ? l.historial : []), entrada].slice(-100);
+  await ref.update({ ...cambios, historial, updated_at: new Date().toISOString() });
+}
+
+export async function verPresupuesto(token: string, equipo = false) {
   const d = await porToken(token);
   const p = d.data();
+  // Lo abrió el cliente (no alguien de Prodi mirándolo): se cuenta y se avisa, a lo sumo cada 30 minutos.
+  if (!equipo && p.estado !== "borrador") {
+    const ahora = new Date();
+    const ultima = p.ultima_apertura ? new Date(String(p.ultima_apertura)).getTime() : 0;
+    if (ahora.getTime() - ultima > 30 * 60_000) {
+      const veces = Number(p.aperturas ?? 0) + 1;
+      await d.ref.update({ aperturas: veces, ultima_apertura: ahora.toISOString() });
+      await anotarEnLead(p.lead_id, { at: ahora.toISOString(), tipo: "presupuesto", texto: `Abrió el presupuesto${veces > 1 ? ` (${veces}ª vez)` : ""}`, por: null, por_nombre: p.empresa ?? "Cliente" }).catch(() => {});
+      if (p.created_by)
+        await enviarAviso(
+          {
+            destinatarios: [String(p.created_by)],
+            titulo: `${p.empresa ?? "El cliente"} abrió tu propuesta`,
+            cuerpo: veces > 1 ? `Es la ${veces}ª vez que la mira. Buen momento para llamar.` : "La está mirando ahora: buen momento para llamar.",
+            link: p.lead_id ? "/web" : "/presupuestos",
+            clave: `presupuesto_abierto:${d.ref.id}:${ahora.toISOString().slice(0, 13)}`,
+            proyectoId: null,
+          },
+          process.env.APP_URL || ""
+        ).catch(() => {});
+    }
+  }
   const ivaPct = Number((await adminDb().collection("app_settings").doc("redes").get()).data()?.iva_pct ?? 21);
   if (!p.visto_at && p.estado === "enviado") await d.ref.update({ visto_at: new Date().toISOString(), estado: "visto" });
   const vencido = !!p.validez && p.validez < hoyAR() && p.estado !== "aceptado";
@@ -108,6 +140,12 @@ export async function aceptarPresupuesto(b: { t?: string; nombre?: string; email
     created_at: ahora,
   });
   await d.ref.update({ estado: "aceptado", aceptado: { at: ahora, nombre, email, uid, proyecto_id: proyecto.id }, updated_at: ahora });
+  // El lead del CRM pasa solo a Ganado (y queda vinculado al cliente nuevo).
+  await anotarEnLead(
+    p.lead_id,
+    { at: ahora, de: null, a: "ganado", tipo: "presupuesto", texto: "Aceptó el presupuesto: ya es cliente", por: null, por_nombre: nombre },
+    { estado: "ganado", proyecto_id: proyecto.id, proximo_paso: null, ultimo_contacto_at: ahora }
+  ).catch((e) => console.warn("[presupuesto] lead", e));
 
   // Aviso a los admins para que le asignen el equipo y arranquen.
   const admins = await destinatariosDe(proyecto.id, [], true);

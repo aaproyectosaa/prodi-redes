@@ -8,6 +8,8 @@
 // POST /api/web/notas     { id, notas }
 // POST /api/web/datos     { id, negocio?, nombre?, email?, telefono?, instagram?, ubicacion?, rubro? }  (completar o corregir)
 // POST /api/web/config    { temporada?, cupos_total? }
+// POST /api/web/seguimiento { id, texto, fecha }             → próximo paso (qué hacer y para cuándo)
+// POST /api/web/actividad   { id, tipo, texto }               → llamada, WhatsApp, mail, reunión o nota (línea de tiempo)
 // POST /api/web/manual    { negocio, nombre?, email?, telefono?, instagram?, ubicacion?, rubro?, fuente?, notas?, estado? } → { id }  (lead cargado a mano)
 // Los leads se guardan en la colección `leads_web`; la configuración en `web_config/general`.
 
@@ -178,7 +180,8 @@ async function cambiar(req: VercelRequest, campo: "estado" | "notas") {
       nuevo.historial = [
         ...(Array.isArray(d.historial) ? d.historial : []),
         { at, de: d.estado ?? null, a: valor, por: caller.uid, por_nombre: caller.nombre || caller.email || "" },
-      ].slice(-50);
+      ].slice(-100);
+      nuevo.ultimo_contacto_at = at;
     }
     await guardarDoc(cli, COL, id, nuevo);
     return { ok: true };
@@ -202,6 +205,48 @@ async function datos(req: VercelRequest) {
     await guardarDoc(cli, COL, id, { ...d, ...cambios, updated_at: new Date().toISOString(), updated_by: caller.uid });
     return { ok: true };
   });
+}
+
+const TIPOS_ACTIVIDAD = ["llamada", "whatsapp", "email", "reunion", "nota", "presupuesto"];
+
+/** Cambia un lead con un historial nuevo (todo en una transacción). */
+async function conLead(id: string, cambio: (d: Record<string, unknown>) => Record<string, unknown>) {
+  if (!ID_OK.test(id)) throw new HttpError(400, "Falta el id");
+  return enTransaccion(async (cli) => {
+    const d = await leerDoc(cli, COL, id, true);
+    if (!d) throw new HttpError(404, "No encontramos ese lead");
+    await guardarDoc(cli, COL, id, { ...d, ...cambio(d), updated_at: new Date().toISOString() });
+    return { ok: true };
+  });
+}
+const conHistorial = (d: Record<string, unknown>, e: Record<string, unknown>) => [...(Array.isArray(d.historial) ? d.historial : []), e].slice(-100);
+
+/** Próximo paso: qué hay que hacer y para cuándo (sin fecha = sin recordatorio). */
+async function seguimiento(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin"]);
+  const b = body<{ id?: string; texto?: string; fecha?: string | null }>(req);
+  const txt = texto(b.texto, 200);
+  const fecha = /^\d{4}-\d{2}-\d{2}$/.test(String(b.fecha ?? "")) ? String(b.fecha) : null;
+  const at = new Date().toISOString();
+  return conLead(texto(b.id, 40), (d) => ({
+    proximo_paso: txt ? { texto: txt, fecha, at, por: caller.uid } : null,
+    historial: conHistorial(d, { at, tipo: "paso", texto: txt ? `Próximo paso: ${txt}${fecha ? ` (${fecha})` : ""}` : "Sacó el próximo paso", por: caller.uid, por_nombre: caller.nombre || caller.email || "" }),
+  }));
+}
+
+/** Algo que pasó con el lead (llamada, WhatsApp, nota…): va a la línea de tiempo y cuenta como contacto. */
+async function actividad(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin"]);
+  const b = body<{ id?: string; tipo?: string; texto?: string; cumplido?: boolean }>(req);
+  const tipo = texto(b.tipo, 20);
+  if (!TIPOS_ACTIVIDAD.includes(tipo)) throw new HttpError(400, "Tipo inválido");
+  const at = new Date().toISOString();
+  return conLead(texto(b.id, 40), (d) => ({
+    ultimo_contacto_at: at,
+    // "Ya lo hice": el próximo paso queda cumplido.
+    ...(b.cumplido ? { proximo_paso: null } : {}),
+    historial: conHistorial(d, { at, tipo, texto: String(b.texto ?? "").trim().slice(0, 1000), por: caller.uid, por_nombre: caller.nombre || caller.email || "" }),
+  }));
 }
 
 /** De dónde vino un lead cargado a mano. */
@@ -282,6 +327,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "notas") res.status(200).json(await cambiar(req, "notas"));
     else if (accion === "config") res.status(200).json(await config(req));
     else if (accion === "manual") res.status(200).json(await manual(req));
+    else if (accion === "seguimiento") res.status(200).json(await seguimiento(req));
+    else if (accion === "actividad") res.status(200).json(await actividad(req));
     else if (accion === "datos") res.status(200).json(await datos(req));
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {

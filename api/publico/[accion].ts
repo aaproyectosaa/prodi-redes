@@ -70,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "responder") res.status(200).json(await responder(req));
     else if (accion === "link") res.status(200).json(await link(req));
     // Presupuesto por link: verlo y aceptarlo (crea el usuario y la ficha del cliente).
-    else if (accion === "presupuesto") res.status(200).json(await verPresupuesto(String(body<{ t?: string }>(req).t ?? "")));
+    else if (accion === "presupuesto") res.status(200).json(await verPresupuesto(String(body<{ t?: string }>(req).t ?? ""), body<{ equipo?: boolean }>(req).equipo === true));
     else if (accion === "presupuesto-aceptar") res.status(200).json(await aceptarPresupuesto(body(req), appUrl(req)));
     else if (accion === "video-cliente") {
       const caller = await requireCaller(req, ["admin", "productor", "cliente"]);
