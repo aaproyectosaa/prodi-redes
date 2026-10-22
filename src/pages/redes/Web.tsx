@@ -14,6 +14,7 @@ import {
   Plus,
   Settings2,
   Sparkles,
+  StickyNote,
   Store,
   Trophy,
   User,
@@ -592,9 +593,10 @@ function NuevoLead({ open, onOpenChange }: { open: boolean; onOpenChange: (o: bo
       setGuardando(false);
     }
   };
-  const [mas, setMas] = useState(false);
+  // Lo opcional aparece de a uno, cuando se pide.
+  const [mas, setMas] = useState<("email" | "instagram" | "notas")[]>([]);
   useEffect(() => {
-    if (open) setMas(false);
+    if (open) setMas([]);
   }, [open]);
   const listo = f.negocio.trim().length >= 2;
   return (
@@ -616,17 +618,34 @@ function NuevoLead({ open, onOpenChange }: { open: boolean; onOpenChange: (o: bo
             <CampoIcono icono={User} value={f.nombre} onChange={(e) => set("nombre", e.target.value)} placeholder="Con quién" maxLength={80} />
             <CampoIcono icono={Phone} value={f.telefono} onChange={(e) => set("telefono", e.target.value)} placeholder="WhatsApp" inputMode="tel" maxLength={40} />
           </div>
-          {mas ? (
-            <div className="grid grid-cols-2 gap-2">
-              <CampoIcono icono={Mail} value={f.email} onChange={(e) => set("email", e.target.value)} placeholder="Email" inputMode="email" maxLength={120} />
-              <CampoIcono icono={AtSign} value={f.instagram} onChange={(e) => set("instagram", e.target.value)} placeholder="Instagram o web" maxLength={120} />
-            </div>
-          ) : (
-            <button type="button" onClick={() => setMas(true)} className="text-xs font-medium text-primary hover:underline">
-              + Email o Instagram
-            </button>
+          {mas.includes("email") && <CampoIcono icono={Mail} value={f.email} onChange={(e) => set("email", e.target.value)} placeholder="Email" inputMode="email" maxLength={120} autoFocus />}
+          {mas.includes("instagram") && <CampoIcono icono={AtSign} value={f.instagram} onChange={(e) => set("instagram", e.target.value)} placeholder="Instagram o web" maxLength={120} autoFocus />}
+          {mas.includes("notas") && (
+            <Textarea value={f.notas} onChange={(e) => set("notas", e.target.value)} rows={2} placeholder="Qué necesita, cuándo volver a llamar…" className="rounded-xl" autoFocus />
           )}
-          <Textarea value={f.notas} onChange={(e) => set("notas", e.target.value)} rows={2} placeholder="Notas (qué necesita, cuándo volver a llamar…)" className="rounded-xl" />
+          {mas.length < 3 && (
+            <div className="flex flex-wrap gap-1.5">
+              {(
+                [
+                  ["email", Mail, "Email"],
+                  ["instagram", AtSign, "Instagram o web"],
+                  ["notas", StickyNote, "Nota"],
+                ] as const
+              )
+                .filter(([id]) => !mas.includes(id))
+                .map(([id, Icono, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setMas((m) => [...m, id])}
+                    className="flex items-center gap-1.5 rounded-full border border-dashed border-primary/40 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                  >
+                    <Plus className="h-3 w-3" />
+                    <Icono className="h-3.5 w-3.5" /> {label}
+                  </button>
+                ))}
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-1.5 pt-1">
             <Etiqueta prefijo="Llegó por" valor={f.fuente} opciones={FUENTES.map((x) => ({ id: x, label: x }))} onCambiar={(v) => set("fuente", v)} />
