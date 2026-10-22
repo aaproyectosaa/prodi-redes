@@ -333,6 +333,7 @@ export async function importarMensajes(base: string, forzar = false) {
       ).catch(() => undefined);
     }
   }
-  if (errores.length && !nuevos) throw new HttpError(502, errores.join(" · "));
+  // Si las dos redes fallaron no hay nada que mostrar; si una anduvo, se informa la otra como aviso.
+  if (errores.length && !detalle.some((d) => d.includes("conversaciones"))) throw new HttpError(502, errores.join(" · "));
   return { revisado: true, nuevos, errores, detalle };
 }
