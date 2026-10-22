@@ -163,23 +163,32 @@ function asegurarTablaIntentos() {
     });
   return tablaIntentos;
 }
-const MAX_POR_MAIL = 8;
+// El freno es por conexión (IP) y por "esa conexión con ese mail": quien prueba contraseñas desde un lugar queda
+// frenado, pero el dueño de la cuenta entra igual desde su compu o su celular (antes, 8 intentos falsos de cualquiera
+// contra un mail dejaban a esa persona afuera). Si muchos lugares distintos prueban el mismo mail, cada intento tarda
+// más (sin bloquear al dueño).
+const MAX_POR_PAR = 8;
 const MAX_POR_IP = 30;
+const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function frenarIntentos(email: string, ip: string | null) {
   await asegurarTablaIntentos();
+  const lugar = ip ?? "-";
   const r = await getPool().query(
-    "select count(*) filter (where clave = $1)::int as mail, count(*) filter (where clave = $2)::int as ip from login_intentos where at > now() - interval '15 minutes' and clave in ($1, $2)",
-    [`mail:${email}`, `ip:${ip ?? "-"}`]
+    "select count(*) filter (where clave = $1)::int as mail, count(*) filter (where clave = $2)::int as ip, count(*) filter (where clave = $3)::int as par from login_intentos where at > now() - interval '15 minutes' and clave in ($1, $2, $3)",
+    [`mail:${email}`, `ip:${lugar}`, `par:${lugar}|${email}`]
   );
-  const { mail, ip: porIp } = r.rows[0] as { mail: number; ip: number };
-  if (mail >= MAX_POR_MAIL || (ip && porIp >= MAX_POR_IP)) {
+  const { mail, ip: porIp, par } = r.rows[0] as { mail: number; ip: number; par: number };
+  if (par >= MAX_POR_PAR || (ip && porIp >= MAX_POR_IP)) {
     throw new AuthError("auth/too-many-requests", "Demasiados intentos. Esperá 15 minutos y probá de nuevo (o pedile al administrador el link para cambiar la contraseña).");
   }
+  // Muchos intentos contra este mail desde otros lados: cada intento tarda un poco más (hasta 3 s).
+  if (mail >= MAX_POR_PAR) await espera(Math.min(3000, (mail - MAX_POR_PAR + 1) * 250));
 }
 async function anotarIntento(email: string, ip: string | null) {
   try {
+    const lugar = ip ?? "-";
     // De a un comando por consulta (Postgres no acepta dos con parámetros).
-    await getPool().query("insert into login_intentos (clave) values ($1), ($2)", [`mail:${email}`, `ip:${ip ?? "-"}`]);
+    await getPool().query("insert into login_intentos (clave) values ($1), ($2), ($3)", [`mail:${email}`, `ip:${lugar}`, `par:${lugar}|${email}`]);
     if (Math.random() < 0.05) await getPool().query("delete from login_intentos where at < now() - interval '1 day'");
   } catch (err) {
     console.warn("[login] no se pudo anotar el intento", err);
