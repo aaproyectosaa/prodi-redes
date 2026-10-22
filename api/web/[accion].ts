@@ -19,7 +19,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { enTransaccion, getPool, guardarDoc, leerDoc } from "../_lib/db";
 import { appUrl, body, HttpError, requireCaller, sendError } from "../_lib/http";
-import { conectarFormularios, recibirWebhook, verificarWebhook } from "../_lib/meta-leads";
+import { conectarFormularios, guardarTokenUsuario, recibirWebhook, verificarWebhook } from "../_lib/meta-leads";
 
 const COL = "leads_web";
 const CONFIG = { col: "web_config", id: "general" };
@@ -339,7 +339,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "seguimiento") res.status(200).json(await seguimiento(req));
     else if (accion === "actividad") res.status(200).json(await actividad(req));
     else if (accion === "datos") res.status(200).json(await datos(req));
-    else if (accion === "meta-conectar") {
+    else if (accion === "meta-token") {
+      await requireCaller(req, ["admin"]);
+      res.status(200).json(await guardarTokenUsuario(String(body<{ token?: string }>(req).token ?? ""), appUrl(req)));
+    } else if (accion === "meta-conectar") {
       await requireCaller(req, ["admin"]);
       res.status(200).json(await conectarFormularios(appUrl(req)));
     }

@@ -12,6 +12,7 @@ import { getPool, guardarDoc, leerDoc } from "./db";
 import { HttpError } from "./http";
 import { adminDb } from "./db";
 import { enviarAviso } from "./notify";
+import { decrypt, encrypt, type EncryptedPayload } from "./crypto";
 
 const VERSION = () => process.env.META_GRAPH_VERSION || "v23.0";
 const COL = "leads_web";
@@ -120,8 +121,44 @@ async function guardarLead(lead: any, temporada: string, base: string): Promise<
 
 const CAMPOS_LEAD = "id,created_time,field_data,form_id,ad_id,ad_name,campaign_name,platform";
 
+// Token de página guardado desde el panel (cifrado). Sale de un token de usuario de un admin de la página con
+// leads_retrieval: el usuario del sistema no siempre puede tener ese permiso. Canjeado a largo plazo, no vence.
+const SECRETO = { col: "secretos", id: "meta_leads" };
+const APP_ID = () => (process.env.META_APP_ID ?? "1702831641421860").trim();
+
+async function tokenGuardado(): Promise<{ id: string; nombre: string; token: string } | null> {
+  const d = await leerDoc(getPool(), SECRETO.col, SECRETO.id);
+  if (!d?.cifrado) return null;
+  try {
+    return { id: String(d.pagina_id), nombre: String(d.pagina ?? "Prodi"), token: decrypt(d.cifrado as EncryptedPayload) };
+  } catch {
+    return null;
+  }
+}
+
+/** Guarda el token de la página a partir del token de usuario que pegó el admin (lo canjea por uno que no vence). */
+export async function guardarTokenUsuario(tokenUsuario: string, base: string) {
+  const corto = tokenUsuario.trim();
+  if (!/^EAA[\w-]{20,}$/.test(corto)) throw new HttpError(400, "Pegá el identificador completo (empieza con EAA)");
+  const secret = process.env.META_APP_SECRET;
+  if (!secret) throw new HttpError(500, "Falta META_APP_SECRET en Vercel");
+  // Token de usuario de 60 días: las páginas que salen de él no vencen.
+  const largo = await fetch(
+    `https://graph.facebook.com/${VERSION()}/oauth/access_token?${new URLSearchParams({ grant_type: "fb_exchange_token", client_id: APP_ID(), client_secret: secret, fb_exchange_token: corto })}`
+  ).then((r) => r.json() as Promise<any>);
+  if (!largo?.access_token) throw new HttpError(400, `Meta: ${largo?.error?.message ?? "no aceptó el identificador"}`);
+  const id = (process.env.META_PRODI_PAGE_ID ?? "").trim();
+  const cuentas = (await graph("me/accounts", { fields: "id,name,access_token", limit: "100" }, largo.access_token)).data ?? [];
+  const pagina = cuentas.find((p: any) => p.id === id) ?? (id ? null : cuentas[0]);
+  if (!pagina?.access_token) throw new HttpError(400, "Ese usuario no administra la página de Prodi (o no la eligió al dar permisos)");
+  await guardarDoc(getPool(), SECRETO.col, SECRETO.id, { pagina_id: pagina.id, pagina: pagina.name, cifrado: encrypt(pagina.access_token), updated_at: new Date().toISOString() });
+  return conectarFormularios(base);
+}
+
 /** Token de la página de Prodi (para suscribirla y leer sus formularios). */
 async function tokenPagina(): Promise<{ id: string; nombre: string; token: string }> {
+  const guardado = await tokenGuardado();
+  if (guardado) return guardado;
   const id = (process.env.META_PRODI_PAGE_ID ?? "").trim();
   if (!id) throw new HttpError(400, "Falta META_PRODI_PAGE_ID en Vercel (el id de la página de Facebook de Prodi)");
   const p = await graph(id, { fields: "name,access_token" });

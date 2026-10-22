@@ -621,6 +621,19 @@ function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => v
 /** Los formularios de los anuncios de Prodi en Meta entran solos como leads (api/_lib/meta-leads.ts). */
 function FormulariosMeta() {
   const [conectando, setConectando] = useState(false);
+  const [token, setToken] = useState("");
+  const usarToken = async () => {
+    setConectando(true);
+    try {
+      const r = await callApi<{ pagina: string; formularios: number; nuevos: number }>("/api/web/meta-token", { token: token.trim() });
+      setToken("");
+      toast.success(`Conectado a ${r.pagina}: ${r.formularios} formulario${r.formularios === 1 ? "" : "s"}, ${r.nuevos} lead${r.nuevos === 1 ? "" : "s"} nuevo${r.nuevos === 1 ? "" : "s"}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo conectar");
+    } finally {
+      setConectando(false);
+    }
+  };
   const conectar = async () => {
     setConectando(true);
     try {
@@ -640,6 +653,17 @@ function FormulariosMeta() {
         {conectando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
         Conectar y traer formularios de Meta
       </Button>
+      <div className="space-y-1.5 border-t pt-2">
+        <p className="text-[11px] text-muted-foreground">
+          Si Meta pide <b>leads_retrieval</b>: pegá acá el identificador de acceso de tu usuario (Meta para desarrolladores → Gestor Prodi → Herramientas) y tocá Usar.
+        </p>
+        <div className="flex gap-1.5">
+          <Input value={token} onChange={(e) => setToken(e.target.value)} placeholder="EAA…" className="h-9 text-xs" type="password" autoComplete="off" />
+          <Button size="sm" className="h-9" onClick={() => void usarToken()} disabled={conectando || token.trim().length < 20}>
+            Usar
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
