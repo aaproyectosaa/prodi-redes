@@ -77,7 +77,7 @@ interface LeadWeb {
   /** Dirección del local o link de Google Maps. */
   ubicacion?: string;
   /** Los que llegaron por Meta: la conversación (mensajes) o el formulario. */
-  meta?: { conversacion_id?: string; plataforma?: string } | null;
+  meta?: { conversacion_id?: string; plataforma?: string; ultimo_texto?: string } | null;
 }
 
 interface Columna {
@@ -442,7 +442,7 @@ function LeadCard({ lead: l, onAbrir }: { lead: LeadWeb; onAbrir: () => void }) 
   const IconoOrigen = o.icono;
   // Un dato clave en vez de la lista entera (el resto está en la ficha).
   const dato = l.inversion_label ? `Invierte ${l.inversion_label}` : l.rubro || l.fuente || "";
-  const nota = (l.notas ?? "").replace(/^Escribió por mensaje de \w+:\s*/i, "").replace(/\s+/g, " ").trim();
+  const nota = (l.meta?.ultimo_texto || (l.notas ?? "").replace(/^Escribió por mensaje de \w+:\s*/i, "")).replace(/\s+/g, " ").trim();
   return (
     <div className={cn("group rounded-xl border bg-card p-3 text-sm shadow-sm transition-all hover:-translate-y-px hover:border-primary/40 hover:shadow-md", l.dudoso && "border-orange-500/60")}>
       <button type="button" onClick={onAbrir} className="block w-full min-w-0 text-left">
@@ -662,7 +662,7 @@ function DatosLead({ lead }: { lead: LeadWeb }) {
 /** Etapa del lead: botones con su color (en vez de un desplegable). */
 function SelectorEtapa({ lead }: { lead: LeadWeb }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="grid grid-cols-5 gap-1 rounded-xl bg-muted/70 p-1">
       {COLUMNAS.map((c) => {
         const activa = lead.estado === c.id;
         return (
@@ -672,12 +672,12 @@ function SelectorEtapa({ lead }: { lead: LeadWeb }) {
             onClick={() => void mover(lead, c.id)}
             title={c.ayuda}
             className={cn(
-              "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-              activa ? "border-transparent bg-foreground text-background shadow-sm" : "bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
+              "flex min-w-0 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-[11px] font-medium transition-all",
+              activa ? "bg-background text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground"
             )}
           >
-            <span className={cn("h-2 w-2 rounded-full", c.dot)} />
-            {c.titulo}
+            <span className={cn("h-1.5 w-6 rounded-full", activa ? c.dot : "bg-muted-foreground/25")} />
+            <span className="truncate">{c.titulo}</span>
           </button>
         );
       })}
@@ -720,7 +720,7 @@ function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => v
   const cambioNotas = notas !== (lead.notas ?? "");
 
   const datos = (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {lead.dudoso && (
         <p className="flex items-center gap-2 rounded-xl border border-orange-500/50 bg-orange-500/10 p-3 text-sm font-medium text-orange-700 dark:text-orange-300">
           <AlertTriangle className="h-4 w-4 shrink-0" /> Revisar: dice que invierte más de $700.000 pero factura menos de $10M por mes.
@@ -742,7 +742,13 @@ function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => v
           )
         }
       >
-        <Textarea rows={3} value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Cómo fue la reunión, qué propuesta le mandaste…" className="rounded-xl" />
+        <Textarea
+          rows={2}
+          value={notas}
+          onChange={(e) => setNotas(e.target.value)}
+          placeholder={conChat ? "Lo que no está en el chat: qué necesita, presupuesto, cómo siguió…" : "Cómo fue la reunión, qué propuesta le mandaste…"}
+          className="min-h-[64px] rounded-xl"
+        />
       </Bloque>
       <SeguimientoLead lead={lead} />
     </div>
@@ -752,7 +758,7 @@ function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => v
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className={cn("max-h-[92dvh] w-[calc(100vw-1.5rem)] gap-0 overflow-hidden rounded-3xl p-0", conChat ? "max-w-5xl" : "max-w-xl")}>
         {/* Encabezado */}
-        <DialogHeader className="flex-row items-center gap-3 space-y-0 border-b bg-gradient-to-r from-primary/[0.07] to-fuchsia-500/[0.05] px-5 py-4 pr-12 text-left">
+        <DialogHeader className="flex-row items-center gap-3 space-y-0 border-b bg-gradient-to-r from-primary/[0.08] via-fuchsia-500/[0.05] to-transparent px-5 py-3.5 pr-12 text-left">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-fuchsia-500 text-sm font-bold text-white shadow-md shadow-primary/25">
             {iniciales}
           </span>
@@ -770,11 +776,11 @@ function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => v
         </DialogHeader>
 
         {conChat ? (
-          <div className="grid max-h-[calc(92dvh-80px)] min-h-0 md:h-[calc(92dvh-80px)] md:grid-cols-[1.2fr_1fr]">
-            <div className="min-h-0 border-b p-4 md:border-b-0 md:border-r">
+          <div className="grid max-h-[calc(92dvh-76px)] min-h-0 md:h-[min(780px,calc(92dvh-76px))] md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+            <div className="h-[60dvh] min-h-0 border-b md:h-auto md:border-b-0 md:border-r">
               <ChatLead lead={lead} />
             </div>
-            <div className="min-h-0 overflow-y-auto p-5">{datos}</div>
+            <div className="min-h-0 overflow-y-auto bg-background p-4">{datos}</div>
           </div>
         ) : (
           <div className="max-h-[calc(92dvh-80px)] overflow-y-auto p-5">{datos}</div>

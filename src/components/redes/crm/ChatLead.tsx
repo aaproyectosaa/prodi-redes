@@ -67,7 +67,8 @@ function dia(at: string) {
   const ayer = new Date(Date.now() - 86400_000);
   if (d.toDateString() === hoy.toDateString()) return "Hoy";
   if (d.toDateString() === ayer.toDateString()) return "Ayer";
-  return d.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", ...(d.getFullYear() !== hoy.getFullYear() ? { year: "numeric" } : {}) });
+  const t = d.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", ...(d.getFullYear() !== hoy.getFullYear() ? { year: "numeric" } : {}) });
+  return t.charAt(0).toUpperCase() + t.slice(1);
 }
 const conNombre = (t: string, lead: LeadChat) => t.replace(/\{nombre\}/g, (lead.nombre || lead.negocio || "").replace(/^@/, "").split(/[\s.]/)[0] || "").replace(/¡Hola !/, "¡Hola!");
 
@@ -309,24 +310,15 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
     return res;
   }, [conv]);
 
-  const iniciales = (lead.negocio || lead.nombre || "?").replace(/^@/, "").slice(0, 1).toUpperCase();
-
   return (
-    <div className="flex h-full min-h-[480px] flex-col overflow-hidden rounded-2xl border bg-card shadow-sm">
-      {/* Encabezado */}
-      <div className="flex items-center gap-2.5 border-b px-3 py-2.5">
-        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 via-fuchsia-500 to-orange-400 text-sm font-bold text-white">
-          {iniciales}
-          <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-card">
-            <IconoRed className="h-3 w-3 text-pink-500" />
-          </span>
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{usuario ? `@${usuario}` : lead.nombre || lead.negocio}</p>
-          <p className="truncate text-[11px] text-muted-foreground">
-            {ultimoSuyo ? `Último mensaje ${dia(ultimoSuyo.at).toLowerCase()} a las ${hora(ultimoSuyo.at)}` : `Chat por ${red}`}
-          </p>
-        </div>
+    <div className="flex h-full min-h-[420px] flex-col overflow-hidden bg-background">
+      {/* Barra fina: red, último mensaje y cuánto queda para responder (el nombre ya está arriba de la ficha). */}
+      <div className="flex items-center gap-2 border-b px-4 py-2">
+        <IconoRed className="h-4 w-4 shrink-0 text-pink-500" />
+        <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          <span className="font-semibold text-foreground">{red}</span>
+          {ultimoSuyo ? ` · último mensaje ${dia(ultimoSuyo.at).toLowerCase()}, ${hora(ultimoSuyo.at)}` : ""}
+        </p>
         {conv &&
           (conv.puede_responder ? (
             <span
@@ -350,7 +342,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
 
       {/* Mensajes */}
       <div className="relative min-h-0 flex-1">
-        <div ref={caja} onScroll={alScroll} className="absolute inset-0 overflow-y-auto bg-[radial-gradient(circle_at_1px_1px,hsl(var(--muted))_1px,transparent_0)] bg-[length:18px_18px] px-3 py-3">
+        <div ref={caja} onScroll={alScroll} className="absolute inset-0 overflow-y-auto bg-background bg-[radial-gradient(circle_at_1px_1px,hsl(var(--border))_1px,transparent_0)] bg-[length:20px_20px] px-4 py-4 sm:px-6">
           {!conv && !error && (
             <p className="flex items-center justify-center gap-2 py-16 text-xs text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Trayendo la conversación…
@@ -359,15 +351,17 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
           {error && <p className="rounded-xl bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">{error}</p>}
           {filas.map((f) =>
             f.tipo === "dia" ? (
-              <div key={f.key} className="sticky top-0 z-10 my-3 flex justify-center">
-                <span className="rounded-full border bg-card/95 px-3 py-0.5 text-[10px] font-semibold capitalize text-muted-foreground shadow-sm backdrop-blur">{f.label}</span>
+              <div key={f.key} className="my-4 flex items-center gap-3 first:mt-0">
+                <span className="h-px flex-1 bg-border" />
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{f.label}</span>
+                <span className="h-px flex-1 bg-border" />
               </div>
             ) : (
               <div key={f.key} className={cn("flex", f.m.mio ? "justify-end" : "justify-start", f.primero ? "mt-2" : "mt-0.5")}>
                 <div
                   className={cn(
-                    "group max-w-[78%] px-3 py-1.5 text-sm leading-snug shadow-sm",
-                    f.m.mio ? "bg-gradient-to-br from-primary to-fuchsia-500 text-white" : "border bg-background",
+                    "group max-w-[75%] px-3.5 py-2 text-[13.5px] leading-snug",
+                    f.m.mio ? "bg-gradient-to-br from-primary to-fuchsia-500 text-white shadow-md shadow-primary/20" : "border bg-card shadow-sm",
                     f.m.mio
                       ? cn("rounded-2xl", !f.ultimo && "rounded-br-md", !f.primero && "rounded-tr-md")
                       : cn("rounded-2xl", !f.ultimo && "rounded-bl-md", !f.primero && "rounded-tl-md"),
@@ -494,7 +488,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
       )}
 
       {/* Responder */}
-      <div className="border-t bg-card p-2">
+      <div className="border-t bg-background px-3 pb-3 pt-2">
         {conv && !conv.puede_responder ? (
           <div className="flex items-center gap-2 rounded-xl bg-muted px-3 py-2.5 text-xs text-muted-foreground">
             <Clock className="h-4 w-4 shrink-0" />
@@ -550,7 +544,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
                   }
                 }}
                 rows={1}
-                placeholder={`Escribí tu respuesta por ${red}…`}
+                placeholder={`Responder por ${red}… (Enter envía)`}
                 className="max-h-[140px] min-h-[42px] resize-none rounded-2xl bg-muted/50 text-sm"
                 disabled={!conv}
                 maxLength={1000}
@@ -565,10 +559,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
                 {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
             </div>
-            <p className="mt-1 flex justify-between px-1 text-[10px] text-muted-foreground">
-              <span>Enter envía · Shift + Enter salto de línea</span>
-              {texto.length > 700 && <span>{texto.length}/1000</span>}
-            </p>
+            {texto.length > 700 && <p className="mt-1 px-1 text-right text-[10px] text-muted-foreground">{texto.length}/1000</p>}
           </>
         )}
       </div>

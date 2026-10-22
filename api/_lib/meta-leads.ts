@@ -351,11 +351,17 @@ export async function importarMensajes(base: string, forzar = false, todo = fals
         califica: true,
         dudoso: false,
         estado: "calificado",
-        notas: [`Escribió por mensaje de ${red}:`, ...suyos.map((m: any) => `«${limpio(m.message, 500)}»`)].join("\n").slice(0, 4000),
+        // Los mensajes se ven en el chat de la ficha: las notas quedan libres para el vendedor.
+        notas: "",
         manual: true,
         fuente: `Mensaje ${red}`,
         origen: "meta:mensaje",
-        meta: { conversacion_id: String(c.id), plataforma, ultimo_mensaje_at: recientes[recientes.length - 1]?.created_time ?? at },
+        meta: {
+          conversacion_id: String(c.id),
+          plataforma,
+          ultimo_mensaje_at: recientes[recientes.length - 1]?.created_time ?? at,
+          ultimo_texto: limpio(suyos[suyos.length - 1]?.message ?? "", 300),
+        },
         historial: [{ at, de: null, a: "calificado", por: null, por_nombre: `Mensaje de ${red}` }],
       });
       nuevos++;
@@ -393,7 +399,7 @@ async function sumarMensajesNuevos(id: string, lead: any, c: any, propios: Set<s
   await guardarDoc(getPool(), COL, id, {
     ...lead,
     updated_at: new Date().toISOString(),
-    meta: { ...(lead.meta ?? {}), ultimo_mensaje_at: ultimo },
+    meta: { ...(lead.meta ?? {}), ultimo_mensaje_at: ultimo, ultimo_texto: limpio(nuevos[nuevos.length - 1].message, 300) },
     historial: [...(Array.isArray(lead.historial) ? lead.historial : []), ...eventos].slice(-100),
   });
   const admins = (await adminDb().collection("profiles").where("role", "==", "admin").get()).docs.filter((d) => d.data().activo !== false).map((d) => d.id);
