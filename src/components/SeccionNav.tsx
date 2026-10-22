@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "react-router-dom";
-import { Briefcase, ChevronDown, Clapperboard, House, Landmark, Layers, type LucideIcon } from "lucide-react";
+import { Briefcase, ChevronDown, Clapperboard, Handshake, House, Landmark, Layers, type LucideIcon } from "lucide-react";
 import type { NavSection } from "@/lib/redes/nav";
 import { isNavItemActive } from "@/components/AppSidebar";
 import { cn } from "@/lib/utils";
@@ -28,6 +28,8 @@ export function estiloSeccion(titulo?: string): { icono: LucideIcon; chip: strin
       return { icono: Landmark, chip: "bg-emerald-500/15 text-emerald-500", linea: "border-emerald-500/30", texto: "text-emerald-500" };
     case "Producción":
       return { icono: Clapperboard, chip: "bg-violet-500/15 text-violet-500", linea: "border-violet-500/30", texto: "text-violet-500" };
+    case "CRM":
+      return { icono: Handshake, chip: "bg-rose-500/15 text-rose-500", linea: "border-rose-500/30", texto: "text-rose-500" };
     case "Gestión":
       return { icono: Briefcase, chip: "bg-amber-500/15 text-amber-500", linea: "border-amber-500/30", texto: "text-amber-500" };
     default:

@@ -188,8 +188,8 @@ export default function Web() {
 
   return (
     <PageShell
-      title="Web"
-      subtitle={`Reservas de somosprodi.com · temporada ${config.temporada}`}
+      title="Leads"
+      subtitle={`Los de somosprodi.com y los que cargás a mano · temporada ${config.temporada}`}
       className="max-w-none"
       actions={
         <>

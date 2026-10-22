@@ -108,10 +108,16 @@ export function navForRole(role: UserRole | undefined): NavSection[] {
             { label: "Tablero", icon: Gauge, path: "/tablero", mobile: true },
             { label: "Pedidos", icon: Inbox, path: "/pedidos" },
             { label: "Clientes", icon: Building2, path: "/clientes", mobile: true },
-            { label: "Presupuestos", icon: FileText, path: "/presupuestos" },
-            { label: "Web", icon: Globe, path: "/web" },
             { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
             { label: "Mi asistente", icon: Sparkles, path: "/mi-asistente" },
+          ],
+        },
+        {
+          // Ventas: los que todavía no son clientes (la web, los cargados a mano) y las propuestas.
+          title: "CRM",
+          items: [
+            { label: "Leads", icon: Globe, path: "/web" },
+            { label: "Presupuestos", icon: FileText, path: "/presupuestos" },
           ],
         },
         {
