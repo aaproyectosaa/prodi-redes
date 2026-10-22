@@ -37,6 +37,28 @@ export async function anotarMinuto(uid: string, fuente: Fuente, que: string | nu
   );
 }
 
+/**
+ * Minutos de antes (ej. lo que se trabajó con Claude Code antes de conectarlo, sacado de sus registros):
+ * solo de los últimos 14 días y nunca del futuro. Si el minuto ya estaba, no se pisa.
+ */
+export async function anotarMinutosPasados(uid: string, fuente: Fuente, minutos: { at?: string; que?: string; proyecto?: string }[]): Promise<number> {
+  await asegurarTablas();
+  const desde = Date.now() - 14 * 86_400_000;
+  const validos = minutos
+    .map((m) => ({ t: Date.parse(String(m.at ?? "")), que: String(m.que ?? "").trim().slice(0, 140) || null, proyecto: String(m.proyecto ?? "").trim().slice(0, 80) || null }))
+    .filter((m) => Number.isFinite(m.t) && m.t >= desde && m.t <= Date.now() + 60_000)
+    .slice(0, 3000);
+  let n = 0;
+  for (const m of validos) {
+    const r = await getPool().query(
+      `insert into mi_tiempo (uid, minuto, fuente, que, proyecto) values ($1, date_trunc('minute', $2::timestamptz), $3, $4, $5) on conflict do nothing`,
+      [uid, new Date(m.t).toISOString(), fuente, m.que, m.proyecto]
+    );
+    n += r.rowCount ?? 0;
+  }
+  return n;
+}
+
 const hash = (t: string) => crypto.createHash("sha256").update(t).digest("hex");
 
 /** Token nuevo para Claude Code (borra los anteriores). Se muestra una sola vez. */

@@ -25,7 +25,7 @@ import { appUrl, body, HttpError, olvidarPerfil, requireCaller, rolesDe, sendErr
 import { enviarMailsLote } from "../_lib/informe";
 import { mailAvisoHtml } from "../_lib/mail-aviso";
 import { borrarEjemplo, cargarEjemplo } from "../_lib/ejemplo";
-import { anotarMinuto, nuevoToken, resumenTiempo, tieneToken, uidDelToken } from "../_lib/mi-tiempo";
+import { anotarMinuto, anotarMinutosPasados, nuevoToken, resumenTiempo, tieneToken, uidDelToken } from "../_lib/mi-tiempo";
 
 export const config = { maxDuration: 60 };
 
@@ -368,7 +368,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Mi tiempo: Claude Code avisa con el token personal (no tiene la sesión de la app).
     if (accion === "tiempo-cc") {
       const uid = await uidDelToken(String(req.headers["x-prodi-token"] ?? ""));
-      const b = body<{ que?: string; proyecto?: string }>(req);
+      const b = body<{ que?: string; proyecto?: string; minutos?: { at?: string; que?: string; proyecto?: string }[] }>(req);
+      // Con "minutos": carga de antes (los registros de Claude Code); si no, el minuto de ahora.
+      if (Array.isArray(b.minutos)) {
+        res.status(200).json({ ok: true, cargados: await anotarMinutosPasados(uid, "claude", b.minutos) });
+        return;
+      }
       await anotarMinuto(uid, "claude", String(b.que ?? "").trim() || null, String(b.proyecto ?? "").trim() || null);
       res.status(200).json({ ok: true });
       return;
