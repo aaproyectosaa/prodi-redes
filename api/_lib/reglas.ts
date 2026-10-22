@@ -56,6 +56,31 @@ const escribeAlguna = (antes: Data | null, despues: Data | null, campos: string[
   !!despues && campos.some((k) => despues[k] !== undefined && JSON.stringify(despues[k]) !== JSON.stringify(antes?.[k]));
 const activo = (c: Contexto) => c.roles.some((r) => ACTIVOS.includes(r));
 const clienteDe = (c: Contexto, pid: unknown) => c.role === "cliente" && typeof pid === "string" && c.misClientes.has(pid);
+/**
+ * Chat: "lo último" (lo que se ve en la lista y sale en el aviso) solo a nombre de quien escribe y con la hora de ahora
+ * (o el mismo de antes, si edita su último mensaje); "leído", solo el propio. Así nadie pone un texto falso a nombre de
+ * Prodi o de otro, ni marca como leído el chat de los demás.
+ */
+function ultimoYLeidoOk(c: Contexto, antes: Data, despues: Data): boolean {
+  const a = (antes.ultimo ?? null) as { texto?: unknown; by?: unknown; at?: unknown } | null;
+  const d = (despues.ultimo ?? null) as { texto?: unknown; by?: unknown; at?: unknown } | null;
+  if (JSON.stringify(a) !== JSON.stringify(d)) {
+    if (!d || d.by !== c.uid || typeof d.texto !== "string" || d.texto.length > 300 || typeof d.at !== "string") return false;
+    const at = Date.parse(d.at);
+    const ahora = Date.now();
+    const reciente = !Number.isNaN(at) && at > ahora - 10 * 60_000 && at < ahora + 2 * 60_000;
+    const editaElSuyo = !!a && a.by === c.uid && a.at === d.at;
+    if (!reciente && !editaElSuyo) return false;
+  }
+  const la = (antes.leido ?? {}) as Record<string, unknown>;
+  const ld = (despues.leido ?? {}) as Record<string, unknown>;
+  for (const k of new Set([...Object.keys(la), ...Object.keys(ld)])) {
+    if (la[k] === ld[k]) continue;
+    if (k !== c.uid || typeof ld[k] !== "string") return false;
+  }
+  return true;
+}
+
 const soloCambia = (antes: Data | null, despues: Data | null, permitidas: string[]) =>
   clavesCambiadas(antes, despues).every((k) => permitidas.includes(k));
 const tocaAlguna = (antes: Data | null, despues: Data | null, prohibidas: string[]) =>
@@ -601,6 +626,8 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       if (esAdmin(c)) return fotoOk(despues!.foto);
       const miembrosAntes = lista(antes!.miembros);
       if (!miembrosAntes.includes(c.uid)) return false;
+      // Lo último y lo leído: cada uno lo suyo (ver ultimoYLeidoOk). También vale para los cambios de abajo.
+      if (!ultimoYLeidoOk(c, antes!, despues!)) return false;
       if (soloCambia(antes, despues, ["ultimo", "leido"])) return true;
       // Fijar o desfijar mensajes arriba del chat: cualquier miembro.
       if (soloCambia(antes, despues, ["fijados"])) return fijadosValidos(despues!.fijados);
