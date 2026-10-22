@@ -709,6 +709,20 @@ async function pautaConsejos(req: VercelRequest) {
   return consejosPauta(caller, b.proyecto_id, !!b.rehacer);
 }
 
+/** Marcar un consejo de la IA como hecho (o pendiente): queda en la base con quién y cuándo, para que lo vea el admin. */
+async function pautaHecho(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "pauta"]);
+  const b = body<{ proyecto_id?: string; indice?: number; hecho?: boolean }>(req);
+  if (!b.proyecto_id || typeof b.indice !== "number" || b.indice < 0) throw new HttpError(400, "Falta el consejo");
+  await assertProjectAccess(caller, b.proyecto_id);
+  const ref = adminDb().collection("ia_pauta").doc(b.proyecto_id);
+  const d = (await ref.get()).data();
+  const i = Math.floor(b.indice);
+  if (!d || !(d.sugerencias ?? [])[i]) throw new HttpError(404, "Ese consejo ya no está: analizá de nuevo");
+  await ref.update({ [`hechos.${i}`]: b.hecho ? { uid: caller.uid, nombre: caller.nombre || "", at: new Date().toISOString() } : null });
+  return { ok: true };
+}
+
 /** "Cómo se hace": los pasos en el Administrador de anuncios para aplicar un consejo de la IA. */
 async function pautaComo(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "pauta"]);
@@ -1704,6 +1718,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "pauta-consejos") res.status(200).json(await pautaConsejos(req));
     else if (accion === "plan-votar") res.status(200).json(await planVotar(req));
     else if (accion === "pauta-como") res.status(200).json(await pautaComo(req));
+    else if (accion === "pauta-hecho") res.status(200).json(await pautaHecho(req));
     else if (accion === "pauta-chat") res.status(200).json(await pautaChat(req));
     else if (accion === "voz-escuchar") res.status(200).json(await vozEscuchar(req));
     else if (accion === "voz-hablar") res.status(200).json(await vozHablar(req));

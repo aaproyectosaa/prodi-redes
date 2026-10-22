@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { db } from "@/integrations/firebase/client";
 import { doc, onSnapshot } from "@/lib/db";
 import { callApi } from "@/lib/redes/api";
+import { assertEditable } from "@/lib/redes/vistaComo";
 import { cn } from "@/lib/utils";
 
 // Consejos de la IA para quien maneja la pauta: lee los últimos 90 días de la cuenta del cliente y dice qué mantener,
@@ -64,6 +65,7 @@ interface Consejos {
   sugerencias: Sugerencia[];
   base?: { campanias: number; conjuntos: number; anuncios: number; gasto: number; moneda: string; leido: string[] };
   generado_at: string;
+  hechos?: Hechos;
 }
 
 /** Ícono y texto de "a qué apunta" cada consejo. */
@@ -113,28 +115,34 @@ const fecha = (iso: string) => new Date(iso).toLocaleDateString("es-AR", { day: 
 /** Primera oración de un texto (para los consejos guardados antes de que existieran "acción" y "por qué"). */
 const primeraFrase = (t: string) => (t.match(/^[^.!?]+[.!?]/)?.[0] ?? t).trim();
 
-/** Lo que ya se hizo de cada análisis (en este navegador). */
-function useHechos(proyectoId: string, generado?: string) {
-  const clave = `prodi:consejos-hechos:${proyectoId}:${generado ?? ""}`;
-  const [hechos, setHechos] = useState<number[]>([]);
-  useEffect(() => {
+/** Quién marcó cada consejo como hecho y cuándo (queda en la base: lo ve el admin y el resto del equipo). */
+type Hechos = Record<string, { uid: string; nombre: string; at: string } | null>;
+
+function useHechos(proyectoId: string, deLaBase: Hechos | undefined) {
+  // Lo que se tocó recién se ve al toque (hasta que llega de la base).
+  const [locales, setLocales] = useState<Record<string, boolean>>({});
+  useEffect(() => setLocales({}), [deLaBase]);
+  const esHecho = (i: number) => (String(i) in locales ? locales[String(i)] : !!deLaBase?.[String(i)]);
+  const quien = (i: number) => deLaBase?.[String(i)] ?? null;
+  const alternar = (i: number) => {
     try {
-      setHechos(JSON.parse(localStorage.getItem(clave) ?? "[]"));
-    } catch {
-      setHechos([]);
+      assertEditable();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Es solo lectura");
+      return;
     }
-  }, [clave]);
-  const alternar = (i: number) =>
-    setHechos((prev) => {
-      const next = prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i];
-      try {
-        localStorage.setItem(clave, JSON.stringify(next));
-      } catch {
-        /* sin almacenamiento */
-      }
-      return next;
+    const nuevo = !esHecho(i);
+    setLocales((x) => ({ ...x, [String(i)]: nuevo }));
+    void callApi("/api/ia/pauta-hecho", { proyecto_id: proyectoId, indice: i, hecho: nuevo }).catch((e) => {
+      setLocales((x) => {
+        const n = { ...x };
+        delete n[String(i)];
+        return n;
+      });
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar");
     });
-  return { hechos, alternar };
+  };
+  return { esHecho, quien, alternar };
 }
 
 export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
@@ -143,7 +151,7 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
   const [filtro, setFiltro] = useState<Sugerencia["tipo"] | null>(null);
   const [abierto, setAbierto] = useState<number | null>(null);
   const [listaAbierta, setListaAbierta] = useState(true);
-  const { hechos, alternar } = useHechos(proyectoId, datos?.generado_at);
+  const { esHecho, quien, alternar } = useHechos(proyectoId, datos?.hechos);
 
   useEffect(() => {
     return onSnapshot(
@@ -176,7 +184,7 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
   const cuenta = (t: Sugerencia["tipo"]) => lista.filter((x) => x.s.tipo === t).length;
   const titular = datos ? datos.titular || primeraFrase(datos.resumen) : "";
   const estado = datos?.estado ? ESTADO[datos.estado] : null;
-  const hechas = lista.filter((x) => hechos.includes(x.i)).length;
+  const hechas = lista.filter((x) => esHecho(x.i)).length;
 
   return (
     <div className="overflow-hidden rounded-3xl border bg-card shadow-sm">
@@ -344,7 +352,8 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
               {visibles.map(({ s, i }) => {
                 const t = TIPO[s.tipo] ?? TIPO.mejorar;
                 const Icono = t.icono;
-                const hecho = hechos.includes(i);
+                const hecho = esHecho(i);
+                const marco = hecho ? quien(i) : null;
                 const accion = s.accion || s.titulo;
                 const porque = s.porque || primeraFrase(s.detalle);
                 const desplegado = abierto === i;
@@ -383,7 +392,14 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
                         <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-lg", t.caja)} title={t.label}>
                           <Icono className="h-3.5 w-3.5" />
                         </span>
-                        <span className={cn("min-w-0 flex-1 text-sm font-semibold leading-snug", !desplegado && "truncate", hecho && "line-through")}>{accion}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className={cn("block text-sm font-semibold leading-snug", !desplegado && "truncate", hecho && "line-through")}>{accion}</span>
+                          {marco && (
+                            <span className="block text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                              Hecho por {marco.nombre.split(" ")[0] || "alguien"} · {new Date(marco.at).toLocaleString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          )}
+                        </span>
                         {s.prioridad === "alta" && (
                           <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-red-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-red-600 dark:text-red-300">
                             <Flame className="h-3 w-3" />
