@@ -646,9 +646,9 @@ function FormulariosMeta() {
   const traerMensajes = async () => {
     setConectando(true);
     try {
-      const r = await callApi<{ nuevos: number; errores?: string[] }>("/api/web/meta-mensajes", { forzar: true });
-      if (r.errores?.length) toast.warning(r.errores.join(" · "));
-      toast.success(r.nuevos ? `${r.nuevos} lead${r.nuevos === 1 ? "" : "s"} nuevo${r.nuevos === 1 ? "" : "s"} por mensaje` : "No hay conversaciones nuevas");
+      const r = await callApi<{ nuevos: number; errores?: string[]; detalle?: string[] }>("/api/web/meta-mensajes", { forzar: true });
+      if (r.errores?.length) toast.warning(r.errores.join(" · "), { duration: 20000 });
+      toast.success(`${r.nuevos ? `${r.nuevos} lead${r.nuevos === 1 ? "" : "s"} nuevo${r.nuevos === 1 ? "" : "s"} por mensaje` : "No hay conversaciones nuevas"}${r.detalle?.length ? ` · ${r.detalle.join(" · ")}` : ""}`, { duration: 15000 });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudieron traer los mensajes");
     } finally {

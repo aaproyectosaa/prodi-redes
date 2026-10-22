@@ -261,6 +261,8 @@ export async function importarMensajes(base: string, forzar = false) {
   const desde = Date.now() - 30 * 86400_000;
   const temporada = await temporadaActual();
   const errores: string[] = [];
+  // Qué se encontró en cada red (para saber dónde se corta si no entra nada).
+  const detalle: string[] = [ig ? `Instagram @${ig.username ?? ig.id}` : "La página no tiene Instagram vinculado"];
   let nuevos = 0;
 
   for (const plataforma of ["messenger", "instagram"] as const) {
@@ -277,8 +279,10 @@ export async function importarMensajes(base: string, forzar = false) {
         ).data ?? [];
     } catch (err) {
       errores.push(`${plataforma === "instagram" ? "Instagram" : "Facebook"}: ${err instanceof Error ? err.message : err}`);
+      detalle.push(`${plataforma}: error`);
       continue;
     }
+    detalle.push(`${plataforma === "instagram" ? "Instagram" : "Facebook"}: ${convs.length} conversaciones`);
     for (const c of convs) {
       if (Date.parse(c.updated_time) < desde) continue;
       const id = idDeLead(`conversacion:${c.id}`);
@@ -330,5 +334,5 @@ export async function importarMensajes(base: string, forzar = false) {
     }
   }
   if (errores.length && !nuevos) throw new HttpError(502, errores.join(" · "));
-  return { revisado: true, nuevos, errores };
+  return { revisado: true, nuevos, errores, detalle };
 }
