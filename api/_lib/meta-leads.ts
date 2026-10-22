@@ -432,6 +432,8 @@ export async function estadoMeta() {
 // ahí con el token de la página. Meta solo deja responder dentro de las 24 h del último mensaje de la persona.
 
 const VENTANA_MS = 24 * 3600_000;
+// Con el permiso "Human Agent" de Meta, una persona (no un bot) puede responder hasta 7 días después.
+const VENTANA_AGENTE_MS = 7 * 24 * 3600_000;
 
 async function contextoConversacion(leadId: string) {
   const lead = await leerDoc(getPool(), COL, leadId);
@@ -459,8 +461,19 @@ export async function conversacionLead(leadId: string) {
     mio: propiosDe(c.propios, m.from?.id),
   }));
   const ultimoSuyo = [...mensajes].reverse().find((m) => !m.mio);
-  const vence = ultimoSuyo ? Date.parse(ultimoSuyo.at) + VENTANA_MS : 0;
-  return { plataforma: c.plataforma, mensajes, puede_responder: vence > Date.now(), vence: vence ? new Date(vence).toISOString() : null };
+  const desde = ultimoSuyo ? Date.parse(ultimoSuyo.at) : 0;
+  const vence = desde ? desde + VENTANA_MS : 0;
+  const venceAgente = desde ? desde + VENTANA_AGENTE_MS : 0;
+  const ahora = Date.now();
+  // "normal": las 24 h de siempre; "agente": de 24 h a 7 días (necesita Human Agent aprobado); "cerrada": más de 7 días.
+  const ventana = vence > ahora ? "normal" : venceAgente > ahora ? "agente" : "cerrada";
+  return {
+    plataforma: c.plataforma,
+    mensajes,
+    puede_responder: ventana !== "cerrada",
+    ventana,
+    vence: ventana === "agente" ? new Date(venceAgente).toISOString() : vence ? new Date(vence).toISOString() : null,
+  };
 }
 const propiosDe = (propios: Set<string>, id: unknown) => propios.has(String(id ?? ""));
 
@@ -472,15 +485,28 @@ export async function responderLead(leadId: string, texto: string, quien: { uid:
   const d = await graph(c.convId, { fields: "participants" }, c.token);
   const persona = (d.participants?.data ?? []).find((p: any) => !c.propios.has(String(p.id)));
   if (!persona?.id) throw new HttpError(400, "No encontramos a quién responderle");
+  // Pasadas las 24 h (y hasta 7 días) se manda marcado como respuesta de una persona (Human Agent).
+  const ultimo = await graph(c.convId, { fields: "messages.limit(10){from,created_time}" }, c.token).catch(() => null);
+  const suyo = (ultimo?.messages?.data ?? []).find((m: any) => !c.propios.has(String(m.from?.id)));
+  const fueraDe24 = suyo ? Date.now() - Date.parse(suyo.created_time) > VENTANA_MS : false;
   try {
     await graph(
       `${c.id}/messages`,
-      { recipient: JSON.stringify({ id: persona.id }), message: JSON.stringify({ text: msj }), messaging_type: "RESPONSE" },
+      {
+        recipient: JSON.stringify({ id: persona.id }),
+        message: JSON.stringify({ text: msj }),
+        ...(fueraDe24 ? { messaging_type: "MESSAGE_TAG", tag: "HUMAN_AGENT" } : { messaging_type: "RESPONSE" }),
+      },
       c.token,
       "POST"
     );
   } catch (err) {
     const m = err instanceof Error ? err.message : String(err);
+    if (fueraDe24)
+      throw new HttpError(
+        400,
+        "Pasaron más de 24 h: para responder hasta 7 días Meta tiene que aprobar el permiso «Human Agent» de la app. Mientras tanto, contestale desde la app de Instagram."
+      );
     if (/24|window|outside|fuera/i.test(m)) throw new HttpError(400, "Pasaron más de 24 h desde su último mensaje: Meta no deja responder desde acá. Contestale desde la app de Instagram.");
     throw err;
   }

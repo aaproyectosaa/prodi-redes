@@ -26,6 +26,8 @@ interface Conversacion {
   plataforma: string;
   mensajes: Mensaje[];
   puede_responder: boolean;
+  /** "agente": pasaron las 24 h pero se puede hasta 7 días con Human Agent. */
+  ventana?: "normal" | "agente" | "cerrada";
   vence: string | null;
 }
 interface Respuesta {
@@ -291,6 +293,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
   const appLink = conv?.plataforma === "messenger" ? "https://business.facebook.com/latest/inbox" : usuario ? `https://ig.me/m/${usuario}` : "https://www.instagram.com/direct/inbox/";
   const quedan = conv?.vence ? Date.parse(conv.vence) - ahora : 0;
   const horas = Math.max(0, Math.floor(quedan / 3600_000));
+  const extendida = conv?.ventana === "agente";
   const detectados = useMemo(() => (conv ? datosEnChat(conv.mensajes, lead) : { telefono: null, email: null }), [conv, lead]);
   const ultimoSuyo = conv ? [...conv.mensajes].reverse().find((m) => !m.mio) : undefined;
   const esperandoRespuesta = !!conv && conv.mensajes.length > 0 && !conv.mensajes[conv.mensajes.length - 1].mio;
@@ -324,11 +327,24 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
             <span
               className={cn(
                 "flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                horas < 3 ? "bg-red-500/15 text-red-600 dark:text-red-400" : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                extendida
+                  ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                  : horas < 3
+                    ? "bg-red-500/15 text-red-600 dark:text-red-400"
+                    : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
               )}
-              title="Meta deja responder hasta 24 h después del último mensaje del lead"
+              title={
+                extendida
+                  ? "Pasaron más de 24 h: se responde como persona (Human Agent), hasta 7 días después de su último mensaje"
+                  : "Meta deja responder hasta 24 h después del último mensaje del lead"
+              }
             >
-              <Clock className="h-3 w-3" /> {horas < 1 ? "Menos de 1 h para responder" : `${horas} h para responder`}
+              <Clock className="h-3 w-3" />{" "}
+              {extendida
+                ? `Plazo extendido · ${horas >= 24 ? `${Math.floor(horas / 24)} d` : `${horas} h`}`
+                : horas < 1
+                  ? "Menos de 1 h para responder"
+                  : `${horas} h para responder`}
             </span>
           ) : (
             <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
@@ -492,7 +508,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
         {conv && !conv.puede_responder ? (
           <div className="flex items-center gap-2 rounded-xl bg-muted px-3 py-2.5 text-xs text-muted-foreground">
             <Clock className="h-4 w-4 shrink-0" />
-            <span className="flex-1">Pasaron más de 24 h desde su último mensaje: Meta no deja responder desde acá.</span>
+            <span className="flex-1">Pasaron más de 7 días desde su último mensaje: Meta no deja responder desde acá.</span>
             <a href={appLink} target="_blank" rel="noopener noreferrer" className="shrink-0 rounded-full bg-primary px-3 py-1 font-semibold text-primary-foreground hover:bg-primary/90">
               Abrir {red}
             </a>
