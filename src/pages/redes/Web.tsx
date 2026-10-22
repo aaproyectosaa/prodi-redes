@@ -67,6 +67,8 @@ interface LeadWeb {
   ultimo_contacto_at?: string | null;
   /** Cargado a mano desde el panel (no vino del formulario de la web). */
   manual?: boolean;
+  /** "meta:leadgen": entró solo desde un formulario de un anuncio de Prodi (api/_lib/meta-leads.ts). */
+  origen?: string;
   fuente?: string;
   telefono?: string;
   /** Dirección del local o link de Google Maps. */
@@ -339,7 +341,7 @@ function LeadCard({ lead: l, onAbrir }: { lead: LeadWeb; onAbrir: () => void }) 
         )}
         {l.manual && (
           <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold text-sky-700 dark:text-sky-300">
-            Cargado a mano{l.fuente ? ` · ${l.fuente}` : ""}
+            {l.origen === "meta:leadgen" ? `Llegó solo · ${l.fuente ?? "Formulario de Meta"}` : `Cargado a mano${l.fuente ? ` · ${l.fuente}` : ""}`}
           </span>
         )}
         <span className="block truncate font-semibold">{l.negocio}</span>
