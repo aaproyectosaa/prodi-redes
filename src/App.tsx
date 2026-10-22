@@ -1,3 +1,4 @@
+import { MensajesMetaFondo } from "@/components/redes/MensajesMetaFondo";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { AvisoVersion } from "@/components/AvisoVersion";
@@ -104,6 +105,7 @@ const App = () => (
           <AvisoVersion />
           <AppProviders>
             <PendingRoleGate />
+            <MensajesMetaFondo />
             <Suspense fallback={<Cargando />}>
             <ModoChat>
             <Routes>
