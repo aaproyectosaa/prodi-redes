@@ -29,6 +29,98 @@ export function mapaEmbebido(u: string): string | null {
   return q.length > 3 ? `https://www.google.com/maps?q=${encodeURIComponent(q)}&output=embed` : null;
 }
 
+type Coords = [number, number];
+
+/** Coordenadas escritas en el texto o en un link de Google Maps (@lat,lng o q=lat,lng). */
+function coordsDe(u: string): Coords | null {
+  const m = u.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) ?? u.match(/(?:^|[=\s])(-?\d{1,2}\.\d{3,}),\s*(-?\d{1,3}\.\d{3,})/);
+  return m ? [Number(m[1]), Number(m[2])] : null;
+}
+
+/** Dónde queda una dirección (OpenStreetMap). Se guarda en el navegador para no volver a buscarla. */
+async function coordenadas(u: string): Promise<Coords | null> {
+  const directas = coordsDe(u);
+  if (directas) return directas;
+  let q = u.trim();
+  if (/^https?:\/\//i.test(q)) {
+    const lugar = q.match(/\/place\/([^/@?]+)/)?.[1];
+    if (!lugar) return null;
+    q = decodeURIComponent(lugar.replace(/\+/g, " "));
+  }
+  const clave = `geo:${q.toLowerCase()}`;
+  try {
+    const guardado = localStorage.getItem(clave);
+    if (guardado) return JSON.parse(guardado) as Coords | null;
+  } catch {
+    /* sin almacenamiento */
+  }
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ar&q=${encodeURIComponent(q)}`);
+    const [x] = (await r.json()) as { lat: string; lon: string }[];
+    const c: Coords | null = x ? [Number(x.lat), Number(x.lon)] : null;
+    try {
+      localStorage.setItem(clave, JSON.stringify(c));
+    } catch {
+      /* sin almacenamiento */
+    }
+    return c;
+  } catch {
+    return null;
+  }
+}
+
+/** Mapa que se mueve y se acerca ahí mismo (Leaflet con OpenStreetMap). Si no encuentra el lugar, muestra el de Google. */
+export function MapaMovible({ ubicacion, className }: { ubicacion: string; className?: string }) {
+  const caja = useRef<HTMLDivElement>(null);
+  const [estado, setEstado] = useState<"cargando" | "ok" | "sin">("cargando");
+  useEffect(() => {
+    let cancelado = false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let mapa: any = null;
+    setEstado("cargando");
+    void (async () => {
+      const c = await coordenadas(ubicacion);
+      if (cancelado) return;
+      if (!c) return setEstado("sin");
+      const L = (await import("leaflet")).default;
+      await import("leaflet/dist/leaflet.css");
+      if (cancelado || !caja.current) return;
+      mapa = L.map(caja.current, { scrollWheelZoom: true }).setView(c, 16);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(mapa);
+      L.marker(c, {
+        icon: L.divIcon({
+          className: "",
+          html: '<div style="width:22px;height:22px;border-radius:9999px 9999px 9999px 0;transform:rotate(-45deg);background:#6F40FC;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4)"></div>',
+          iconSize: [22, 22],
+          iconAnchor: [11, 22],
+        }),
+      }).addTo(mapa);
+      setEstado("ok");
+      // En un diálogo que se está abriendo, el tamaño se acomoda después.
+      setTimeout(() => mapa?.invalidateSize(), 250);
+    })();
+    return () => {
+      cancelado = true;
+      mapa?.remove();
+    };
+  }, [ubicacion]);
+
+  if (estado === "sin") {
+    const g = mapaEmbebido(ubicacion);
+    return g ? <iframe title="Mapa" src={g} className={cn("w-full rounded-xl border", className)} loading="lazy" referrerPolicy="no-referrer-when-downgrade" /> : null;
+  }
+  return (
+    <div className={cn("relative isolate overflow-hidden rounded-xl border", className)}>
+      <div ref={caja} className="h-full w-full" />
+      {estado === "cargando" && (
+        <div className="absolute inset-0 flex items-center justify-center bg-muted/60 text-xs text-muted-foreground">
+          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Buscando en el mapa…
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface Sugerencia {
   id: number;
   titulo: string;
@@ -95,7 +187,12 @@ export function BuscadorMapa({
     };
   }, [valor]);
 
-  const mapa = valor.trim().length > 3 ? mapaEmbebido(valor) : null;
+  // El mapa se actualiza cuando deja de escribir (o al elegir una sugerencia).
+  const [paraMapa, setParaMapa] = useState(valor.trim());
+  useEffect(() => {
+    const t = setTimeout(() => setParaMapa(valor.trim()), valor.trim() === elegido.current ? 0 : 1200);
+    return () => clearTimeout(t);
+  }, [valor]);
 
   return (
     <div className={cn("space-y-1.5", className)}>
@@ -146,7 +243,7 @@ export function BuscadorMapa({
           </div>
         )}
       </div>
-      {mapa && <iframe title="Mapa" src={mapa} className="h-40 w-full rounded-xl border" loading="lazy" referrerPolicy="no-referrer-when-downgrade" />}
+      {paraMapa.length > 3 && <MapaMovible ubicacion={paraMapa} className="h-44" />}
       <a
         href={valor.trim() ? linkMapa(valor) : "https://www.google.com/maps"}
         target="_blank"

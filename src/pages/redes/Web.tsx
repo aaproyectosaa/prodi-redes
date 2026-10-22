@@ -34,7 +34,7 @@ import { collection, db, doc, onSnapshot } from "@/lib/db";
 import { callApi } from "@/lib/redes/api";
 import { fechaHora, hace, hoyISO } from "@/lib/redes/format";
 import { cn } from "@/lib/utils";
-import { BuscadorMapa, linkMapa, mapaEmbebido } from "@/components/redes/BuscadorMapa";
+import { BuscadorMapa, linkMapa, mapaEmbebido, MapaMovible } from "@/components/redes/BuscadorMapa";
 
 // Reservas de la landing de la campaña «No empezamos de cero» (somosprodi.com).
 // Las crea el servidor (/api/web/aplicar); acá se mueven y se anotan (/api/web/estado y /notas).
@@ -512,7 +512,7 @@ function DatosLead({ lead }: { lead: LeadWeb }) {
                 </div>
               )}
               {k === "ubicacion" && editando !== k && mapaEmbebido(v) && (
-                <iframe title="Mapa" src={mapaEmbebido(v)!} className="mt-2 h-36 w-full rounded-lg border" loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+                <MapaMovible ubicacion={v} className="mt-2 h-48" />
               )}
             </div>
           );
