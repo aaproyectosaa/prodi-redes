@@ -9,6 +9,7 @@
 // - Cada link queda además como dato en la memoria del cliente (ia_memoria.chat_notas), con el título y la
 //   descripción de la página si se pueden leer: lo usan el plan del mes, los copys, los guiones y @prodi.
 
+import { hostPublicoDNS } from "./url-segura";
 import { adminDb, type Data } from "./db";
 import { HttpError, type Caller } from "./http";
 import { chatDeMiembro, mensajeProdi, PRODI_ID } from "./chat-server";
@@ -67,6 +68,8 @@ export interface PreviaLink {
 export async function previaDeLink(u: URL): Promise<PreviaLink | null> {
   if (u.protocol !== "https:" && u.protocol !== "http:") return null;
   if (/^(localhost|\d+\.\d+\.\d+\.\d+|\[.*\])$/i.test(u.hostname) || /\.(local|internal|localhost)$/i.test(u.hostname) || /(^|\.)(nip\.io|sslip\.io|xip\.io|localtest\.me)$/i.test(u.hostname)) return null;
+  // El dominio tampoco puede apuntar a una dirección interna.
+  if (!(await hostPublicoDNS(u.hostname))) return null;
   try {
     const r = await fetch(u.toString(), { redirect: "manual", signal: AbortSignal.timeout(5000), headers: { "User-Agent": "Mozilla/5.0 (Prodi)" } });
     if (!r.ok || !String(r.headers.get("content-type") ?? "").includes("text/html")) return null;
@@ -105,6 +108,8 @@ export async function previaDeLink(u: URL): Promise<PreviaLink | null> {
 export async function leerPagina(u: URL): Promise<string | null> {
   if (u.protocol !== "https:" && u.protocol !== "http:") return null;
   if (/^(localhost|\d+\.\d+\.\d+\.\d+|\[.*\])$/i.test(u.hostname) || /\.(local|internal|localhost)$/i.test(u.hostname) || /(^|\.)(nip\.io|sslip\.io|xip\.io|localtest\.me)$/i.test(u.hostname)) return null;
+  // El dominio tampoco puede apuntar a una dirección interna.
+  if (!(await hostPublicoDNS(u.hostname))) return null;
   try {
     // Sin seguir redirecciones: una página pública podría mandar a una dirección interna del servidor.
     const r = await fetch(u.toString(), { redirect: "manual", signal: AbortSignal.timeout(5000), headers: { "User-Agent": "Mozilla/5.0 (Prodi)" } });

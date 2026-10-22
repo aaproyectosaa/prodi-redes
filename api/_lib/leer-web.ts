@@ -2,6 +2,8 @@
 // productos, servicios o tienda que enlaza (más los productos que publica en JSON-LD). Solo sitios públicos, con
 // tiempo corto y sin seguir redirecciones a otros lados (una página podría mandar a una dirección interna).
 
+import { hostPublicoDNS } from "./url-segura";
+
 const MAX_TEXTO = 18_000;
 const MAX_PAGINAS = 6;
 const PRODUCTOS = /(producto|product|tienda|shop|store|catalog|categor|collection|coleccion|servicio|service|menu|carta|precio|price|item)/i;
@@ -22,7 +24,7 @@ const mismoSitio = (a: URL, b: URL) => a.hostname.replace(/^www\./, "") === b.ho
 async function bajarHtml(u: URL): Promise<{ html: string; url: URL } | null> {
   let actual = u;
   for (let i = 0; i < 4; i++) {
-    if (!hostPublico(actual)) return null;
+    if (!hostPublico(actual) || !(await hostPublicoDNS(actual.hostname))) return null;
     const r = await fetch(actual.toString(), {
       redirect: "manual",
       signal: AbortSignal.timeout(6000),
