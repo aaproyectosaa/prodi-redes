@@ -544,7 +544,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
                   }
                 }}
                 rows={1}
-                placeholder={`Responder por ${red}… (Enter envía)`}
+                placeholder={`Responder por ${red}…`}
                 className="max-h-[140px] min-h-[42px] resize-none rounded-2xl bg-muted/50 text-sm"
                 disabled={!conv}
                 maxLength={1000}

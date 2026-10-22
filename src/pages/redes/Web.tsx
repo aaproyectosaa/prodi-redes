@@ -753,6 +753,8 @@ function Bloque({ titulo, children, accion }: { titulo: string; children: React.
 
 function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => void }) {
   const [notas, setNotas] = useState("");
+  const [pestana, setPestana] = useState<"chat" | "ficha">("chat");
+  useEffect(() => setPestana("chat"), [lead?.id]);
   const [guardando, setGuardando] = useState(false);
   useEffect(() => setNotas(lead?.notas ?? ""), [lead?.id, lead?.notas]);
   if (!lead) return null;
@@ -830,11 +832,27 @@ function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => v
         </DialogHeader>
 
         {conChat ? (
-          <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] overflow-y-auto md:grid-rows-1 md:overflow-hidden md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-            <div className="h-[65dvh] min-h-0 border-b md:h-auto md:border-b-0 md:border-r">
+          <div className="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+            {/* En el celular: una cosa por vez (chat o ficha). En la compu, lado a lado. */}
+            <div className="grid shrink-0 grid-cols-2 gap-1 border-b p-1.5 md:hidden">
+              {(["chat", "ficha"] as const).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPestana(p)}
+                  className={cn(
+                    "rounded-lg py-2 text-sm font-semibold transition-colors",
+                    pestana === p ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground"
+                  )}
+                >
+                  {p === "chat" ? "Chat" : "Ficha"}
+                </button>
+              ))}
+            </div>
+            <div className={cn("min-h-0 flex-1 md:block md:border-r", pestana === "chat" ? "flex flex-col" : "hidden")}>
               <ChatLead lead={lead} />
             </div>
-            <div className="min-h-0 overflow-y-auto bg-background p-4">{datos}</div>
+            <div className={cn("min-h-0 flex-1 overflow-y-auto bg-background p-4 md:block", pestana === "ficha" ? "block" : "hidden")}>{datos}</div>
           </div>
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto p-5">{datos}</div>
