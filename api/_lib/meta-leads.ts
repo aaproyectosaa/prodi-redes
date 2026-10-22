@@ -289,11 +289,13 @@ export async function importarMensajes(base: string, forzar = false) {
       if (await leerDoc(pool, COL, id)) continue;
       const persona = (c.participants?.data ?? []).find((p: any) => !propios.has(String(p.id)));
       if (!persona) continue;
-      // Del más viejo al más nuevo; lo que escribió la persona (no las respuestas de Prodi).
+      // Del más viejo al más nuevo; lo que escribió la persona en los últimos 30 días (no las respuestas de Prodi).
+      // Cuenta también quien vuelve a escribir en un chat viejo.
       const mensajes = [...(c.messages?.data ?? [])].reverse();
-      const primero = mensajes[0];
-      if (primero && Date.parse(primero.created_time) < desde) continue;
-      const suyos = mensajes.filter((m: any) => m?.from && !propios.has(String(m.from.id)) && m.message).slice(0, 3);
+      const recientes = mensajes.filter((m: any) => m?.from && !propios.has(String(m.from.id)) && Date.parse(m.created_time) >= desde);
+      if (!recientes.length) continue;
+      const primero = recientes[0];
+      const suyos = recientes.filter((m: any) => m.message).slice(-3);
       const red = plataforma === "instagram" ? "Instagram" : "Facebook";
       const usuario = plataforma === "instagram" ? String(persona.username ?? persona.name ?? "") : "";
       const nombre = limpio(persona.name ?? persona.username ?? "", 80);
