@@ -13,6 +13,7 @@ import { HttpError } from "./http";
 import { adminDb } from "./db";
 import { enviarAviso } from "./notify";
 import { decrypt, encrypt, type EncryptedPayload } from "./crypto";
+import { generarJSON } from "./ia";
 
 const VERSION = () => process.env.META_GRAPH_VERSION || "v23.0";
 const COL = "leads_web";
@@ -487,4 +488,40 @@ export async function responderLead(leadId: string, texto: string, quien: { uid:
     historial: [...(Array.isArray(lead.historial) ? lead.historial : []), { at, tipo: "whatsapp", texto: `Le respondiste por ${red}: «${limpio(msj, 500)}»`, por: quien.uid, por_nombre: quien.nombre }].slice(-100),
   });
   return { ok: true };
+}
+
+// ── Herramientas del vendedor ─────────────────────────────────────────────────────────────────────────────────────
+
+/** Tres respuestas posibles para el lead, según la charla (la elige y la edita el vendedor antes de mandar). */
+export async function sugerirRespuestas(leadId: string, pedido?: string) {
+  const conv = await conversacionLead(leadId);
+  const lead = (await leerDoc(getPool(), COL, leadId)) as any;
+  const charla = conv.mensajes
+    .slice(-20)
+    .map((m) => `${m.mio ? "Prodi" : "Cliente"}: ${m.texto || `(${m.tipo ?? "sin texto"})`}`)
+    .join("\n");
+  const prompt = `Sos vendedor de Prodi, una agencia de Reconquista (Santa Fe, Argentina) que hace videos verticales profesionales para negocios, los publica en sus redes y los pauta en Meta Ads. Estás respondiendo un mensaje directo de ${conv.plataforma === "messenger" ? "Facebook" : "Instagram"}.
+
+Objetivo de venta: entender qué negocio tiene y qué necesita, generar confianza y llevarlo a una videollamada o a pasar su WhatsApp. No des precios cerrados por chat: los planes dependen de cuántos videos por mes.
+
+Escribí 3 respuestas distintas para mandar ahora (una más corta, una más cálida y una que avance hacia la reunión o el WhatsApp). Reglas: español rioplatense con voseo, natural como un DM (1 a 3 frases), sin sonar a robot, como máximo 1 emoji, sin saludar de nuevo si ya se saludó, respondé lo que preguntó.
+${pedido ? `Lo que quiere decir el vendedor: ${pedido}\n` : ""}
+Datos del lead: ${[lead?.negocio, lead?.nombre, lead?.rubro && `rubro ${lead.rubro}`, lead?.notas && `notas: ${String(lead.notas).slice(0, 300)}`].filter(Boolean).join(" · ")}
+
+Charla (lo último está al final):
+${charla || "(todavía no hay mensajes)"}`;
+  const r = await generarJSON<{ opciones: string[] }>(prompt, { type: "OBJECT", properties: { opciones: { type: "ARRAY", items: { type: "STRING" } } }, required: ["opciones"] }, 0.7);
+  return { opciones: (r.opciones ?? []).map((o) => String(o).trim().slice(0, 1000)).filter(Boolean).slice(0, 3) };
+}
+
+const RESPUESTAS = { col: "web_config", id: "respuestas" };
+
+/** Guarda las respuestas rápidas del equipo (título corto + texto; {nombre} se reemplaza por el nombre del lead). */
+export async function guardarRespuestas(lista: unknown) {
+  const limpia = (Array.isArray(lista) ? lista : [])
+    .map((x: any) => ({ titulo: limpio(x?.titulo, 40), texto: String(x?.texto ?? "").trim().slice(0, 1000) }))
+    .filter((x) => x.titulo && x.texto)
+    .slice(0, 30);
+  await guardarDoc(getPool(), RESPUESTAS.col, RESPUESTAS.id, { lista: limpia, updated_at: new Date().toISOString() });
+  return { ok: true, lista: limpia };
 }

@@ -770,9 +770,9 @@ function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => v
         </DialogHeader>
 
         {conChat ? (
-          <div className="grid max-h-[calc(92dvh-80px)] min-h-0 md:grid-cols-[1.1fr_1fr]">
+          <div className="grid max-h-[calc(92dvh-80px)] min-h-0 md:h-[calc(92dvh-80px)] md:grid-cols-[1.2fr_1fr]">
             <div className="min-h-0 border-b p-4 md:border-b-0 md:border-r">
-              <ChatLead leadId={lead.id} usuario={lead.instagram} />
+              <ChatLead lead={lead} />
             </div>
             <div className="min-h-0 overflow-y-auto p-5">{datos}</div>
           </div>
