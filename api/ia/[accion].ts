@@ -1299,8 +1299,11 @@ async function planVotar(req: VercelRequest) {
 }
 
 async function planResponder(req: VercelRequest) {
-  const caller = await requireCaller(req, ["cliente", "admin"]);
-  const b = body<{ proyecto_id?: string; mes?: string; respuestas?: { id?: string; ok?: boolean; comentario?: string }[]; nota?: string }>(req);
+  const caller = await requireCaller(req, ["cliente", "admin", "productor"]);
+  const b = body<{ proyecto_id?: string; mes?: string; respuestas?: { id?: string; ok?: boolean; comentario?: string }[]; nota?: string; por_fuera?: boolean }>(req);
+  // El equipo responde por el cliente solo si lo aprobó por otro medio (WhatsApp, en persona, una llamada).
+  const porFuera = caller.role !== "cliente";
+  if (porFuera && b.por_fuera !== true) throw new HttpError(403, "Lo responde el cliente");
   if (!b.proyecto_id || !MES_RE.test(String(b.mes))) throw new HttpError(400, "Datos incompletos");
   await assertProjectAccess(caller, b.proyecto_id);
   const pid = b.proyecto_id;
@@ -1315,8 +1318,10 @@ async function planResponder(req: VercelRequest) {
   const final = await db.runTransaction(async (tx) => {
     const p = (await tx.get(ref)).data();
     if (!p) throw new HttpError(404, "No encontramos el plan");
-    if (p.estado !== "enviado") throw new HttpError(409, "Este plan ya fue respondido");
+    // Por otro medio también desde el borrador (clientes que todavía no usan el sistema: no hace falta mandárselo).
+    if (p.estado !== "enviado" && !(porFuera && p.estado === "borrador")) throw new HttpError(409, "Este plan ya fue respondido");
     const ideas = (p.ideas ?? []) as IdeaPlan[];
+    if (!ideas.length) throw new HttpError(409, "El plan no tiene ideas");
     const out: IdeaPlan[] = [];
     for (const i of ideas) {
       const r = resp.get(i.id);
@@ -1333,7 +1338,7 @@ async function planResponder(req: VercelRequest) {
             team,
             mes,
             { titulo: i.titulo, idea: i.idea, objetivo: i.objetivo, pedido_por: caller.uid, filma_cliente: filmaElCliente(proj) },
-            "Idea del plan del mes aprobada por el cliente"
+            porFuera ? "Idea del plan del mes aprobada por el cliente (por otro medio, la cargó el equipo)" : "Idea del plan del mes aprobada por el cliente"
           ),
           pedido_cliente: false,
           plan_idea_id: i.id,
@@ -1349,6 +1354,7 @@ async function planResponder(req: VercelRequest) {
       nota_cliente: nota,
       respondido_at: new Date().toISOString(),
       respondido_por: caller.uid,
+      ...(porFuera ? { respondido_por_fuera: true } : {}),
       updated_at: new Date().toISOString(),
     });
     return out;
@@ -1359,7 +1365,7 @@ async function planResponder(req: VercelRequest) {
   const cambios = final.length - ok;
   await enviarAviso(
     {
-      destinatarios: team.productor ?? [],
+      destinatarios: (team.productor ?? []).filter((x) => x !== caller.uid),
       titulo: cambios ? `${proj.nombre ?? "El cliente"} pidió cambios en el plan` : `${proj.nombre ?? "El cliente"} aprobó el plan`,
       cuerpo: `${ok} idea${ok === 1 ? "" : "s"} aprobada${ok === 1 ? "" : "s"}${cambios ? ` y ${cambios} con cambios para ajustar` : ""}${nota ? ` · “${nota.slice(0, 100)}”` : ""}`,
       link: `/videos?plan=${planId(pid, mes)}`,
@@ -1369,6 +1375,22 @@ async function planResponder(req: VercelRequest) {
     appUrl(req)
   );
   return { ok: true, aprobadas: ok, cambios };
+}
+
+/** "Volver a editar": el plan que se le mandó al cliente vuelve a borrador (lo que haya votado se descarta). */
+async function planVolver(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "productor"]);
+  const b = body<{ proyecto_id?: string; mes?: string }>(req);
+  if (!b.proyecto_id || !MES_RE.test(String(b.mes))) throw new HttpError(400, "Datos incompletos");
+  await assertProjectAccess(caller, b.proyecto_id);
+  const ref = adminDb().collection("planes_mes").doc(planId(b.proyecto_id, String(b.mes)));
+  await adminDb().runTransaction(async (tx) => {
+    const p = (await tx.get(ref)).data();
+    if (!p) throw new HttpError(404, "No encontramos el plan");
+    if (p.estado !== "enviado") throw new HttpError(409, "El cliente ya lo respondió: ajustá las ideas desde acá");
+    tx.update(ref, { estado: "borrador", votos: null, enviado_at: null, updated_at: new Date().toISOString() });
+  });
+  return { ok: true };
 }
 
 async function planAjustar(req: VercelRequest) {
@@ -1697,6 +1719,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "plan-enviar") res.status(200).json(await planEnviar(req));
     else if (accion === "plan-responder") res.status(200).json(await planResponder(req));
     else if (accion === "plan-ajustar") res.status(200).json(await planAjustar(req));
+    else if (accion === "plan-volver") res.status(200).json(await planVolver(req));
     else if (accion === "plan-reescribir") res.status(200).json(await planReescribir(req));
     else if (accion === "video-reescribir") res.status(200).json(await videoReescribir(req));
     else if (accion === "plan-campania") res.status(200).json(await planCampania(req));

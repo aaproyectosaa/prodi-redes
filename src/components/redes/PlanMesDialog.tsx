@@ -4,6 +4,7 @@ import { CampaniaIA } from "@/components/redes/CampaniaIA";
 import {
   Brain,
   Check,
+  Pencil,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -466,6 +467,34 @@ function Borrador({ plan, nombre }: { plan: PlanMes; nombre: string }) {
     }
   };
 
+  // El cliente lo aprobó por WhatsApp, en persona o en una llamada (o todavía no usa el sistema):
+  // se guarda como está y se crean los videos, sin mandárselo.
+  const aprobadoPorFuera = async () => {
+    const malas = new Set(ideas.filter((i) => i.titulo.trim().length < 3 || i.idea.trim().length < 10).map((i) => i.id));
+    setErrores(malas);
+    if (!ideas.length || malas.size) {
+      toast.error(ideas.length ? "Completá el título y la descripción de las ideas marcadas" : "Dejá al menos una idea");
+      return;
+    }
+    if (!window.confirm(`¿${nombre} aprobó las ${ideas.length} ideas por otro medio? Se crean los videos sin mandárselo.`)) return;
+    setBusy("enviar");
+    try {
+      await guardarBorrador(plan, ideas, nota.trim() || null);
+      await callApi("/api/ia/plan-responder", {
+        proyecto_id: plan.proyecto_id,
+        mes: plan.mes,
+        respuestas: ideas.map((i) => ({ id: i.id, ok: true })),
+        nota: null,
+        por_fuera: true,
+      });
+      toast.success("Listo: quedó aprobado y se crearon los videos");
+    } catch (e) {
+      err(e);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const editadas = ideas.filter((i) => {
     const o = (plan.ideas_ia ?? []).find((x) => x.id === i.id);
     return !o || o.titulo !== i.titulo || o.idea !== i.idea;
@@ -634,6 +663,10 @@ function Borrador({ plan, nombre }: { plan: PlanMes; nombre: string }) {
             {busy === "enviar" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
             Aprobar y mandar a {nombre.split(" ")[0]}
           </Button>
+          <Button variant="outline" onClick={() => void aprobadoPorFuera()} disabled={!!busy} title="Lo aprobó por WhatsApp, en persona o todavía no usa el sistema">
+            <Check className="mr-2 h-4 w-4 text-emerald-600" />
+            Ya lo aprobó por otro medio
+          </Button>
           <span className="text-center text-[11px] text-muted-foreground sm:text-right">
             {ideas.length} idea{ideas.length === 1 ? "" : "s"}
             {editadas ? ` · ${editadas} cambiada${editadas === 1 ? "" : "s"} por vos (la IA lo aprende)` : ""}
@@ -696,8 +729,53 @@ function Enviado({ plan, onCerrar }: { plan: PlanMes; onCerrar: () => void }) {
     window.setTimeout(() => openVideo(id), 150);
   };
   const e = ESTADO_PLAN[plan.estado];
+  const [busy, setBusy] = useState<null | "fuera" | "volver">(null);
+  // El cliente lo aprobó por WhatsApp, en persona o en una llamada: se cargan todas como aprobadas y se crean los videos.
+  const aprobadoPorFuera = async () => {
+    if (!window.confirm(`¿El cliente aprobó las ${plan.ideas.length} ideas por otro medio? Se crean los videos como si las hubiera aprobado desde su panel.`)) return;
+    setBusy("fuera");
+    try {
+      await callApi("/api/ia/plan-responder", {
+        proyecto_id: plan.proyecto_id,
+        mes: plan.mes,
+        respuestas: plan.ideas.map((i) => ({ id: i.id, ok: true })),
+        nota: null,
+        por_fuera: true,
+      });
+      toast.success("Listo: quedó aprobado y se crearon los videos");
+    } catch (er) {
+      err(er);
+    } finally {
+      setBusy(null);
+    }
+  };
+  // Volver a editar: pasa a borrador (el cliente deja de verlo para responder hasta que se lo mandes de nuevo).
+  const volverAEditar = async () => {
+    if (!window.confirm("¿Volver a editar el plan? El cliente deja de verlo para responder hasta que se lo mandes de nuevo.")) return;
+    setBusy("volver");
+    try {
+      await callApi("/api/ia/plan-volver", { proyecto_id: plan.proyecto_id, mes: plan.mes });
+      toast.success("Volvió a borrador: editalo y mandalo de nuevo");
+    } catch (er) {
+      err(er);
+    } finally {
+      setBusy(null);
+    }
+  };
   return (
     <div className="space-y-4">
+      {plan.estado === "enviado" && (
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => void aprobadoPorFuera()} disabled={!!busy} className="bg-emerald-600 hover:bg-emerald-600/90">
+            {busy === "fuera" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Check className="mr-1.5 h-3.5 w-3.5" />}
+            El cliente lo aprobó por otro medio
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => void volverAEditar()} disabled={!!busy}>
+            {busy === "volver" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Pencil className="mr-1.5 h-3.5 w-3.5" />}
+            Volver a editar
+          </Button>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", e.clase)}>{e.label}</span>
         {plan.estado === "enviado" && (
