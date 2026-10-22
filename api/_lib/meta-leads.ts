@@ -57,7 +57,7 @@ function respuestas(campos: { name: string; values?: string[] }[]) {
     return "";
   };
   const nombre = tomar("full_name", "nombre_completo", "nombre") || [tomar("first_name"), tomar("last_name")].filter(Boolean).join(" ");
-  const telefono = tomar("phone_number", "telefono", "teléfono", "whatsapp");
+  const telefono = tomar("phone_number", "whatsapp_number", "telefono", "teléfono", "whatsapp");
   const email = tomar("email", "correo");
   const negocio = tomar("company_name", "empresa", "negocio", "nombre_del_negocio");
   const ciudad = tomar("city", "ciudad", "localidad");
