@@ -41,7 +41,7 @@ export async function permitirNegocio(caller: Caller, negocio: string) {
     if (!caller.roles?.includes("admin") && caller.role !== "admin") throw new HttpError(403, "Solo el admin");
     return;
   }
-  if (!/^[\w-]{4,60}$/.test(negocio)) throw new HttpError(400, "Negocio inválido");
+  if (!/^[\w-]{1,60}$/.test(negocio)) throw new HttpError(400, "Negocio inválido");
   await assertProjectAccess(caller, negocio);
 }
 
@@ -299,7 +299,7 @@ export function precioTexto(p: { precio: number | null; moneda?: string }) {
  * `contacto`: dónde anotar (leads_web del CRM de Prodi o crm_contactos del de clientes).
  */
 export async function linksParaMandar(base: string, negocio: string, ids: string[], contacto: { col: "leads_web" | "crm_contactos"; id: string }) {
-  if (!/^[\w-]{4,60}$/.test(contacto.id)) throw new HttpError(400, "Contacto inválido");
+  if (!/^[\w-]{1,60}$/.test(contacto.id)) throw new HttpError(400, "Contacto inválido");
   const pool = getPool();
   const out: (ProductoCatalogo & { link: string; precio_texto: string })[] = [];
   for (const id of ids.slice(0, 10)) {
