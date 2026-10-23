@@ -36,7 +36,7 @@ export async function recordatoriosRodaje(base: string): Promise<number> {
     if (p.enabled === false) continue;
     const team = (p.team_roles ?? {}) as Record<string, string[]>;
     const videos = await Promise.all(
-      (r.video_ids ?? []).slice(0, 10).map((id: string) => db.collection("videos").doc(id).get())
+      (r.video_ids ?? []).slice(0, 30).map((id: string) => db.collection("videos").doc(id).get())
     );
     const titulos = videos.map((v) => v.data()?.titulo).filter(Boolean) as string[];
     const cuando = `${r.hora ? `a las ${r.hora}` : ""}${r.lugar ? ` en ${r.lugar}` : ""}`.trim();

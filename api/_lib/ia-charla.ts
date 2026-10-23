@@ -174,7 +174,7 @@ async function contextoDe(tipo: TipoCharla, b: PedidoCharla, pid: string): Promi
     return { texto: `Videos por mes del plan y lugares libres:\n${lineas.join("\n")}${propuesta}`, mes };
   }
   if (tipo === "preparar") {
-    const ids = (b.video_ids ?? []).slice(0, 10).map(String);
+    const ids = (b.video_ids ?? []).slice(0, 30).map(String);
     const vids = await Promise.all(ids.map((id) => db.collection("videos").doc(id).get()));
     const lista = vids
       .map((v) => v.data())

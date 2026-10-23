@@ -154,6 +154,12 @@ export function RodajeDialog({
         .sort((a, b) => a.mes.localeCompare(b.mes) || a.created_at.localeCompare(b.created_at)),
     [videos, clienteId, rodaje]
   );
+  // Campañas con videos para filmar: se eligen todos de un toque (un rodaje de campaña filma varios meses juntos).
+  const campanias = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const v of candidatos) if (v.campania) m.set(v.campania, [...(m.get(v.campania) ?? []), v.id]);
+    return [...m.entries()].filter(([, ids]) => ids.length > 1);
+  }, [candidatos]);
   const sinLlegar = Object.entries(pendientes).filter(([id]) => !candidatos.some((v) => v.id === id));
   // Si el cliente filma siempre él, sus videos no llevan rodaje: no se cargan desde acá.
   const puedeCrear = !!cliente && quienFilma(cliente) !== "cliente";
@@ -470,6 +476,32 @@ export function RodajeDialog({
               </div>
             ) : (
               <div className="space-y-2">
+                {campanias.map(([nombre, ids]) => {
+                  const todos = ids.every((id) => sel.has(id));
+                  return (
+                    <button
+                      key={nombre}
+                      type="button"
+                      onClick={() =>
+                        setSel((prev) => {
+                          const next = new Set(prev);
+                          for (const id of ids) todos ? next.delete(id) : next.add(id);
+                          return next;
+                        })
+                      }
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-2xl border border-dashed px-4 py-2.5 text-left text-xs transition-colors",
+                        todos ? "border-primary/60 bg-primary/[0.08] text-primary" : "border-primary/40 hover:bg-primary/[0.05]"
+                      )}
+                    >
+                      <Clapperboard className="h-4 w-4 shrink-0 text-primary" />
+                      <span className="min-w-0 flex-1">
+                        <span className="font-semibold">{todos ? "Quitar" : "Elegir"} toda la campaña “{nombre}”</span>
+                        <span className="text-muted-foreground"> · {ids.length} videos</span>
+                      </span>
+                    </button>
+                  );
+                })}
                 {candidatos.map((v) => {
                   const marcado = sel.has(v.id);
                   return (
@@ -492,7 +524,10 @@ export function RodajeDialog({
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold">{v.titulo}</span>
-                        <span className="text-xs capitalize text-muted-foreground">{mesLabel(v.mes)}</span>
+                        <span className="text-xs text-muted-foreground">
+                          <span className="capitalize">{mesLabel(v.mes)}</span>
+                          {v.campania ? ` · ${v.campania}` : ""}
+                        </span>
                       </span>
                     </button>
                   );

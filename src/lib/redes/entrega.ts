@@ -2,6 +2,7 @@
 // la editora la ve en la tarjeta y ordena por ella, y el cron avisa el día antes y si se pasó.
 
 import { diaSemana, hoyAR, sumarDias } from "@/lib/fecha";
+import { especialesDe } from "@/lib/feriados";
 import type { Video } from "./types";
 
 const DIAS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
@@ -17,14 +18,24 @@ export function sumarHabiles(fecha: string, n: number): string {
   return f;
 }
 
-/** Fecha sugerida: un día antes de la que pidió el cliente para publicar, o en 3 días hábiles. */
-export function entregaPorDefecto(video: Pick<Video, "fecha_deseada">, hoy = hoyAR()): string {
+/**
+ * Fecha sugerida: un día antes de la que pidió el cliente para publicar. Si no pidió fecha y el video es de un mes que
+ * viene (ej. un rodaje de campaña que filma noviembre a febrero de una), una semana antes de que empiece su mes: así a la
+ * editora no le cae todo junto para dentro de 3 días. Si no, en 3 días hábiles.
+ */
+export function entregaPorDefecto(video: Pick<Video, "fecha_deseada"> & { mes?: string | null }, hoy = hoyAR()): string {
   const manana = sumarDias(hoy, 1);
   if (video.fecha_deseada) {
     const antes = sumarDias(video.fecha_deseada, -1);
     return antes > manana ? antes : manana;
   }
-  return sumarHabiles(hoy, 3);
+  const habiles = sumarHabiles(hoy, 3);
+  if (video.mes && /^\d{4}-\d{2}$/.test(video.mes) && video.mes > hoy.slice(0, 7)) {
+    let f = sumarDias(`${video.mes}-01`, -7);
+    while (diaSemana(f) === 0 || diaSemana(f) === 6 || especialesDe(f).some((d) => d.tipo === "feriado")) f = sumarDias(f, -1);
+    return f > habiles ? f : habiles;
+  }
+  return habiles;
 }
 
 /** Opciones rápidas del selector, en días hábiles. */

@@ -792,14 +792,14 @@ async function preparar(req: VercelRequest) {
   await assertProjectAccess(caller, proyecto_id);
   const db = adminDb();
   const p = (await db.collection("projects").doc(proyecto_id).get()).data() ?? {};
-  const vids = await Promise.all((video_ids ?? []).slice(0, 10).map((id) => db.collection("videos").doc(String(id)).get()));
+  const vids = await Promise.all((video_ids ?? []).slice(0, 30).map((id) => db.collection("videos").doc(String(id)).get()));
   const lista = vids
     .map((v) => v.data())
     .filter((v) => v && v.proyecto_id === proyecto_id)
     .map((v) => `- ${v!.titulo}${v!.idea ? `: ${v!.idea}` : ""}${v!.tomas?.length ? ` (tomas: ${v!.tomas.join("; ")})` : ""}`)
     .join("\n");
   const prompt = `Sos productor de una agencia argentina de videos comerciales. Mañana se filman estos videos en el comercio del cliente.
-Escribí en 2 a 4 líneas cortas qué tiene que tener listo el cliente (productos, personas, lugar ordenado, ropa, horarios, etc.).
+Escribí en ${vids.length > 8 ? "4 a 8" : "2 a 4"} líneas cortas qué tiene que tener listo el cliente (productos, personas, lugar ordenado, ropa, horarios, etc.).
 Hablale directo al cliente, con voseo, amable y concreto. Sin saludos ni despedidas. Solo lo necesario para estos videos.
 
 ${marcaTexto(p)}
@@ -812,6 +812,124 @@ ${lista || "- (sin detalle)"}`;
     required: ["texto"],
   });
   return { texto: String(r.texto ?? "").trim() };
+}
+
+/**
+ * Preparar un rodaje de muchos videos (ej. un día entero de campaña) de una:
+ * - "guiones": guion y tomas de los videos que todavía no los tienen (de a tandas, en paralelo) y los guarda en cada video.
+ * - "orden": arma el día por momento y lugar (bloques de videos que se filman juntos) y la lista de qué llevar; lo guarda en el rodaje.
+ */
+async function rodajeArmar(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "productor"]);
+  const b = body<{ rodaje_id?: string; que?: string }>(req);
+  if (!b.rodaje_id || (b.que !== "guiones" && b.que !== "orden")) throw new HttpError(400, "Faltan datos");
+  const db = adminDb();
+  const rRef = db.collection("rodajes").doc(String(b.rodaje_id));
+  const rodaje = (await rRef.get()).data();
+  if (!rodaje) throw new HttpError(404, "Rodaje no encontrado");
+  await assertProjectAccess(caller, rodaje.proyecto_id);
+  await controlarTopeIA(caller, b.que === "guiones" ? "guion" : "preparar");
+  const p = (await db.collection("projects").doc(rodaje.proyecto_id).get()).data() ?? {};
+  const docs = await Promise.all(((rodaje.video_ids ?? []) as string[]).slice(0, 40).map((id) => db.collection("videos").doc(id).get()));
+  const vids: (Record<string, any> & { id: string })[] = docs.filter((d) => d.exists && d.data()?.proyecto_id === rodaje.proyecto_id).map((d) => ({ ...(d.data() as Record<string, any>), id: d.id }));
+  if (!vids.length) throw new HttpError(400, "El rodaje no tiene videos");
+  const lugar = [rodaje.lugar ? `Lugar: ${rodaje.lugar}` : "", rodaje.notas ? `Notas del equipo: ${rodaje.notas}` : ""].filter(Boolean).join("\n");
+
+  if (b.que === "guiones") {
+    const faltan = vids.filter((v) => !String(v.guion ?? "").trim() || !(v.tomas ?? []).length);
+    if (!faltan.length) return { armados: 0 };
+    const contexto = await contextoComercial(rodaje.proyecto_id, rangoMes(String(faltan[0].mes ?? fechaAR(new Date()).slice(0, 7))));
+    const tandas: (typeof faltan)[] = [];
+    for (let i = 0; i < faltan.length; i += 5) tandas.push(faltan.slice(i, i + 5));
+    const ahora = new Date().toISOString();
+    const resultados = await Promise.all(
+      tandas.map(async (tanda) => {
+        const prompt = `Sos director creativo de una agencia argentina que filma videos comerciales verticales (Reels) de 20 a 45 segundos para pautar en Meta.
+Estos videos se filman todos el mismo día de rodaje. Armá el guion y la lista de tomas de CADA UNO (devolvé el mismo "id").
+- guion: SOLO las palabras que dice la persona frente a cámara, listas para leer y aprender: frases cortas, una por renglón, como se hablan. Entre 50 y 110 palabras. La primera frase es el gancho de los primeros 3 segundos y la última, el llamado a la acción. Si la idea trae una "Voz:" o un "Cierre:", respetalos. NO pongas escenas, planos, etiquetas ni comillas: solo lo que se dice. Si el video no lleva a nadie hablando (solo imágenes y texto en pantalla), escribí los textos de pantalla, uno por renglón.
+- tomas: lista concreta de planos para filmar (qué, cómo y dónde), en el orden más práctico. Máximo 10.
+Español rioplatense con voseo. No inventes precios, promociones ni datos que no estén abajo o en la idea.
+
+${marcaTexto(p)}
+
+${contexto}
+${lugar ? `\n${lugar}\n` : ""}
+Videos:
+${tanda.map((v) => `- id ${v.id}: ${v.titulo}${v.idea ? `\n  Idea: ${v.idea}` : ""}${v.objetivo ? `\n  Objetivo: ${v.objetivo}` : ""}`).join("\n")}`;
+        const r = await generarJSON<{ videos?: { id?: string; guion?: string; tomas?: string[] }[] }>(prompt, {
+          type: "OBJECT",
+          properties: {
+            videos: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: { id: { type: "STRING" }, guion: { type: "STRING" }, tomas: { type: "ARRAY", items: { type: "STRING" } } },
+                required: ["id", "guion", "tomas"],
+              },
+            },
+          },
+          required: ["videos"],
+        });
+        let n = 0;
+        for (const x of r.videos ?? []) {
+          const v = tanda.find((t) => t.id === x.id);
+          if (!v) continue;
+          const guion = String(x.guion ?? "").trim();
+          const tomas = (x.tomas ?? []).map((t) => String(t).trim()).filter(Boolean).slice(0, 15);
+          if (!guion && !tomas.length) continue;
+          // Lo que ya tenía escrito el equipo no se pisa.
+          await db.collection("videos").doc(v.id).update({
+            ...(String(v.guion ?? "").trim() ? {} : { guion }),
+            ...((v.tomas ?? []).length ? {} : { tomas }),
+            updated_at: ahora,
+          });
+          n++;
+        }
+        return n;
+      })
+    );
+    return { armados: resultados.reduce((a, n) => a + n, 0) };
+  }
+
+  const prompt = `Sos productor de una agencia argentina de videos comerciales. En un mismo día de rodaje se filman ${vids.length} videos de un cliente (puede ser una campaña entera que se publica en varios meses).
+Ordená el día para filmar rápido y sin ir y venir:
+- "bloques": agrupá los videos que se filman juntos por momento del día y lugar o ambientación (ej. "De día en el patio y la pileta", "Atardecer: mesa navideña", "Noche: Año Nuevo"), en el orden en que conviene filmarlos (pensá en la luz natural y en no desarmar y volver a armar la escenografía). Cada video va en un solo bloque. "nombre" corto (2 a 5 palabras) y "detalle" en una frase (qué se arma, qué luz, quiénes están). Usá los "id" de los videos.
+- "llevar": lista de lo que hay que tener ese día: productos, utilería y decoración, comida, vestuario y gente que aparece. Un ítem por renglón, concreto y corto (ej. "Horno a Gas Grande Innova", "Moño de regalo", "Familia con chicos para la mesa"). Máximo 25. No repitas.
+Español rioplatense. No inventes cosas que no surjan de los videos.
+
+${marcaTexto(p)}
+${lugar ? `\n${lugar}\n` : ""}
+Videos:
+${vids.map((v) => `- id ${v.id}: ${v.titulo}${v.idea ? ` · ${String(v.idea).slice(0, 500)}` : ""}${(v.tomas ?? []).length ? ` · tomas: ${(v.tomas as string[]).slice(0, 8).join("; ")}` : ""}`).join("\n")}`;
+  const r = await generarJSON<{ bloques?: { nombre?: string; detalle?: string; video_ids?: string[] }[]; llevar?: string[] }>(prompt, {
+    type: "OBJECT",
+    properties: {
+      bloques: {
+        type: "ARRAY",
+        items: {
+          type: "OBJECT",
+          properties: { nombre: { type: "STRING" }, detalle: { type: "STRING" }, video_ids: { type: "ARRAY", items: { type: "STRING" } } },
+          required: ["nombre", "detalle", "video_ids"],
+        },
+      },
+      llevar: { type: "ARRAY", items: { type: "STRING" } },
+    },
+    required: ["bloques", "llevar"],
+  });
+  const ids = new Set(vids.map((v) => v.id));
+  const usados = new Set<string>();
+  const bloques: { nombre: string; detalle: string | null; video_ids: string[] }[] = [];
+  for (const x of r.bloques ?? []) {
+    const propios = (x.video_ids ?? []).map(String).filter((id) => ids.has(id) && !usados.has(id));
+    propios.forEach((id) => usados.add(id));
+    if (propios.length && bloques.length < 10)
+      bloques.push({ nombre: String(x.nombre ?? "").trim().slice(0, 60) || "Bloque", detalle: String(x.detalle ?? "").trim().slice(0, 240) || null, video_ids: propios });
+  }
+  const sueltos = vids.map((v) => v.id).filter((id) => !usados.has(id));
+  if (sueltos.length) bloques.push({ nombre: "Otros", detalle: null, video_ids: sueltos });
+  const llevar = [...new Set((r.llevar ?? []).map((x) => String(x).trim().slice(0, 100)).filter(Boolean))].slice(0, 30);
+  await rRef.update({ bloques, llevar, llevar_hecho: [] });
+  return { bloques, llevar };
 }
 
 const MIME_IMG = ["image/png", "image/jpeg", "image/webp"];
@@ -1356,6 +1474,7 @@ async function planResponder(req: VercelRequest) {
           ),
           pedido_cliente: false,
           plan_idea_id: i.id,
+          ...(i.campania ? { campania: i.campania } : {}),
           ...(p.demo_ejemplo ? { demo_ejemplo: true } : {}),
         });
       }
@@ -1725,6 +1844,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "chat-resumen") res.status(200).json(await chatResumen(req));
     else if (accion === "presupuesto-ia") res.status(200).json(await presupuestoConIA(req));
     else if (accion === "borrador") res.status(200).json(await borrador(req));
+    else if (accion === "rodaje-armar") res.status(200).json(await rodajeArmar(req));
     else if (accion === "preparar") res.status(200).json(await preparar(req));
     else if (accion === "marca-subir") res.status(200).json(await marcaSubir(req));
     else if (accion === "marca-quitar") res.status(200).json(await marcaQuitar(req));
