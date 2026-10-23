@@ -90,7 +90,7 @@ export function PlanMesDialog({
   const { plan, loading } = usePlanMes(open ? clienteId : null, mes);
   const delMes = usePlanesDelMes(open ? [mes] : [], open);
   const libres = usoPlan(cliente, planes, videos, mes).disponibles;
-  const meses = [0, 1, 2].map((d) => sumarMeses(mesActual(), d));
+  const meses = [0, 1, 2, 3, 4, 5].map((d) => sumarMeses(mesActual(), d));
   // "mes": las ideas de un mes (lo de siempre). "campania": charlar una campaña con la IA (un día de rodaje, varios meses).
   const [modo, setModo] = useState<"mes" | "campania">("mes");
   useEffect(() => {
@@ -406,6 +406,22 @@ function Borrador({ plan, nombre }: { plan: PlanMes; nombre: string }) {
   const ideasRef = useRef(ideas);
   ideasRef.current = ideas;
 
+  // Campaña: los otros meses del cliente que todavía están en borrador con ideas de la misma campaña. Se pueden
+  // mandar todos juntos: al cliente le llega un solo link para aprobar la campaña entera.
+  const campania = ideas.find((i) => i.campania)?.campania ?? null;
+  const proximos = useMemo(() => [0, 1, 2, 3, 4, 5, 6, 7].map((d) => sumarMeses(mesActual(), d)), []);
+  const planesCliente = usePlanesDelMes(campania ? proximos : [], !!campania);
+  const deCampania = campania
+    ? planesCliente
+        .filter((p) => p.proyecto_id === plan.proyecto_id && p.estado === "borrador" && (p.id === plan.id || (p.ideas ?? []).some((i) => i.campania === campania)))
+        .sort((a, b) => a.mes.localeCompare(b.mes))
+    : [];
+  const ideasCampania = deCampania.reduce((n, p) => n + (p.id === plan.id ? ideas.length : (p.ideas ?? []).length), 0);
+  const rangoCampania =
+    deCampania.length > 1
+      ? `${mesLabel(deCampania[0].mes).split(" ")[0].toLowerCase()} a ${mesLabel(deCampania[deCampania.length - 1].mes).split(" ")[0].toLowerCase()}`
+      : "";
+
   // Si cambian las ideas en el servidor (rehacer con IA), se toma la versión nueva.
   const firma = `${plan.generado_at ?? ""}|${plan.ideas_ia?.length ?? 0}`;
   useEffect(() => {
@@ -490,6 +506,32 @@ function Borrador({ plan, nombre }: { plan: PlanMes; nombre: string }) {
     try {
       await enviarPlan(plan.proyecto_id, plan.mes, ideas, nota.trim() || null);
       toast.success(`Le llegó a ${nombre}. La IA guardó tus cambios para aprender.`);
+    } catch (e) {
+      err(e);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const enviarCampania = async () => {
+    const malas = new Set(ideas.filter((i) => i.titulo.trim().length < 3 || i.idea.trim().length < 10).map((i) => i.id));
+    setErrores(malas);
+    if (malas.size) {
+      toast.error("Completá el título y la descripción de las ideas marcadas");
+      return;
+    }
+    if (
+      !window.confirm(
+        `¿Mandar a ${nombre} toda la campaña “${campania}”? Son ${ideasCampania} ideas de ${rangoCampania} (${deCampania.length} meses). Le llega un solo aviso con un link para aprobarlas todas.`
+      )
+    )
+      return;
+    setBusy("campania");
+    try {
+      await guardarBorrador(plan, ideas, nota.trim() || null);
+      setDirty(false);
+      await callApi("/api/ia/plan-enviar-campania", { proyecto_id: plan.proyecto_id, meses: deCampania.map((p) => p.mes), nota_equipo: nota.trim() || null });
+      toast.success(`Le llegó a ${nombre} la campaña entera: ${ideasCampania} ideas de ${rangoCampania}.`);
     } catch (e) {
       err(e);
     } finally {
@@ -689,9 +731,24 @@ function Borrador({ plan, nombre }: { plan: PlanMes; nombre: string }) {
           </Button>
         </PistaPopover>
         <div className="flex flex-col items-stretch gap-1 sm:items-end">
-          <Button onClick={() => void enviar()} disabled={!!busy}>
+          {deCampania.length > 1 && (
+            <Button
+              onClick={() => void enviarCampania()}
+              disabled={!!busy}
+              className="h-auto flex-col items-stretch gap-0 bg-gradient-to-r from-primary to-fuchsia-500 py-2 text-left font-semibold shadow-md shadow-primary/25 sm:items-end sm:text-right"
+            >
+              <span className="flex items-center gap-2 sm:justify-end">
+                {busy === "campania" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clapperboard className="h-4 w-4" />}
+                Mandar toda la campaña a {nombre.split(" ")[0]}
+              </span>
+              <span className="text-[11px] font-normal text-white/85">
+                {ideasCampania} ideas de {rangoCampania}, en un solo link
+              </span>
+            </Button>
+          )}
+          <Button onClick={() => void enviar()} disabled={!!busy} variant={deCampania.length > 1 ? "outline" : "default"}>
             {busy === "enviar" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-            Aprobar y mandar a {nombre.split(" ")[0]}
+            {deCampania.length > 1 ? `Mandar solo ${mesLabel(plan.mes).split(" ")[0].toLowerCase()}` : `Aprobar y mandar a ${nombre.split(" ")[0]}`}
           </Button>
           <Button variant="outline" onClick={() => void aprobadoPorFuera()} disabled={!!busy} title="Lo aprobó por WhatsApp, en persona o todavía no usa el sistema">
             <Check className="mr-2 h-4 w-4 text-emerald-600" />

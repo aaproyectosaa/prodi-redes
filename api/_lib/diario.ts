@@ -151,6 +151,9 @@ export async function recordatoriosPlan(base: string): Promise<number> {
       return x;
     });
     if (!plan) continue;
+    // Campaña de varios meses: un solo recordatorio (el del primer mes), con el link a la campaña entera.
+    const campania = Array.isArray(plan.enviado_en_campania) && plan.enviado_en_campania.length > 1 ? (plan.enviado_en_campania as string[]) : null;
+    if (campania && plan.mes !== campania[0]) continue;
     const p = (await db.collection("projects").doc(plan.proyecto_id).get()).data() ?? {};
     if (p.enabled === false) continue;
     const team = (p.team_roles ?? {}) as Record<string, string[]>;
@@ -158,9 +161,11 @@ export async function recordatoriosPlan(base: string): Promise<number> {
     await enviarAviso(
       {
         destinatarios: team.cliente ?? [],
-        titulo: "Te esperan las ideas del mes 🎬",
-        cuerpo: `Tenés ${n === 1 ? "1 idea" : `${n} ideas`} para elegir. Con tu OK arrancamos a filmar.`,
-        link: `/cliente?plan=${plan.mes}`,
+        titulo: campania ? "Te espera la campaña 🎬" : "Te esperan las ideas del mes 🎬",
+        cuerpo: campania
+          ? "Tenés las ideas de la campaña para elegir. Con tu OK organizamos el rodaje."
+          : `Tenés ${n === 1 ? "1 idea" : `${n} ideas`} para elegir. Con tu OK arrancamos a filmar.`,
+        link: `/cliente?plan=${campania ? campania.join(",") : plan.mes}`,
         clave: `recordatorio_plan:${d.id}:${Number(plan.recordatorios ?? 0) + 1}`,
         proyectoId: plan.proyecto_id,
       },

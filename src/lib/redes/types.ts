@@ -244,6 +244,8 @@ export interface PlanMes {
   proyecto_id: string;
   mes: string;
   estado: EstadoPlanMes;
+  /** Se mandó junto con otros meses como una campaña (el cliente los aprueba todos en un link). */
+  enviado_en_campania?: string[] | null;
   ideas: IdeaPlan[];
   ideas_ia?: IdeaPlan[];
   descartadas?: string[];

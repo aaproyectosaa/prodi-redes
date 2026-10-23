@@ -1407,6 +1407,85 @@ async function planEnviar(req: VercelRequest) {
   return { ok: true };
 }
 
+/**
+ * Mandar una campaña entera de una (varios meses que se filman juntos): todos los borradores pasan a "enviado" y al
+ * cliente le llega UN aviso con un solo link donde ve y aprueba los videos de todos los meses
+ * (/cliente?plan=2026-11,2026-12,…). Cada mes sigue siendo su plan: se responde, se ajusta y se recuerda como siempre.
+ */
+async function planEnviarCampania(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "productor"]);
+  const b = body<{ proyecto_id?: string; meses?: unknown; nota_equipo?: string }>(req);
+  const meses = [...new Set((Array.isArray(b.meses) ? b.meses : []).map(String).filter((m) => MES_RE.test(m)))].sort().slice(0, 12);
+  if (!b.proyecto_id || meses.length < 2) throw new HttpError(400, "Elegí los meses de la campaña");
+  await assertProjectAccess(caller, b.proyecto_id);
+  const pid = b.proyecto_id;
+  const db = adminDb();
+  const nota = String(b.nota_equipo ?? "").trim().slice(0, 600) || null;
+
+  // Primero se revisa todo: o salen todos los meses o ninguno.
+  const planes = await Promise.all(meses.map(async (mes) => ({ mes, ref: db.collection("planes_mes").doc(planId(pid, mes)), p: (await db.collection("planes_mes").doc(planId(pid, mes)).get()).data() })));
+  for (const { mes, p } of planes) {
+    const m = nombreMes(mes).split(" ")[0].toLowerCase();
+    if (!p) throw new HttpError(404, `No hay plan de ${m}`);
+    if (p.estado !== "borrador") throw new HttpError(409, `El plan de ${m} ya se mandó`);
+    const ideas = limpiarIdeas(p.ideas);
+    if (!ideas.length) throw new HttpError(400, `El plan de ${m} no tiene ideas`);
+    if (ideas.some((i) => i.titulo.length < 3 || i.idea.length < 10)) throw new HttpError(400, `Completá el título y la descripción de las ideas de ${m}`);
+  }
+
+  const proj = (await db.collection("projects").doc(pid).get()).data() ?? {};
+  const ahora = new Date().toISOString();
+  let total = 0;
+  let campania: string | null = null;
+  for (const { mes, ref } of planes) {
+    const plan: Record<string, any> = await db.runTransaction(async (tx) => {
+      const p = (await tx.get(ref)).data();
+      if (!p || p.estado !== "borrador") throw new HttpError(409, "Otro del equipo ya lo mandó");
+      const ideas = limpiarIdeas(p.ideas).map((i) => ({ ...i, respuesta: null, video_id: null }));
+      tx.update(ref, {
+        ideas,
+        // El mensaje va una sola vez (en el primer mes); los otros conservan el suyo si tenían.
+        nota_equipo: mes === meses[0] ? nota ?? p.nota_equipo ?? null : p.nota_equipo ?? null,
+        estado: "enviado",
+        enviado_at: ahora,
+        enviado_por: caller.uid,
+        enviado_en_campania: meses,
+        recordatorios: 0,
+        updated_at: ahora,
+      });
+      return { ...(p as Record<string, any>), ideasNuevas: ideas };
+    });
+    total += plan.ideasNuevas.length;
+    campania = campania ?? plan.campania?.nombre ?? plan.ideasNuevas.find((i: IdeaPlan) => i.campania)?.campania ?? null;
+    await aprender(pid, proj, aprendizajeEquipo(mes, plan.ideas_ia ?? [], plan.ideasNuevas, plan.descartadas ?? []));
+  }
+
+  const desde = nombreMes(meses[0]).split(" ")[0].toLowerCase();
+  const hasta = nombreMes(meses[meses.length - 1]).split(" ")[0].toLowerCase();
+  const link = `/cliente?plan=${meses.join(",")}`;
+  const team = (proj.team_roles ?? {}) as Record<string, string[]>;
+  await enviarAviso(
+    {
+      destinatarios: team.cliente ?? [],
+      titulo: campania ? `Tu campaña “${campania}” 🎬` : `Tus videos de ${desde} a ${hasta} 🎬`,
+      cuerpo: `Te armamos ${total} ideas de video de ${desde} a ${hasta}, para filmar juntas. Miralas y decinos cuáles van.`,
+      link,
+      clave: `plan_campania:${pid}:${meses.join(",")}`,
+      proyectoId: pid,
+    },
+    appUrl(req)
+  );
+  const grupo = `cliente_${pid}`;
+  if ((await db.collection("chats").doc(grupo).get()).exists) {
+    await mensajeProdi(
+      grupo,
+      `🎬 ¡Ya está la campaña${campania ? ` “${campania}”` : ""}! Armamos ${total} ideas de video de ${desde} a ${hasta}, para filmarlas juntas. Miralas y decinos cuáles van.`,
+      { link, link_texto: "Ver ideas", link_equipo: `/videos?plan=${planId(pid, meses[0])}` }
+    ).catch((e) => console.warn("[plan-enviar-campania] chat", pid, e));
+  }
+  return { ok: true, meses: meses.length, ideas: total };
+}
+
 /** El voto de un integrante del cliente en una idea (cada uno el suyo; los demás lo ven en vivo). */
 async function planVotar(req: VercelRequest) {
   const caller = await requireCaller(req, ["cliente", "admin"]);
@@ -1845,6 +1924,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "presupuesto-ia") res.status(200).json(await presupuestoConIA(req));
     else if (accion === "borrador") res.status(200).json(await borrador(req));
     else if (accion === "rodaje-armar") res.status(200).json(await rodajeArmar(req));
+    else if (accion === "plan-enviar-campania") res.status(200).json(await planEnviarCampania(req));
     else if (accion === "preparar") res.status(200).json(await preparar(req));
     else if (accion === "marca-subir") res.status(200).json(await marcaSubir(req));
     else if (accion === "marca-quitar") res.status(200).json(await marcaQuitar(req));

@@ -50,7 +50,8 @@ export function pasosCliente(params: {
   piezas: PiezaIA[];
   cupo: number;
   /** Plan del mes que el equipo le mandó y todavía no respondió. */
-  planPendiente?: { mes: string; ideas: number; titulos?: string[] } | null;
+  /** `campania`: si vino en una campaña de varios meses, cómo nombrarla ("la campaña (noviembre a febrero)"). */
+  planPendiente?: { mes: string; ideas: number; titulos?: string[]; campania?: string | null } | null;
 }): Paso[] {
   const { cliente, videos, rodajes, piezas, cupo, planPendiente } = params;
   const mes = mesActual();
@@ -89,11 +90,14 @@ export function pasosCliente(params: {
     out.push({
       tipo: "elegir_ideas",
       teToca: true,
-      titulo: `Necesitamos tu OK para filmar ${nombreMes}`,
-      texto: `Te mandamos ${planPendiente.ideas === 1 ? "1 idea de video" : `${planPendiente.ideas} ideas de videos`}. Hasta que no nos digas cuáles van, no podemos organizar el rodaje. Te lleva 2 minutos.`,
+      titulo: `Necesitamos tu OK para filmar ${planPendiente.campania ?? nombreMes}`,
+      texto: `${planPendiente.campania ? "Te mandamos las ideas de todos los meses, para filmarlas juntas" : `Te mandamos ${planPendiente.ideas === 1 ? "1 idea de video" : `${planPendiente.ideas} ideas de videos`}`}. Hasta que no nos digas cuáles van, no podemos organizar el rodaje. Te lleva 2 minutos.`,
       lista: planPendiente.titulos?.slice(0, 4),
       comoHacerlo: ["Abrí las ideas", "Marcá ✓ las que te gustan", "En las otras, contanos qué cambiarías"],
-      accion: { label: planPendiente.ideas === 1 ? "Ver la idea y responder" : `Ver las ${planPendiente.ideas} ideas y responder`, destino: "ideas" },
+      accion: {
+        label: planPendiente.campania ? "Ver las ideas y responder" : planPendiente.ideas === 1 ? "Ver la idea y responder" : `Ver las ${planPendiente.ideas} ideas y responder`,
+        destino: "ideas",
+      },
     });
   }
 
