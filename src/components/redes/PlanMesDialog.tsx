@@ -96,19 +96,42 @@ export function PlanMesDialog({
   useEffect(() => {
     if (open) setModo("mes");
   }, [open]);
+  // Al bajar, el encabezado se achica (queda el título, el cliente y el mes) para dejar lugar a las ideas.
+  const [compacto, setCompacto] = useState(false);
+  useEffect(() => {
+    setCompacto(false);
+  }, [open, modo]);
+  const alScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const y = e.currentTarget.scrollTop;
+    if (y > 48 && !compacto) setCompacto(true);
+    else if (y < 8 && compacto) setCompacto(false);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[94dvh] w-[calc(100vw-1.5rem)] max-w-3xl flex-col gap-0 overflow-hidden rounded-3xl border-0 p-0 shadow-2xl [&>button.absolute]:right-4 [&>button.absolute]:top-4 [&>button.absolute]:rounded-full [&>button.absolute]:bg-white/15 [&>button.absolute]:p-1.5 [&>button.absolute]:text-white [&>button.absolute]:opacity-100 [&>button.absolute]:backdrop-blur">
-        <DialogHeader className="relative shrink-0 space-y-1 overflow-hidden bg-gradient-to-br from-primary via-violet-600 to-fuchsia-500 px-5 pb-4 pt-5 text-left text-white">
+        <DialogHeader
+          className={cn(
+            "relative shrink-0 space-y-1 overflow-clip bg-gradient-to-br from-primary via-violet-600 to-fuchsia-500 px-5 text-left text-white transition-[padding] duration-200",
+            compacto ? "pb-3 pt-3" : "pb-4 pt-5"
+          )}
+        >
           <div className="pointer-events-none absolute -right-12 -top-16 h-48 w-48 rounded-full bg-white/15 blur-3xl" aria-hidden />
           <div className="pointer-events-none absolute -bottom-20 left-10 h-40 w-40 rounded-full bg-fuchsia-300/25 blur-3xl" aria-hidden />
-          <DialogTitle className="relative flex items-center gap-2.5 pr-10 text-xl text-white">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/20 ring-1 ring-white/30 backdrop-blur">
-              <Sparkles className="h-5 w-5" />
+          <DialogTitle className={cn("relative flex items-center gap-2.5 pr-10 text-white transition-all duration-200", compacto ? "text-base" : "text-xl")}>
+            <span
+              className={cn(
+                "flex items-center justify-center rounded-xl bg-white/20 ring-1 ring-white/30 backdrop-blur transition-all duration-200",
+                compacto ? "h-7 w-7" : "h-9 w-9"
+              )}
+            >
+              <Sparkles className={compacto ? "h-4 w-4" : "h-5 w-5"} />
             </span>
             {modo === "mes" ? "Armar el mes con IA" : "Campaña con IA"}
           </DialogTitle>
+          {/* Lo que se esconde al bajar: la explicación y el cambio de modo. */}
+          <div className={cn("relative grid transition-[grid-template-rows,opacity] duration-200", compacto ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100")} aria-hidden={compacto}>
+          <div className="min-h-0 space-y-1 overflow-clip">
           <DialogDescription className="relative text-white/80">
             {modo === "mes"
               ? "La IA propone las ideas con lo que sabe del cliente. Vos las revisás y recién ahí le llegan. Lo que cambies, lo aprende para la próxima."
@@ -135,9 +158,16 @@ export function PlanMesDialog({
               </button>
             ))}
           </div>
-          <div className="relative flex flex-wrap items-center gap-2 pt-2">
+          </div>
+          </div>
+          <div className={cn("relative flex flex-wrap items-center gap-2", compacto ? "pt-1" : "pt-2")}>
             <Select value={clienteId} onValueChange={setClienteId}>
-              <SelectTrigger className="h-9 w-full rounded-full border-white/25 bg-white/15 text-white backdrop-blur sm:w-64 [&>svg]:text-white">
+              <SelectTrigger
+                className={cn(
+                  "h-9 rounded-full border-white/25 bg-white/15 text-white backdrop-blur sm:w-64 sm:flex-none [&>svg]:text-white",
+                  compacto ? "w-auto min-w-0 flex-1" : "w-full"
+                )}
+              >
                 <SelectValue placeholder="Elegí el cliente">{cliente?.nombre}</SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -179,13 +209,13 @@ export function PlanMesDialog({
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
-            {cliente && !loading && modo === "mes" && (
+            {cliente && !loading && modo === "mes" && !compacto && (
               <span className="rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-primary shadow-sm">{ESTADO_PLAN[plan?.estado ?? "nada"].label}</span>
             )}
           </div>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 pb-5 pt-5">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 pb-5 pt-5" onScroll={alScroll}>
           {!cliente ? (
             <p className="py-8 text-center text-sm text-muted-foreground">Elegí un cliente.</p>
           ) : modo === "campania" ? (
