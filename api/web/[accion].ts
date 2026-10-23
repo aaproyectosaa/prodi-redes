@@ -12,6 +12,7 @@
 // POST /api/web/actividad   { id, tipo, texto }               → llamada, WhatsApp, mail, reunión o nota (línea de tiempo)
 // GET|POST /api/web/meta-webhook  (Meta: formularios de los anuncios de Prodi → leads)
 // POST /api/web/meta-conversacion { id } · meta-responder { id, texto }  (admin) chat del lead por Instagram/Messenger
+// POST /api/web/meta-productos { id, ids }  (admin) manda productos del catálogo de Prodi como tarjetas
 // POST /api/web/unir { id, otro } · foto { id, foto (data URL, vacía = sacar) }  (admin)
 // POST /api/web/wa-estado · wa-config { config_id } · wa-conectar { code, waba_id, phone_number_id }  (admin) WhatsApp de Prodi → leads
 // POST /api/web/meta-mensajes     (admin) { forzar? } trae los mensajes nuevos de IG y FB como leads
@@ -23,9 +24,10 @@ import { createHmac, randomUUID } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { enTransaccion, getPool, guardarDoc, leerDoc } from "../_lib/db";
 import { appUrl, body, HttpError, requireCaller, sendError } from "../_lib/http";
-import { fotoManual, unirLeads } from "../_lib/leads-unir";
+import { fotoManual, unirLeads } from "../_lib/leads-unir";
+import { linksParaMandar } from "../_lib/catalogo";
 import { conectarWhatsApp, estadoWhatsApp, guardarConfigWhatsApp, recibirWhatsApp } from "../_lib/meta-whatsapp";
-import { conectarFormularios, guardarTokenUsuario, conversacionLead, estadoMeta, guardarRespuestas, sugerirRespuestas, importarMensajes, recibirWebhook, responderLead, verificarWebhook } from "../_lib/meta-leads";
+import { conectarFormularios, guardarTokenUsuario, conversacionLead, enviarProductos, estadoMeta, guardarRespuestas, sugerirRespuestas, importarMensajes, recibirWebhook, responderLead, verificarWebhook } from "../_lib/meta-leads";
 
 const COL = "leads_web";
 const CONFIG = { col: "web_config", id: "general" };
@@ -346,7 +348,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "seguimiento") res.status(200).json(await seguimiento(req));
     else if (accion === "actividad") res.status(200).json(await actividad(req));
     else if (accion === "datos") res.status(200).json(await datos(req));
-    else if (accion === "unir") {
+    else if (accion === "meta-productos") {
+      const caller = await requireCaller(req, ["admin"]);
+      const b = body<{ id?: string; ids?: string[] }>(req);
+      const id = texto(b.id, 40);
+      const productos = await linksParaMandar(appUrl(req), "prodi", Array.isArray(b.ids) ? b.ids.map(String) : [], { col: "leads_web", id });
+      res.status(200).json(await enviarProductos(id, productos, { uid: caller.uid, nombre: caller.nombre || caller.email || "" }));
+    } else if (accion === "unir") {
       const caller = await requireCaller(req, ["admin"]);
       const b = body<{ id?: string; otro?: string }>(req);
       res.status(200).json(await unirLeads(texto(b.id, 40), texto(b.otro, 40), { uid: caller.uid, nombre: caller.nombre || caller.email || "" }));

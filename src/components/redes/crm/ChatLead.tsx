@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, Check, Clock, Instagram, Loader2, MessageCircle, Paperclip, Pencil, Phone, Plus, RefreshCw, Send, Smile, Sparkles, Trash2, X, Zap, AtSign } from "lucide-react";
+import { ArrowDown, Check, Clock, Instagram, Loader2, MessageCircle, Paperclip, Pencil, Phone, Plus, RefreshCw, Send, Smile, Sparkles, Trash2, X, Zap, AtSign, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { db, doc, onSnapshot, suscribirEscribiendo } from "@/lib/db";
 import { callApi } from "@/lib/redes/api";
 import { cn } from "@/lib/utils";
+import { ConfigCatalogo, SelectorProductos, type Producto } from "./CatalogoProductos";
 
 // Chat de un lead que llegó por Instagram o Messenger: se lee y se contesta desde el CRM (api/_lib/meta-leads.ts).
 // Herramientas del vendedor: respuestas rápidas del equipo (con {nombre}), tres respuestas sugeridas por la IA según
@@ -199,7 +200,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
   const [error, setError] = useState<string | null>(null);
   const [texto, setTexto] = useState("");
   const [cargando, setCargando] = useState(false);
-  const [panel, setPanel] = useState<null | "rapidas" | "ia" | "editar">(null);
+  const [panel, setPanel] = useState<null | "rapidas" | "ia" | "editar" | "productos" | "catalogo">(null);
   const [sugerencias, setSugerencias] = useState<string[] | null>(null);
   const [pensando, setPensando] = useState(false);
   const [pedido, setPedido] = useState("");
@@ -314,6 +315,23 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
       .catch((e) => {
         setPendientes((l) => l.map((x) => (x.id === id ? { ...x, estado: "error" } : x)));
         toast.error(e instanceof Error ? e.message : "No se pudo enviar");
+      });
+  };
+  const mandarProductos = (lista: Producto[]) => {
+    const id = `local-p-${Date.now()}`;
+    const texto = `🛍️ ${lista.map((p) => p.nombre).join(" · ")}`;
+    setPanel(null);
+    setPendientes((l) => [...l, { id, texto, adjunto: false, tipo: "texto", at: new Date().toISOString(), mio: true, estado: "enviando" }]);
+    requestAnimationFrame(() => bajar());
+    callApi<{ como: string }>("/api/web/meta-productos", { id: lead.id, ids: lista.map((p) => p.id) })
+      .then(() => {
+        setPendientes((l) => l.filter((x) => x.id !== id));
+        toast.success(lista.length === 1 ? "Producto enviado" : `${lista.length} productos enviados`);
+        setTimeout(() => void cargar(), 1200);
+      })
+      .catch((e) => {
+        setPendientes((l) => l.filter((x) => x.id !== id));
+        toast.error(e instanceof Error ? e.message : "No se pudieron mandar");
       });
   };
   const enviar = () => {
@@ -532,6 +550,22 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
           <EditarRespuestas lista={respuestas} onClose={() => setPanel("rapidas")} />
         </div>
       )}
+      {panel === "productos" && (
+        <div className="border-t bg-muted/40 p-2">
+          <SelectorProductos negocio="prodi" onElegir={(l) => mandarProductos(l)} onCerrar={() => setPanel(null)} onConfigurar={() => setPanel("catalogo")} />
+        </div>
+      )}
+      {panel === "catalogo" && (
+        <div className="max-h-[50vh] overflow-y-auto border-t bg-muted/40 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Catálogo de Prodi</p>
+            <button type="button" onClick={() => setPanel("productos")} className="text-[11px] font-semibold text-primary hover:underline">
+              Volver a elegir
+            </button>
+          </div>
+          <ConfigCatalogo negocio="prodi" />
+        </div>
+      )}
       {panel === "ia" && (
         <div className="border-t bg-gradient-to-br from-primary/[0.06] to-fuchsia-500/[0.06] p-2">
           <div className="mb-1.5 flex items-center justify-between px-1">
@@ -585,6 +619,9 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
             <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
               <Herramienta activo={panel === "rapidas" || panel === "editar"} onClick={() => setPanel(panel === "rapidas" ? null : "rapidas")} titulo="Respuestas guardadas del equipo">
                 <Zap className="h-3.5 w-3.5" /> Rápidas
+              </Herramienta>
+              <Herramienta activo={panel === "productos" || panel === "catalogo"} onClick={() => setPanel(panel === "productos" ? null : "productos")} titulo="Mandar productos del catálogo (tarjeta con foto, precio y link)">
+                <ShoppingBag className="h-3.5 w-3.5" /> Productos
               </Herramienta>
               <Herramienta activo={panel === "ia"} onClick={() => void sugerir()} titulo="La IA lee la charla y te propone 3 respuestas">
                 <Sparkles className="h-3.5 w-3.5" /> Sugerir con IA

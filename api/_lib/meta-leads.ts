@@ -629,3 +629,64 @@ export async function guardarRespuestas(lista: unknown) {
   await guardarDoc(getPool(), RESPUESTAS.col, RESPUESTAS.id, { lista: limpia, updated_at: new Date().toISOString() });
   return { ok: true, lista: limpia };
 }
+
+// ── Productos del catálogo ────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Manda productos del catálogo por Instagram o Messenger como tarjetas (foto, nombre, precio y botón "Ver producto",
+ * con el link que avisa cuando lo abren). Si Meta no acepta la tarjeta, va como texto con los links.
+ */
+export async function enviarProductos(
+  leadId: string,
+  productos: { nombre: string; precio_texto: string; foto: string | null; link: string; descripcion?: string }[],
+  quien: { uid: string; nombre: string }
+) {
+  if (!productos.length) throw new HttpError(400, "Elegí al menos un producto");
+  const c = await contextoConversacion(leadId);
+  const d = await graph(c.convId, { fields: "participants,messages.limit(10){from,created_time}" }, c.token);
+  const persona = (d.participants?.data ?? []).find((p: any) => !c.propios.has(String(p.id)));
+  if (!persona?.id) throw new HttpError(400, "No encontramos a quién mandarle");
+  const suyo = (d.messages?.data ?? []).find((m: any) => !c.propios.has(String(m.from?.id)));
+  const fueraDe24 = suyo ? Date.now() - Date.parse(suyo.created_time) > VENTANA_MS : false;
+  const tipo = fueraDe24 ? { messaging_type: "MESSAGE_TAG", tag: "HUMAN_AGENT" } : { messaging_type: "RESPONSE" };
+  const mandar = (message: unknown) => graph(`${c.id}/messages`, { recipient: JSON.stringify({ id: persona.id }), message: JSON.stringify(message), ...tipo }, c.token, "POST");
+  const tarjeta = {
+    attachment: {
+      type: "template",
+      payload: {
+        template_type: "generic",
+        elements: productos.slice(0, 10).map((p) => ({
+          title: limpio(p.nombre, 80),
+          subtitle: limpio([p.precio_texto, p.descripcion].filter(Boolean).join(" · "), 80) || undefined,
+          ...(p.foto ? { image_url: p.foto } : {}),
+          default_action: { type: "web_url", url: p.link },
+          buttons: [{ type: "web_url", url: p.link, title: "Ver producto" }],
+        })),
+      },
+    },
+  };
+  let como = "tarjeta";
+  try {
+    await mandar(tarjeta);
+  } catch {
+    // Sin tarjeta (ej. Messenger sin permiso de plantillas): los mismos productos como texto.
+    como = "texto";
+    try {
+      await mandar({ text: productos.map((p) => `${p.nombre}${p.precio_texto ? ` — ${p.precio_texto}` : ""}\n${p.link}`).join("\n\n").slice(0, 1000) });
+    } catch (err) {
+      if (fueraDe24) throw new HttpError(400, "Pasaron más de 24 h desde su último mensaje: Meta no deja mandarle desde acá todavía.");
+      throw err;
+    }
+  }
+  const red = c.plataforma === "instagram" ? "Instagram" : "Facebook";
+  const at = new Date().toISOString();
+  const lead = c.lead as any;
+  const nombres = productos.map((p) => p.nombre).join(", ");
+  await guardarDoc(getPool(), COL, leadId, {
+    ...lead,
+    updated_at: at,
+    ultimo_contacto_at: at,
+    historial: [...(Array.isArray(lead.historial) ? lead.historial : []), { at, tipo: "presupuesto", texto: `Le mandaste por ${red}: ${limpio(nombres, 400)}`, por: quien.uid, por_nombre: quien.nombre }].slice(-100),
+  });
+  return { ok: true, como };
+}

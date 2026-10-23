@@ -42,6 +42,7 @@ import { BuscadorMapa, linkMapa, mapaEmbebido, MapaMovible } from "@/components/
 import { ProximoPasoChip, SeguimientoLead, type EventoLead } from "@/components/redes/crm/SeguimientoLead";
 import { ChatLead } from "@/components/redes/crm/ChatLead";
 import { ConectarWhatsApp } from "@/components/redes/crm/ConectarWhatsApp";
+import { ConfigCatalogo } from "@/components/redes/crm/CatalogoProductos";
 import { useSearchParams } from "react-router-dom";
 
 // Reservas de la landing de la campaña «No empezamos de cero» (somosprodi.com).
@@ -1098,7 +1099,7 @@ function AjustesTemporada({ open, onOpenChange, config }: { open: boolean; onOpe
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-sm rounded-2xl">
+      <DialogContent className="max-h-[90dvh] w-[calc(100vw-1.5rem)] max-w-md overflow-y-auto rounded-2xl">
         <DialogHeader className="text-left">
           <DialogTitle>Temporada y cupos</DialogTitle>
           <DialogDescription>Las aplicaciones nuevas quedan en esta temporada. Los cupos ocupados son los ganados de la temporada.</DialogDescription>
@@ -1121,6 +1122,10 @@ function AjustesTemporada({ open, onOpenChange, config }: { open: boolean; onOpe
         </div>
         <FormulariosMeta />
         <ConectarWhatsApp />
+        <div className="space-y-2 rounded-xl border bg-muted/40 p-3">
+          <p className="text-sm font-semibold">Catálogo de productos</p>
+          <ConfigCatalogo negocio="prodi" />
+        </div>
       </DialogContent>
     </Dialog>
   );
