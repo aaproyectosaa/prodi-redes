@@ -80,7 +80,7 @@ interface LeadWeb {
   /** Dirección del local o link de Google Maps. */
   ubicacion?: string;
   /** Los que llegaron por Meta: la conversación (mensajes) o el formulario. */
-  meta?: { conversacion_id?: string; plataforma?: string; ultimo_texto?: string; foto?: string | null; foto_manual?: string | null; wa_id?: string } | null;
+  meta?: { conversacion_id?: string; plataforma?: string; ultimo_texto?: string; foto?: string | null; foto_manual?: string | null; wa_id?: string; chat?: { mensajes?: unknown[]; at?: string } | null } | null;
 }
 
 interface Columna {

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { db, doc, onSnapshot } from "@/lib/db";
+import { db, doc, onSnapshot, suscribirEscribiendo } from "@/lib/db";
 import { callApi } from "@/lib/redes/api";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +43,27 @@ export interface LeadChat {
   instagram?: string;
   telefono?: string;
   email?: string;
+  /** Copia de los últimos mensajes guardada en el lead (abre al instante y llega en tiempo real). */
+  meta?: { plataforma?: string; chat?: { mensajes?: unknown[]; at?: string } | null } | null;
+}
+
+const VENTANA_MS = 24 * 3600_000;
+const VENTANA_AGENTE_MS = 7 * VENTANA_MS;
+/** La conversación armada con la copia guardada (el plazo para responder se calcula acá). */
+function desdeCopia(lead: LeadChat): Conversacion | null {
+  const lista = lead.meta?.chat?.mensajes as Mensaje[] | undefined;
+  if (!Array.isArray(lista) || !lista.length) return null;
+  const ultimoSuyo = [...lista].reverse().find((m) => !m.mio);
+  const desde = ultimoSuyo ? Date.parse(ultimoSuyo.at) : 0;
+  const ahora = Date.now();
+  const ventana = desde + VENTANA_MS > ahora ? "normal" : desde + VENTANA_AGENTE_MS > ahora ? "agente" : "cerrada";
+  return {
+    plataforma: lead.meta?.plataforma ?? "instagram",
+    mensajes: lista,
+    puede_responder: ventana !== "cerrada",
+    ventana,
+    vence: desde ? new Date(desde + (ventana === "agente" ? VENTANA_AGENTE_MS : VENTANA_MS)).toISOString() : null,
+  };
 }
 
 const RESPUESTAS_BASE: Respuesta[] = [
@@ -174,7 +195,7 @@ function EditarRespuestas({ lista, onClose }: { lista: Respuesta[]; onClose: () 
 }
 
 export function ChatLead({ lead }: { lead: LeadChat }) {
-  const [conv, setConv] = useState<Conversacion | null>(null);
+  const [conv, setConv] = useState<Conversacion | null>(() => desdeCopia(lead));
   const [error, setError] = useState<string | null>(null);
   const [texto, setTexto] = useState("");
   const [cargando, setCargando] = useState(false);
@@ -189,6 +210,23 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
   const caja = useRef<HTMLDivElement>(null);
   const entrada = useRef<HTMLTextAreaElement>(null);
   const cantidad = useRef(0);
+
+  // Con el chat abierto el sistema pregunta más seguido si cambió algo (cada 4 s, como los chats del equipo).
+  useEffect(() => suscribirEscribiendo(() => undefined), []);
+  const copia = lead.meta?.chat;
+  useEffect(() => {
+    const nueva = desdeCopia(lead);
+    if (!nueva) return;
+    setConv((c) => {
+      if (!c) return nueva;
+      const ids = new Set(c.mensajes.map((m) => m.id));
+      const faltan = nueva.mensajes.filter((m) => !ids.has(m.id));
+      if (!faltan.length) return c;
+      const mensajes = [...c.mensajes, ...faltan].sort((a, b) => a.at.localeCompare(b.at));
+      return { ...nueva, mensajes };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [copia]);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -205,7 +243,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
 
   useEffect(() => {
     void cargar();
-    const t = setInterval(() => document.visibilityState === "visible" && void cargar(), 15_000);
+    const t = setInterval(() => document.visibilityState === "visible" && void cargar(), 30_000);
     const reloj = setInterval(() => setAhora(Date.now()), 60_000);
     return () => {
       clearInterval(t);
