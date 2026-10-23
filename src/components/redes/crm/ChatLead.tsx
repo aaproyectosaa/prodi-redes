@@ -21,6 +21,8 @@ interface Mensaje {
   tipo?: "texto" | "historia" | "publicacion" | "sticker" | "archivo" | "otro";
   at: string;
   mio: boolean;
+  /** Solo los que mandé recién: se ven al instante mientras viajan a Meta. */
+  estado?: "enviando" | "error";
 }
 interface Conversacion {
   plataforma: string;
@@ -175,7 +177,6 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
   const [conv, setConv] = useState<Conversacion | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [texto, setTexto] = useState("");
-  const [enviando, setEnviando] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [panel, setPanel] = useState<null | "rapidas" | "ia" | "editar">(null);
   const [sugerencias, setSugerencias] = useState<string[] | null>(null);
@@ -260,22 +261,30 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
     }
   };
 
-  const enviar = async () => {
+  // Lo que mandé y todavía no volvió de Meta: se muestra al instante (sin esperar).
+  const [pendientes, setPendientes] = useState<Mensaje[]>([]);
+  const mandar = (t: string, id = `local-${Date.now()}`) => {
+    const at = new Date().toISOString();
+    setPendientes((l) => [...l.filter((x) => x.id !== id), { id, texto: t, adjunto: false, tipo: "texto", at, mio: true, estado: "enviando" }]);
+    requestAnimationFrame(() => bajar());
+    callApi("/api/web/meta-responder", { id: lead.id, texto: t })
+      .then(() => {
+        // Ya salió: queda como enviado hasta que Meta lo devuelva en la conversación.
+        setPendientes((l) => l.map((x) => (x.id === id ? { ...x, estado: undefined } : x)));
+        setTimeout(() => void cargar(), 1200);
+      })
+      .catch((e) => {
+        setPendientes((l) => l.map((x) => (x.id === id ? { ...x, estado: "error" } : x)));
+        toast.error(e instanceof Error ? e.message : "No se pudo enviar");
+      });
+  };
+  const enviar = () => {
     const t = texto.trim();
-    if (!t || enviando) return;
-    setEnviando(true);
-    try {
-      await callApi("/api/web/meta-responder", { id: lead.id, texto: t });
-      setTexto("");
-      setSugerencias(null);
-      setConv((c) => (c ? { ...c, mensajes: [...c.mensajes, { id: `local-${Date.now()}`, texto: t, adjunto: false, tipo: "texto", at: new Date().toISOString(), mio: true }] } : c));
-      requestAnimationFrame(() => bajar());
-      setTimeout(() => void cargar(), 1500);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo enviar");
-    } finally {
-      setEnviando(false);
-    }
+    if (!t) return;
+    setTexto("");
+    setSugerencias(null);
+    mandar(t);
+    requestAnimationFrame(() => entrada.current?.focus());
   };
 
   const guardarDato = async (campo: "telefono" | "email", valor: string) => {
@@ -299,8 +308,16 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
   const esperandoRespuesta = !!conv && conv.mensajes.length > 0 && !conv.mensajes[conv.mensajes.length - 1].mio;
 
   // Mensajes agrupados por día y seguidos del mismo lado.
+  const mensajesVer = useMemo(() => {
+    const base = conv?.mensajes ?? [];
+    const faltan = pendientes.filter(
+      (p) => !base.some((m) => m.mio && m.texto.trim() === p.texto.trim() && Date.parse(m.at) >= Date.parse(p.at) - 120_000)
+    );
+    return [...base, ...faltan];
+  }, [conv, pendientes]);
+
   const filas = useMemo(() => {
-    const lista = conv?.mensajes ?? [];
+    const lista = mensajesVer;
     const res: ({ tipo: "dia"; label: string; key: string } | { tipo: "msj"; m: Mensaje; primero: boolean; ultimo: boolean; key: string })[] = [];
     lista.forEach((m, i) => {
       const ant = lista[i - 1];
@@ -311,7 +328,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
       res.push({ tipo: "msj", m, primero: !mismoAnt, ultimo: !mismoSig, key: m.id });
     });
     return res;
-  }, [conv]);
+  }, [mensajesVer]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
@@ -391,8 +408,20 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
                     </span>
                   )}
                   <span className={cn("mt-0.5 flex items-center justify-end gap-1 text-[10px]", f.m.mio ? "text-white/75" : "text-muted-foreground")}>
-                    {hora(f.m.at)}
-                    {f.m.mio && <Check className="h-3 w-3" />}
+                    {f.m.estado === "error" ? (
+                      <button
+                        type="button"
+                        onClick={() => mandar(f.m.texto, f.m.id)}
+                        className="rounded-full bg-white/20 px-2 py-0.5 font-semibold text-white hover:bg-white/30"
+                      >
+                        No se envió · Reintentar
+                      </button>
+                    ) : (
+                      <>
+                        {hora(f.m.at)}
+                        {f.m.mio && (f.m.estado === "enviando" ? <Clock className="h-3 w-3 animate-pulse" /> : <Check className="h-3 w-3" />)}
+                      </>
+                    )}
                   </span>
                 </div>
               </div>
@@ -556,7 +585,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
-                    void enviar();
+                    enviar();
                   }
                 }}
                 rows={1}
@@ -568,11 +597,11 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
               <Button
                 size="icon"
                 className="h-[42px] w-[42px] shrink-0 rounded-full bg-gradient-to-br from-primary to-fuchsia-500 shadow-md shadow-primary/25"
-                onClick={() => void enviar()}
-                disabled={!texto.trim() || enviando || !conv}
+                onClick={enviar}
+                disabled={!texto.trim() || !conv}
                 aria-label="Enviar"
               >
-                {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                <Send className="h-4 w-4" />
               </Button>
             </div>
             {texto.length > 700 && <p className="mt-1 px-1 text-right text-[10px] text-muted-foreground">{texto.length}/1000</p>}
