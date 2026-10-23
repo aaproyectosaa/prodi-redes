@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   AtSign,
+  Camera,
   ChevronDown,
   ExternalLink,
   FileText,
@@ -23,6 +24,7 @@ import {
   Trophy,
   User,
   UserPlus,
+  X,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -78,7 +80,7 @@ interface LeadWeb {
   /** Dirección del local o link de Google Maps. */
   ubicacion?: string;
   /** Los que llegaron por Meta: la conversación (mensajes) o el formulario. */
-  meta?: { conversacion_id?: string; plataforma?: string; ultimo_texto?: string; foto?: string | null } | null;
+  meta?: { conversacion_id?: string; plataforma?: string; ultimo_texto?: string; foto?: string | null; foto_manual?: string | null; wa_id?: string } | null;
 }
 
 interface Columna {
@@ -450,7 +452,7 @@ export default function Web() {
         </details>
       )}
 
-      <LeadDetalle lead={lead} onClose={() => setAbierto(null)} />
+      <LeadDetalle lead={lead} todos={leads ?? []} onClose={() => setAbierto(null)} />
       <NuevoLead open={nuevo} onOpenChange={setNuevo} />
       <AjustesTemporada open={ajustes} onOpenChange={setAjustes} config={config} />
     </PageShell>
@@ -467,7 +469,8 @@ function copiarEmail(email: string) {
 /** Foto de perfil del lead (Instagram) o sus iniciales si no hay o el link venció. */
 function AvatarLead({ lead, className }: { lead: LeadWeb; className?: string }) {
   const [fallo, setFallo] = useState(false);
-  const foto = lead.meta?.foto;
+  // La que se cargó a mano manda (WhatsApp no da la foto); si no, la de Instagram.
+  const foto = lead.meta?.foto_manual || lead.meta?.foto;
   useEffect(() => setFallo(false), [foto]);
   const iniciales = (lead.negocio || lead.nombre || "?").replace(/^[@+]/, "").slice(0, 2).toUpperCase();
   return foto && !fallo ? (
@@ -772,7 +775,118 @@ function Bloque({ titulo, children, accion }: { titulo: string; children: React.
   );
 }
 
-function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => void }) {
+/** Los últimos 10 dígitos del teléfono (para reconocer a la misma persona en dos canales). */
+const claveTel = (t?: string) => {
+  const d = (t ?? "").replace(/\D/g, "");
+  return d.length >= 8 ? d.slice(-10) : "";
+};
+const claveIg = (v?: string) => (v ?? "").trim().replace(/^@/, "").toLowerCase();
+
+/** Otros leads que parecen la misma persona (mismo teléfono o mismo Instagram). */
+function mismaPersona(lead: LeadWeb, todos: LeadWeb[]): LeadWeb[] {
+  const tel = claveTel(lead.telefono);
+  const ig = claveIg(lead.instagram);
+  return todos.filter((o) => o.id !== lead.id && ((tel && claveTel(o.telefono) === tel) || (ig && !ig.includes(".") && claveIg(o.instagram) === ig)));
+}
+
+/** Foto achicada a 320 px en JPEG, como data URL (para guardarla en el lead). */
+async function fotoChica(file: File): Promise<string> {
+  const bmp = await createImageBitmap(file);
+  const lado = 320;
+  const k = Math.max(lado / bmp.width, lado / bmp.height);
+  const c = document.createElement("canvas");
+  c.width = lado;
+  c.height = lado;
+  // Recorte cuadrado al centro.
+  c.getContext("2d")!.drawImage(bmp, (lado - bmp.width * k) / 2, (lado - bmp.height * k) / 2, bmp.width * k, bmp.height * k);
+  return c.toDataURL("image/jpeg", 0.85);
+}
+
+/** El avatar de la ficha: se toca para subir una foto (o cambiarla). */
+function AvatarEditable({ lead }: { lead: LeadWeb }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [subiendo, setSubiendo] = useState(false);
+  const elegir = async (f?: File) => {
+    if (!f) return;
+    setSubiendo(true);
+    try {
+      await callApi("/api/web/foto", { id: lead.id, foto: await fotoChica(f) });
+      toast.success("Foto guardada");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar la foto");
+    } finally {
+      setSubiendo(false);
+    }
+  };
+  const quitar = async () => {
+    try {
+      await callApi("/api/web/foto", { id: lead.id, foto: "" });
+      toast.success("Foto sacada");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo sacar");
+    }
+  };
+  return (
+    <div className="group relative shrink-0">
+      <button type="button" onClick={() => input.current?.click()} title="Cambiar la foto" className="relative block">
+        <AvatarLead lead={lead} className="h-11 w-11 rounded-2xl text-sm shadow-md shadow-primary/25" />
+        <span className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/55 text-white opacity-0 transition-opacity group-hover:opacity-100">
+          {subiendo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+        </span>
+      </button>
+      {lead.meta?.foto_manual && (
+        <button
+          type="button"
+          onClick={() => void quitar()}
+          className="absolute -right-1.5 -top-1.5 hidden h-5 w-5 items-center justify-center rounded-full border bg-background text-muted-foreground shadow group-hover:flex hover:text-foreground"
+          title="Sacar la foto"
+          aria-label="Sacar la foto"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+      <input ref={input} type="file" accept="image/*" hidden onChange={(e) => (void elegir(e.target.files?.[0]), (e.target.value = ""))} />
+    </div>
+  );
+}
+
+/** Aviso cuando la misma persona está en otro lead (ej. por WhatsApp y por Instagram), con el botón para unirlos. */
+function AvisoMismaPersona({ lead, otros }: { lead: LeadWeb; otros: LeadWeb[] }) {
+  const [uniendo, setUniendo] = useState<string | null>(null);
+  if (!otros.length) return null;
+  const unir = async (o: LeadWeb) => {
+    setUniendo(o.id);
+    try {
+      await callApi("/api/web/unir", { id: lead.id, otro: o.id });
+      toast.success("Unidos: ahora es un solo lead");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudieron unir");
+    } finally {
+      setUniendo(null);
+    }
+  };
+  return (
+    <div className="space-y-1.5 rounded-xl border border-sky-500/40 bg-sky-500/10 p-2.5">
+      {otros.map((o) => {
+        const og = ORIGENES[origenDe(o)];
+        return (
+          <div key={o.id} className="flex items-center gap-2">
+            <AvatarLead lead={o} className="h-7 w-7 rounded-full text-[10px]" />
+            <p className="min-w-0 flex-1 text-xs">
+              <span className="font-semibold">Parece la misma persona</span> que <b>{o.negocio}</b>
+              <span className="text-muted-foreground"> · {og.label}</span>
+            </p>
+            <Button size="sm" className="h-7 shrink-0 rounded-full px-3 text-[11px]" onClick={() => void unir(o)} disabled={!!uniendo}>
+              {uniendo === o.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Unir"}
+            </Button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function LeadDetalle({ lead, todos, onClose }: { lead: LeadWeb | null; todos: LeadWeb[]; onClose: () => void }) {
   const [notas, setNotas] = useState("");
   const [pestana, setPestana] = useState<"chat" | "ficha">("chat");
   useEffect(() => setPestana("chat"), [lead?.id]);
@@ -802,6 +916,7 @@ function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => v
           <AlertTriangle className="h-4 w-4 shrink-0" /> Revisar: dice que invierte más de $700.000 pero factura menos de $10M por mes.
         </p>
       )}
+      <AvisoMismaPersona lead={lead} otros={mismaPersona(lead, todos)} />
       <Bloque titulo="Etapa">
         <SelectorEtapa lead={lead} />
       </Bloque>
@@ -835,7 +950,7 @@ function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => v
       <DialogContent className={cn("flex max-h-[92dvh] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden rounded-3xl bg-background p-0", conChat ? "h-[min(860px,92dvh)] max-w-5xl" : "max-w-xl")}>
         {/* Encabezado */}
         <DialogHeader className="shrink-0 flex-row items-center gap-3 space-y-0 border-b bg-gradient-to-r from-primary/[0.08] via-fuchsia-500/[0.05] to-transparent px-5 py-3.5 pr-12 text-left">
-          <AvatarLead lead={lead} className="h-11 w-11 rounded-2xl text-sm shadow-md shadow-primary/25" />
+          <AvatarEditable lead={lead} />
           <div className="min-w-0 flex-1">
             <DialogTitle className="truncate text-lg">{lead.negocio}</DialogTitle>
             <DialogDescription className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">

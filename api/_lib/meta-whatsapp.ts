@@ -11,6 +11,7 @@ import { HttpError } from "./http";
 import { enviarAviso } from "./notify";
 import { decrypt, encrypt, type EncryptedPayload } from "./crypto";
 import { graph, idDeLead, limpio, temporadaActual } from "./meta-leads";
+import { leadPorTelefono } from "./leads-unir";
 
 const COL = "leads_web";
 const SECRETO = { col: "secretos", id: "meta_whatsapp" };
@@ -104,11 +105,19 @@ export async function recibirWhatsApp(b: any, base: string) {
 async function guardarMensaje(m: any, nombrePerfil: string, base: string): Promise<boolean> {
   const wa = String(m?.from ?? "").replace(/\D/g, "");
   if (!wa) return false;
-  const id = idDeLead(`whatsapp:${wa}`);
   const pool = getPool();
   const texto = limpio(textoDe(m), 1000);
   const at = m?.timestamp ? new Date(Number(m.timestamp) * 1000).toISOString() : new Date().toISOString();
-  const lead = (await leerDoc(pool, COL, id)) as any;
+  // Su lead de WhatsApp; si no tiene, el lead que ya tenga ese teléfono (ej. el de Instagram, con foto): la misma persona.
+  let id = idDeLead(`whatsapp:${wa}`);
+  let lead = (await leerDoc(pool, COL, id)) as any;
+  if (!lead) {
+    const mismo = await leadPorTelefono(wa);
+    if (mismo) {
+      id = mismo.id;
+      lead = { ...mismo.data, meta: { ...(mismo.data.meta ?? {}), wa_id: wa } };
+    }
+  }
   const vistos: string[] = Array.isArray(lead?.meta?.wa_vistos) ? lead.meta.wa_vistos : [];
   if (m?.id && vistos.includes(String(m.id))) return false; // Meta a veces avisa dos veces.
   const nombre = limpio(nombrePerfil, 80);
