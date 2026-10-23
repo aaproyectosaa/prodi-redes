@@ -3,7 +3,9 @@ import { Brain, CalendarDays, Clapperboard, Loader2, Megaphone, RotateCcw, Send,
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { EstadoBorrador } from "@/components/redes/EstadoBorrador";
 import { callApi } from "@/lib/redes/api";
+import { useBorrador } from "@/lib/redes/borradores";
 import { mesLabel } from "@/lib/redes/format";
 import { cn } from "@/lib/utils";
 
@@ -60,6 +62,9 @@ function leer(pid: string): { mensajes: Mensaje[]; propuesta: Propuesta | null }
   return { mensajes: [], propuesta: null };
 }
 
+type Charla = { mensajes: Mensaje[]; propuesta: Propuesta | null };
+const charlaVacia = (c: Charla) => !c.mensajes.length && !c.propuesta;
+
 export function CampaniaIA({
   proyectoId,
   nombre,
@@ -95,6 +100,22 @@ export function CampaniaIA({
       /* sin almacenamiento */
     }
   }, [proyectoId, mensajes, propuesta]);
+
+  // Y en el servidor: así no se pierde al cambiar de compu o de celular, y la ve todo el equipo.
+  const charla = useMemo<Charla>(() => ({ mensajes: mensajes.slice(-40), propuesta }), [mensajes, propuesta]);
+  const borrador = useBorrador<Charla>({
+    tipo: "campania",
+    clave: proyectoId,
+    proyectoId,
+    valor: charla,
+    vacio: charlaVacia,
+    alCargar: (d) => {
+      // Si en esta compu hay una charla más larga (sin subir todavía), queda esa.
+      if ((d.mensajes?.length ?? 0) < leer(proyectoId).mensajes.length) return;
+      setMensajes(d.mensajes ?? []);
+      setPropuesta(d.propuesta ?? null);
+    },
+  });
 
   // Lugares libres de los próximos meses.
   useEffect(() => {
@@ -145,6 +166,7 @@ export function CampaniaIA({
     setMensajes([]);
     setPropuesta(null);
     setTexto("");
+    void borrador.descartar();
   };
 
   const cambiarVideo = (id: string, cambios: Partial<VideoCampania>) =>
@@ -211,11 +233,14 @@ export function CampaniaIA({
 
       {/* La charla. */}
       <div className="overflow-hidden rounded-3xl border bg-card">
-        <div className="flex items-center gap-2 border-b bg-gradient-to-r from-primary/[0.08] to-fuchsia-500/[0.06] px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-2 border-b bg-gradient-to-r from-primary/[0.08] to-fuchsia-500/[0.06] px-4 py-2.5">
           <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-primary to-fuchsia-500 text-white">
             <Sparkles className="h-3.5 w-3.5" />
           </span>
           <p className="flex-1 text-sm font-semibold">Planificá la campaña con la IA</p>
+          {mensajes.length > 0 && (
+            <EstadoBorrador estado={borrador.estado} guardadoAt={borrador.guardadoAt} porNombre={borrador.porNombre} onGuardar={() => void borrador.guardar()} />
+          )}
           {mensajes.length > 0 && (
             <Button size="sm" variant="ghost" className="h-7 rounded-full text-xs text-muted-foreground" onClick={empezarDeNuevo} disabled={enviando || cargando}>
               <RotateCcw className="mr-1 h-3.5 w-3.5" /> Empezar de nuevo

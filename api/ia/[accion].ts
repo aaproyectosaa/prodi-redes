@@ -1724,6 +1724,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "voz-hablar") res.status(200).json(await vozHablar(req));
     else if (accion === "chat-resumen") res.status(200).json(await chatResumen(req));
     else if (accion === "presupuesto-ia") res.status(200).json(await presupuestoConIA(req));
+    else if (accion === "borrador") res.status(200).json(await borrador(req));
     else if (accion === "preparar") res.status(200).json(await preparar(req));
     else if (accion === "marca-subir") res.status(200).json(await marcaSubir(req));
     else if (accion === "marca-quitar") res.status(200).json(await marcaQuitar(req));
@@ -1832,6 +1833,35 @@ async function resumenVoz(req: VercelRequest) {
 }
 
 const ROLES_VOZ = ["admin", "productor", "editor", "pauta", "diseno"];
+
+/**
+ * Borradores del equipo guardados en el servidor (planificar videos, campaña con la IA…): así lo que se arma no se
+ * pierde al cerrar, recargar o cambiar de compu o de celular, y lo ve cualquiera del equipo.
+ * { tipo, clave } lee; { tipo, clave, data } guarda; { tipo, clave, data: null } lo borra.
+ */
+async function borrador(req: VercelRequest) {
+  const caller = await requireCaller(req, ROLES_VOZ as never);
+  const b = body<{ tipo?: string; clave?: string; data?: unknown; proyecto_id?: string }>(req);
+  const tipo = String(b.tipo ?? "");
+  const clave = String(b.clave ?? "");
+  if (!/^[a-z-]{3,30}$/.test(tipo) || !/^[\w-]{1,80}$/.test(clave)) throw new HttpError(400, "Borrador inválido");
+  if (b.proyecto_id) await assertProjectAccess(caller, String(b.proyecto_id));
+  const id = `${tipo}_${clave}`;
+  const ref = adminDb().collection("borradores").doc(id);
+  if (!("data" in b)) {
+    const d = (await ref.get()).data();
+    return d ? { data: d.data ?? null, updated_at: d.updated_at ?? null, por_nombre: d.por_nombre ?? null } : { data: null, updated_at: null, por_nombre: null };
+  }
+  if (b.data === null) {
+    await ref.delete().catch(() => undefined);
+    return { ok: true };
+  }
+  const texto = JSON.stringify(b.data);
+  if (texto.length > 300_000) throw new HttpError(400, "El borrador es muy grande");
+  const updated_at = new Date().toISOString();
+  await ref.set({ tipo, clave, proyecto_id: b.proyecto_id ?? null, data: b.data, updated_at, por: caller.uid, por_nombre: caller.nombre || caller.email || "" });
+  return { ok: true, updated_at };
+}
 
 /** Charla con la IA que arma la propuesta comercial con lo que cuenta el admin, capturas, PDF o un chat de WhatsApp (ver api/_lib/presupuesto-ia.ts). */
 async function presupuestoConIA(req: VercelRequest) {

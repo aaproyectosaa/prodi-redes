@@ -29,10 +29,15 @@ import { usoPlan } from "@/lib/redes/planes";
 import { PlanUsage } from "./PlanUsage";
 import { useOpenVideo } from "./VideoCard";
 import { cn } from "@/lib/utils";
+import { useBorrador } from "@/lib/redes/borradores";
+import { EstadoBorrador } from "./EstadoBorrador";
 
 export type ModoPlanificar = "planificar" | "filmado";
 
 const vacio = (): NuevoVideo => ({ titulo: "", idea: "", objetivo: "", referencias: "" });
+
+type Borrador = { items: NuevoVideo[]; extra: boolean; modo: ModoPlanificar };
+const borradorVacio = (b: Borrador) => !b.items.some((i) => i.titulo.trim() || i.idea?.trim() || i.objetivo?.trim() || i.referencias?.trim());
 
 const MODOS: { value: ModoPlanificar; icon: typeof CalendarDays; titulo: string; texto: string }[] = [
   { value: "planificar", icon: CalendarDays, titulo: "Planificar", texto: "Todavía no se filmó: cargás la idea y después agendás el rodaje" },
@@ -80,6 +85,23 @@ export function PlanificarDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, clienteInicial]);
 
+  // Lo que se va cargando queda guardado (por cliente y mes) aunque se cierre la ventana o se cambie de equipo.
+  const valorBorrador = useMemo<Borrador>(() => ({ items, extra, modo }), [items, extra, modo]);
+  const borrador = useBorrador<Borrador>({
+    tipo: "planificar",
+    clave: clienteId ? `${clienteId}_${mes}` : null,
+    proyectoId: clienteId || null,
+    valor: valorBorrador,
+    vacio: borradorVacio,
+    // Si se abrió con un video ya cargado (ej. desde el chat), no se pisa con el borrador.
+    activo: open && !inicial?.titulo,
+    alCargar: (d) => {
+      if (d.items?.length) setItems(d.items);
+      setExtra(!!d.extra);
+      if (d.modo) setModo(d.modo);
+    },
+  });
+
   const cliente = clientes.find((c) => c.id === clienteId);
   const uso = useMemo(
     () => usoPlan(cliente, planes, videos, mes),
@@ -101,6 +123,7 @@ export function PlanificarDialog({
     setSaving(true);
     try {
       const ids = await crearVideos(cliente, validos, mes, user.uid, { extra, filmado });
+      void borrador.descartar();
       onOpenChange(false);
       if (filmado && ids[0]) {
         // Se abre el (primer) video: ahí se sube el crudo y se toca "Enviar a edición".
@@ -267,7 +290,16 @@ export function PlanificarDialog({
           <Switch checked={extra} onCheckedChange={setExtra} />
         </label>
 
-        <DialogFooter>
+        <DialogFooter className="sm:items-center">
+          {!inicial?.titulo && (
+            <EstadoBorrador
+              className="mr-auto justify-between sm:justify-start"
+              estado={borrador.estado}
+              guardadoAt={borrador.guardadoAt}
+              porNombre={borrador.porNombre}
+              onGuardar={() => void borrador.guardar()}
+            />
+          )}
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
