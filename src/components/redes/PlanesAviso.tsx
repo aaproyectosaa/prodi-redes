@@ -31,6 +31,8 @@ interface Item {
   key: string;
   tono: "cambios" | "borrador" | "falta";
   texto: string;
+  /** Lo que dice el chip (el texto completo queda de tooltip). */
+  corto: string;
   boton: string;
   clienteId: string;
   mes: string;
@@ -61,6 +63,7 @@ export function PlanesAviso() {
   }, [desdeLink]);
 
   const nombre = (id: string) => clientes.find((c) => c.id === id)?.nombre ?? "Cliente";
+  const mesCorto = (m: string) => mesLabel(m).split(" ")[0].slice(0, 3).toLowerCase();
   const items: Item[] = [];
   for (const p of lista) {
     const n = cambiosPendientes(p).length;
@@ -69,6 +72,7 @@ export function PlanesAviso() {
         key: p.id,
         tono: "cambios",
         texto: `${nombre(p.proyecto_id)} pidió cambios en ${n === 1 ? "1 idea" : `${n} ideas`} de ${mesLabel(p.mes).split(" ")[0].toLowerCase()}`,
+        corto: `${nombre(p.proyecto_id)} pidió ${n === 1 ? "1 cambio" : `${n} cambios`} · ${mesCorto(p.mes)}`,
         boton: "Ajustar",
         clienteId: p.proyecto_id,
         mes: p.mes,
@@ -78,6 +82,7 @@ export function PlanesAviso() {
         key: p.id,
         tono: "borrador",
         texto: `Borrador sin mandar: ${nombre(p.proyecto_id)} · ${mesLabel(p.mes).split(" ")[0].toLowerCase()}`,
+        corto: `Borrador ${nombre(p.proyecto_id)} · ${mesCorto(p.mes)}`,
         boton: "Revisar",
         clienteId: p.proyecto_id,
         mes: p.mes,
@@ -97,40 +102,40 @@ export function PlanesAviso() {
           faltan.length === 1
             ? `Falta armar ${mesLabel(proximo).split(" ")[0].toLowerCase()} de ${faltan[0].nombre}`
             : `Faltan armar los videos de ${mesLabel(proximo).split(" ")[0].toLowerCase()} de ${faltan.length} clientes`,
+        corto: faltan.length === 1 ? `Falta ${faltan[0].nombre} · ${mesCorto(proximo)}` : `Faltan ${faltan.length} clientes · ${mesCorto(proximo)}`,
         boton: "Armar con IA",
         clienteId: faltan[0].id,
         mes: proximo,
       });
   }
 
+  // Lo más urgente primero: cambios del cliente, borradores, lo que falta armar.
+  const orden = { cambios: 0, borrador: 1, falta: 2 } as const;
+  items.sort((a, b) => orden[a.tono] - orden[b.tono]);
+
   return (
     <>
       {items.length > 0 && (
-        <div className="mb-4 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-300 motion-reduce:animate-none">
-          {items.slice(0, 4).map((it) => {
+        <div className="-mx-1 mb-3 flex items-center gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] animate-in fade-in duration-300 motion-reduce:animate-none">
+          <span className="shrink-0 pr-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Planes</span>
+          {items.map((it) => {
             const Icono = it.tono === "cambios" ? MessageSquareWarning : it.tono === "borrador" ? Clock : Sparkles;
             return (
               <button
                 key={it.key}
                 type="button"
                 onClick={() => setAbrir({ clienteId: it.clienteId, mes: it.mes })}
+                title={`${it.texto} · ${it.boton}`}
                 className={cn(
-                  "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition-all hover:-translate-y-0.5 hover:shadow-sm",
-                  it.tono === "cambios" && "border-orange-500/40 bg-orange-500/[0.07]",
-                  it.tono === "borrador" && "border-amber-500/40 bg-amber-500/[0.07]",
-                  it.tono === "falta" && "border-primary/30 bg-primary/[0.05]"
+                  "group inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors",
+                  it.tono === "cambios" && "border-orange-500/40 bg-orange-500/10 text-orange-700 hover:bg-orange-500/20 dark:text-orange-300",
+                  it.tono === "borrador" && "border-border bg-muted/40 text-foreground/80 hover:border-amber-500/50 hover:bg-amber-500/10",
+                  it.tono === "falta" && "border-primary/30 bg-primary/[0.06] text-primary hover:bg-primary/10"
                 )}
               >
-                <Icono
-                  className={cn(
-                    "h-4 w-4 shrink-0",
-                    it.tono === "cambios" ? "text-orange-600" : it.tono === "borrador" ? "text-amber-600" : "text-primary"
-                  )}
-                />
-                <span className="min-w-0 flex-1">{it.texto}</span>
-                <span className="inline-flex shrink-0 items-center text-xs font-semibold text-primary">
-                  {it.boton} <ChevronRight className="h-3.5 w-3.5" />
-                </span>
+                <Icono className={cn("h-3.5 w-3.5 shrink-0", it.tono === "borrador" && "text-amber-500")} />
+                <span className="max-w-[16rem] truncate">{it.corto}</span>
+                <ChevronRight className="-mr-1 h-3 w-3 shrink-0 opacity-50 transition-transform group-hover:translate-x-0.5 group-hover:opacity-100" />
               </button>
             );
           })}
