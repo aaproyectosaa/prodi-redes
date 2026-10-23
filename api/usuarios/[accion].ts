@@ -240,7 +240,10 @@ async function contactoCrear(req: VercelRequest, caller: Caller) {
   const cliente = await clienteParaContactos(caller, b.proyecto_id);
   const nombre = String(b.nombre ?? "").trim().slice(0, 80);
   const email = String(b.email ?? "").trim().toLowerCase();
-  if (!nombre || !/.+@.+\..+/.test(email)) throw new HttpError(400, "Completá nombre y mail");
+  if (!nombre) throw new HttpError(400, "Completá el nombre");
+  // El mail mal escrito (ej. "@hotmailcom", sin el punto): que se entienda qué está mal.
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email))
+    throw new HttpError(400, email.includes("@") ? `Revisá el mail: “${email}” no está completo (¿falta el punto, como en @hotmail.com?)` : "Revisá el mail: le falta la @");
   const sistema = b.acceso === "sistema";
   const conClave = !!b.password;
   // Poner la contraseña o dar acceso al sistema: solo el super admin (nadie más del equipo puede entrar como el cliente).
