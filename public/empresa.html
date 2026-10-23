@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Prodi Redes · Gestión de redes y publicidad en Meta</title>
+<meta name="description" content="Prodi es una agencia argentina que gestiona las redes sociales y la publicidad en Meta de pequeñas y medianas empresas, con un panel propio donde cada cliente ve sus resultados." />
+<link rel="icon" href="/favicon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --violeta: #6F40FC;
+    --fucsia: #E040A0;
+    --negro: #0B0A12;
+    --texto: #1A1726;
+    --suave: #5F5A70;
+    --linea: #E7E4F0;
+    --fondo: #FAF9FD;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Poppins", system-ui, sans-serif; color: var(--texto); background: var(--fondo); line-height: 1.6; }
+  a { color: var(--violeta); }
+  .envolver { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+  header { background: var(--negro); color: #fff; }
+  .barra { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; }
+  .barra img { height: 30px; }
+  .barra a.boton { font-size: 14px; }
+  .boton { display: inline-block; background: linear-gradient(90deg, var(--violeta), var(--fucsia)); color: #fff; text-decoration: none; font-weight: 600; padding: 12px 22px; border-radius: 999px; }
+  .heroe { padding: 56px 0 72px; }
+  .heroe h1 { font-size: clamp(30px, 5vw, 48px); line-height: 1.15; font-weight: 800; max-width: 760px; }
+  .heroe h1 span { background: linear-gradient(90deg, #A88BFF, #F07ACB); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .heroe p { color: #CFCBDD; font-size: 18px; max-width: 640px; margin: 18px 0 28px; }
+  section { padding: 64px 0; }
+  h2 { font-size: clamp(24px, 3.5vw, 32px); font-weight: 700; margin-bottom: 8px; }
+  .bajada { color: var(--suave); margin-bottom: 32px; max-width: 680px; }
+  .grilla { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .tarjeta { background: #fff; border: 1px solid var(--linea); border-radius: 18px; padding: 22px; }
+  .tarjeta h3 { font-size: 17px; font-weight: 600; margin: 10px 0 6px; }
+  .tarjeta p, .tarjeta li { color: var(--suave); font-size: 14.5px; }
+  .icono { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: linear-gradient(135deg, var(--violeta), var(--fucsia)); color: #fff; font-size: 20px; }
+  .panel { background: var(--negro); color: #fff; border-radius: 24px; padding: 36px; display: grid; gap: 28px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .panel h2 { color: #fff; }
+  .panel p, .panel li { color: #CFCBDD; }
+  .panel ul { padding-left: 18px; margin-top: 10px; }
+  .panel li { margin: 6px 0; }
+  .planes .tarjeta { display: flex; flex-direction: column; }
+  .planes .tarjeta.destacado { border: 2px solid var(--violeta); box-shadow: 0 10px 30px rgba(111, 64, 252, 0.15); }
+  .etiqueta { align-self: flex-start; background: rgba(111, 64, 252, 0.1); color: var(--violeta); font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+  .planes ul { list-style: none; margin: 14px 0 20px; flex: 1; }
+  .planes li { padding: 5px 0 5px 22px; position: relative; }
+  .planes li::before { content: "✓"; position: absolute; left: 0; color: var(--violeta); font-weight: 700; }
+  .precio { font-weight: 600; color: var(--texto); font-size: 15px; margin-top: 4px; }
+  .datos dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 20px; }
+  .datos dt { color: var(--suave); }
+  .datos dd { font-weight: 500; }
+  footer { border-top: 1px solid var(--linea); padding: 28px 0 40px; color: var(--suave); font-size: 14px; }
+  footer .envolver { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; }
+</style>
+</head>
+<body>
+<header>
+  <div class="envolver">
+    <div class="barra">
+      <img src="/brand/logo-horizontal-blanco.png" alt="Prodi" />
+      <a class="boton" href="mailto:progresodigital.arg@gmail.com?subject=Quiero%20un%20presupuesto">Pedí tu presupuesto</a>
+    </div>
+    <div class="heroe">
+      <h1>Redes que <span>venden</span>, no solo que publican.</h1>
+      <p>Prodi es una agencia argentina que gestiona las redes sociales y la publicidad en Meta (Instagram y Facebook) de pequeñas y medianas empresas. Filmamos, editamos, pautamos y te mostramos los resultados en tu propio panel.</p>
+      <a class="boton" href="#planes">Ver planes</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section>
+    <div class="envolver">
+      <h2>Qué hacemos</h2>
+      <p class="bajada">Un equipo completo para que tu negocio tenga más consultas y más ventas desde las redes.</p>
+      <div class="grilla">
+        <div class="tarjeta"><div class="icono">🎬</div><h3>Videos para redes</h3><p>Ideas, guion, filmación y edición de Reels pensados para vender lo que tu negocio ofrece.</p></div>
+        <div class="tarjeta"><div class="icono">📣</div><h3>Publicidad en Meta</h3><p>Armamos y manejamos tus anuncios en Instagram y Facebook para que te escriban y te compren.</p></div>
+        <div class="tarjeta"><div class="icono">🎨</div><h3>Piezas gráficas</h3><p>Posteos, historias, carruseles y flyers con la identidad de tu marca.</p></div>
+        <div class="tarjeta"><div class="icono">📈</div><h3>Resultados claros</h3><p>Cada mes ves cuánto invertiste, cuántas personas te vieron y cuántos mensajes y ventas trajo la publicidad.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="envolver">
+      <div class="panel">
+        <div>
+          <h2>El panel de cada cliente</h2>
+          <p>Cada cliente entra al <b>Gestor Prodi</b> con su usuario y ve solo la información de su negocio:</p>
+          <ul>
+            <li>Sus videos: en qué etapa está cada uno y cuáles tiene para aprobar.</li>
+            <li>Los resultados de su publicidad: inversión, alcance, mensajes y ventas.</li>
+            <li>El crecimiento de sus seguidores en Instagram y Facebook.</li>
+            <li>Su plan, sus boletas y el chat con el equipo.</li>
+          </ul>
+        </div>
+        <div>
+          <h2>Cómo usamos los datos de Meta</h2>
+          <p>Con la autorización de cada cliente, el panel lee las métricas de sus propias cuentas publicitarias, páginas e Instagram para mostrárselas, armar su informe mensual y mejorar sus campañas.</p>
+          <ul>
+            <li>Cada cliente ve únicamente su propia información.</li>
+            <li>No vendemos ni compartimos los datos con terceros.</li>
+            <li>El cliente puede quitar el acceso cuando quiera.</li>
+          </ul>
+          <p style="margin-top:12px">Más detalle en nuestra <a href="/privacidad.html" style="color:#A88BFF">política de privacidad</a>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="planes" class="planes">
+    <div class="envolver">
+      <h2>Planes</h2>
+      <p class="bajada">Todos incluyen el panel de cliente, el informe mensual y el chat con el equipo. El precio depende de tu negocio y de cuánto quieras invertir en publicidad.</p>
+      <div class="grilla">
+        <div class="tarjeta">
+          <span class="etiqueta">Para arrancar</span>
+          <h3>Inicial</h3>
+          <ul>
+            <li>4 videos por mes</li>
+            <li>2 piezas gráficas por mes</li>
+            <li>Publicación en Instagram y Facebook</li>
+            <li>Pauta en Meta (1 campaña)</li>
+            <li>Informe mensual de resultados</li>
+          </ul>
+          <p class="precio">Pedí tu presupuesto</p>
+        </div>
+        <div class="tarjeta destacado">
+          <span class="etiqueta">El más elegido</span>
+          <h3>Crecimiento</h3>
+          <ul>
+            <li>8 videos por mes</li>
+            <li>4 piezas gráficas por mes</li>
+            <li>Publicación en Instagram y Facebook</li>
+            <li>Pauta en Meta con varias campañas</li>
+            <li>Reunión mensual de resultados</li>
+          </ul>
+          <p class="precio">Pedí tu presupuesto</p>
+        </div>
+        <div class="tarjeta">
+          <span class="etiqueta">Para escalar</span>
+          <h3>Full</h3>
+          <ul>
+            <li>12 videos por mes</li>
+            <li>8 piezas gráficas por mes</li>
+            <li>Instagram, Facebook y TikTok</li>
+            <li>Pauta en Meta y seguimiento semanal</li>
+            <li>Administración de las redes</li>
+          </ul>
+          <p class="precio">Pedí tu presupuesto</p>
+        </div>
+        <div class="tarjeta">
+          <span class="etiqueta">A tu medida</span>
+          <h3>Solo pauta</h3>
+          <ul>
+            <li>Vos nos mandás tus videos</li>
+            <li>Armamos y manejamos tus anuncios</li>
+            <li>Panel con los resultados</li>
+            <li>Informe mensual</li>
+          </ul>
+          <p class="precio">Pedí tu presupuesto</p>
+        </div>
+      </div>
+      <p style="margin-top:24px"><a class="boton" href="mailto:progresodigital.arg@gmail.com?subject=Quiero%20un%20presupuesto">Pedí tu presupuesto</a></p>
+    </div>
+  </section>
+
+  <section class="datos">
+    <div class="envolver">
+      <h2>Datos de la empresa</h2>
+      <p class="bajada">Prodi también desarrolla software de gestión (Prodi Software).</p>
+      <div class="tarjeta">
+        <dl>
+          <dt>Empresa</dt><dd>Prodi · Progreso Digital</dd>
+          <dt>CUIT</dt><dd>20-42033474-6</dd>
+          <dt>País</dt><dd>Argentina</dd>
+          <dt>Contacto</dt><dd><a href="mailto:progresodigital.arg@gmail.com">progresodigital.arg@gmail.com</a></dd>
+          <dt>Web</dt><dd><a href="https://somosprodi.com">somosprodi.com</a></dd>
+        </dl>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="envolver">
+    <span>© Prodi · Progreso Digital · Argentina</span>
+    <span><a href="/privacidad.html">Política de privacidad</a> · <a href="/terminos.html">Términos y condiciones</a></span>
+  </div>
+</footer>
+</body>
+</html>
