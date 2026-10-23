@@ -359,6 +359,9 @@ export async function importarMensajes(base: string, forzar = false, todo = fals
         meta: {
           conversacion_id: String(c.id),
           plataforma,
+          persona_id: String(persona.id ?? ""),
+          foto: await fotoDe(String(persona.id ?? ""), plataforma, token),
+          foto_at: new Date().toISOString(),
           ultimo_mensaje_at: recientes[recientes.length - 1]?.created_time ?? at,
           ultimo_texto: limpio(suyos[suyos.length - 1]?.message ?? "", 300),
         },
@@ -383,6 +386,18 @@ export async function importarMensajes(base: string, forzar = false, todo = fals
   await guardarDoc(pool, SECRETO.col, SECRETO.id, { ...actual, mensajes_vistos: vistos });
   if (errores.length && !detalle.some((d) => d.includes("conversaciones"))) throw new HttpError(502, errores.join(" · "));
   return { revisado: true, nuevos, errores, detalle, cada };
+}
+
+/**
+ * Foto de perfil de quien escribió (Instagram: con su ID de la conversación; Messenger: igual, si hay permiso).
+ * Meta la da como un link que vence en unos días: se vuelve a pedir cada vez que se abre el chat.
+ */
+async function fotoDe(personaId: string, plataforma: string, token: string): Promise<string | null> {
+  if (!personaId) return null;
+  void plataforma;
+  const r = await graph(personaId, { fields: "profile_pic" }, token).catch(() => null);
+  const url = String(r?.profile_pic ?? "");
+  return /^https:\/\//.test(url) ? url.slice(0, 2000) : null;
 }
 
 /** Mensajes nuevos de alguien que ya es lead: se suman a su línea de tiempo y se avisa. Devuelve true si había. */
@@ -460,6 +475,11 @@ export async function conversacionLead(leadId: string) {
     at: m.created_time,
     mio: propiosDe(c.propios, m.from?.id),
   }));
+  const persona = (d.participants?.data ?? []).find((p: any) => !c.propios.has(String(p.id)));
+  const foto = persona?.id ? await fotoDe(String(persona.id), c.plataforma, c.token) : null;
+  const lead = c.lead as any;
+  if (foto && foto !== lead.meta?.foto)
+    await guardarDoc(getPool(), COL, leadId, { ...lead, meta: { ...(lead.meta ?? {}), persona_id: String(persona.id), foto, foto_at: new Date().toISOString() } }).catch(() => undefined);
   const ultimoSuyo = [...mensajes].reverse().find((m) => !m.mio);
   const desde = ultimoSuyo ? Date.parse(ultimoSuyo.at) : 0;
   const vence = desde ? desde + VENTANA_MS : 0;
@@ -469,6 +489,7 @@ export async function conversacionLead(leadId: string) {
   const ventana = vence > ahora ? "normal" : venceAgente > ahora ? "agente" : "cerrada";
   return {
     plataforma: c.plataforma,
+    foto,
     mensajes,
     puede_responder: ventana !== "cerrada",
     ventana,

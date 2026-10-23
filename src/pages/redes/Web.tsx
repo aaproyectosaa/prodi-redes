@@ -78,7 +78,7 @@ interface LeadWeb {
   /** Dirección del local o link de Google Maps. */
   ubicacion?: string;
   /** Los que llegaron por Meta: la conversación (mensajes) o el formulario. */
-  meta?: { conversacion_id?: string; plataforma?: string; ultimo_texto?: string } | null;
+  meta?: { conversacion_id?: string; plataforma?: string; ultimo_texto?: string; foto?: string | null } | null;
 }
 
 interface Columna {
@@ -464,6 +464,19 @@ function copiarEmail(email: string) {
     .catch(() => toast.error("No se pudo copiar"));
 }
 
+/** Foto de perfil del lead (Instagram) o sus iniciales si no hay o el link venció. */
+function AvatarLead({ lead, className }: { lead: LeadWeb; className?: string }) {
+  const [fallo, setFallo] = useState(false);
+  const foto = lead.meta?.foto;
+  useEffect(() => setFallo(false), [foto]);
+  const iniciales = (lead.negocio || lead.nombre || "?").replace(/^[@+]/, "").slice(0, 2).toUpperCase();
+  return foto && !fallo ? (
+    <img src={foto} alt="" referrerPolicy="no-referrer" onError={() => setFallo(true)} className={cn("shrink-0 object-cover", className)} />
+  ) : (
+    <span className={cn("flex shrink-0 items-center justify-center bg-gradient-to-br from-primary to-fuchsia-500 font-bold text-white", className)}>{iniciales}</span>
+  );
+}
+
 /** Botón de acción chico de la tarjeta (solo ícono, con su nombre al pasar el mouse). */
 function AccionCard({ href, onClick, titulo, children }: { href?: string; onClick?: () => void; titulo: string; children: React.ReactNode }) {
   const clase = "flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary";
@@ -499,8 +512,13 @@ function LeadCard({ lead: l, onAbrir }: { lead: LeadWeb; onAbrir: () => void }) 
             <AlertTriangle className="h-3 w-3" /> Revisar: factura menos de $10M
           </span>
         )}
-        <span className="mt-2 block truncate text-[15px] font-semibold leading-tight">{l.negocio}</span>
-        {l.nombre && l.nombre !== l.negocio.replace(/^@/, "") && <span className="block truncate text-xs text-muted-foreground">{l.nombre}</span>}
+        <span className="mt-2 flex items-center gap-2">
+          <AvatarLead lead={l} className="h-8 w-8 rounded-full text-[11px]" />
+          <span className="min-w-0">
+            <span className="block truncate text-[15px] font-semibold leading-tight">{l.negocio}</span>
+            {l.nombre && l.nombre !== l.negocio.replace(/^@/, "") && <span className="block truncate text-xs text-muted-foreground">{l.nombre}</span>}
+          </span>
+        </span>
         {dato && <span className="mt-1.5 inline-block max-w-full truncate rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{dato}</span>}
         {nota && <span className="mt-1.5 line-clamp-2 block text-xs leading-snug text-foreground/80">“{nota}”</span>}
         <ProximoPasoChip lead={l} />
@@ -775,7 +793,6 @@ function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => v
   const o = ORIGENES[origenDe(lead)];
   const IconoOrigen = o.icono;
   const conChat = lead.origen === "meta:mensaje" && !!lead.meta?.conversacion_id;
-  const iniciales = (lead.negocio || lead.nombre || "?").replace(/^@/, "").slice(0, 2).toUpperCase();
   const cambioNotas = notas !== (lead.notas ?? "");
 
   const datos = (
@@ -818,9 +835,7 @@ function LeadDetalle({ lead, onClose }: { lead: LeadWeb | null; onClose: () => v
       <DialogContent className={cn("flex max-h-[92dvh] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden rounded-3xl bg-background p-0", conChat ? "h-[min(860px,92dvh)] max-w-5xl" : "max-w-xl")}>
         {/* Encabezado */}
         <DialogHeader className="shrink-0 flex-row items-center gap-3 space-y-0 border-b bg-gradient-to-r from-primary/[0.08] via-fuchsia-500/[0.05] to-transparent px-5 py-3.5 pr-12 text-left">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-fuchsia-500 text-sm font-bold text-white shadow-md shadow-primary/25">
-            {iniciales}
-          </span>
+          <AvatarLead lead={lead} className="h-11 w-11 rounded-2xl text-sm shadow-md shadow-primary/25" />
           <div className="min-w-0 flex-1">
             <DialogTitle className="truncate text-lg">{lead.negocio}</DialogTitle>
             <DialogDescription className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
