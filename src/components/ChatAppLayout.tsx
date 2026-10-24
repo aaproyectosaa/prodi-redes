@@ -1,7 +1,7 @@
 import { PedirFotoPerfil } from "@/components/redes/PedirFotoPerfil";
 import { useEffect, useState, type ReactNode } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, Bell, ExternalLink, LayoutGrid, LogOut, Menu, Moon, Palette, Sun, User } from "lucide-react";
+import { ArrowLeft, Bell, Check, ChevronRight, ExternalLink, LayoutGrid, LogOut, Menu, Moon, Palette, Sun, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { asset } from "@/lib/asset";
 import { signOut } from "@/lib/auth";
@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import UserAvatar from "@/components/UserAvatar";
-import { RoleBadge } from "@/components/RoleBadge";
 import { AvisoActivarAvisos } from "@/components/InstalarApp";
 import { RecorridoAuto } from "@/components/recorrido/Recorrido";
 import { BarraInstalarChat, BotonInstalarChat, InstalarChatHost } from "@/components/InstalarChat";
@@ -114,6 +113,41 @@ export function ModoChat({ children }: { children: ReactNode }) {
   );
 }
 
+/** Una opción del menú de Prodi Chat: ícono de color, título, una línea de ayuda y la flecha. */
+function FilaMenu({
+  icono: Icono,
+  color,
+  titulo,
+  sub,
+  badge,
+  externo,
+  onClick,
+}: {
+  icono: React.ElementType;
+  color: string;
+  titulo: string;
+  sub?: string;
+  badge?: number;
+  externo?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 border-b px-3.5 py-3 text-left transition-colors last:border-0 hover:bg-muted/60 active:bg-muted">
+      <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-sm", color)}>
+        <Icono className="h-[18px] w-[18px]" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold">{titulo}</span>
+        {sub && <span className="block truncate text-xs text-muted-foreground">{sub}</span>}
+      </span>
+      {!!badge && (
+        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground">{badge > 99 ? "99+" : badge}</span>
+      )}
+      {externo ? <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
+    </button>
+  );
+}
+
 /** Encabezado de Prodi Chat: sin la navegación del sistema; perfil, avisos y salir en el menú. */
 function ChatAppHeader() {
   const navigate = useNavigate();
@@ -172,71 +206,104 @@ function ChatAppHeader() {
       </header>
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" className="flex w-[82vw] max-w-xs flex-col p-0">
-          <SheetHeader className="border-b p-4 text-left">
-            <SheetTitle className="sr-only">Menú</SheetTitle>
-            <button type="button" onClick={() => go(CHAT_APP_PERFIL)} className="flex items-center gap-3">
-              {profile ? <UserAvatar profile={profile} size="md" /> : <User className="h-8 w-8 text-muted-foreground" />}
-              <div className="min-w-0 text-left">
-                <p className="truncate font-semibold">{profile?.nombre ?? "Mi perfil"}</p>
-                <RoleBadge label={getRoleInfo(role).label} />
-              </div>
+        <SheetContent side="right" className="flex w-[86vw] max-w-sm flex-col gap-0 overflow-y-auto border-l-0 p-0 [&>button:last-child]:right-3 [&>button:last-child]:top-[max(env(safe-area-inset-top),0.75rem)] [&>button:last-child]:z-10 [&>button:last-child]:text-white">
+          <SheetTitle className="sr-only">Menú</SheetTitle>
+          {/* Tarjeta de perfil. */}
+          <SheetHeader className="relative overflow-hidden bg-gradient-to-br from-primary via-violet-600 to-fuchsia-500 px-5 pb-5 pt-[max(env(safe-area-inset-top),1.25rem)] text-left text-white">
+            <span className="pointer-events-none absolute -right-12 -top-12 h-44 w-44 rounded-full bg-white/15 blur-2xl" aria-hidden />
+            <span className="pointer-events-none absolute -bottom-16 -left-10 h-40 w-40 rounded-full bg-fuchsia-300/20 blur-2xl" aria-hidden />
+            <button type="button" onClick={() => go(CHAT_APP_PERFIL)} className="relative mt-6 flex items-center gap-3.5 text-left">
+              <span className="rounded-full ring-[3px] ring-white/40 ring-offset-0">
+                {profile ? <UserAvatar profile={profile} size="lg" className="h-16 w-16" /> : <User className="h-16 w-16 p-3" />}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-lg font-bold leading-tight">{profile?.nombre ?? "Mi perfil"}</span>
+                <span className="mt-1 inline-flex rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-semibold backdrop-blur">{getRoleInfo(role).label}</span>
+                {profile?.email && <span className="mt-1 block truncate text-xs text-white/75">{profile.email}</span>}
+              </span>
             </button>
           </SheetHeader>
-          <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
-            <button type="button" onClick={() => go(CHAT_APP_PERFIL)} className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm hover:bg-accent">
-              <User className="h-4 w-4" /> Mi perfil
-            </button>
-            <button type="button" onClick={() => go(CHAT_APP_AVISOS)} className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm hover:bg-accent">
-              <Bell className="h-4 w-4" /> Avisos y notificaciones
-            </button>
-            {!esContacto(role) && (
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                abrirEnSistema("/");
-              }}
-              className="flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-accent"
-            >
-              <ExternalLink className="h-4 w-4 shrink-0" /> Abrir Prodi (sistema completo)
-            </button>
-            )}
-          </nav>
-          <div className="space-y-0.5 border-t p-3" onClick={() => setOpen(false)}>
-            <BotonInstalarChat className="h-10 gap-3 text-foreground" />
-            {/* Tema: claro, oscuro o violeta. */}
-            <div className="grid grid-cols-3 gap-1 rounded-xl bg-muted/60 p-1" onClick={(e) => e.stopPropagation()}>
-              {(
-                [
-                  { k: "light", label: "Claro", icon: Sun },
-                  { k: "dark", label: "Oscuro", icon: Moon },
-                  { k: "violeta", label: "Violeta", icon: Palette },
-                ] as const
-              ).map((x) => (
-                <button
-                  key={x.k}
-                  type="button"
-                  onClick={() => setTheme(x.k)}
-                  className={cn(
-                    "flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-medium transition-colors",
-                    theme === x.k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <x.icon className="h-3.5 w-3.5" /> {x.label}
-                </button>
-              ))}
+
+          <div className="flex-1 space-y-5 p-4">
+            {/* Opciones. */}
+            <div className="overflow-hidden rounded-2xl border bg-card">
+              <FilaMenu icono={User} color="from-sky-500 to-blue-600" titulo="Mi perfil" sub="Foto, nombre y datos" onClick={() => go(CHAT_APP_PERFIL)} />
+              <FilaMenu
+                icono={Bell}
+                color="from-amber-400 to-orange-500"
+                titulo="Avisos y notificaciones"
+                sub={unreadCount ? `${unreadCount} sin leer` : "Todo al día"}
+                badge={unreadCount}
+                onClick={() => go(CHAT_APP_AVISOS)}
+              />
+              {!esContacto(role) && (
+                <FilaMenu
+                  icono={LayoutGrid}
+                  color="from-primary to-fuchsia-500"
+                  titulo="Abrir Prodi"
+                  sub="El sistema completo"
+                  externo
+                  onClick={() => {
+                    setOpen(false);
+                    abrirEnSistema("/");
+                  }}
+                />
+              )}
             </div>
+
+            {/* Tema: claro, oscuro o violeta, con una muestra de cada uno. */}
+            <div className="space-y-2">
+              <p className="px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Apariencia</p>
+              <div className="grid grid-cols-3 gap-2">
+                {(
+                  [
+                    { k: "light", label: "Claro", icon: Sun, fondo: "bg-[#f7f7fb]", barra: "bg-[#e6e4f0]", burbuja: "bg-[#6F40FC]" },
+                    { k: "dark", label: "Oscuro", icon: Moon, fondo: "bg-[#0a0a0c]", barra: "bg-[#1c1c22]", burbuja: "bg-[#7b4dff]" },
+                    { k: "violeta", label: "Violeta", icon: Palette, fondo: "bg-[#150e24]", barra: "bg-[#2a1f45]", burbuja: "bg-[#a77bff]" },
+                  ] as const
+                ).map((x) => (
+                  <button
+                    key={x.k}
+                    type="button"
+                    onClick={() => setTheme(x.k)}
+                    className={cn(
+                      "group rounded-2xl border-2 p-1.5 text-center transition-all active:scale-95",
+                      theme === x.k ? "border-primary bg-primary/5" : "border-transparent bg-muted/50 hover:bg-muted"
+                    )}
+                    aria-pressed={theme === x.k}
+                  >
+                    {/* Mini chat de muestra. */}
+                    <span className={cn("flex h-14 flex-col justify-end gap-1 rounded-xl border border-black/5 p-1.5", x.fondo)}>
+                      <span className={cn("h-2 w-3/5 rounded-full", x.barra)} />
+                      <span className={cn("ml-auto h-2 w-1/2 rounded-full", x.burbuja)} />
+                    </span>
+                    <span className={cn("mt-1.5 flex items-center justify-center gap-1 text-xs font-semibold", theme === x.k ? "text-primary" : "text-muted-foreground")}>
+                      {theme === x.k ? <Check className="h-3.5 w-3.5" /> : <x.icon className="h-3.5 w-3.5" />}
+                      {x.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-2xl border bg-card [&>button]:h-12 [&>button]:rounded-none [&>button]:px-4 [&>button]:text-foreground" onClick={() => setOpen(false)}>
+              <BotonInstalarChat className="gap-3" />
+            </div>
+          </div>
+
+          <div className="border-t p-4 pb-[max(env(safe-area-inset-bottom),1rem)]">
             <button
               type="button"
               onClick={async () => {
+                setOpen(false);
                 await signOut(auth);
                 navigate(CHAT_APP_INGRESAR, { replace: true });
               }}
-              className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm text-muted-foreground hover:bg-accent"
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-destructive/10 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/15 active:scale-[0.98]"
             >
               <LogOut className="h-4 w-4" /> Cerrar sesión
             </button>
+            <p className="mt-3 text-center text-[11px] text-muted-foreground">Prodi Chat</p>
           </div>
         </SheetContent>
       </Sheet>
