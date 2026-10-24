@@ -11,6 +11,7 @@
 // POST /api/ia/marca-avatar  { proyecto_id, de, img } → foto de perfil (JPEG chico) armada en el navegador con el logo
 // POST /api/ia/marca-variante { proyecto_id, drive_file_id, etiqueta?, principal? } → renombra o la hace el logo principal
 // POST /api/ia/marca-colores { proyecto_id, paleta: ["#rrggbb", …], info?: { "#rrggbb": { nombre, uso } } }  (también el cliente)
+// POST /api/ia/marca-detectar-colores { proyecto_id } → la IA propone la paleta mirando logo, versiones y manual (no guarda)
 // POST /api/ia/marca-info   { proyecto_id, rubro, descripcion, publico?, colores?, instagram?, tono? }  (también el cliente)
 // Plan del mes con IA (ver api/_lib/plan-mes.ts):
 // POST /api/ia/plan-mes      { proyecto_id, mes, idea_id?, pista? }  → arma el borrador (o rehace una idea)
@@ -1134,6 +1135,74 @@ async function marcaColores(req: VercelRequest) {
   return { ok: true, paleta };
 }
 
+/** Colores de la marca detectados por la IA mirando el logo, sus versiones, el manual y lo que se cargó de la marca.
+ *  No guarda nada: los propone y quien edita los revisa y guarda. */
+async function marcaDetectarColores(req: VercelRequest) {
+  const caller = await requireCaller(req, ROLES_MARCA);
+  const b = body<{ proyecto_id?: string }>(req);
+  if (!b.proyecto_id) throw new HttpError(400, "Faltan datos");
+  await assertProjectAccess(caller, b.proyecto_id);
+  const p = (await adminDb().collection("projects").doc(b.proyecto_id).get()).data();
+  if (!p) throw new HttpError(404, "No encontramos el cliente");
+  await controlarTopeIA(caller, "marca-colores");
+  const arch = (p.marca_archivos ?? {}) as { logo?: { drive_file_id: string }; variantes?: { drive_file_id: string; etiqueta?: string }[]; manuales?: { drive_file_id: string }[] };
+  const fuentes = [
+    ...(arch.logo ? [{ id: arch.logo.drive_file_id, que: "el logo principal" }] : []),
+    ...(arch.variantes ?? []).slice(0, 4).map((v) => ({ id: v.drive_file_id, que: `otra versión del logo (${v.etiqueta ?? "sin nombre"})` })),
+    ...(arch.manuales ?? []).slice(0, 2).map((m) => ({ id: m.drive_file_id, que: "el manual de marca" })),
+  ];
+  const bajados = await Promise.all(fuentes.map((f) => descargarDrive(f.id).catch(() => null)));
+  const sirve = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
+  const adjuntos: Adjunto[] = [];
+  const cuales: string[] = [];
+  bajados.forEach((d, i) => {
+    if (d && sirve.includes(d.mime)) {
+      adjuntos.push({ data: d.data, mime: d.mime as Adjunto["mime"] });
+      cuales.push(`${adjuntos.length}. ${fuentes[i].que}`);
+    }
+  });
+  const m = (p.marca ?? {}) as Record<string, unknown>;
+  const datos = [
+    `Marca: ${p.nombre ?? ""}`,
+    m.rubro ? `Rubro: ${m.rubro}` : "",
+    m.descripcion ? `Descripción: ${m.descripcion}` : "",
+    m.colores ? `Colores que anotaron: ${m.colores}` : "",
+    m.tono ? `Tono: ${m.tono}` : "",
+  ].filter(Boolean).join("\n");
+  if (!adjuntos.length && !m.colores) throw new HttpError(422, "Cargá primero el logo (o el manual de marca) para que la IA vea los colores");
+  const r = await generarJSON<{ colores?: { hex?: string; nombre?: string; uso?: string }[] }>(
+    `Sos diseñador. Detectá la paleta de colores de esta marca para usarla en sus piezas y videos.
+${datos}
+${cuales.length ? `Archivos adjuntos, en orden:\n${cuales.join("\n")}` : "No hay archivos: usá solo lo que anotaron."}
+
+Reglas:
+- Si el manual de marca indica colores (hex, RGB, Pantone), usá esos exactos.
+- Si no, sacalos del logo: el color más característico va primero (es el principal).
+- No cuentes el fondo a cuadros ni el blanco o negro del fondo de la imagen; sumá blanco o negro solo si son parte de la marca (ej. el texto del logo).
+- Entre 2 y 6 colores, sin repetir tonos casi iguales.
+- nombre: corto, en castellano (ej. "Violeta Prodi"). uso: para qué sirve, corto (ej. "Fondos y titulares").
+- hex en formato #rrggbb.`,
+    {
+      type: "OBJECT",
+      properties: {
+        colores: {
+          type: "ARRAY",
+          items: { type: "OBJECT", properties: { hex: { type: "STRING" }, nombre: { type: "STRING" }, uso: { type: "STRING" } }, required: ["hex", "nombre", "uso"] },
+        },
+      },
+      required: ["colores"],
+    },
+    0.2,
+    adjuntos,
+  );
+  const colores = (r.colores ?? [])
+    .map((c) => ({ hex: String(c.hex ?? "").trim().toLowerCase(), nombre: String(c.nombre ?? "").trim().slice(0, 40), uso: String(c.uso ?? "").trim().slice(0, 80) }))
+    .filter((c, i, a) => /^#[0-9a-f]{6}$/.test(c.hex) && a.findIndex((x) => x.hex === c.hex) === i)
+    .slice(0, 12);
+  if (!colores.length) throw new HttpError(422, "La IA no pudo detectar los colores. Probá cargando otra versión del logo.");
+  return { colores };
+}
+
 async function marcaQuitar(req: VercelRequest) {
   const caller = await requireCaller(req, ROLES_MARCA);
   const b = body<{ proyecto_id?: string; tipo?: string; drive_file_id?: string }>(req);
@@ -1987,6 +2056,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "memoria-notas") res.status(200).json(await memoriaNotas(req));
     else if (accion === "comercial-guardar") res.status(200).json(await comercialGuardar(req));
     else if (accion === "marca-colores") res.status(200).json(await marcaColores(req));
+    else if (accion === "marca-detectar-colores") res.status(200).json(await marcaDetectarColores(req));
     else if (accion === "comercial-ver") res.status(200).json(await comercialVer(req));
     else if (accion === "pauta-sugerir") res.status(200).json(await pautaSugerir(req));
     else if (accion === "pauta-guardar") res.status(200).json(await pautaGuardar(req));

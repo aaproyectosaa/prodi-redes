@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ExternalLink, FileText, ImagePlus, Loader2, MoreVertical, Pencil, Plus, Star, Trash2, X } from "lucide-react";
+import { ExternalLink, FileText, ImagePlus, Loader2, MoreVertical, Pencil, Plus, Sparkles, Star, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -324,9 +324,36 @@ export function PaletaMarca({ cliente, conNombres = false }: { cliente: Project;
     }
   };
   const sumar = () => cambiar([...paleta, SUGERIDOS.find((c) => !paleta.includes(c)) ?? "#888888"]);
+  const [detectando, setDetectando] = useState(false);
+  /** La IA mira el logo, sus versiones, el manual y los datos de la marca y propone los colores (quedan para revisar y guardar). */
+  const detectar = async () => {
+    setDetectando(true);
+    try {
+      const r = await callApi<{ colores: { hex: string; nombre: string; uso: string }[] }>("/api/ia/marca-detectar-colores", { proyecto_id: cliente.id });
+      setPaleta(r.colores.map((c) => c.hex));
+      setInfo((x) => ({ ...x, ...Object.fromEntries(r.colores.map((c) => [c.hex, { nombre: c.nombre, uso: c.uso }])) }));
+      setDirty(true);
+      toast.success("Listo: revisalos y tocá «Guardar colores»");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudieron detectar los colores");
+    } finally {
+      setDetectando(false);
+    }
+  };
   return (
     <div className="min-w-0 space-y-1.5">
-      <p className="text-xs font-medium">Colores de la marca</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium">Colores de la marca</p>
+        <button
+          type="button"
+          onClick={() => void detectar()}
+          disabled={detectando}
+          className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-60"
+        >
+          {detectando ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+          {detectando ? "Mirando la marca…" : "Detectar con IA"}
+        </button>
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         {paleta.map((c, i) => (
           <div key={i} className="group relative">
@@ -391,7 +418,7 @@ export function PaletaMarca({ cliente, conNombres = false }: { cliente: Project;
         </div>
       )}
       <p className="text-[11px] text-muted-foreground">
-        {paleta.length ? "Tocá un color para cambiarlo. El primero (con borde) es el principal." : "Sumá los colores de la marca: tocá + y elegilo."}
+        {paleta.length ? "Tocá un color para cambiarlo. El primero (con borde) es el principal." : "Tocá «Detectar con IA» y los saca del logo y el manual, o sumalos a mano con +."}
       </p>
       {dirty && (
         <Button size="sm" className="h-8" onClick={() => void guardar()} disabled={busy}>
