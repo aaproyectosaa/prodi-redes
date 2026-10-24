@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { AlertTriangle, ChevronRight, Link2Off, Megaphone, MousePointerClick, Target, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import { PageShell } from "@/components/redes/PageShell";
 import { FilaKpis, Kpi, Pestanias } from "@/components/redes/admin/AdminUI";
-import { AlertasPauta, useAlertasPauta } from "@/components/redes/AlertasPauta";
+import { AlertasPauta, clientesDePauta, useAlertasPauta, type VistaPauta } from "@/components/redes/AlertasPauta";
 import { PautaMeta } from "@/components/redes/PautaMeta";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useRedes } from "@/contexts/redes-data-context";
@@ -84,6 +84,10 @@ export default function Pauta() {
   const [rango, setRango] = useState<Rango>("mes");
   const [vista, setVista] = useState<"conectados" | "sin_conectar">("conectados");
   const [abierto, setAbierto] = useState<string | null>(null);
+  // Si hay cuentas de Prodi (cuenta propia, ej. Prodi Redes), dos paneles: la pauta de los clientes y la propia.
+  const hayPropia = clientes.some((c) => c.enabled !== false && c.cuenta_propia && (admin || (c.team_roles?.pauta ?? []).includes(uid)));
+  const [panel, setPanel] = useState<VistaPauta>("clientes");
+  const vistaPauta = hayPropia ? panel : undefined;
   const hoy = hoyISO();
   const f = fechasDe(rango, hoy);
   // Lo que hace falta: el rango, el anterior (para comparar) y el mes en curso (presupuesto).
@@ -92,8 +96,8 @@ export default function Pauta() {
   const { alertas } = useAlertasPauta();
 
   const mios = useMemo(
-    () => clientes.filter((c) => c.enabled !== false && (admin || (c.team_roles?.pauta ?? []).includes(uid))).sort((a, b) => a.nombre.localeCompare(b.nombre)),
-    [clientes, admin, uid]
+    () => clientesDePauta(clientes, uid, admin, vistaPauta).sort((a, b) => a.nombre.localeCompare(b.nombre)),
+    [clientes, admin, uid, vistaPauta]
   );
   const conectados = mios.filter((c) => c.meta?.ad_account_id);
   const sinConectar = mios.filter((c) => !c.meta?.ad_account_id);
@@ -137,7 +141,32 @@ export default function Pauta() {
 
   return (
     <PageShell title="Pauta" subtitle="Cómo viene la publicidad de tus clientes en Meta. Se trae sola todos los días.">
-      <div className="mb-4 flex flex-wrap gap-1">
+      {hayPropia && (
+        <div className="mb-4 inline-flex rounded-xl border bg-muted/40 p-1">
+          {(
+            [
+              { k: "clientes", label: "Pauta de clientes" },
+              { k: "propia", label: "Pauta propia" },
+            ] as const
+          ).map((x) => (
+            <button
+              key={x.k}
+              type="button"
+              onClick={() => {
+                setPanel(x.k);
+                setAbierto(null);
+              }}
+              className={cn(
+                "rounded-lg px-4 py-1.5 text-sm font-medium transition-colors",
+                panel === x.k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {x.label}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="mb-4 flex flex-wrap items-center gap-1">
         {RANGOS_PAUTA.map((x) => (
           <button
             key={x.k}
@@ -164,7 +193,7 @@ export default function Pauta() {
         <Kpi icono={AlertTriangle} tono={conAlertas ? "ambar" : "gris"} label="Para revisar" valor={`${conAlertas} ${conAlertas === 1 ? "cliente" : "clientes"}`} sub={`${conectados.length} de ${mios.length} conectados a Meta`} />
       </FilaKpis>
 
-      <AlertasPauta onAbrir={setAbierto} />
+      <AlertasPauta onAbrir={setAbierto} vista={vistaPauta} />
 
       <div className="mb-3">
         <Pestanias<"conectados" | "sin_conectar">

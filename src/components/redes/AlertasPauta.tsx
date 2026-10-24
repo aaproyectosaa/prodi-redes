@@ -17,6 +17,22 @@ const hoyISO = () => {
 };
 
 /** Las alertas de los clientes que ve esta persona (la pauta de los últimos 31 días, para comparar semanas y el mes). */
+export type VistaPauta = "propia" | "clientes";
+/**
+ * Los clientes de pauta de cada uno: los que tiene asignados en Pauta (el admin, todos).
+ * Con `vista`: "propia" = las cuentas de Prodi (cuenta propia), "clientes" = el resto.
+ */
+export function clientesDePauta<T extends { enabled?: boolean; cuenta_propia?: boolean | null; team_roles?: { pauta?: string[] } | null }>(
+  clientes: T[],
+  uid: string,
+  admin: boolean,
+  vista?: VistaPauta
+): T[] {
+  const suyos = clientes.filter((c) => c.enabled !== false && (admin || (c.team_roles?.pauta ?? []).includes(uid)));
+  if (!vista) return suyos;
+  return suyos.filter((c) => !!c.cuenta_propia === (vista === "propia"));
+}
+
 export function useAlertasPauta(activo = true) {
   const { clientes, settings } = useRedes();
   const reglas = useMemo(() => reglasActivas(settings.reglas_pauta), [settings.reglas_pauta]);
@@ -37,22 +53,24 @@ const CHIP = [
  * Panel del tablero: una fila por cliente con lo que le pasa (en pastillas). Solo lo que hay que mirar hoy;
  * el detalle de cada una, al pasar el mouse, y tocando la fila se abre su pauta.
  */
-export function AlertasPauta({ onAbrir }: { onAbrir?: (clienteId: string) => void } = {}) {
+export function AlertasPauta({ onAbrir, vista }: { onAbrir?: (clienteId: string) => void; vista?: VistaPauta } = {}) {
   const navigate = useNavigate();
   const { clienteById, clientes } = useRedes();
   const { user, tieneRol } = useUserProfileContext();
   const uid = user?.uid ?? "";
   // Sus clientes: los que tiene en pauta (el admin, todos).
-  const mios = clientes.filter((c) => c.enabled !== false && (tieneRol("admin") || (c.team_roles?.pauta ?? []).includes(uid)));
+  const mios = clientesDePauta(clientes, uid, tieneRol("admin"), vista);
+  const idsMios = new Set(mios.map((c) => c.id));
   const conectados = mios.filter((c) => c.meta?.ad_account_id);
   const sinPresupuesto = conectados.filter((c) => !presupuestoPauta(c)).length;
   const { alertas, cargando } = useAlertasPauta();
   const [abierto, setAbierto] = useState(false);
   const porCliente = useMemo(() => {
     const m = new Map<string, AlertaPauta[]>();
-    for (const a of alertas.filter((x) => x.nivel >= 1)) m.set(a.proyectoId, [...(m.get(a.proyectoId) ?? []), a]);
+    for (const a of alertas.filter((x) => x.nivel >= 1 && idsMios.has(x.proyectoId))) m.set(a.proyectoId, [...(m.get(a.proyectoId) ?? []), a]);
     return [...m.entries()].map(([id, lista]) => ({ id, lista, nivel: Math.max(...lista.map((x) => x.nivel)) })).sort((x, y) => y.nivel - x.nivel);
-  }, [alertas]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alertas, [...idsMios].join()]);
   if (cargando || !mios.length) return null;
   const urgentes = porCliente.filter((x) => x.nivel === 2).length;
   // Cuántos de sus clientes el sistema puede controlar (los que tienen la cuenta publicitaria cargada).
