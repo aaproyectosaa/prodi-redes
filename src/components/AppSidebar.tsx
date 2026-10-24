@@ -5,7 +5,7 @@ import { signOut } from "@/lib/auth";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { auth } from "@/integrations/firebase/client";
 import { getRoleInfo } from "@/lib/roles";
-import { navForRoles, type NavItem } from "@/lib/redes/nav";
+import { estadoCrm, navForRoles, type NavItem } from "@/lib/redes/nav";
 import { ROLES_DOCK } from "@/lib/redes/chatDock";
 import { useEmpresa } from "@/lib/empresa";
 import { SelectorEmpresa } from "@/components/SelectorEmpresa";
@@ -70,7 +70,7 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
   const { empresa } = useEmpresa();
   // En la compu el chat está en el botón flotante: el menú no lo repite (en el celular sigue en la barra de abajo).
   const conDock = !viewingAs && ROLES_DOCK.includes(role ?? "");
-  const sections = navForRoles(role, roles, empresa)
+  const sections = navForRoles(role, roles, empresa, { crm: estadoCrm(clientes) })
     .map((s) => ({ ...s, items: conDock ? s.items.filter((i) => i.path !== "/chat") : s.items }))
     .filter((s) => s.items.length > 0);
   const pendientes = usePendientes();
@@ -161,6 +161,7 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
                   activa={plegables.activa(section)}
                   pendientes={section.items.reduce((a, i) => a + (pendientes[i.path] ?? 0), 0)}
                   onClick={() => plegables.alternar(section)}
+                  pronto={section.items.some((i) => i.pronto)}
                 />
               )}
               {collapsed && idx > 0 && <div className="mx-2 my-1 border-t border-border" />}

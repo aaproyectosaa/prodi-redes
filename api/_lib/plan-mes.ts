@@ -252,6 +252,8 @@ export interface ContextoPlan {
   historial: { titulo: string; idea?: string | null; mensajes?: number | null; mes: string }[];
   /** Videos que ya existen para ese mes (pedidos del cliente, etc.). */
   yaEnElMes: string[];
+  /** CRM: lo que más preguntan u objetan sus clientes en los chats (ver crm-ideas.ts). */
+  crm?: string;
   /** Ideas que no hay que repetir (las otras del plan, al regenerar una). */
   evitar?: string[];
   /** Pedido puntual de Lucía al regenerar ("más divertida", "sobre delivery"). */
@@ -281,7 +283,7 @@ Reglas:
 ${memoria ? "- Lo más importante: respetá lo que aprendiste de este cliente y las indicaciones del equipo. No vuelvas a proponer cosas que se descartaron.\n" : ""}
 ${c.marca}
 
-${c.comercial ? `${c.comercial}\n\n` : ""}${memoria ? `${memoria}\n\n` : ""}${top.length ? `Videos que más mensajes trajeron (inspirate en lo que funcionó, sin copiar):\n${top.map((v) => `- ${v.titulo}: ${v.mensajes} mensajes${v.idea ? ` (${String(v.idea).slice(0, 140)})` : ""}`).join("\n")}\n\n` : ""}${recientes.length ? `Videos que ya se hicieron (no los repitas):\n${recientes.join("\n")}\n\n` : ""}${c.yaEnElMes.length ? `Ya están confirmados para este mes (no los repitas):\n${c.yaEnElMes.map((x) => `- ${x}`).join("\n")}\n\n` : ""}${c.evitar?.length ? `Otras ideas de este mismo plan (proponé algo distinto):\n${c.evitar.map((x) => `- ${x}`).join("\n")}\n\n` : ""}${fechas.length ? `Fechas del mes que pueden servir (solo si le encajan al rubro): ${fechas.join(", ")}.\n\n` : ""}${c.pista ? `Pedido del equipo para esta idea: ${c.pista}\n` : ""}`.trim();
+${c.comercial ? `${c.comercial}\n\n` : ""}${c.crm ? `${c.crm}\n\n` : ""}${memoria ? `${memoria}\n\n` : ""}${top.length ? `Videos que más mensajes trajeron (inspirate en lo que funcionó, sin copiar):\n${top.map((v) => `- ${v.titulo}: ${v.mensajes} mensajes${v.idea ? ` (${String(v.idea).slice(0, 140)})` : ""}`).join("\n")}\n\n` : ""}${recientes.length ? `Videos que ya se hicieron (no los repitas):\n${recientes.join("\n")}\n\n` : ""}${c.yaEnElMes.length ? `Ya están confirmados para este mes (no los repitas):\n${c.yaEnElMes.map((x) => `- ${x}`).join("\n")}\n\n` : ""}${c.evitar?.length ? `Otras ideas de este mismo plan (proponé algo distinto):\n${c.evitar.map((x) => `- ${x}`).join("\n")}\n\n` : ""}${fechas.length ? `Fechas del mes que pueden servir (solo si le encajan al rubro): ${fechas.join(", ")}.\n\n` : ""}${c.pista ? `Pedido del equipo para esta idea: ${c.pista}\n` : ""}`.trim();
 }
 
 export const ESQUEMA_PLAN = {

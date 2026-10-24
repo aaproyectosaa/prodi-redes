@@ -14,6 +14,7 @@
 // POST /api/ia/marca-info   { proyecto_id, rubro, descripcion, publico?, colores?, instagram?, tono? }  (también el cliente)
 // Plan del mes con IA (ver api/_lib/plan-mes.ts):
 // POST /api/ia/plan-mes      { proyecto_id, mes, idea_id?, pista? }  → arma el borrador (o rehace una idea)
+// POST /api/ia/crm-ideas     { proyecto_id, rehacer? } → CRM: lo que más preguntan los contactos y un video para cada tema (api/_lib/crm-ideas.ts)
 // POST /api/ia/plan-enviar   { proyecto_id, mes, ideas, nota_equipo } → producción lo revisó: va al cliente
 // POST /api/ia/plan-responder { proyecto_id, mes, respuestas, nota }  (cliente) → los OK pasan a ser videos
 // POST /api/ia/plan-ajustar  { proyecto_id, mes, idea_id, accion: "crear"|"descartar", titulo?, idea?, objetivo? }
@@ -60,6 +61,7 @@ import { crearTarea } from "../_lib/tareas";
 import { logosParaPieza, marcaTexto } from "../_lib/marca";
 import { itemsPerfil } from "../_lib/perfil-cliente";
 import { controlarTopeIA } from "../_lib/tope-ia";
+import { ideasDeLosChats, textoCrmParaPlan } from "../_lib/crm-ideas";
 import { charlarIA, cuposDesde, esTipoCharla, ROLES_CHARLA, type PedidoCharla } from "../_lib/ia-charla";
 import { comoSeHaceConsejo, consejosPauta } from "../_lib/ia-pauta";
 import { chatEspecialista } from "../_lib/ia-especialista";
@@ -1070,6 +1072,8 @@ async function planMes(req: VercelRequest) {
   const ctx = {
     marca: marcaTexto(proj),
     comercial: await contextoComercial(pid, rangoMes(mes), false),
+    // Lo que preguntan sus clientes en el CRM: alguna idea tiene que responderlo.
+    crm: proj.crm_activo ? await textoCrmParaPlan(pid).catch(() => "") : "",
     mes,
     memoria,
     historial,
@@ -1731,6 +1735,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "marca-avatar") res.status(200).json(await marcaAvatar(req));
     else if (accion === "marca-variante") res.status(200).json(await marcaVariante(req));
     else if (accion === "plan-mes") res.status(200).json(await planMes(req));
+    else if (accion === "crm-ideas") {
+      const caller = await requireCaller(req, ["admin", "productor", "editor", "pauta", "diseno", "cliente"]);
+      const b = body<{ proyecto_id?: string; rehacer?: boolean }>(req);
+      res.status(200).json(await ideasDeLosChats(caller, String(b.proyecto_id ?? ""), b.rehacer === true));
+    }
     else if (accion === "plan-enviar") res.status(200).json(await planEnviar(req));
     else if (accion === "plan-responder") res.status(200).json(await planResponder(req));
     else if (accion === "plan-ajustar") res.status(200).json(await planAjustar(req));

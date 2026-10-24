@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "react-router-dom";
-import { Briefcase, ChevronDown, Clapperboard, Handshake, House, Landmark, Layers, type LucideIcon } from "lucide-react";
+import { Briefcase, ChevronDown, Clapperboard, Handshake, House, Landmark, Layers, UserRound, type LucideIcon } from "lucide-react";
 import type { NavSection } from "@/lib/redes/nav";
 import { isNavItemActive } from "@/components/AppSidebar";
 import { cn } from "@/lib/utils";
@@ -27,9 +27,12 @@ export function estiloSeccion(titulo?: string): { icono: LucideIcon; chip: strin
     case "Administración":
       return { icono: Landmark, chip: "bg-emerald-500/15 text-emerald-500", linea: "border-emerald-500/30", texto: "text-emerald-500" };
     case "Producción":
+    case "Redes":
       return { icono: Clapperboard, chip: "bg-violet-500/15 text-violet-500", linea: "border-violet-500/30", texto: "text-violet-500" };
     case "CRM":
       return { icono: Handshake, chip: "bg-rose-500/15 text-rose-500", linea: "border-rose-500/30", texto: "text-rose-500" };
+    case "Mi cuenta":
+      return { icono: UserRound, chip: "bg-amber-500/15 text-amber-500", linea: "border-amber-500/30", texto: "text-amber-500" };
     case "Gestión":
       return { icono: Briefcase, chip: "bg-amber-500/15 text-amber-500", linea: "border-amber-500/30", texto: "text-amber-500" };
     default:
@@ -44,8 +47,11 @@ export function TituloSeccion({
   pendientes,
   onClick,
   className,
+  pronto,
 }: {
   titulo: string;
+  /** El grupo todavía no se puede usar: etiqueta "Pronto". */
+  pronto?: boolean;
   abierta: boolean;
   activa: boolean;
   pendientes: number;
@@ -69,6 +75,7 @@ export function TituloSeccion({
         <Icono className="h-3.5 w-3.5" />
       </span>
       <span className="flex-1 text-left">{titulo}</span>
+      {pronto && <span className="rounded-full bg-gradient-to-r from-primary to-fuchsia-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">Pronto</span>}
       {!abierta && pendientes > 0 && (
         <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground">
           {pendientes > 99 ? "99+" : pendientes}

@@ -34,6 +34,7 @@ const Pedidos = lazy(() => import("./pages/redes/Pedidos"));
 const Pauta = lazy(() => import("./pages/redes/Pauta"));
 const Presupuestos = lazy(() => import("./pages/redes/Presupuestos"));
 const PresupuestoPublico = lazy(() => import("./pages/PresupuestoPublico"));
+const ArchivoPublico = lazy(() => import("./pages/ArchivoPublico"));
 const Bienvenida = lazy(() => import("./pages/Bienvenida"));
 const Rodajes = lazy(() => import("./pages/redes/Rodajes"));
 const ClientePortal = lazy(() => import("./pages/redes/ClientePortal"));
@@ -114,6 +115,8 @@ const App = () => (
               <Route path="/aprobar/:token" element={<Aprobar />} />
               {/* Público: el presupuesto por link (lo acepta y crea su usuario) y la bienvenida para instalar las apps */}
               <Route path="/p/:token" element={<PresupuestoPublico />} />
+              {/* Foto o video que un cliente del CRM le manda a su contacto */}
+              <Route path="/v/:token" element={<ArchivoPublico />} />
               <Route path="/bienvenida" element={<Bienvenida />} />
 
               <Route element={<AppLayout />}>

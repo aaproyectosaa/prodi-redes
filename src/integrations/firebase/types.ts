@@ -320,6 +320,10 @@ export interface Project {
     zona_pauta?: "chica" | "grande" | "nacional" | null;
     ciudad_pauta?: string | null;
   } | null;
+  /** CRM (beta): si el cliente ve "Mis contactos". Lo prende el admin. */
+  crm_activo?: boolean;
+  /** CRM en "Próximamente": lo ve en el menú con la etiqueta "Pronto" y una pantalla de lo que va a poder hacer. */
+  crm_proximamente?: boolean;
   /** Última vez que se trajeron la pauta y el Instagram de Meta (lo escribe el servidor). */
   meta_sync?: {
     at: string;

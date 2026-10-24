@@ -22,7 +22,7 @@ import {
   Store,
   FolderOpen,
   Sparkles,
-  ListTodo, Inbox, Globe, Megaphone, FileText } from "lucide-react";
+  ListTodo, Inbox, Globe, Megaphone, FileText, Contact, Trophy } from "lucide-react";
 import type { UserRole } from "@/integrations/firebase/types";
 
 export interface NavItem {
@@ -31,6 +31,8 @@ export interface NavItem {
   path: string;
   /** Mostrar en la barra inferior del celular. */
   mobile?: boolean;
+  /** Todavía no se puede usar: se ve con la etiqueta "Pronto". */
+  pronto?: boolean;
 }
 
 export interface NavSection {
@@ -79,9 +81,9 @@ export function navSoftware(roles: UserRole[]): NavSection[] {
 }
 
 /** Menú del rol principal + lo que suman los roles adicionales (en una sección aparte, sin repetir). En Software, el suyo. */
-export function navForRoles(role: UserRole | undefined, roles: UserRole[] = [], empresa: "redes" | "software" = "redes"): NavSection[] {
+export function navForRoles(role: UserRole | undefined, roles: UserRole[] = [], empresa: "redes" | "software" = "redes", opciones: OpcionesNav = {}): NavSection[] {
   if (empresa === "software") return navSoftware(roles.length ? roles : role ? [role] : []);
-  const base = navForRole(role);
+  const base = navForRole(role, opciones);
   const ya = new Set(base.flatMap((s) => s.items.map((i) => i.path)));
   const extra: NavItem[] = [];
   for (const r of roles) {
@@ -97,7 +99,12 @@ export function navForRoles(role: UserRole | undefined, roles: UserRole[] = [], 
   return extra.length ? [...base, { title: "También", items: extra }] : base;
 }
 
-export function navForRole(role: UserRole | undefined): NavSection[] {
+export interface OpcionesNav {
+  /** El CRM (beta) del cliente: prendido o en "Próximamente". */
+  crm?: "activo" | "pronto" | null;
+}
+
+export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {}): NavSection[] {
   switch (role) {
     case "admin":
       // El tablero del dueño es el del negocio: plata, clientes y equipo. Producción queda aparte.
@@ -215,14 +222,31 @@ export function navForRole(role: UserRole | undefined): NavSection[] {
         },
       ];
     case "cliente":
+      // Por módulo, como el menú del admin: sus redes, el CRM (si lo tiene prendido) y su cuenta.
       return [
         {
+          title: "Redes",
           items: [
             { label: "Mis videos", icon: Home, path: "/cliente", mobile: true },
             { label: "Resultados", icon: TrendingUp, path: "/cliente?tab=resultados", mobile: true },
             { label: "Piezas gráficas", icon: ImageIcon, path: "/cliente?tab=piezas", mobile: true },
-            { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
             { label: "Material", icon: FolderOpen, path: "/cliente?tab=material" },
+          ],
+        },
+        ...(opciones.crm ? [
+              {
+                title: "CRM",
+                items: [
+                  { label: "Mis contactos", icon: Contact, path: "/cliente?tab=contactos", pronto: opciones.crm === "pronto" },
+                  { label: "Qué te vende", icon: Trophy, path: "/cliente?tab=vende", pronto: opciones.crm === "pronto" },
+                  { label: "Equipo", icon: Users, path: "/cliente?tab=equipo", pronto: opciones.crm === "pronto" },
+                ],
+              },
+            ] : []),
+        {
+          title: "Mi cuenta",
+          items: [
+            { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
             { label: "Mi plan", icon: CreditCard, path: "/cliente?tab=plan" },
             { label: "Mi negocio", icon: Store, path: "/cliente?tab=negocio" },
           ],
@@ -239,3 +263,8 @@ export const NOTIFICATIONS_ITEM: NavItem = {
   path: "/notificaciones",
   mobile: true,
 };
+
+/** Para el menú: el CRM de los clientes de la persona (alcanza con uno prendido; si no, alguno en "Próximamente"). */
+export function estadoCrm(clientes: { crm_activo?: boolean; crm_proximamente?: boolean }[]): "activo" | "pronto" | null {
+  return clientes.some((c) => c.crm_activo) ? "activo" : clientes.some((c) => c.crm_proximamente) ? "pronto" : null;
+}

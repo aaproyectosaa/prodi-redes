@@ -15,7 +15,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import UserAvatar from "@/components/UserAvatar";
 import { RoleBadge } from "@/components/RoleBadge";
 import { getRoleInfo } from "@/lib/roles";
-import { navForRoles } from "@/lib/redes/nav";
+import { estadoCrm, navForRoles } from "@/lib/redes/nav";
 import { useEmpresa } from "@/lib/empresa";
 import { SelectorEmpresa } from "@/components/SelectorEmpresa";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
@@ -54,7 +54,7 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
   const puedeVerComo = realRole === "admin" && !viewingAs;
   const oscuro = theme === "dark";
   const { empresa } = useEmpresa();
-  const sections = navForRoles(role, roles, empresa);
+  const sections = navForRoles(role, roles, empresa, { crm: estadoCrm(clientes) });
   const plegables = useSeccionesPlegables();
   const pendientes = usePendientes();
 
@@ -136,6 +136,7 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
                     activa={plegables.activa(s)}
                     pendientes={s.items.reduce((a, it) => a + (pendientes[it.path] ?? 0), 0)}
                     onClick={() => plegables.alternar(s)}
+                    pronto={s.items.some((i) => i.pronto)}
                     className="py-2"
                   />
                 )}
@@ -297,8 +298,8 @@ export const MobileTabBar = ({ role }: { role?: UserRole }) => {
   const pendientes = usePendientes();
   const { empresa: empresaBarra } = useEmpresa();
   const { roles: rolesBarra, viewingAs } = useUserProfileContext();
-  const { chats } = useRedes();
-  const todos = navForRoles(role, empresaBarra === "software" ? rolesBarra : [], empresaBarra).flatMap((s) => s.items);
+  const { chats, clientes } = useRedes();
+  const todos = navForRoles(role, empresaBarra === "software" ? rolesBarra : [], empresaBarra, { crm: estadoCrm(clientes) }).flatMap((s) => s.items);
   // Si está la burbuja flotante del chat, "Chat" no se repite en la barra: ese lugar queda para otra cosa.
   const conBurbuja = !viewingAs && ROLES_DOCK.includes(role ?? "") && chats.length > 0;
   const base = todos.filter((i) => i.mobile && !(conBurbuja && i.path === "/chat"));

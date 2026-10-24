@@ -418,6 +418,11 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
       return equipoDe(c, d.proyecto_id) || esFinanzas(c) || clienteDe(c, d.proyecto_id);
     case "ia_pauta": // consejos de la IA sobre la pauta: solo el equipo (los escribe el servidor)
       return equipoDe(c, d.proyecto_id);
+    case "crm_contactos": // CRM del cliente (beta): el cliente y su equipo
+    case "crm_vendedores":
+    case "crm_galeria": // sus fotos y videos para mandar (las escribe el servidor al subirlas)
+    case "crm_ideas": // lo que más preguntan sus contactos (lo escribe el servidor)
+      return equipoDe(c, d.proyecto_id) || clienteDe(c, d.proyecto_id);
     case "prodi_pedidos": // pedidos a @prodi (límite por minuto): solo el servidor
     case "whatsapp_verifications": // código de verificación (hasheado): solo lo usa el servidor
     case "notification_queue":
@@ -699,6 +704,15 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
     case "chat_prefs":
       // Solo las propias (ni el super admin toca las de otro).
       return c.uid === id && (borra || prefsValidas(despues!));
+    case "crm_contactos":
+    case "crm_vendedores": {
+      // El cliente carga y mueve sus contactos; el equipo también. No se pasa un contacto a otro cliente.
+      const pid = (despues ?? antes)!.proyecto_id;
+      if (antes && despues && antes.proyecto_id !== despues.proyecto_id) return false;
+      return equipoDe(c, pid) || clienteDe(c, pid);
+    }
+    case "crm_galeria": // se cargan por /api/drive/crm-archivo; desde la app solo se borran
+      return !despues && (equipoDe(c, antes!.proyecto_id) || clienteDe(c, antes!.proyecto_id));
     case "presupuestos": // los arma el admin; lo aceptado lo escribe el servidor
       return esAdmin(c) && (crea || antes!.estado !== "aceptado" || borra);
     case "in_app_notifications":

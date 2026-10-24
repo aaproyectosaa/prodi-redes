@@ -13,6 +13,7 @@ import { InputNumero } from "@/components/ui/input-numero";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { WebCatalogoPendiente } from "@/components/redes/crm/CatalogoProductos";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -454,6 +455,44 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
                 <span className="text-sm">{form.enabled ? "Activo" : "Dado de baja"}</span>
               </label>
             </div>
+            <div className="space-y-2 rounded-lg border border-dashed p-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm">
+                  CRM (beta)
+                  <span className="block text-[11px] text-muted-foreground">«Próximamente»: lo ve en el menú, sin poder usarlo. Se guarda al tocar.</span>
+                </span>
+                <div className="inline-flex rounded-full border bg-background p-0.5">
+                  {(
+                    [
+                      ["apagado", "Apagado"],
+                      ["pronto", "Próximamente"],
+                      ["activo", "Activo"],
+                    ] as const
+                  ).map(([k, label]) => {
+                    const actual = cliente.crm_activo ? "activo" : cliente.crm_proximamente ? "pronto" : "apagado";
+                    return (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() =>
+                          void updateDoc(doc(db, "projects", cliente.id), { crm_activo: k === "activo", crm_proximamente: k === "pronto" })
+                            .then(() => toast.success(k === "activo" ? "CRM activo: ya ve «Mis contactos»" : k === "pronto" ? "CRM en Próximamente" : "CRM apagado"))
+                            .catch((e) => toast.error(e instanceof Error ? e.message : "No se pudo"))
+                        }
+                        className={
+                          actual === k
+                            ? "h-7 rounded-full bg-primary px-3 text-[11px] font-semibold text-primary-foreground"
+                            : "h-7 rounded-full px-3 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+                        }
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            {cliente.crm_activo && <WebCatalogoPendiente negocio={cliente.id} />}
             <div className="flex flex-wrap gap-2">
               {COLORES.map((c) => (
                 <button

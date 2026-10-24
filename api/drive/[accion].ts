@@ -3,10 +3,12 @@
 // /api/drive/chat-subida · chat-archivo  (archivos del chat, ver _lib/drive-acciones/chat.ts)
 // /api/drive/equipo-subida · equipo-archivo  (lo que sube el equipo, ver _lib/drive-acciones/equipo-subida.ts)
 // /api/drive/video-subida · video-archivo · video-listo  (material que manda el cliente, ver _lib/drive-acciones/video-material.ts)
+// /api/drive/crm-subida · crm-archivo · crm-compartir  (fotos y videos del CRM para mandar a un contacto, ver _lib/crm-galeria.ts)
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import accessToken from "../_lib/drive-acciones/access-token";
 import { chatArchivo, chatSubida } from "../_lib/drive-acciones/chat";
+import { crmArchivo, crmCompartir, crmSubida } from "../_lib/crm-galeria";
 import { equipoArchivo, equipoSubida } from "../_lib/drive-acciones/equipo-subida";
 import disconnect from "../_lib/drive-acciones/disconnect";
 import media from "../_lib/drive-acciones/media";
@@ -21,6 +23,9 @@ const ACCIONES: Record<string, (req: VercelRequest, res: VercelResponse) => Prom
   "access-token": accessToken,
   "chat-archivo": chatArchivo,
   "chat-subida": chatSubida,
+  "crm-archivo": crmArchivo,
+  "crm-compartir": crmCompartir,
+  "crm-subida": crmSubida,
   disconnect,
   "equipo-archivo": equipoArchivo,
   "equipo-subida": equipoSubida,

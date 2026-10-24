@@ -39,16 +39,23 @@ import { CupoVideos } from "@/components/redes/cliente/CupoVideos";
 import { MaterialCliente } from "@/components/redes/cliente/MaterialCliente";
 import { ContextoComercialEditor } from "@/components/redes/ContextoComercial";
 import { cn } from "@/lib/utils";
+import { Contactos } from "@/components/redes/crm/Contactos";
+import { EquipoCrm } from "@/components/redes/crm/EquipoCrm";
+import { QueTeVende } from "@/components/redes/crm/QueTeVende";
+import { CrmProximamente } from "@/components/redes/crm/CrmProximamente";
 import { LogoCliente } from "@/components/redes/LogoCliente";
 import { DATOS_COBRO_DEFAULT } from "@/lib/redes/types";
 import { SelectorVista, VistaCalendario, useVista } from "@/components/redes/VistaCalendario";
 import { faltaMarca, pasosCliente, resumenMarca } from "@/lib/redes/proximoPaso";
 
-type Tab = "inicio" | "resultados" | "piezas" | "material" | "plan" | "negocio";
+type Tab = "inicio" | "resultados" | "piezas" | "contactos" | "vende" | "equipo" | "material" | "plan" | "negocio";
 
 const TITULOS: Partial<Record<Tab, string>> = {
   resultados: "Resultados",
   piezas: "Piezas gráficas",
+  contactos: "Mis contactos",
+  vende: "Qué te vende",
+  equipo: "Equipo de ventas",
   material: "Material",
   plan: "Mi plan",
   negocio: "Mi negocio",
@@ -56,6 +63,9 @@ const TITULOS: Partial<Record<Tab, string>> = {
 const SUBTITULOS: Partial<Record<Tab, string>> = {
   resultados: "Qué lograron tus videos con la pauta.",
   piezas: "Posteos, historias, afiches, carteles y banners con tu marca.",
+  contactos: "Los que te escriben: a quién contestarle hoy, cuánto vendiste y cuánto te costó cada venta.",
+  vende: "Qué video te trajo cada venta y qué te preguntan tus clientes (para tus próximos videos).",
+  equipo: "Quiénes atienden tus contactos y cómo le va a cada uno este mes.",
   material: "Todo lo que filmamos y lo que ya está editado, para ver y descargar.",
   plan: "Si estás al día, qué incluye tu plan, cuánto usaste y tus boletas.",
   negocio: "Tu marca y lo que vendés: con esto armamos tus videos y piezas.",
@@ -74,6 +84,9 @@ export default function ClientePortal() {
   const [params, setParams] = useSearchParams();
   const tab = ((params.get("tab") as Tab) || "inicio") as Tab;
   const [clienteId, setClienteId] = useState<string>("");
+  // El "+" del CRM (nuevo contacto o nuevo vendedor) va arriba, donde los otros módulos tienen "Pedir un video".
+  const [crmNuevo, setCrmNuevo] = useState(false);
+  const enCrm = tab === "contactos" || tab === "equipo";
   const cliente = clientes.find((c) => c.id === clienteId) ?? clientes[0];
   const mes = mesActual();
   const [mesRes, setMesRes] = useState(mes);
@@ -210,6 +223,7 @@ export default function ClientePortal() {
 
   return (
     <PageShell
+      className={enCrm ? "max-w-none" : undefined}
       title={
         TITULOS[tab] ?? (
           <span>
@@ -260,10 +274,10 @@ export default function ClientePortal() {
             <HelpCircle className="h-[18px] w-[18px]" />
           </Button>
           <Button
-            onClick={() => setPedirVideo(true)}
+            onClick={() => (enCrm && cliente.crm_activo ? setCrmNuevo(true) : setPedirVideo(true))}
             className="group h-11 w-full rounded-full sm:h-10 sm:w-auto bg-gradient-to-r from-primary to-fuchsia-500 px-5 font-semibold shadow-lg shadow-primary/25 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/35"
           >
-            <Plus className="mr-1.5 h-4 w-4 transition-transform group-hover:rotate-90" /> Pedir un video
+            <Plus className="mr-1.5 h-4 w-4 transition-transform group-hover:rotate-90" /> {cliente.crm_activo && tab === "contactos" ? "Nuevo contacto" : cliente.crm_activo && tab === "equipo" ? "Nuevo vendedor" : "Pedir un video"}
           </Button>
         </>
       }
@@ -448,6 +462,31 @@ export default function ClientePortal() {
             onCompletarPerfil={() => setTab("negocio")}
           />
         </TabsContent>
+
+        {!cliente.crm_activo && cliente.crm_proximamente && (
+          <>
+            {(["contactos", "vende", "equipo"] as const).map((t) => (
+              <TabsContent key={t} value={t}>
+                <CrmProximamente />
+              </TabsContent>
+            ))}
+          </>
+        )}
+        {cliente.crm_activo && (
+          <TabsContent value="contactos">
+            <Contactos cliente={cliente} nuevo={crmNuevo} onNuevo={setCrmNuevo} />
+          </TabsContent>
+        )}
+        {cliente.crm_activo && (
+          <TabsContent value="vende">
+            <QueTeVende cliente={cliente} />
+          </TabsContent>
+        )}
+        {cliente.crm_activo && (
+          <TabsContent value="equipo">
+            <EquipoCrm cliente={cliente} nuevo={crmNuevo} onNuevo={setCrmNuevo} />
+          </TabsContent>
+        )}
 
         <TabsContent value="negocio" className="space-y-6">
           <TarjetaPerfil cliente={cliente} onCompletar={() => document.getElementById("datos-marca")?.scrollIntoView({ behavior: "smooth", block: "start" })} />
