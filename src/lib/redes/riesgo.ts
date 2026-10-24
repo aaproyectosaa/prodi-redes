@@ -166,7 +166,8 @@ export function riesgoCliente(c: Project, d: DatosRiesgo): RiesgoCliente {
 /** Riesgo de todos los clientes, por id. */
 export function calcularRiesgo(d: DatosRiesgo): Map<string, RiesgoCliente> {
   const ahora = d.ahora ?? new Date();
-  return new Map(d.clientes.map((c) => [c.id, riesgoCliente(c, { ...d, ahora })]));
+  // La cuenta propia de Prodi no es un cliente que se pueda perder.
+  return new Map(d.clientes.filter((c) => !c.cuenta_propia).map((c) => [c.id, riesgoCliente(c, { ...d, ahora })]));
 }
 
 /** Los que están en riesgo (alto o medio), de mayor a menor puntaje. */

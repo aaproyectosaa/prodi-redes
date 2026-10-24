@@ -54,11 +54,12 @@ export interface AlertaRegla {
   detalle: string;
 }
 
-type Res = "mensajes" | "compras" | "leads";
+type Res = "mensajes" | "compras" | "leads" | "clics";
 const NOMBRE: Record<Res, { uno: string; ninguno: string }> = {
   mensajes: { uno: "mensaje", ninguno: "ningún mensaje" },
   compras: { uno: "venta", ninguno: "ninguna venta" },
   leads: { uno: "contacto", ninguno: "ningún contacto" },
+  clics: { uno: "clic", ninguno: "ningún clic" },
 };
 
 export function sumarDiasISO(f: string, n: number): string {
@@ -79,7 +80,10 @@ function resultadoDe(filas: FilaPautaRegla[]): Res {
   if (/SALES|CONVERSIONS/.test(obj)) return "compras";
   if (/LEAD/.test(obj)) return "leads";
   if (/MESSAGES|ENGAGEMENT/.test(obj)) return "mensajes";
+  // Tráfico (llevar gente a la web) o alcance: lo que cuenta son los clics, no mensajes ni ventas.
+  if (/TRAFFIC|LINK_CLICKS|AWARENESS|REACH|VIDEO_VIEWS/.test(obj)) return "clics";
   const s = (k: Res) => filas.reduce((a, f) => a + (Number(f[k]) || 0), 0);
+  if (!s("compras") && !s("leads") && !s("mensajes") && s("clics")) return "clics";
   return s("compras") ? "compras" : s("leads") > s("mensajes") ? "leads" : "mensajes";
 }
 

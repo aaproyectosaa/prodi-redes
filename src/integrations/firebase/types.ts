@@ -173,6 +173,8 @@ export interface Project {
    * No borra datos. Si falta el campo, se considera habilitado.
    */
   enabled?: boolean;
+  /** La cuenta propia de Prodi (Prodi Redes): se trabaja como un cliente más pero no se cobra ni cuenta en los números de clientes. */
+  cuenta_propia?: boolean;
   monthly_limits?: {
     [key in TipoContenido]?: number;
   };

@@ -54,7 +54,9 @@ import { cn } from "@/lib/utils";
  */
 export default function Tablero() {
   const navigate = useNavigate();
-  const { clientes, videos, planes, cobros, piezas } = useRedes();
+  const { clientes: todosLosClientes, videos, planes, cobros, piezas } = useRedes();
+  // La cuenta propia de Prodi no cuenta como cliente en los números del negocio.
+  const clientes = useMemo(() => todosLosClientes.filter((c) => !c.cuenta_propia), [todosLosClientes]);
   const { profiles } = useAppData();
   // Se puede mirar cualquier mes (por defecto el actual); el gráfico muestra los 12 meses hasta ese.
   const mesHoy = mesActual();
