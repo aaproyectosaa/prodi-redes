@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, ExternalLink, MessageCircle } from "lucide-react";
+import { Check, ExternalLink, MessageCircle, Wrench } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -164,6 +164,9 @@ export function MisServicios({ cliente, resaltar }: { cliente: { id: string; ser
               <p className="rounded-2xl bg-muted/50 p-3 text-sm text-muted-foreground">Lo estamos armando. Te avisamos apenas esté listo para usar.</p>
             )}
             {s.detalle && <p className="whitespace-pre-wrap rounded-2xl bg-muted/50 p-3 text-sm">{s.detalle}</p>}
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Wrench className="h-3.5 w-3.5 shrink-0 text-amber-500" /> Incluye mantenimiento: soporte y cambios cuando los necesites.
+            </p>
             <div className="mt-auto flex flex-wrap gap-2">
               {s.url && (
                 <Button asChild className="h-11 flex-1 rounded-2xl font-semibold">

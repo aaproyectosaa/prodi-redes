@@ -1,8 +1,9 @@
-import { AppWindow, Globe, LayoutDashboard, Wrench, type LucideIcon } from "lucide-react";
+import { AppWindow, Globe, LayoutDashboard, type LucideIcon } from "lucide-react";
 
 // Lo que el cliente contrató además de Redes (que todos tienen: videos, piezas y pauta). Cada servicio suma un
 // módulo a su panel ("Mis servicios"): en qué estado está, el link para entrar y un botón para pedir cambios o ayuda.
 // Se elige al dar de alta el cliente y se edita en su ficha (Configuración).
+// El mantenimiento no es un servicio aparte: viene incluido en todos (el cliente lo ve en cada uno).
 
 export type IdServicio = "web" | "erp" | "app" | "mantenimiento";
 export type EstadoServicio = "desarrollo" | "activo";
@@ -21,7 +22,6 @@ export const SERVICIOS: { id: IdServicio; nombre: string; texto: string; icon: L
   { id: "web", nombre: "Página web", texto: "Tu web o tienda online", icon: Globe, color: "from-sky-500 to-blue-600", abrir: "Ver mi web" },
   { id: "erp", nombre: "Sistema ERP", texto: "Facturación, stock, cuentas corrientes, cheques e impuestos", icon: LayoutDashboard, color: "from-emerald-500 to-teal-600", abrir: "Entrar al sistema" },
   { id: "app", nombre: "App a medida", texto: "Tu plataforma o app hecha a medida", icon: AppWindow, color: "from-violet-500 to-fuchsia-500", abrir: "Abrir la app" },
-  { id: "mantenimiento", nombre: "Mantenimiento", texto: "Soporte y cambios de tu sistema todos los meses", icon: Wrench, color: "from-amber-400 to-orange-500", abrir: "Abrir" },
 ];
 
 export const servicioInfo = (id: IdServicio) => SERVICIOS.find((s) => s.id === id)!;
