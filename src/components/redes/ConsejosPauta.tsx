@@ -1,3 +1,4 @@
+import { LeerEnVoz } from "@/components/LeerEnVoz";
 import { useEffect, useMemo, useState } from "react";
 import { BotonAplicar, ChatIA } from "@/components/redes/ChatIA";
 import { HacerConsejo } from "@/components/redes/HacerConsejo";
@@ -227,6 +228,11 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
                 </span>
               )}
               <p className="mt-3 text-xl font-extrabold leading-tight tracking-tight sm:text-2xl">{titular}</p>
+              <LeerEnVoz
+                className="mt-3"
+                etiqueta="Escuchar el análisis"
+                texto={[titular, datos.resumen, lista.length ? `Qué hacer ahora: ${lista.map(({ s: x }) => x.accion || x.titulo).join(". ")}` : ""].filter(Boolean).join(". ")}
+              />
             </div>
             {!!datos.numeros?.length && (
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -425,6 +431,7 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
                             </span>
                           )}
                         </div>
+                        <LeerEnVoz texto={[accion, `Por qué: ${porque}`, s.detalle && s.detalle !== porque ? s.detalle : ""].filter(Boolean).join(". ")} />
                         <p className="text-xs leading-relaxed">
                           <b>Por qué:</b> <span className="text-muted-foreground">{porque}</span>
                         </p>
