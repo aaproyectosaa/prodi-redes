@@ -4,13 +4,13 @@ import { PlanificarDialog } from "../PlanificarDialog";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import type { NuevoVideo } from "@/lib/redes/videos";
 import { alternarGuardado, useChatPrefs } from "@/lib/redes/chatPrefs";
-import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { collection, limit, onSnapshot, orderBy, query } from "@/lib/db";
 import {
   Plus,
   Pencil,
-  Star, ArrowLeft, BarChart3, CalendarClock, Camera, Check, CheckCheck, CornerUpRight, FileText, Headphones, Image as ImageIcon, Images, Info, Loader2, Moon, Paperclip, Reply, Search, Send, Sparkles, Upload, Video, X } from "lucide-react";
+  Star, ArrowLeft, ChevronsDown, BarChart3, CalendarClock, Camera, Check, CheckCheck, CornerUpRight, FileText, Headphones, Image as ImageIcon, Images, Info, Loader2, Moon, Paperclip, Reply, Search, Send, Sparkles, Upload, Video, X } from "lucide-react";
 import { esHorarioDescanso, leerDescanso, ROLES_CON_DESCANSO } from "../../../../api/_lib/descanso";
 import { toast } from "sonner";
 import { db } from "@/integrations/firebase/client";
@@ -78,6 +78,9 @@ import { chatEnPantalla, EVENTO_BORRADOR, tomarBorrador } from "@/lib/redes/chat
 import { fechaAR, formatearFecha, hoyAR, sumarDias } from "@/lib/fecha";
 import type { Chat as ChatT, Mensaje, ReferenciaChat } from "@/lib/redes/types";
 import type { Profile } from "@/integrations/firebase/types";
+
+/** Mensajes que se traen por vez: los últimos al abrir y otra tanda al llegar arriba. */
+const PAGINA_CHAT = 80;
 
 function diaLabel(iso: string) {
   const dia = fechaAR(iso);
@@ -385,7 +388,16 @@ export function ChatConversacion({
   const [editProg, setEditProg] = useState<import("@/lib/redes/chat").Programado | null>(null);
   const programados = useProgramados(chat.id, uid);
   // Cuántos mensajes se cargan (al saltar a uno viejo, se cargan más) y a cuál saltar cuando lleguen.
-  const [limite, setLimite] = useState(200);
+  const [limite, setLimite] = useState(PAGINA_CHAT);
+  // Scroll como WhatsApp: si estás leyendo arriba no te baja de golpe; aparece la flecha con los nuevos.
+  const [lejos, setLejos] = useState(false);
+  const [nuevosAbajo, setNuevosAbajo] = useState(0);
+  const [cargandoMas, setCargandoMas] = useState(false);
+  // Al traer mensajes más viejos se guarda dónde estabas, para no saltar.
+  const anclaje = useRef<{ alto: number; top: number; cantidad: number } | null>(null);
+  const hayMas = useRef(false);
+  const cantidadRef = useRef(0);
+  const chatCargado = useRef("");
   // Fecha flotante al scrollear (como WhatsApp) y mensajes que llegan mientras está abierto (entran animados).
   const [diaFlotante, setDiaFlotante] = useState<string | null>(null);
   const tDia = useRef<ReturnType<typeof setTimeout>>();
@@ -492,7 +504,11 @@ export function ChatConversacion({
   };
 
   useEffect(() => {
-    setCargando(true);
+    // Solo al cambiar de chat se muestra "cargando" (al traer más viejos, la lista queda como está).
+    if (chatCargado.current !== chat.id) {
+      chatCargado.current = chat.id;
+      setCargando(true);
+    }
     return onSnapshot(
       query(collection(db, "chats", chat.id, "mensajes"), orderBy("at", "desc"), limit(limite)),
       (snap) => {
@@ -509,11 +525,26 @@ export function ChatConversacion({
       }
     );
   }, [chat.id, limite]);
-  // Al cambiar de chat, vuelve a los últimos 200.
+  // Al cambiar de chat, vuelve a los últimos.
   useEffect(() => {
-    setLimite(200);
+    setLimite(PAGINA_CHAT);
     setBuscando(false);
+    setNuevosAbajo(0);
+    setLejos(false);
+    anclaje.current = null;
   }, [chat.id]);
+  hayMas.current = mensajes.length >= limite;
+  cantidadRef.current = mensajes.length;
+
+  // Llegaron los más viejos: queda viendo el mismo mensaje que antes (los nuevos entran arriba, fuera de la vista).
+  useLayoutEffect(() => {
+    const a = anclaje.current;
+    const el = scroller.current;
+    if (!a || !el || mensajes.length === a.cantidad) return;
+    if (mensajes.length > a.cantidad) el.scrollTop = el.scrollHeight - a.alto + a.top;
+    anclaje.current = null;
+    setCargandoMas(false);
+  }, [mensajes]);
 
   useEffect(() => {
     if (cargando) return;
@@ -535,26 +566,65 @@ export function ChatConversacion({
   // Al volver a desplegarla sin nada nuevo, queda donde estaba.
   const visto = useRef("");
   const ubicado = useRef("");
+  const ultimoMsj = mensajes[mensajes.length - 1];
+  const ultimoPrevio = useRef("");
   useEffect(() => {
     if (!activa) return;
-    const ahora = `${chat.id}|${mensajes.length}|${subidas.length}|${pensando}`;
+    // Solo cuenta lo que llega abajo (el último mensaje): traer más viejos no baja la lista.
+    const ahora = `${chat.id}|${ultimoMsj?.id ?? ""}|${subidas.length}|${pensando}`;
     // La primera vez que se ve este chat ya cargado: si hay mensajes sin leer, se arranca en el primero (como WhatsApp).
     const primera = !cargando && ubicado.current !== chat.id;
     if (primera) ubicado.current = chat.id;
     const franja = primera ? document.getElementById(`sin-leer-${chat.id}`) : null;
     if (franja) franja.scrollIntoView({ block: "start" });
-    else if (ahora !== visto.current) fin.current?.scrollIntoView({ block: "end" });
+    else if (ahora !== visto.current) {
+      const mismoChat = visto.current.startsWith(`${chat.id}|`) && !primera;
+      // Leyendo más arriba y escribió otro: no se baja, se suma a la flecha. Lo propio siempre baja.
+      if (mismoChat && !pegadoAbajo.current && ultimoMsj?.by !== uid && !cargando) {
+        // Cuántos de otros llegaron después del último que había (pueden llegar varios juntos).
+        const desde = mensajes.findIndex((m) => m.id === ultimoPrevio.current);
+        const llegaron = desde >= 0 ? mensajes.slice(desde + 1).filter((m) => m.by !== uid && m.tipo !== "sistema").length : 1;
+        setNuevosAbajo((n) => n + Math.max(1, llegaron));
+      }
+      else fin.current?.scrollIntoView({ block: "end" });
+    }
     visto.current = ahora;
+    ultimoPrevio.current = ultimoMsj?.id ?? "";
     void marcarLeido(chat, uid);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mensajes.length, chat.id, subidas.length, pensando, activa, cargando]);
+  }, [ultimoMsj?.id, chat.id, subidas.length, pensando, activa, cargando]);
+
+  const irAbajo = () => {
+    const el = scroller.current;
+    if (!el) return;
+    // Muy lejos: salto directo (el scroll suave por cientos de mensajes tarda); cerca, suave.
+    const lejisimos = el.scrollHeight - el.scrollTop - el.clientHeight > el.clientHeight * 3;
+    el.scrollTo({ top: el.scrollHeight, behavior: lejisimos ? "auto" : "smooth" });
+    setNuevosAbajo(0);
+  };
 
   // Si se achica la lista (se abre el teclado) estando abajo de todo, se sigue viendo lo último.
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
     const alScroll = () => {
-      pegadoAbajo.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+      const distancia = el.scrollHeight - el.scrollTop - el.clientHeight;
+      pegadoAbajo.current = distancia < 80;
+      setLejos(distancia > 400);
+      if (pegadoAbajo.current) setNuevosAbajo(0);
+      // Cerca de arriba: trae los mensajes anteriores (sin saltar).
+      if (el.scrollTop < 400 && hayMas.current && !anclaje.current && el.scrollHeight > el.clientHeight) {
+        anclaje.current = { alto: el.scrollHeight, top: el.scrollTop, cantidad: cantidadRef.current };
+        setCargandoMas(true);
+        setLimite((l) => l + PAGINA_CHAT);
+        // Si no llegó nada más (justo eran todos), se libera.
+        setTimeout(() => {
+          if (anclaje.current?.cantidad === cantidadRef.current) {
+            anclaje.current = null;
+            setCargandoMas(false);
+          }
+        }, 5000);
+      }
       // El día del primer mensaje que se ve arriba.
       const r = el.getBoundingClientRect();
       const arriba = document.elementFromPoint(r.left + r.width / 2, r.top + 16)?.closest("[data-dia]") as HTMLElement | null;
@@ -568,11 +638,14 @@ export function ChatConversacion({
       if (pegadoAbajo.current) el.scrollTop = el.scrollHeight;
     };
     el.addEventListener("scroll", alScroll, { passive: true });
+    // Fotos y videos que terminan de cargar agrandan la lista: si estabas abajo, sigue viéndose lo último.
+    el.addEventListener("load", abajo, true);
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(abajo) : null;
     ro?.observe(el);
     window.addEventListener("teclado-ios", abajo);
     return () => {
       el.removeEventListener("scroll", alScroll);
+      el.removeEventListener("load", abajo, true);
       ro?.disconnect();
       window.removeEventListener("teclado-ios", abajo);
     };
@@ -933,7 +1006,9 @@ export function ChatConversacion({
         </div>
       )}
 
-      <div ref={scroller} className={cn("fondo-chat min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-3", compacto ? "py-3" : "py-4 md:px-6")}>
+      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div ref={scroller} className={cn("fondo-chat min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-3 [overflow-anchor:none]", compacto ? "py-3" : "py-4 md:px-6")}>
+
         {cargando ? (
           <div className="flex justify-center py-10">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -1324,6 +1399,29 @@ export function ChatConversacion({
             <div ref={fin} />
           </div>
         )}
+      </div>
+      {/* Trayendo los anteriores: flota arriba (no ocupa lugar, así la lista no salta). */}
+      {cargandoMas && (
+        <span className="pointer-events-none absolute left-1/2 top-2 z-20 flex h-7 w-7 -translate-x-1/2 items-center justify-center rounded-full border bg-background/95 shadow">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+        </span>
+      )}
+      {/* Flecha para bajar a lo último, con cuántos llegaron mientras leías arriba. */}
+      {(lejos || nuevosAbajo > 0) && !cargando && (
+        <button
+          type="button"
+          onClick={irAbajo}
+          className="absolute bottom-3 right-3 z-20 flex h-10 w-10 items-center justify-center rounded-full border bg-background/95 text-muted-foreground shadow-lg backdrop-blur transition-colors animate-in fade-in zoom-in-90 hover:text-foreground md:right-5"
+          aria-label={nuevosAbajo ? `Ir ${nuevosAbajo === 1 ? "al mensaje nuevo" : `a los ${nuevosAbajo} mensajes nuevos`}` : "Ir al último mensaje"}
+        >
+          <ChevronsDown className="h-5 w-5" />
+          {nuevosAbajo > 0 && (
+            <span className="absolute -top-1.5 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+              {nuevosAbajo > 99 ? "99+" : nuevosAbajo}
+            </span>
+          )}
+        </button>
+      )}
       </div>
 
       {descansan.length > 0 && texto.trim() && !programar && (
