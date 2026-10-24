@@ -1,3 +1,4 @@
+import { AVISO_LEGAL, minutosTexto, useRacha } from "@/components/redes/chat/RachaRespuestas";
 import { useEffect, useMemo, useState } from "react";
 import { PautaTodos } from "@/components/redes/PautaMeta";
 import { useNavigate, useParams } from "react-router-dom";
@@ -338,6 +339,77 @@ function KpiGrid({ r, grande = false }: { r: ReporteUsuario; grande?: boolean })
   );
 }
 
+/** Racha de respuestas: cómo se le contesta a cada cliente en los chats (indicador del servicio, no de horas). */
+function AtencionClientes({ onCliente }: { onCliente: (id: string) => void }) {
+  const datos = useRacha();
+  const { profiles } = useAppData();
+  if (!datos?.personas) return null;
+  return (
+    <Section title="Atención a clientes en los chats" className="mt-10" description={`Cuánto se tarda en contestarles (últimos 30 días, horario de atención de Prodi). ${AVISO_LEGAL.replace("lo que cobrás", "lo que cobra cada uno")}`}>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="overflow-x-auto rounded-xl border bg-card">
+          <table className="w-full min-w-[420px] text-sm">
+            <thead className="border-b text-left text-xs text-muted-foreground">
+              <tr>
+                <th className="p-3 font-medium">Persona</th>
+                <th className="p-3 text-right font-medium">Racha</th>
+                <th className="p-3 text-right font-medium">Mejor</th>
+                <th className="p-3 text-right font-medium">Promedio</th>
+                <th className="p-3 text-right font-medium">A tiempo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {datos.personas.map((p) => {
+                const perfil = profiles.find((x) => x.id === p.uid);
+                return (
+                  <tr key={p.uid} className="border-b last:border-0">
+                    <td className="p-3">
+                      <span className="flex items-center gap-2">
+                        {perfil && <UserAvatar profile={perfil} size="sm" />}
+                        <span className="truncate font-medium">{perfil?.nombre ?? p.nombre}</span>
+                      </span>
+                    </td>
+                    <td className="p-3 text-right font-bold tabular-nums">{p.racha ? `🔥 ${p.racha}` : "0"}</td>
+                    <td className="p-3 text-right tabular-nums text-muted-foreground">{p.mejor}</td>
+                    <td className="p-3 text-right tabular-nums">{minutosTexto(p.promedio)}</td>
+                    <td className={cn("p-3 text-right font-semibold tabular-nums", p.aTiempo != null && p.aTiempo < 70 ? "text-red-600 dark:text-red-400" : "")}>
+                      {p.aTiempo != null ? `${p.aTiempo}%` : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="overflow-x-auto rounded-xl border bg-card">
+          <table className="w-full min-w-[360px] text-sm">
+            <thead className="border-b text-left text-xs text-muted-foreground">
+              <tr>
+                <th className="p-3 font-medium">Cliente</th>
+                <th className="p-3 text-right font-medium">Mensajes</th>
+                <th className="p-3 text-right font-medium">Promedio</th>
+                <th className="p-3 text-right font-medium">A tiempo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(datos.clientes ?? []).map((c) => (
+                <tr key={c.id} className="cursor-pointer border-b last:border-0 hover:bg-muted/40" onClick={() => onCliente(c.id)}>
+                  <td className="max-w-[12rem] truncate p-3 font-medium">{c.nombre}</td>
+                  <td className="p-3 text-right tabular-nums text-muted-foreground">{c.casos}</td>
+                  <td className="p-3 text-right tabular-nums">{minutosTexto(c.promedio)}</td>
+                  <td className={cn("p-3 text-right font-semibold tabular-nums", c.aTiempo != null && c.aTiempo < 70 ? "text-red-600 dark:text-red-400" : "")}>
+                    {c.aTiempo != null ? `${c.aTiempo}%` : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </Section>
+  );
+}
+
 export default function Reportes() {
   const navigate = useNavigate();
   const { videos, rodajes, reuniones, piezas, clientes: proyectos } = useRedes();
@@ -399,6 +471,8 @@ export default function Reportes() {
           </div>
         )}
       </Section>
+
+      <AtencionClientes onCliente={(id) => navigate(`/clientes/${id}`)} />
 
       <Section title="Pauta de los clientes (Meta)" className="mt-10" description="Lo que va del mes, traído solo de Meta todos los días. Tocá un cliente para ver el detalle.">
         <PautaTodos clientes={proyectos} onAbrir={(id) => navigate(`/clientes/${id}?tab=resultados`)} />

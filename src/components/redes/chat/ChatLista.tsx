@@ -1,3 +1,4 @@
+import { RachaChip } from "./RachaRespuestas";
 import { useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import {
   Star, Archive, ArchiveRestore, ArrowLeft, Headphones, ListTodo, MoreHorizontal, Pin, PinOff, Search, SquarePen, Tag, Trash2, UsersRound, X } from "lucide-react";
@@ -335,6 +336,7 @@ export function ChatLista({
                 <Search className="h-5 w-5" />
               </button>
             )}
+            {["admin", "productor", "editor", "pauta", "diseno", "administracion"].includes(role ?? "") && !soloLectura && <RachaChip />}
             <button
               type="button"
               onClick={() => setVerGuardados(true)}

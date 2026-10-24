@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // Gestión de usuarios (solo super admin).
+// POST /api/usuarios/racha → racha de respuestas a los clientes (la propia; el admin, la de todos y por cliente)
 // POST /api/usuarios/crear       { nombre, email, rol, clientes?: string[], password? }
 // POST /api/usuarios/editar      { uid, nombre?, email?, rol?, clientes?: string[] }
 // POST /api/usuarios/desactivar  { uid, activo: boolean }
@@ -26,6 +27,7 @@ import { enviarMailsLote } from "../_lib/informe";
 import { mailAvisoHtml } from "../_lib/mail-aviso";
 import { borrarEjemplo, cargarEjemplo } from "../_lib/ejemplo";
 import { anotarMinuto, anotarMinutosPasados, nuevoToken, resumenTiempo, tieneToken, uidDelToken } from "../_lib/mi-tiempo";
+import { rachaVacia, rachasDeRespuesta } from "../_lib/racha";
 
 export const config = { maxDuration: 60 };
 
@@ -395,6 +397,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else if (accion === "tiempo-token") {
         res.status(200).json({ token: await nuevoToken(yo.uid) });
       } else res.status(404).json({ error: "Acción desconocida" });
+      return;
+    }
+    // Racha de respuestas a los clientes: cada uno ve lo suyo; el admin, todo (ver api/_lib/racha.ts).
+    if (accion === "racha") {
+      const yo = await requireCaller(req, ["admin", "productor", "editor", "pauta", "diseno", "administracion"]);
+      const { personas, clientes } = await rachasDeRespuesta();
+      const mia = personas.find((x) => x.uid === yo.uid) ?? rachaVacia(yo.uid, yo.nombre);
+      const admin = yo.roles.includes("admin");
+      res.status(200).json({ yo: mia, ...(admin ? { personas, clientes } : {}) });
       return;
     }
     if (accion.startsWith("contacto-")) {
