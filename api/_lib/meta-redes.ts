@@ -245,3 +245,26 @@ export async function fotoRedesTodos(): Promise<string> {
   const ok = clientes.filter((c) => c.estado === "ok").length;
   return `${ok} de ${clientes.length} clientes leídos`;
 }
+
+/**
+ * La web que el cliente tiene puesta en su página de Facebook y en su Instagram (el campo "sitio web" del perfil).
+ * La usa el catálogo del CRM para comprobar que una web es del cliente sin que nadie la apruebe a mano.
+ */
+export async function websEnMeta(p: Record<string, any>): Promise<string[]> {
+  const out: string[] = [];
+  const pedidos: Promise<void>[] = [];
+  if (p.meta?.page_id)
+    pedidos.push(
+      graph(String(p.meta.page_id), { fields: "website" })
+        .then((j) => void out.push(...String(j?.website ?? "").split(/\s+/)))
+        .catch(() => undefined)
+    );
+  if (p.meta?.ig_user_id)
+    pedidos.push(
+      graph(String(p.meta.ig_user_id), { fields: "website" })
+        .then((j) => void out.push(String(j?.website ?? "")))
+        .catch(() => undefined)
+    );
+  await Promise.all(pedidos);
+  return out.filter(Boolean);
+}

@@ -62,11 +62,11 @@ async function media(req: VercelRequest, res: VercelResponse) {
 /** Catálogo de productos del CRM (el de Prodi o el de un cliente). */
 async function catalogo(req: VercelRequest, accion: string) {
   const caller = await requireCaller(req);
-  const b = body<{ negocio?: string; url?: string; producto?: unknown; id?: string; ids?: string[]; contacto?: { col?: string; id?: string } }>(req);
+  const b = body<{ negocio?: string; url?: string; auto?: boolean; producto?: unknown; id?: string; ids?: string[]; contacto?: { col?: string; id?: string } }>(req);
   const negocio = String(b.negocio ?? "");
   await permitirNegocio(caller, negocio);
   if (accion === "catalogo") return verCatalogo(negocio);
-  if (accion === "catalogo-conectar") return conectarCatalogo(negocio, String(b.url ?? ""));
+  if (accion === "catalogo-conectar") return conectarCatalogo(caller, negocio, String(b.url ?? ""), { auto: b.auto === true, base: appUrl(req) });
   if (accion === "catalogo-producto") return guardarProducto(negocio, b.producto);
   if (accion === "catalogo-borrar") return borrarProducto(negocio, String(b.id ?? ""));
   if (accion === "catalogo-links") {
