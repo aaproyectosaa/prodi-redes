@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Mic, Pause, Play, Send, Trash2 } from "lucide-react";
+import { ChevronDown, Loader2, Mic, Pause, Play, Send, Trash2 } from "lucide-react";
+import { callApi } from "@/lib/redes/api";
+import { enModoVista } from "@/lib/redes/vistaComo";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { AUDIO_MAX_SEG, duracionTexto, urlAudio } from "@/lib/redes/chat";
@@ -84,13 +86,44 @@ function siguienteDe(r: Reproductor): Reproductor | null {
 
 export function AudioMensaje({
   chatId,
+  mensajeId,
   audio,
   mio,
+  transcripcion,
+  escuchado,
+  nombreDe,
 }: {
   chatId: string;
+  mensajeId?: string;
   audio: { id: string; mime: string; duracion: number };
   mio: boolean;
+  transcripcion?: string | null;
+  escuchado?: Record<string, string> | null;
+  nombreDe?: (uid: string) => string;
 }) {
+  const [texto, setTexto] = useState<string | null>(transcripcion ?? null);
+  const [verTexto, setVerTexto] = useState(false);
+  const [transcribiendo, setTranscribiendo] = useState(false);
+  const avisado = useRef(false);
+  useEffect(() => {
+    if (transcripcion) setTexto(transcripcion);
+  }, [transcripcion]);
+  const quienes = Object.keys(escuchado ?? {});
+  const transcribir = async () => {
+    if (texto) return setVerTexto(!verTexto);
+    if (!mensajeId) return;
+    setVerTexto(true);
+    setTranscribiendo(true);
+    try {
+      const r = await callApi<{ texto: string }>("/api/ia/audio-transcribir", { chat_id: chatId, mensaje_id: mensajeId });
+      setTexto(r.texto);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo transcribir");
+      setVerTexto(false);
+    } finally {
+      setTranscribiendo(false);
+    }
+  };
   const ref = useRef<HTMLAudioElement | null>(null);
   const url = useRef<string | null>(null);
   const [cargando, setCargando] = useState(false);
@@ -146,6 +179,11 @@ export function AudioMensaje({
       sonandoAhora = yo.current;
       el.playbackRate = velGlobal;
       setSonando(true);
+      // "Escuchado": se le avisa al que lo mandó (una vez, y no en "ver como").
+      if (!mio && mensajeId && !avisado.current && !enModoVista()) {
+        avisado.current = true;
+        void callApi("/api/ia/audio-escuchado", { chat_id: chatId, mensaje_id: mensajeId }).catch(() => {});
+      }
       // Pantalla bloqueada / auriculares: qué suena y pausar o seguir.
       if ("mediaSession" in navigator) {
         try {
@@ -233,6 +271,7 @@ export function AudioMensaje({
   };
 
   return (
+    <div className="space-y-1">
     <div ref={caja} className="flex min-w-[230px] items-center gap-2.5 py-0.5">
       <button
         type="button"
@@ -296,6 +335,28 @@ export function AudioMensaje({
       >
         {vel === 1.5 ? "1,5" : vel}x
       </button>
+    </div>
+    <div className={cn("flex items-center gap-2 pl-[2.875rem] text-[10px]", mio ? "text-primary-foreground/75" : "text-muted-foreground")}>
+      {mensajeId && (
+        <button type="button" onClick={() => void transcribir()} className="inline-flex items-center gap-0.5 font-medium underline-offset-2 hover:underline">
+          {transcribiendo ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronDown className={cn("h-3 w-3 transition-transform", verTexto && "rotate-180")} />}
+          {verTexto ? "Ocultar texto" : "Ver texto"}
+        </button>
+      )}
+      {mio && (
+        <span
+          className={cn("ml-auto inline-flex items-center gap-0.5", quienes.length && "font-semibold text-sky-300")}
+          title={quienes.length ? `Lo escuchó: ${quienes.map((u) => nombreDe?.(u) || "alguien").join(", ")}` : "Todavía nadie lo escuchó"}
+        >
+          <Mic className="h-3 w-3" /> {quienes.length ? "Escuchado" : "Sin escuchar"}
+        </span>
+      )}
+    </div>
+    {verTexto && (
+      <p className={cn("whitespace-pre-wrap rounded-lg px-2.5 py-1.5 text-xs leading-relaxed", mio ? "bg-white/15" : "bg-muted/70")}>
+        {transcribiendo ? "Transcribiendo…" : texto}
+      </p>
+    )}
     </div>
   );
 }

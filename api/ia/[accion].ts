@@ -201,6 +201,39 @@ async function piezaCompartir(req: VercelRequest) {
 }
 
 /** Reenviar un mensaje a otros chats (hasta 5). Tiene que ser miembro del de origen y de cada destino. */
+/** El mensaje de voz de un chat donde quien pide es miembro (o 404/403). */
+async function audioDelChat(req: VercelRequest) {
+  const caller = await requireCaller(req);
+  const b = body<{ chat_id?: string; mensaje_id?: string }>(req);
+  await chatDeMiembro(b.chat_id, caller.uid);
+  if (!b.mensaje_id || !/^[A-Za-z0-9_-]{1,200}$/.test(b.mensaje_id)) throw new HttpError(400, "Falta el mensaje");
+  const ref = adminDb().collection(`chats/${b.chat_id}/mensajes`).doc(b.mensaje_id);
+  const m = (await ref.get()).data();
+  if (!m || m.tipo !== "audio" || !m.audio?.id) throw new HttpError(404, "No encontramos el audio");
+  return { caller, ref, m, chatId: String(b.chat_id) };
+}
+
+/** "Escuchado" (el micrófono azul de WhatsApp): quien no lo mandó lo reprodujo. Queda la primera vez. */
+async function audioEscuchado(req: VercelRequest) {
+  const { caller, ref, m } = await audioDelChat(req);
+  if (m.by === caller.uid || m.escuchado?.[caller.uid]) return { ok: true };
+  await ref.update({ [`escuchado.${caller.uid}`]: new Date().toISOString() });
+  return { ok: true };
+}
+
+/** Transcripción de un mensaje de voz (se hace una vez y queda guardada en el mensaje). */
+async function audioTranscribir(req: VercelRequest) {
+  const { caller, ref, m, chatId } = await audioDelChat(req);
+  if (m.transcripcion) return { texto: String(m.transcripcion) };
+  await controlarTopeIA(caller, "transcribir");
+  const a = (await adminDb().collection(`chats/${chatId}/audios`).doc(String(m.audio.id)).get()).data();
+  if (!a?.data) throw new HttpError(404, "No encontramos el audio");
+  const texto = (await transcribir(Buffer.from(String(a.data), "base64"), String(a.mime ?? m.audio.mime ?? "audio/webm"))).trim().slice(0, 4000);
+  if (!texto) throw new HttpError(422, "No se entendió lo que dice el audio");
+  await ref.update({ transcripcion: texto });
+  return { texto };
+}
+
 async function reenviar(req: VercelRequest) {
   const caller = await requireCaller(req);
   const b = body<{ chat_id?: string; mensaje_id?: string; destinos?: unknown }>(req);
@@ -1919,6 +1952,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "pauta-hecho") res.status(200).json(await pautaHecho(req));
     else if (accion === "pauta-chat") res.status(200).json(await pautaChat(req));
     else if (accion === "voz-escuchar") res.status(200).json(await vozEscuchar(req));
+    else if (accion === "audio-escuchado") res.status(200).json(await audioEscuchado(req));
+    else if (accion === "audio-transcribir") res.status(200).json(await audioTranscribir(req));
     else if (accion === "voz-hablar") res.status(200).json(await vozHablar(req));
     else if (accion === "chat-resumen") res.status(200).json(await chatResumen(req));
     else if (accion === "presupuesto-ia") res.status(200).json(await presupuestoConIA(req));

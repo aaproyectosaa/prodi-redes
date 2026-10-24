@@ -597,6 +597,9 @@ export interface Mensaje {
   reunion_id?: string | null;
   /** Mensaje de voz: el audio está en chats/{chat}/audios/{id} (se baja al reproducirlo). */
   audio?: { id: string; mime: string; duracion: number } | null;
+  /** Mensaje de voz: lo que dice (se transcribe a pedido o cuando se le habla a Prodi) y quién lo escuchó { uid: cuándo }. */
+  transcripcion?: string | null;
+  escuchado?: Record<string, string> | null;
   /** Sticker (tipo "sticker"): código del emoji animado, ej. "1f602". */
   sticker?: string | null;
   /** Encuesta rápida: pregunta y opciones; votos = { uid: [índices] }. */

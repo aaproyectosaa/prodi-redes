@@ -1157,7 +1157,15 @@ export function ChatConversacion({
                       ) : m.tipo === "sticker" && m.sticker ? (
                         <StickerMensaje codigo={m.sticker} emoji={m.texto} />
                       ) : m.tipo === "audio" && m.audio ? (
-                        <AudioMensaje chatId={chat.id} audio={m.audio} mio={mio} />
+                        <AudioMensaje
+                          chatId={chat.id}
+                          mensajeId={m.id}
+                          audio={m.audio}
+                          mio={mio}
+                          transcripcion={m.transcripcion ?? null}
+                          escuchado={m.escuchado ?? null}
+                          nombreDe={(id) => perfilDe(id)?.nombre ?? ""}
+                        />
                       ) : (
                         // Chats de Software: ```código``` con colores y "Copiar" (Redes, como siempre).
                         enSoftware && (tieneCodigo(m.texto) || esError(m.texto)) ? (
