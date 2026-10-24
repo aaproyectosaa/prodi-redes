@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ElegirCliente } from "@/components/redes/ElegirCliente";
 import { BotonAplicar, ChatIA } from "@/components/redes/ChatIA";
 import { CampaniaIA } from "@/components/redes/CampaniaIA";
 import {
@@ -161,30 +162,20 @@ export function PlanMesDialog({
           </div>
           </div>
           <div className={cn("relative flex flex-wrap items-center gap-2", compacto ? "pt-1" : "pt-2")}>
-            <Select value={clienteId} onValueChange={setClienteId}>
-              <SelectTrigger
-                className={cn(
-                  "h-9 rounded-full border-white/25 bg-white/15 text-white backdrop-blur sm:w-64 sm:flex-none [&>svg]:text-white",
-                  compacto ? "w-auto min-w-0 flex-1" : "w-full"
-                )}
-              >
-                <SelectValue placeholder="Elegí el cliente">{cliente?.nombre}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {clientes.map((c) => {
-                  const p = delMes.find((x) => x.proyecto_id === c.id);
-                  const e = ESTADO_PLAN[p?.estado ?? "nada"];
-                  return (
-                    <SelectItem key={c.id} value={c.id}>
-                      <span className="flex items-center gap-2 whitespace-nowrap">
-                        {c.nombre}
-                        <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-medium", e.clase)}>{e.label}</span>
-                      </span>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
+            <ElegirCliente
+              value={clienteId ?? ""}
+              onChange={setClienteId}
+              clientes={clientes}
+              placeholder="Elegí el cliente"
+              className={cn(
+                "h-9 rounded-full border-white/25 bg-white/15 text-white backdrop-blur hover:border-white/50 sm:w-64 sm:flex-none [&_svg]:text-white",
+                compacto ? "w-auto min-w-0 flex-1" : "w-full"
+              )}
+              detalle={(id) => {
+                const e = ESTADO_PLAN[delMes.find((x) => x.proyecto_id === id)?.estado ?? "nada"];
+                return <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium", e.clase)}>{e.label}</span>;
+              }}
+            />
             <div className="flex items-center gap-1 rounded-full border border-white/25 bg-white/15 p-0.5 backdrop-blur">
               {modo === "campania" && <span className="pl-2.5 text-xs text-white/75">Desde</span>}
               <Button

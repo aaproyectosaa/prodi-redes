@@ -135,5 +135,5 @@ export function useBorrarVideos(videos: Video[]) {
     </>
   );
 
-  return { modo, boton, envolver, barra };
+  return { modo, boton, envolver, barra, entrar: () => setModo(true), salir };
 }

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { AccionTile } from "@/components/redes/AccionesTablero";
 import { useSearchParams } from "react-router-dom";
-import { ChevronRight, Clock, MessageSquareWarning, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronRight, ClipboardList, Clock, MessageSquareWarning, Sparkles } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { PlanMesDialog } from "@/components/redes/PlanMesDialog";
 import { useRedes } from "@/contexts/redes-data-context";
@@ -47,6 +48,7 @@ export function PlanesAviso() {
   const { clientes, planes, videos } = useRedes();
   const [params, setParams] = useSearchParams();
   const [abrir, setAbrir] = useState<{ clienteId: string; mes: string } | null>(null);
+  const [verLista, setVerLista] = useState(false);
   const meses = [mesActual(), sumarMeses(mesActual(), 1)];
   const lista = usePlanesDelMes(meses).filter((p) => clientes.some((c) => c.id === p.proyecto_id));
 
@@ -113,33 +115,54 @@ export function PlanesAviso() {
   const orden = { cambios: 0, borrador: 1, falta: 2 } as const;
   items.sort((a, b) => orden[a.tono] - orden[b.tono]);
 
+  const urgentes = items.filter((it) => it.tono === "cambios").length;
+
   return (
     <>
       {items.length > 0 && (
-        <div className="-mx-1 mb-3 flex items-center gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] animate-in fade-in duration-300 motion-reduce:animate-none">
-          <span className="shrink-0 pr-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Planes</span>
-          {items.map((it) => {
-            const Icono = it.tono === "cambios" ? MessageSquareWarning : it.tono === "borrador" ? Clock : Sparkles;
-            return (
-              <button
-                key={it.key}
-                type="button"
-                onClick={() => setAbrir({ clienteId: it.clienteId, mes: it.mes })}
-                title={`${it.texto} · ${it.boton}`}
-                className={cn(
-                  "group inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors",
-                  it.tono === "cambios" && "border-orange-500/40 bg-orange-500/10 text-orange-700 hover:bg-orange-500/20 dark:text-orange-300",
-                  it.tono === "borrador" && "border-border bg-muted/40 text-foreground/80 hover:border-amber-500/50 hover:bg-amber-500/10",
-                  it.tono === "falta" && "border-primary/30 bg-primary/[0.06] text-primary hover:bg-primary/10"
-                )}
-              >
-                <Icono className={cn("h-3.5 w-3.5 shrink-0", it.tono === "borrador" && "text-amber-500")} />
-                <span className="max-w-[16rem] truncate">{it.corto}</span>
-                <ChevronRight className="-mr-1 h-3 w-3 shrink-0 opacity-50 transition-transform group-hover:translate-x-0.5 group-hover:opacity-100" />
-              </button>
-            );
-          })}
-        </div>
+        <Popover open={verLista} onOpenChange={setVerLista}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                "inline-flex h-11 shrink-0 items-center gap-2 rounded-2xl px-4 text-sm font-semibold transition-colors animate-in fade-in",
+                urgentes ? "bg-orange-500/15 text-orange-700 hover:bg-orange-500/25 dark:text-orange-300" : "bg-primary/10 text-primary hover:bg-primary/15"
+              )}
+            >
+              <ClipboardList className="h-4 w-4" />
+              {items.length === 1 ? "1 plan" : `${items.length} planes`}
+              <span className="-ml-1 hidden sm:inline">para revisar</span>
+              <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-[min(22rem,calc(100vw-2rem))] rounded-2xl p-1.5">
+            {items.map((it) => {
+              const Icono = it.tono === "cambios" ? MessageSquareWarning : it.tono === "borrador" ? Clock : Sparkles;
+              return (
+                <button
+                  key={it.key}
+                  type="button"
+                  onClick={() => {
+                    setVerLista(false);
+                    setAbrir({ clienteId: it.clienteId, mes: it.mes });
+                  }}
+                  className="flex w-full items-start gap-2.5 rounded-xl px-2.5 py-2 text-left text-sm transition-colors hover:bg-muted"
+                >
+                  <Icono
+                    className={cn(
+                      "mt-0.5 h-4 w-4 shrink-0",
+                      it.tono === "cambios" ? "text-orange-500" : it.tono === "borrador" ? "text-amber-500" : "text-primary"
+                    )}
+                  />
+                  <span className="min-w-0 flex-1 leading-snug">{it.texto}</span>
+                  <span className="inline-flex shrink-0 items-center text-xs font-semibold text-primary">
+                    {it.boton} <ChevronRight className="h-3.5 w-3.5" />
+                  </span>
+                </button>
+              );
+            })}
+          </PopoverContent>
+        </Popover>
       )}
       <PlanMesDialog open={!!abrir} onOpenChange={(o) => !o && setAbrir(null)} clienteId={abrir?.clienteId} mes={abrir?.mes} />
     </>

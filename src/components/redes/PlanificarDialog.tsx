@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ElegirCliente } from "@/components/redes/ElegirCliente";
 import { CalendarDays, Clapperboard, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -187,18 +188,7 @@ export function PlanificarDialog({
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Cliente</Label>
-            <Select value={clienteId} onValueChange={setClienteId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Elegí un cliente" />
-              </SelectTrigger>
-              <SelectContent>
-                {clientes.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.nombre}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ElegirCliente value={clienteId} onChange={setClienteId} clientes={clientes} placeholder="Elegí un cliente" />
           </div>
           <div className="space-y-1.5">
             <Label>Mes del plan</Label>

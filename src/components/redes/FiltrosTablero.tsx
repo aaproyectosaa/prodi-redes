@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ElegirCliente } from "@/components/redes/ElegirCliente";
 import { ArrowDownWideNarrow, Building2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -53,22 +54,13 @@ export function FiltrosTablero({
   return (
     <>
       {clientes.length > 1 && (
-        <Select value={cliente} onValueChange={setCliente}>
-          <SelectTrigger className={cn(CLASE_FILTRO, "w-full min-w-0 gap-2 sm:w-56 [&>span]:truncate")} aria-label="Empresa">
-            <Building2 className="h-4 w-4 shrink-0 text-primary" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todas las empresas</SelectItem>
-            {[...clientes]
-              .sort((a, b) => (a.nombre ?? "").localeCompare(b.nombre ?? ""))
-              .map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.nombre}
-                </SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
+        <ElegirCliente
+          value={cliente}
+          onChange={setCliente}
+          clientes={clientes}
+          opciones={[{ value: "todos", label: "Todas las empresas" }]}
+          className={cn(CLASE_FILTRO, "w-full min-w-0 sm:w-56")}
+        />
       )}
       {conOrden && (
         <Select value={orden} onValueChange={(v) => setOrden(v as OrdenTablero)}>

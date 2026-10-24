@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ElegirCliente } from "@/components/redes/ElegirCliente";
 import { BotonAplicar, ChatIA } from "@/components/redes/ChatIA";
 import { AvisoPausaEquipo } from "@/components/redes/MoraAvisos";
 import { es } from "date-fns/locale";
@@ -305,35 +306,18 @@ export function RodajeDialog({
             </div>
           )}
           {/* Cliente */}
-          <Select
+          <ElegirCliente
             value={clienteId}
-            onValueChange={(v) => {
+            onChange={(v) => {
               setClienteId(v);
               setSel(new Set());
               setPendientes({});
             }}
             disabled={!!rodaje}
-          >
-            <SelectTrigger className="h-14 rounded-2xl border-white/10 bg-muted/40 px-4 text-base font-medium">
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-xs font-bold text-primary">
-                  {cliente ? iniciales(cliente.nombre ?? "") : <Building2 className="h-4 w-4" />}
-                </div>
-                <div className="min-w-0 truncate">
-                  <SelectValue placeholder="¿Para qué cliente?" />
-                </div>
-              </div>
-            </SelectTrigger>
-            <SelectContent>
-              {[...clientes]
-                .sort((a, b) => (a.nombre ?? "").localeCompare(b.nombre ?? ""))
-                .map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.nombre}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
+            clientes={clientes}
+            placeholder="¿Para qué cliente?"
+            className="h-14 rounded-2xl border-white/10 bg-muted/40 px-4 text-base font-medium"
+          />
 
           {/* Día */}
           <section className="space-y-2.5">
