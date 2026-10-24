@@ -7,12 +7,13 @@ import { RecorteFoto } from "@/components/RecorteFoto";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { AVATAR_LADO, AVATAR_MAX, guardarFotoPerfil } from "@/lib/avatares";
 import { enModoVista } from "@/lib/redes/vistaComo";
-import { hoyISO } from "@/lib/redes/format";
 
-// A quien del equipo no tiene foto de perfil se le pide una, estilo profesional (como LinkedIn): la ven los clientes
-// en los chats. Sale una vez por día hasta que la sube, y nunca encima de otra ventana abierta.
+// Al equipo de Redes que no tiene foto de perfil se le pide una, estilo profesional (como LinkedIn): la ven los
+// clientes en los chats. Es obligatoria: no se puede cerrar hasta subirla. Nunca sale encima de otra ventana abierta.
+// Quien ya tiene foto no la ve.
 
-const CLAVE = (uid: string) => `prodi:pedir-foto:${uid}`;
+/** Los roles que tratan con los clientes. */
+const ROLES_CON_FOTO = ["admin", "productor", "editor", "pauta", "diseno"] as const;
 
 const CONSEJOS = [
   { icono: UserRound, texto: "De frente, de los hombros para arriba" },
@@ -23,42 +24,27 @@ const CONSEJOS = [
 ];
 
 export function PedirFotoPerfil() {
-  const { user, profile, viewingAs } = useUserProfileContext();
+  const { user, profile, viewingAs, tieneRol } = useUserProfileContext();
   const [open, setOpen] = useState(false);
   const [foto, setFoto] = useState<File | null>(null);
   const [guardando, setGuardando] = useState(false);
   const galeria = useRef<HTMLInputElement>(null);
   const camara = useRef<HTMLInputElement>(null);
   const uid = user?.uid;
-  const sinFoto = !!profile && !profile.profileImage;
+  const delEquipo = ROLES_CON_FOTO.some((r) => tieneRol(r));
+  const sinFoto = !!profile && !profile.profileImage && delEquipo;
 
-  // Una vez por día, cuando no hay otra ventana abierta (Mi día, avisos…): se espera y se vuelve a mirar.
+  // Cuando no hay otra ventana abierta (Mi día, avisos…): se espera y se vuelve a mirar.
   useEffect(() => {
     if (!uid || !sinFoto || viewingAs || enModoVista()) return;
-    try {
-      if (localStorage.getItem(CLAVE(uid)) === hoyISO()) return;
-    } catch {
-      /* sin almacenamiento: se pide igual */
-    }
     let t = 0;
     const probar = () => {
-      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) t = window.setTimeout(probar, 15_000);
+      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) t = window.setTimeout(probar, 8_000);
       else setOpen(true);
     };
-    t = window.setTimeout(probar, 12_000);
+    t = window.setTimeout(probar, 4_000);
     return () => window.clearTimeout(t);
   }, [uid, sinFoto, viewingAs]);
-
-  const masTarde = () => {
-    if (uid) {
-      try {
-        localStorage.setItem(CLAVE(uid), hoyISO());
-      } catch {
-        /* sin almacenamiento */
-      }
-    }
-    setOpen(false);
-  };
 
   const elegir = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -85,8 +71,14 @@ export function PedirFotoPerfil() {
 
   return (
     <>
-      <Dialog open={open && !foto} onOpenChange={(v) => !v && masTarde()}>
-        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md overflow-hidden rounded-3xl border-0 p-0 shadow-2xl">
+      {/* Obligatoria: no se cierra tocando afuera, con Escape ni con la cruz. */}
+      <Dialog open={open && !foto} onOpenChange={() => {}}>
+        <DialogContent
+          className="w-[calc(100vw-1.5rem)] max-w-md overflow-hidden rounded-3xl border-0 p-0 shadow-2xl [&>button:last-child]:hidden"
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+        >
           {/* Cabecera con un "retrato" de ejemplo. */}
           <div className="relative flex flex-col items-center bg-gradient-to-br from-primary via-violet-600 to-fuchsia-500 px-6 pb-6 pt-7 text-center text-white">
             <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/15 blur-2xl" aria-hidden />
@@ -95,9 +87,9 @@ export function PedirFotoPerfil() {
               <span className="relative h-10 w-16 rounded-t-full bg-slate-700" />
               <span className="absolute bottom-0 h-4 w-5 bg-white [clip-path:polygon(0_0,100%_0,50%_100%)]" />
             </div>
-            <DialogTitle className="relative mt-4 text-xl font-bold text-white">¡Sumá tu foto de perfil!</DialogTitle>
+            <DialogTitle className="relative mt-4 text-xl font-bold text-white">Necesitamos tu foto de perfil</DialogTitle>
             <DialogDescription className="relative mt-1 text-sm text-white/85">
-              Te ven los clientes en los chats. Una foto estilo LinkedIn, profesional y cercana, da mucha más confianza.
+              Los clientes te ven en los chats: una foto estilo LinkedIn, profesional y cercana, les da confianza. Es obligatoria para seguir.
             </DialogDescription>
           </div>
 
@@ -127,9 +119,6 @@ export function PedirFotoPerfil() {
                 {guardando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ImagePlus className="mr-2 h-4 w-4" />} Elegir una foto
               </Button>
             </div>
-            <button type="button" onClick={masTarde} className="mx-auto block text-xs font-medium text-muted-foreground hover:text-foreground">
-              Más tarde
-            </button>
           </div>
         </DialogContent>
       </Dialog>

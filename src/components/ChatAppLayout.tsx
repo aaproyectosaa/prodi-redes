@@ -1,3 +1,4 @@
+import { PedirFotoPerfil } from "@/components/redes/PedirFotoPerfil";
 import { useEffect, useState, type ReactNode } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, Bell, ExternalLink, LayoutGrid, LogOut, Menu, Moon, Palette, Sun, User } from "lucide-react";
@@ -282,6 +283,7 @@ export function ChatAppLayout() {
         <AvisoTarde />
         <LeerAvisosALaVista uid={viewingAs ? undefined : user?.uid} />
         <LatidoMiTiempo />
+        <PedirFotoPerfil />
       </div>
     </RedesDataProvider>
   );

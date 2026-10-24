@@ -1,3 +1,4 @@
+import { PedirFotoPerfil } from "@/components/redes/PedirFotoPerfil";
 import { useEffect } from "react";
 import { asset } from "@/lib/asset";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -84,6 +85,7 @@ const LayoutInner = () => {
         <AvisoTarde />
         <LeerAvisosALaVista uid={viewingAs ? undefined : user?.uid} />
         <LatidoMiTiempo />
+        <PedirFotoPerfil />
         <MiDia />
         <DriveUploadStatusBar />
         <VideoSheet />

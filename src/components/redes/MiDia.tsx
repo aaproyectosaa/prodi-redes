@@ -1,4 +1,3 @@
-import { PedirFotoPerfil } from "./PedirFotoPerfil";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useAlertasPauta } from "@/components/redes/AlertasPauta";
 import { useLeadsDelDia } from "@/components/redes/crm/SeguimientoLead";
@@ -433,7 +432,6 @@ export function MiDia() {
     <>
       <MiDiaCartel items={items} />
       {/* Sin foto de perfil: se la pide (estilo LinkedIn). */}
-      <PedirFotoPerfil />
     </>
   );
 }
