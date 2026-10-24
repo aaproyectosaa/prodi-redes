@@ -83,6 +83,34 @@ All colors MUST be HSL.
     --sidebar-border: 240 5% 15%;
     --sidebar-ring: 255 97% 64%;
   }
+
+  /* Tercer tema: oscuro violeta (fondos morados profundos, en vez de negro). */
+  .dark.violeta {
+    --background: 258 45% 9%;
+    --foreground: 255 60% 97%;
+    --card: 258 40% 13%;
+    --card-foreground: 255 60% 97%;
+    --popover: 258 40% 14%;
+    --popover-foreground: 255 60% 97%;
+    --primary: 262 100% 72%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 258 32% 18%;
+    --secondary-foreground: 255 50% 94%;
+    --muted: 258 30% 18%;
+    --muted-foreground: 255 22% 72%;
+    --accent: 260 50% 24%;
+    --accent-foreground: 255 100% 90%;
+    --border: 258 30% 22%;
+    --input: 258 30% 24%;
+    --ring: 262 100% 72%;
+    --sidebar-background: 258 48% 8%;
+    --sidebar-foreground: 255 60% 97%;
+    --sidebar-primary: 262 100% 72%;
+    --sidebar-accent: 260 50% 24%;
+    --sidebar-accent-foreground: 255 100% 90%;
+    --sidebar-border: 258 30% 22%;
+    --sidebar-ring: 262 100% 72%;
+  }
 }
 
 @layer base {

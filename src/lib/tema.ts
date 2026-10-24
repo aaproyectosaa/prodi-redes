@@ -1,4 +1,5 @@
-export type Tema = "light" | "dark";
+/** Claro, oscuro y "violeta" (oscuro con el violeta de Prodi: usa las mismas reglas de oscuro y cambia los colores). */
+export type Tema = "light" | "dark" | "violeta";
 
 export const CLAVE_TEMA = "ui-theme";
 
@@ -6,7 +7,7 @@ export const CLAVE_TEMA = "ui-theme";
 export function temaElegido(storageKey = CLAVE_TEMA): Tema | null {
   try {
     const t = localStorage.getItem(storageKey);
-    return t === "light" || t === "dark" ? t : null;
+    return t === "light" || t === "dark" || t === "violeta" ? t : null;
   } catch {
     return null;
   }

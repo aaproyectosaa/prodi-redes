@@ -47,7 +47,7 @@ export function PieSidebar({
   const [verComo, setVerComo] = useState(false);
   const finanzas = role === "admin" || roles.includes("administracion");
   const puedeVerComo = realRole === "admin" && !viewingAs;
-  const oscuro = theme === "dark";
+  const oscuro = theme !== "light";
 
   const rapido = "relative flex h-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground";
   const Rapidos = (

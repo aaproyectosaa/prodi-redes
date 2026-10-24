@@ -53,7 +53,7 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
   const [ocultos, setOcultos] = useMontosOcultos();
   const finanzas = role === "admin" || roles.includes("administracion");
   const puedeVerComo = realRole === "admin" && !viewingAs;
-  const oscuro = theme === "dark";
+  const oscuro = theme !== "light";
   const { empresa } = useEmpresa();
   const sections = navForRoles(role, roles, empresa, { crm: estadoCrm(clientes), servicios: serviciosEnMenu(clientes) });
   const plegables = useSeccionesPlegables();

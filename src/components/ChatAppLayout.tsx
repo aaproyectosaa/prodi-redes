@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, Bell, ExternalLink, LayoutGrid, LogOut, Menu, Moon, Sun, User } from "lucide-react";
+import { ArrowLeft, Bell, ExternalLink, LayoutGrid, LogOut, Menu, Moon, Palette, Sun, User } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { asset } from "@/lib/asset";
 import { signOut } from "@/lib/auth";
 import { auth } from "@/integrations/firebase/client";
@@ -203,14 +204,28 @@ function ChatAppHeader() {
           </nav>
           <div className="space-y-0.5 border-t p-3" onClick={() => setOpen(false)}>
             <BotonInstalarChat className="h-10 gap-3 text-foreground" />
-            <button
-              type="button"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm hover:bg-accent"
-            >
-              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              {theme === "dark" ? "Modo claro" : "Modo oscuro"}
-            </button>
+            {/* Tema: claro, oscuro o violeta. */}
+            <div className="grid grid-cols-3 gap-1 rounded-xl bg-muted/60 p-1" onClick={(e) => e.stopPropagation()}>
+              {(
+                [
+                  { k: "light", label: "Claro", icon: Sun },
+                  { k: "dark", label: "Oscuro", icon: Moon },
+                  { k: "violeta", label: "Violeta", icon: Palette },
+                ] as const
+              ).map((x) => (
+                <button
+                  key={x.k}
+                  type="button"
+                  onClick={() => setTheme(x.k)}
+                  className={cn(
+                    "flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-medium transition-colors",
+                    theme === x.k ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <x.icon className="h-3.5 w-3.5" /> {x.label}
+                </button>
+              ))}
+            </div>
             <button
               type="button"
               onClick={async () => {

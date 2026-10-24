@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { CLAVE_TEMA, temaElegido } from "@/lib/tema";
+import { CLAVE_TEMA, temaElegido, type Tema } from "@/lib/tema";
 
-type Theme = "light" | "dark";
+type Theme = Tema;
 
 type ThemeProviderProps = {
   children: React.ReactNode;
@@ -32,8 +32,10 @@ export function ThemeProvider({
   useEffect(() => {
     const root = window.document.documentElement;
 
-    root.classList.remove("light", "dark");
-    root.classList.add(theme);
+    root.classList.remove("light", "dark", "violeta");
+    // Violeta es un oscuro: lleva "dark" (para todo lo que cambia en oscuro) y "violeta" (sus colores).
+    if (theme === "violeta") root.classList.add("dark", "violeta");
+    else root.classList.add(theme);
   }, [theme]);
 
   const setTheme = useCallback(

@@ -155,7 +155,7 @@ const Profile = () => {
         setProfileImage(data.profileImage || "");
         setAvatarColor(data.avatarColor || "#3b82f6");
         if (!temaElegido() && data.theme && data.theme !== theme) {
-          setTheme(data.theme as "light" | "dark");
+          setTheme(data.theme as "light" | "dark" | "violeta");
         }
         setPushEnabled(Boolean(data.push_enabled));
         setEmailAvisos(data.email_avisos !== false);
@@ -464,47 +464,31 @@ const Profile = () => {
                 description="Elegí el tema de la aplicación en este dispositivo."
                 className="p-2"
               >
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setTheme("light")}
-                    className={cn(
-                      "flex flex-col items-center justify-center gap-2 rounded-xl border-2 py-4 text-sm font-semibold transition-all",
-                      theme === "light"
-                        ? "border-primary bg-primary/5 text-primary"
-                        : "border-transparent bg-muted/60 text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    <span
+                <div className="grid grid-cols-3 gap-2">
+                  {(
+                    [
+                      { k: "light", label: "Claro", icon: Sun },
+                      { k: "dark", label: "Oscuro", icon: Moon },
+                      { k: "violeta", label: "Violeta", icon: Palette },
+                    ] as const
+                  ).map((x) => (
+                    <button
+                      key={x.k}
+                      type="button"
+                      onClick={() => setTheme(x.k)}
                       className={cn(
-                        "flex h-10 w-10 items-center justify-center rounded-xl",
-                        theme === "light" ? "bg-primary/10" : "bg-background"
+                        "flex flex-col items-center justify-center gap-2 rounded-xl border-2 py-4 text-sm font-semibold transition-all",
+                        theme === x.k
+                          ? "border-primary bg-primary/5 text-primary"
+                          : "border-transparent bg-muted/60 text-muted-foreground hover:text-foreground"
                       )}
                     >
-                      <Sun className="w-5 h-5" />
-                    </span>
-                    Claro
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTheme("dark")}
-                    className={cn(
-                      "flex flex-col items-center justify-center gap-2 rounded-xl border-2 py-4 text-sm font-semibold transition-all",
-                      theme === "dark"
-                        ? "border-primary bg-primary/5 text-primary"
-                        : "border-transparent bg-muted/60 text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "flex h-10 w-10 items-center justify-center rounded-xl",
-                        theme === "dark" ? "bg-primary/10" : "bg-background"
-                      )}
-                    >
-                      <Moon className="w-5 h-5" />
-                    </span>
-                    Oscuro
-                  </button>
+                      <span className={cn("flex h-10 w-10 items-center justify-center rounded-xl", theme === x.k ? "bg-primary/10" : "bg-background")}>
+                        <x.icon className="w-5 h-5" />
+                      </span>
+                      {x.label}
+                    </button>
+                  ))}
                 </div>
               </Section>
 
