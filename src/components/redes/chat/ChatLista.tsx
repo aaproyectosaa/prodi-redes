@@ -195,16 +195,28 @@ export function ChatLista({
     if (typeof buscarRef === "function") buscarRef(el);
     else if (buscarRef) (buscarRef as { current: HTMLInputElement | null }).current = el;
   };
+  // Mientras se achica o se agranda el encabezado (300 ms), la lista se corre sola: eso no cuenta como scroll.
+  const animando = useRef(0);
+  const plegar = (v: boolean) => {
+    setPlegado((antes) => {
+      if (antes !== v) animando.current = Date.now() + 350;
+      return v;
+    });
+  };
   const alScrollear = (e: React.UIEvent<HTMLDivElement>) => {
-    const y = e.currentTarget.scrollTop;
+    const el = e.currentTarget;
+    const y = el.scrollTop;
     const antes = ultimoScroll.current;
     ultimoScroll.current = y;
-    if (y < 12) setPlegado(false);
-    else if (y > antes + 4 && y > 48) setPlegado(true);
-    else if (y < antes - 14) setPlegado(false);
+    // El rebote del iPhone al llegar arriba o abajo de todo no es scroll.
+    if (y < 0 || y > el.scrollHeight - el.clientHeight) return;
+    if (Date.now() < animando.current) return;
+    if (y < 12) plegar(false);
+    else if (y > antes + 4 && y > 48) plegar(true);
+    else if (y < antes - 14) plegar(false);
   };
   const abrirBuscador = () => {
-    setPlegado(false);
+    plegar(false);
     window.setTimeout(() => inputBuscar.current?.focus(), 200);
   };
 
