@@ -222,7 +222,7 @@ function CircuitoCompleto() {
       }
     >
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative w-full sm:w-64">
+        <div className="relative w-full sm:w-52 lg:w-64">
           <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
           <Input
             value={q}

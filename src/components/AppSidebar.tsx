@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { serviciosEnMenu } from "@/lib/redes/servicios";
 import { asset } from "@/lib/asset";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -38,25 +38,45 @@ interface AppSidebarProps {
   children?: React.ReactNode;
 }
 
+/** Pantalla de tablet: el menú lateral ya se ve (md) pero el ancho es poco (menos de 1100 px: iPad parado). */
+function useEsTablet() {
+  const consulta = "(min-width: 768px) and (max-width: 1099px)";
+  const [es, setEs] = useState(() => typeof window !== "undefined" && window.matchMedia(consulta).matches);
+  useEffect(() => {
+    const m = window.matchMedia(consulta);
+    const cambio = () => setEs(m.matches);
+    m.addEventListener("change", cambio);
+    return () => m.removeEventListener("change", cambio);
+  }, []);
+  return es;
+}
+
 export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
   const navigate = useNavigate();
   // Cliente: su negocio, para el anillo de "perfil completo".
   const { clientes } = useRedes();
   const location = useLocation();
   const { unreadCount } = useInAppNotifications(profile?.id);
-  const [collapsed, setCollapsed] = useState(() => {
+  // En la tablet parada (iPad vertical) el menú arranca plegado (solo íconos) para dejarle lugar a la pantalla;
+  // en la compu, abierto. Cada uno recuerda lo que eligió la persona por separado.
+  const tablet = useEsTablet();
+  const clave = tablet ? `${STORAGE_KEY}-tablet` : STORAGE_KEY;
+  const leer = (k: string, porDefecto: boolean) => {
     try {
-      return localStorage.getItem(STORAGE_KEY) === "1";
+      const v = localStorage.getItem(k);
+      return v === null ? porDefecto : v === "1";
     } catch {
-      return false;
+      return porDefecto;
     }
-  });
+  };
+  const [collapsed, setCollapsed] = useState(() => leer(clave, tablet));
+  useEffect(() => setCollapsed(leer(clave, tablet)), [clave, tablet]);
 
   const toggleCollapsed = () => {
     const next = !collapsed;
     setCollapsed(next);
     try {
-      localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
+      localStorage.setItem(clave, next ? "1" : "0");
     } catch {
       /* ignore */
     }

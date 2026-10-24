@@ -431,12 +431,12 @@ export function ConfigCatalogo({ negocio }: { negocio: string }) {
               <button
                 type="button"
                 onClick={() => setEditando({ id: p.id, nombre: p.nombre, precio: p.precio != null ? String(p.precio) : "", foto: p.foto ?? "", url: p.url ?? "", descripcion: p.descripcion })}
-                className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted group-hover:opacity-100"
+                className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted group-hover:opacity-100 [@media(hover:none)]:opacity-100"
                 aria-label="Editar"
               >
                 <Pencil className="h-3.5 w-3.5" />
               </button>
-              <button type="button" onClick={() => void borrar(p)} className="rounded p-1 text-muted-foreground opacity-0 hover:bg-muted hover:text-red-500 group-hover:opacity-100" aria-label="Sacar">
+              <button type="button" onClick={() => void borrar(p)} className="rounded p-1 text-muted-foreground opacity-0 [@media(hover:none)]:opacity-100 hover:bg-muted hover:text-red-500 group-hover:opacity-100" aria-label="Sacar">
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
             </div>

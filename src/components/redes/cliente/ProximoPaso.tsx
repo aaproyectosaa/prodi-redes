@@ -96,13 +96,14 @@ export function ProximoPaso({ pasos, onPedir, onIdeas }: { pasos: Paso[]; onPedi
           )}
           {aprobar ? "Para aprobar" : principal.tipo === "elegir_ideas" ? "Esperamos tu respuesta" : principal.teToca ? "Te toca" : "Todo en marcha"}
         </p>
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center">
+        {/* En la tablet el botón va abajo, a lo ancho: el título no se aprieta en una columna angosta. */}
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center">
           {archivo ? (
             // La miniatura del video: se toca y se abre para verlo y aprobarlo.
             <button
               type="button"
               onClick={() => principal.accion && ir(principal.accion)}
-              className="relative mx-auto aspect-[9/16] w-32 shrink-0 overflow-hidden rounded-2xl bg-black shadow-xl ring-2 ring-primary/60 sm:mx-0 sm:w-24"
+              className="relative mx-auto aspect-[9/16] w-32 shrink-0 overflow-hidden rounded-2xl bg-black shadow-xl ring-2 ring-primary/60 lg:mx-0 lg:w-24"
               aria-label="Ver el video"
             >
               {!sinMiniatura ? (
@@ -166,7 +167,7 @@ export function ProximoPaso({ pasos, onPedir, onIdeas }: { pasos: Paso[]; onPedi
           {principal.accion && (
             <Button
               size="lg"
-              className="group w-full shrink-0 shadow-[0_8px_30px_-8px_hsl(var(--primary)/0.7)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_36px_-8px_hsl(var(--primary)/0.9)] sm:w-auto"
+              className="group w-full shrink-0 shadow-[0_8px_30px_-8px_hsl(var(--primary)/0.7)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_36px_-8px_hsl(var(--primary)/0.9)] lg:w-auto"
               onClick={() => ir(principal.accion!)}
             >
               {principal.accion.label}

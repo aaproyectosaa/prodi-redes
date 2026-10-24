@@ -692,7 +692,7 @@ function DatosLead({ lead }: { lead: LeadWeb }) {
               <button
                 type="button"
                 onClick={() => abrir(k)}
-                className="absolute right-1.5 top-1.5 rounded-md p-1 text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground md:opacity-0 md:group-hover:opacity-100"
+                className="absolute right-1.5 top-1.5 rounded-md p-1 text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground md:opacity-0 [@media(hover:none)]:md:opacity-100 md:group-hover:opacity-100"
                 aria-label={`Cambiar ${label}`}
                 title={`Cambiar ${label.toLowerCase()}`}
               >

@@ -211,7 +211,7 @@ export function NuevaPiezaEquipo({
                     <button
                       type="button"
                       onClick={() => setFotos((xs) => xs.filter((_, j) => j !== i))}
-                      className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                      className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition-opacity [@media(hover:none)]:opacity-100 group-hover:opacity-100"
                       aria-label="Sacar foto"
                     >
                       <X className="h-3 w-3" />

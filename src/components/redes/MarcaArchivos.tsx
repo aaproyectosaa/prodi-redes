@@ -376,7 +376,7 @@ export function PaletaMarca({ cliente, conNombres = false }: { cliente: Project;
             <button
               type="button"
               onClick={() => cambiar(paleta.filter((_, j) => j !== i))}
-              className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/75 text-white opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-100 max-md:opacity-90"
+              className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/75 text-white opacity-0 transition-opacity [@media(hover:none)]:opacity-100 focus:opacity-100 group-hover:opacity-100 max-md:opacity-90"
               aria-label="Quitar color"
             >
               <X className="h-3 w-3" />

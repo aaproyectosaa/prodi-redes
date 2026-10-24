@@ -16,8 +16,9 @@ export function PageShell({
 }) {
   return (
     <div className={cn("mx-auto w-full max-w-7xl px-4 py-5 md:px-8 md:py-8 pb-mobile-nav md:pb-8", className)}>
-      <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
+      {/* Si el título y los botones no entran en un renglón (tablet), los botones bajan: el título nunca se aprieta. */}
+      <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+        <div className="min-w-0 sm:min-w-[16rem] sm:flex-1">
           <h1 className="text-2xl font-bold tracking-tight md:text-[28px]">{title}</h1>
           {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
         </div>

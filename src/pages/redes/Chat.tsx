@@ -46,7 +46,7 @@ export default function Chat() {
       {/* Lista */}
       <aside
         className={cn(
-          "flex min-h-0 w-full flex-col border-r md:w-80 md:shrink-0",
+          "flex min-h-0 w-full flex-col border-r md:w-72 md:shrink-0 xl:w-80",
           activo && "hidden md:flex"
         )}
       >
