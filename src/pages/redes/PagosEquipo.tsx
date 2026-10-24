@@ -1,3 +1,4 @@
+import { PagosSocios } from "@/components/redes/socio/PagosSocios";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -106,6 +107,7 @@ export default function PagosEquipoPage() {
       actions={<MesNav mes={mes} setMes={setMes} max={mesActual()} />}
     >
       <PagosEquipo mes={mes} />
+      <PagosSocios mes={mes} />
     </PageShell>
   );
 }

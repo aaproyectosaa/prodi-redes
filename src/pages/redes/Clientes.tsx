@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ElegirServicios } from "@/components/redes/ServiciosCliente";
 import { servicioInfo, serviciosDe, type IdServicio } from "@/lib/redes/servicios";
 import { avisar } from "@/lib/redes/avisos";
-import { Link, useNavigate } from "react-router-dom";
-import { addDoc, collection } from "@/lib/db";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { addDoc, collection, doc, getDoc } from "@/lib/db";
 import { Building2, ChevronRight, Copy, Loader2, Mail, Plus, Search, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,28 @@ export default function Clientes() {
   const { profiles } = useAppData();
   const { role } = useUserProfileContext();
   const [nuevo, setNuevo] = useState(false);
+  // Alta desde un lead ganado del CRM (/clientes?lead=ID): viene con sus datos y, si lo trajo un socio, queda con él.
+  const [params, setParams] = useSearchParams();
+  const [desdeLead, setDesdeLead] = useState<LeadAlta | null>(null);
+  useEffect(() => {
+    const id = params.get("lead");
+    if (!id || role !== "admin") return;
+    void getDoc(doc(db, "leads_web", id)).then((s) => {
+      const d = s.data() as { negocio?: string; nombre?: string; email?: string; socio_nombre?: string | null; cliente_id?: string | null } | undefined;
+      if (!d) return toast.error("No encontramos ese lead");
+      if (d.cliente_id) return toast.info("Ese lead ya se dio de alta como cliente");
+      setDesdeLead({ id, negocio: d.negocio ?? "", nombre: d.nombre ?? "", email: d.email ?? "", socio: d.socio_nombre ?? null });
+      setNuevo(true);
+    });
+  }, [params, role]);
+  const cerrarNuevo = (v: boolean) => {
+    setNuevo(v);
+    if (!v && desdeLead) {
+      setDesdeLead(null);
+      params.delete("lead");
+      setParams(params, { replace: true });
+    }
+  };
   const [busqueda, setBusqueda] = useState("");
   const [quienSube, setQuienSube] = useState(false);
   const mes = mesActual();
@@ -231,7 +253,7 @@ export default function Clientes() {
         </>
       )}
       {isAdmin && <ClientesViejos />}
-      <NuevoClienteDialog open={nuevo} onOpenChange={setNuevo} />
+      <NuevoClienteDialog open={nuevo} onOpenChange={cerrarNuevo} lead={desdeLead} />
       {isAdmin && <QuienSubeDialog open={quienSube} onOpenChange={setQuienSube} clientes={clientes} />}
     </PageShell>
   );
@@ -247,8 +269,17 @@ interface Alta {
   yaTenia?: boolean;
 }
 
+/** El lead ganado del CRM del que sale el cliente (y el socio comercial que lo trajo, si hay). */
+interface LeadAlta {
+  id: string;
+  negocio: string;
+  nombre: string;
+  email: string;
+  socio: string | null;
+}
+
 /** Alta de cliente en un solo paso: marca, plan, equipo, su usuario y el mensaje de bienvenida listo. */
-function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+function NuevoClienteDialog({ open, onOpenChange, lead }: { open: boolean; onOpenChange: (v: boolean) => void; lead?: LeadAlta | null }) {
   const navigate = useNavigate();
   const { planes } = useRedes();
   const { profiles } = useAppData();
@@ -261,6 +292,11 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   const [servicios, setServicios] = useState<IdServicio[]>([]);
   const [saving, setSaving] = useState(false);
   const [alta, setAlta] = useState<Alta | null>(null);
+  useEffect(() => {
+    if (!lead || !open) return;
+    setNombre(lead.negocio);
+    setContacto({ nombre: lead.nombre, email: lead.email });
+  }, [lead, open]);
 
   const reset = () => {
     setNombre("");
@@ -308,6 +344,11 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
         alta: hoyISO(),
         created_at: new Date().toISOString(),
       });
+      // Salió de un lead: queda con el socio que lo trajo y la fecha de alta (y el lead, ganado y con su cliente).
+      if (lead)
+        await callApi("/api/web/socio-alta", { lead_id: lead.id, proyecto_id: ref.id }).catch((e) =>
+          toast.error(`El cliente se creó, pero no se enganchó con el lead: ${e instanceof Error ? e.message : "error"}`)
+        );
       let password: string | null = null;
       if (email && !existente) {
         try {
@@ -401,6 +442,11 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
           </span>
           <div className="space-y-1">
             <DialogTitle className="text-[22px] font-bold tracking-tight">Nuevo cliente</DialogTitle>
+          {lead && (
+            <p className="w-fit rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+              Viene del CRM{lead.socio ? ` · traído por ${lead.socio}` : ""}
+            </p>
+          )}
             <p className="text-sm text-muted-foreground">Marca, plan, equipo y su usuario en un solo paso.</p>
           </div>
         </DialogHeader>

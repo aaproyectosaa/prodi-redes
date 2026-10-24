@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { CheckCircle2, Clock, HandCoins, Hourglass, Sparkles, TrendingUp } from "lucide-react";
 import { PageShell, Section } from "@/components/redes/PageShell";
+import { GananciasSocio } from "@/components/redes/socio/GananciasSocio";
 import { MesNav } from "@/components/redes/admin/FacturaPartes";
 import { ClienteTag } from "@/components/redes/ClienteTag";
 import { useOpenVideo } from "@/components/redes/VideoCard";
@@ -53,7 +54,30 @@ function enCamino(uid: string, role: string, videos: Video[], piezas: PiezaIA[],
  * mismo cálculo que usa administración en "Pagos al equipo"), qué trabajos cuentan, si ya se le pagó,
  * lo que tiene en camino y los meses anteriores.
  */
+/** Socio comercial: su comisión. Si además es del equipo, debajo de lo suyo de siempre. */
 export default function MisGanancias() {
+  const { user, role, roles } = useUserProfileContext();
+  if (role === "socio")
+    return (
+      <PageShell title="Mis ganancias" subtitle="Tu comisión por los clientes que trajiste, mes a mes.">
+        <GananciasSocio uid={user?.uid ?? ""} />
+      </PageShell>
+    );
+  return (
+    <>
+      <MisGananciasEquipo />
+      {roles.includes("socio") && (
+        <div className="mx-auto w-full max-w-5xl px-4 pb-24 md:px-8">
+          <Section title="Como socio comercial" description="Tu comisión por los clientes que trajiste.">
+            <GananciasSocio uid={user?.uid ?? ""} />
+          </Section>
+        </div>
+      )}
+    </>
+  );
+}
+
+function MisGananciasEquipo() {
   // A mes vencido: lo que se cobra ahora es lo del mes pasado.
   const [mes, setMes] = useState(sumarMeses(mesActual(), -1));
   const { user, role } = useUserProfileContext();

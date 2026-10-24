@@ -43,7 +43,8 @@ import { ProximoPasoChip, SeguimientoLead, type EventoLead } from "@/components/
 import { ChatLead } from "@/components/redes/crm/ChatLead";
 import { ConectarWhatsApp } from "@/components/redes/crm/ConectarWhatsApp";
 import { ConfigCatalogo } from "@/components/redes/crm/CatalogoProductos";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Handshake } from "lucide-react";
 
 // Reservas de la landing de la campaña «No empezamos de cero» (somosprodi.com).
 // Las crea el servidor (/api/web/aplicar); acá se mueven y se anotan (/api/web/estado y /notas).
@@ -82,6 +83,11 @@ interface LeadWeb {
   ubicacion?: string;
   /** Los que llegaron por Meta: la conversación (mensajes) o el formulario. */
   meta?: { conversacion_id?: string; plataforma?: string; ultimo_texto?: string; foto?: string | null; foto_manual?: string | null; wa_id?: string; chat?: { mensajes?: unknown[]; at?: string } | null } | null;
+  /** Socio comercial que lo trajo (por su link o cargado desde su panel). */
+  socio_id?: string | null;
+  socio_nombre?: string | null;
+  /** Cliente que salió de este lead (al darlo de alta). */
+  cliente_id?: string | null;
 }
 
 interface Columna {
@@ -103,15 +109,17 @@ const COLUMNAS: Columna[] = [
 ];
 
 /** De dónde llegó un lead: para la etiqueta de la tarjeta y el filtro. */
-type Origen = "web" | "instagram" | "whatsapp" | "formulario" | "mano";
+type Origen = "web" | "instagram" | "whatsapp" | "formulario" | "mano" | "socio";
 const ORIGENES: Record<Origen, { label: string; icono: React.ElementType; clase: string }> = {
   web: { label: "Web", icono: Globe, clase: "bg-violet-500/12 text-violet-700 dark:text-violet-300" },
   instagram: { label: "Instagram", icono: Instagram, clase: "bg-pink-500/12 text-pink-700 dark:text-pink-300" },
   whatsapp: { label: "WhatsApp", icono: MessageCircle, clase: "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" },
   formulario: { label: "Formulario", icono: FileText, clase: "bg-blue-500/12 text-blue-700 dark:text-blue-300" },
   mano: { label: "A mano", icono: Hand, clase: "bg-muted text-muted-foreground" },
+  socio: { label: "Socio", icono: Handshake, clase: "bg-[#6F40FC]/12 text-[#6F40FC] dark:text-[#a98bff]" },
 };
 function origenDe(l: LeadWeb): Origen {
+  if (l.origen === "socio") return "socio";
   if (l.origen === "meta:mensaje") return "instagram";
   if (l.origen === "meta:whatsapp") return "whatsapp";
   if (l.origen === "meta:leadgen") return "formulario";
@@ -247,7 +255,7 @@ export default function Web() {
 
   const deTemporada = useMemo(() => (leads ?? []).filter((l) => l.temporada === config.temporada), [leads, config.temporada]);
   const porOrigen = useMemo(() => {
-    const c: Record<Origen, number> = { web: 0, instagram: 0, whatsapp: 0, formulario: 0, mano: 0 };
+    const c: Record<Origen, number> = { web: 0, instagram: 0, whatsapp: 0, formulario: 0, mano: 0, socio: 0 };
     deTemporada.forEach((l) => c[origenDe(l)]++);
     return c;
   }, [deTemporada]);
@@ -349,7 +357,7 @@ export default function Web() {
             <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar negocio, nombre o teléfono" className="h-9 rounded-full pl-9" />
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {(["todos", "whatsapp", "instagram", "formulario", "web", "mano"] as const).map((o) => {
+            {(["todos", "whatsapp", "instagram", "formulario", "web", "socio", "mano"] as const).map((o) => {
               const n = o === "todos" ? deTemporada.length : porOrigen[o];
               if (o !== "todos" && !n) return null;
               const Icono = o === "todos" ? null : ORIGENES[o].icono;
@@ -924,6 +932,7 @@ function LeadDetalle({ lead, todos, onClose }: { lead: LeadWeb | null; todos: Le
       <Bloque titulo="Datos">
         <DatosLead lead={lead} />
       </Bloque>
+      <TraidoPor lead={lead} />
       <Bloque
         titulo="Notas"
         accion={
@@ -993,6 +1002,77 @@ function LeadDetalle({ lead, todos, onClose }: { lead: LeadWeb | null; todos: Le
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Socios comerciales (para el "Traído por"): se piden una vez. */
+let sociosCache: Promise<{ uid: string; nombre: string; activo: boolean; codigo: string | null }[]> | null = null;
+function useSociosLista() {
+  const [lista, setLista] = useState<{ uid: string; nombre: string; activo: boolean; codigo: string | null }[]>([]);
+  useEffect(() => {
+    sociosCache ??= callApi<{ socios: { uid: string; nombre: string; activo: boolean; codigo: string | null }[] }>("/api/web/socio-lista", {})
+      .then((r) => r.socios)
+      .catch(() => {
+        sociosCache = null;
+        return [];
+      });
+    void sociosCache.then(setLista);
+  }, []);
+  return lista;
+}
+
+/** "Traído por": el socio comercial del lead (se asigna o cambia a mano) y, si se ganó, darlo de alta como cliente. */
+function TraidoPor({ lead }: { lead: LeadWeb }) {
+  const navigate = useNavigate();
+  const socios = useSociosLista();
+  const [guardando, setGuardando] = useState(false);
+  if (!socios.length && !lead.socio_id && lead.estado !== "ganado") return null;
+  const cambiar = async (uid: string) => {
+    setGuardando(true);
+    try {
+      await callApi("/api/web/socio-asignar", { id: lead.id, socio_id: uid || null });
+      toast.success(uid ? "Socio asignado" : "Sin socio");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo guardar");
+    } finally {
+      setGuardando(false);
+    }
+  };
+  return (
+    <Bloque titulo="Traído por">
+      <div className="space-y-2.5">
+        <div className="flex items-center gap-2">
+          <Handshake className="h-4 w-4 shrink-0 text-[#6F40FC]" />
+          <select
+            value={lead.socio_id ?? ""}
+            onChange={(e) => void cambiar(e.target.value)}
+            disabled={guardando}
+            className="h-10 min-w-0 flex-1 rounded-xl border bg-background px-3 text-sm"
+            aria-label="Socio comercial que lo trajo"
+          >
+            <option value="">Nadie (lo trajo Prodi)</option>
+            {lead.socio_id && !socios.some((s) => s.uid === lead.socio_id) && <option value={lead.socio_id}>{lead.socio_nombre || "Socio"}</option>}
+            {socios.map((s) => (
+              <option key={s.uid} value={s.uid}>
+                {s.nombre}
+                {!s.activo ? " (desactivado)" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+        {lead.estado === "ganado" &&
+          (lead.cliente_id ? (
+            <Button variant="outline" size="sm" className="h-9 rounded-full" onClick={() => navigate(`/clientes/${lead.cliente_id}`)}>
+              Ver el cliente
+            </Button>
+          ) : (
+            <Button size="sm" className="h-9 rounded-full" onClick={() => navigate(`/clientes?lead=${lead.id}`)}>
+              <UserPlus className="mr-1.5 h-4 w-4" /> Dar de alta el cliente
+            </Button>
+          ))}
+        {lead.socio_id && <p className="text-[11px] text-muted-foreground">Al darlo de alta, el cliente queda con este socio y cobra comisión de lo que pague.</p>}
+      </div>
+    </Bloque>
   );
 }
 

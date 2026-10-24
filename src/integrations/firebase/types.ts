@@ -18,6 +18,7 @@ export type UserRole =
   | "administracion" // Administración: facturación, cobros, pagos al equipo y gastos
   | "programador" // Programación de Prodi Software: ve sus ganancias y los clientes/pagos de Software
   | "cliente"
+  | "socio" // Socio comercial: trae clientes y cobra comisión (de afuera o del equipo)
   | "contacto" // Contacto de un cliente que usa solo Prodi Chat (proyecto_id = su cliente)
   // Roles del modelo anterior. Se leen para no romper datos viejos, pero ya
   // no se asignan: un usuario con alguno de estos queda "pendiente" hasta que
@@ -65,6 +66,8 @@ export interface Profile {
   /** false = desactivado por el admin (no puede entrar). */
   activo?: boolean;
   /** Cuándo el cliente vio (o cerró) la guía de bienvenida. */
+  /** Socio comercial: su código de referido y la comisión que cargó el admin (sin % o sin meses no se calcula). */
+  socio?: { codigo: string; comision_pct: number | null; meses: number | null } | null;
   guia_cliente_at?: string | null;
   /** Recorrido por la pantalla del cliente (dónde está cada cosa): cuándo lo terminó o salteó. */
   tour_cliente_at?: string | null;
@@ -177,6 +180,11 @@ export interface Project {
   enabled?: boolean;
   /** La cuenta propia de Prodi (Prodi Redes): se trabaja como un cliente más pero no se cobra ni cuenta en los números de clientes. */
   cuenta_propia?: boolean;
+  /** Socio comercial que lo trajo y desde cuándo (YYYY-MM-DD): cobra comisión de sus abonos los meses que tenga configurados. */
+  socio_id?: string | null;
+  socio_alta?: string | null;
+  /** Lead del CRM del que salió. */
+  lead_id?: string | null;
   monthly_limits?: {
     [key in TipoContenido]?: number;
   };

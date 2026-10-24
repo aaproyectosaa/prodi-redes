@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EditarServicios } from "@/components/redes/ServiciosCliente";
+import { TraidoPorCliente } from "@/components/redes/socio/TraidoPorCliente";
 import { RUBROS_PAUTA, ZONAS_PAUTA } from "../../../api/_lib/pauta-rubros";
 import { PautaMeta } from "@/components/redes/PautaMeta";
 import { CrecimientoRedes } from "@/components/redes/CrecimientoRedes";
@@ -780,6 +781,7 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
         </Section>
       )}
 
+      {isAdmin && <TraidoPorCliente cliente={cliente} />}
       <ContactosCliente cliente={cliente} />
 
       <Section title="Marca" description="La IA usa esto para escribir copys y diseñar piezas.">

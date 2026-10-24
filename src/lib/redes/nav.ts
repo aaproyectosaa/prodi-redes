@@ -22,7 +22,7 @@ import {
   Store,
   FolderOpen,
   Sparkles,
-  ListTodo, Inbox, Globe, Megaphone, FileText, Contact, Trophy, BookOpen } from "lucide-react";
+  ListTodo, Inbox, Globe, Megaphone, FileText, Contact, Trophy, BookOpen, Handshake } from "lucide-react";
 import { servicioInfo, type IdServicio } from "@/lib/redes/servicios";
 import type { UserRole } from "@/integrations/firebase/types";
 
@@ -128,6 +128,7 @@ export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {
           items: [
             { label: "Leads", icon: Globe, path: "/web" },
             { label: "Presupuestos", icon: FileText, path: "/presupuestos" },
+            { label: "Socios", icon: Handshake, path: "/socios" },
           ],
         },
         {
@@ -221,6 +222,16 @@ export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {
             { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
             { label: "Reuniones", icon: VideoIcon, path: "/reuniones", mobile: true },
             { label: "Mis ganancias", icon: HandCoins, path: "/mis-ganancias" },
+          ],
+        },
+      ];
+    case "socio":
+      // Socio comercial: sus empresarios, su link y lo que gana. Nada más del sistema.
+      return [
+        {
+          items: [
+            { label: "Mis empresarios", icon: Handshake, path: "/socio", mobile: true },
+            { label: "Mis ganancias", icon: HandCoins, path: "/mis-ganancias", mobile: true },
           ],
         },
       ];

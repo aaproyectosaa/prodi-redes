@@ -3,6 +3,7 @@
 // sin usuario, toca Aceptar, crea su usuario y contraseña ahí mismo y queda como cliente de Prodi: se crea su ficha
 // (con el plan y el precio del presupuesto), entra a su panel y lo lleva a instalar las apps. Al admin le llega el aviso.
 
+import { avisarEstadoAlSocio } from "./socios";
 import { adminDb } from "./db";
 import { HttpError } from "./http";
 import { crearUsuario, iniciarSesion, tokenDeSesion, validarClave } from "./cuentas";
@@ -32,6 +33,8 @@ async function anotarEnLead(leadId: unknown, entrada: Record<string, unknown>, c
   if (!l) return;
   const historial = [...(Array.isArray(l.historial) ? l.historial : []), entrada].slice(-100);
   await ref.update({ ...cambios, historial, updated_at: new Date().toISOString() });
+  // Si lo trajo un socio comercial y cambió de etapa (propuesta, ganado), le avisamos.
+  if (typeof cambios.estado === "string" && cambios.estado !== l.estado) await avisarEstadoAlSocio(l, leadId, cambios.estado, process.env.APP_URL || "");
 }
 
 export async function verPresupuesto(token: string, equipo = false) {

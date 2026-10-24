@@ -28,10 +28,11 @@ import { mailAvisoHtml } from "../_lib/mail-aviso";
 import { borrarEjemplo, cargarEjemplo } from "../_lib/ejemplo";
 import { anotarMinuto, anotarMinutosPasados, nuevoToken, resumenTiempo, tieneToken, uidDelToken } from "../_lib/mi-tiempo";
 import { rachaVacia, rachasDeRespuesta } from "../_lib/racha";
+import { avisarAdmin, configValida } from "../_lib/socios";
 
 export const config = { maxDuration: 60 };
 
-const ROLES = ["admin", "productor", "editor", "pauta", "diseno", "administracion", "programador", "cliente", "pending"];
+const ROLES = ["admin", "productor", "editor", "pauta", "diseno", "administracion", "programador", "socio", "cliente", "pending"];
 const ROL_EN_CLIENTE: Record<string, string> = { productor: "productor", editor: "editor", pauta: "pauta", diseno: "diseno", cliente: "cliente" };
 
 /**
@@ -68,12 +69,15 @@ async function asignarClientes(uid: string, rol: string | string[], clientes: st
 const extrasValidos = (rol: string, extra: unknown): string[] => rolesDe(rol, extra).filter((r) => r !== rol);
 
 async function crear(req: VercelRequest) {
-  const b = body<{ nombre?: string; email?: string; rol?: string; roles_extra?: string[]; clientes?: string[]; password?: string }>(req);
+  const b = body<{ nombre?: string; email?: string; rol?: string; roles_extra?: string[]; clientes?: string[]; password?: string; socio?: unknown }>(req);
   const nombre = String(b.nombre ?? "").trim();
   const email = String(b.email ?? "").trim().toLowerCase();
   const rol = String(b.rol ?? "");
   if (!nombre || !/.+@.+\..+/.test(email) || !(ROLES.includes(rol) || rol === "contacto")) throw new HttpError(400, "Completá nombre, mail y rol");
   const password = b.password && b.password.length >= 6 ? b.password : `Prodi-${crypto.randomBytes(4).toString("hex")}`;
+  // Socio comercial (principal o adicional): su código y su comisión, validados antes de crear la cuenta.
+  const esSocioNuevo = rol === "socio" || extrasValidos(rol, b.roles_extra).includes("socio");
+  const socio = esSocioNuevo ? await configValida(b.socio) : null;
   let user;
   try {
     user = await adminAuth().createUser({ email, password, displayName: nombre });
@@ -86,15 +90,18 @@ async function crear(req: VercelRequest) {
     email,
     role: rol,
     roles_extra: extrasValidos(rol, b.roles_extra),
+    ...(socio ? { socio } : {}),
     activo: true,
     created_at: new Date().toISOString(),
   });
+  if (socio && (!socio.comision_pct || !socio.meses))
+    await avisarAdmin(`Falta la comisión de ${nombre}`, "Cargale el porcentaje y los meses en Equipo: sin eso no se le calcula comisión.", "/equipo", `socio-config:${user.uid}`, appUrl(req));
   if (b.clientes?.length) await asignarClientes(user.uid, [rol, ...extrasValidos(rol, b.roles_extra)], b.clientes);
   return { ok: true, uid: user.uid, password };
 }
 
 async function editar(req: VercelRequest, adminUid: string) {
-  const b = body<{ uid?: string; nombre?: string; email?: string; rol?: string; roles_extra?: string[]; clientes?: string[] }>(req);
+  const b = body<{ uid?: string; nombre?: string; email?: string; rol?: string; roles_extra?: string[]; clientes?: string[]; socio?: unknown }>(req);
   if (!b.uid) throw new HttpError(400, "Falta uid");
   if (b.uid === adminUid && b.rol && b.rol !== "admin") throw new HttpError(409, "No te podés sacar el rol de super admin a vos mismo");
   const ref = adminDb().collection("profiles").doc(b.uid);
@@ -116,6 +123,13 @@ async function editar(req: VercelRequest, adminUid: string) {
   // Roles adicionales: los que vienen (o los que tenía), siempre válidos para el rol principal.
   const extras = extrasValidos(rolFinal, b.roles_extra !== undefined ? b.roles_extra : prev.roles_extra);
   if (b.roles_extra !== undefined || patch.role) patch.roles_extra = extras;
+  // Socio comercial: su código y comisión (si deja de ser socio, la configuración queda guardada por si vuelve).
+  if ((rolFinal === "socio" || extras.includes("socio")) && b.socio !== undefined) {
+    patch.socio = await configValida(b.socio, b.uid);
+    const s = patch.socio as { comision_pct: number | null; meses: number | null };
+    if (!s.comision_pct || !s.meses)
+      await avisarAdmin(`Falta la comisión de ${String(patch.nombre ?? prev.nombre ?? "un socio")}`, "Cargale el porcentaje y los meses en Equipo: sin eso no se le calcula comisión.", "/equipo", `socio-config:${b.uid}`, appUrl(req));
+  }
   if (patch.nombre) await adminAuth().updateUser(b.uid, { displayName: patch.nombre as string }).catch(() => undefined);
   if (Object.keys(patch).length) await ref.set(patch, { merge: true });
   if (Object.keys(patch).length) olvidarPerfil(b.uid);

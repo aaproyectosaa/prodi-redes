@@ -449,9 +449,16 @@ function UsuarioDialog({
   const [extras, setExtras] = useState<Set<string>>(new Set());
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
+  /** Socio comercial: su código de referido y la comisión (sin % o sin meses no se calcula). */
+  const [socio, setSocio] = useState({ codigo: "", comision_pct: "", meses: "" });
 
   useEffect(() => {
     if (!persona) return;
+    setSocio({
+      codigo: p?.socio?.codigo ?? "",
+      comision_pct: p?.socio?.comision_pct != null ? String(p.socio.comision_pct) : "",
+      meses: p?.socio?.meses != null ? String(p.socio.meses) : "",
+    });
     if (p) {
       setNombre(p.nombre ?? "");
       setEmail(p.email ?? "");
@@ -484,11 +491,12 @@ function UsuarioDialog({
           rol,
           roles_extra: extrasValidos,
           clientes: Array.from(sel),
+          ...(esSocio ? { socio } : {}),
         });
         onClose();
         onCreado(`Entrá a ${window.location.origin}\nMail: ${email}\nContraseña: ${r.password}`);
       } else if (p) {
-        await callApi("/api/usuarios/editar", { uid: p.id, nombre, email, rol, roles_extra: extrasValidos, clientes: Array.from(sel) });
+        await callApi("/api/usuarios/editar", { uid: p.id, nombre, email, rol, roles_extra: extrasValidos, clientes: Array.from(sel), ...(esSocio ? { socio } : {}) });
         toast.success("Usuario actualizado");
         onClose();
       }
@@ -502,7 +510,9 @@ function UsuarioDialog({
   // Solo el equipo interno suma roles (un cliente o un contacto, no).
   const sumaRoles = ["admin", ...ROLES_ADICIONALES].includes(rol as never);
   const extrasValidos = sumaRoles ? ROLES_ADICIONALES.filter((r) => r !== rol && extras.has(r)) : [];
-  const usaClientes = ["productor", "editor", "pauta", "diseno", "cliente"].includes(rol) || extrasValidos.some((r) => r !== "administracion");
+  const usaClientes = ["productor", "editor", "pauta", "diseno", "cliente"].includes(rol) || extrasValidos.some((r) => r !== "administracion" && r !== "socio");
+  const esSocio = rol === "socio" || extrasValidos.includes("socio");
+  const codigoOk = /^[a-z0-9][a-z0-9-]{2,29}$/.test(socio.codigo);
 
   return (
     <Dialog open={!!persona} onOpenChange={(o) => !o && onClose()}>
@@ -584,6 +594,40 @@ function UsuarioDialog({
               </p>
             </div>
           )}
+          {esSocio && (
+            <div className="space-y-3 rounded-2xl bg-primary/5 p-3.5 ring-1 ring-inset ring-primary/20">
+              <p className="text-sm font-semibold">Socio comercial</p>
+              <div className="space-y-1.5">
+                <Label htmlFor="s-codigo" className={ETIQUETA}>Código de su link</Label>
+                <Input
+                  id="s-codigo"
+                  value={socio.codigo}
+                  onChange={(e) => setSocio((x) => ({ ...x, codigo: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") }))}
+                  placeholder="juanperez"
+                  maxLength={30}
+                  className={cn(SUAVE, "h-11")}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Su link: somosprodi.com/?ref={socio.codigo || "codigo"}
+                  {socio.codigo && !codigoOk && <span className="text-destructive"> · mínimo 3 letras o números</span>}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="s-pct" className={ETIQUETA}>Comisión (%)</Label>
+                  <Input id="s-pct" type="number" inputMode="decimal" min={0} max={100} value={socio.comision_pct} onChange={(e) => setSocio((x) => ({ ...x, comision_pct: e.target.value }))} placeholder="Ej: 10" className={cn(SUAVE, "h-11")} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="s-meses" className={ETIQUETA}>Durante (meses)</Label>
+                  <Input id="s-meses" type="number" inputMode="numeric" min={1} max={120} value={socio.meses} onChange={(e) => setSocio((x) => ({ ...x, meses: e.target.value }))} placeholder="Ej: 12" className={cn(SUAVE, "h-11")} />
+                </div>
+              </div>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                Sobre el abono neto cobrado (sin IVA, sin pauta ni reintegros), desde el alta de cada cliente que traiga.
+                {(!socio.comision_pct || !socio.meses) && <b className="text-amber-600 dark:text-amber-400"> Sin porcentaje y meses no se le calcula comisión.</b>}
+              </p>
+            </div>
+          )}
           {usaClientes && (
             <div className="space-y-2">
               <Label className={ETIQUETA}>
@@ -630,7 +674,7 @@ function UsuarioDialog({
           <Button variant="ghost" onClick={onClose} className="h-12 rounded-2xl font-semibold">
             Cancelar
           </Button>
-          <Button onClick={save} disabled={saving || !nombre.trim() || !email.trim()} className="h-12 rounded-2xl px-6 font-semibold shadow-lg shadow-primary/25">
+          <Button onClick={save} disabled={saving || !nombre.trim() || !email.trim() || (esSocio && !codigoOk)} className="h-12 rounded-2xl px-6 font-semibold shadow-lg shadow-primary/25">
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {nuevo ? "Crear usuario" : "Guardar"}
           </Button>

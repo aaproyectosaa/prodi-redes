@@ -371,6 +371,9 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
     case "equipo_liquidaciones":
       // El historial cargado de la planilla (importado) lo ve solo administración; cada uno ve lo suyo de ahora en adelante.
       return esFinanzas(c) || (d.uid === c.uid && !d.importado);
+    // Comisión de cada socio comercial por mes (si ya se le pagó): administración y el propio socio.
+    case "socio_liquidaciones":
+      return esFinanzas(c) || d.uid === c.uid;
     // Facturado por mes de antes del sistema y lo que deben los clientes (planes de pago): solo administración.
     case "historico_mensual":
     case "historico_facturas":
@@ -380,6 +383,7 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
     case "obligaciones":
       return esFinanzas(c);
     // Reservas de la landing (módulo Web): solo el super admin. Se escriben solo por /api/web.
+    // El socio comercial ve sus leads por /api/web/socio-panel (sin notas internas ni datos de Meta), no desde acá.
     case "leads_web":
     case "web_config":
       return esAdmin(c);
@@ -505,7 +509,7 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       if (crea) return c.uid === id && despues!.role === "pending" && despues!.roles_extra == null;
       return (
         esAdmin(c) ||
-        (c.uid === id && !tocaAlguna(antes, despues, ["role", "roles_extra", "dashboard_access", "project_permissions", "activo", "email", "proyecto_id"]))
+        (c.uid === id && !tocaAlguna(antes, despues, ["role", "roles_extra", "dashboard_access", "project_permissions", "activo", "email", "proyecto_id", "socio"]))
       );
     case "projects":
       if (crea || borra) return esAdmin(c);
@@ -594,6 +598,7 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
     case "historico_mensual":
     case "historico_facturas":
     case "deudas_clientes":
+    case "socio_liquidaciones":
       return esFinanzas(c);
     case "planes_redes":
       return esAdmin(c);

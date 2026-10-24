@@ -18,14 +18,27 @@
 // POST /api/web/meta-mensajes     (admin) { forzar? } trae los mensajes nuevos de IG y FB como leads
 // POST /api/web/meta-conectar     (admin) suscribe la página de Prodi y trae los formularios de 30 días
 // POST /api/web/manual    { negocio, nombre?, email?, telefono?, instagram?, ubicacion?, rubro?, fuente?, notas?, estado? } → { id }  (lead cargado a mano)
+// Socios comerciales (ver api/_lib/socios.ts):
+// POST /api/web/aplicar acepta `ref` (código del socio que guardó la landing): el lead entra con origen "socio".
+// POST /api/web/socio-panel                  (socio) → { codigo, link, leads[] } solo los suyos, sin notas internas
+// POST /api/web/socio-cargar { negocio, nombre?, rubro?, telefono?, nota? }  (socio) → { id } | { repetido: true }
+// POST /api/web/socio-ganancias { meses? }   (socio) → comisión de los últimos meses (lo cobrado de sus clientes)
+// POST /api/web/socio-asignar { id, socio_id|null }  (admin) → "Traído por" de un lead
+// POST /api/web/socio-alta { lead_id, proyecto_id }  (admin) → el cliente nuevo queda con el socio del lead y la fecha
+// POST /api/web/socio-cliente { proyecto_id, socio_id|null }  (admin) → "Traído por" de un cliente
+// POST /api/web/socio-resumen { mes }        (admin) → por socio: leads, ganados, clientes, facturado y comisión
 // Los leads se guardan en la colección `leads_web`; la configuración en `web_config/general`.
 
 import { createHmac, randomUUID } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { enTransaccion, getPool, guardarDoc, leerDoc } from "../_lib/db";
-import { appUrl, body, HttpError, requireCaller, sendError } from "../_lib/http";
+import { appUrl, body, HttpError, requireCaller, sendError, type Caller } from "../_lib/http";
+import { adminDb } from "../_lib/db";
+import { avisarAdmin, avisarEstadoAlSocio, comisionesDelMes, listarSocios, resumenSocios, socioPorCodigo, sumarMeses } from "../_lib/socios";
+import { claveTelefono } from "../_lib/leads-unir";
 import { fotoManual, unirLeads } from "../_lib/leads-unir";
-import { linksParaMandar } from "../_lib/catalogo";
+import { linksParaMandar } from "../_lib/catalogo";
+
 import { conectarWhatsApp, estadoWhatsApp, guardarConfigWhatsApp, recibirWhatsApp } from "../_lib/meta-whatsapp";
 import { conectarFormularios, guardarTokenUsuario, conversacionLead, enviarProductos, estadoMeta, guardarRespuestas, sugerirRespuestas, importarMensajes, recibirWebhook, responderLead, verificarWebhook } from "../_lib/meta-leads";
 
@@ -127,6 +140,24 @@ async function aplicar(req: VercelRequest) {
   const id = randomUUID();
   const at = new Date(ahora).toISOString();
   const estado = califica ? "calificado" : "no_califica";
+  // Vino por el link de un socio (?ref=CODIGO, lo guarda la landing 60 días). Si ese empresario ya era lead, queda
+  // para quien lo trajo primero (y se avisa al admin).
+  const socio = b.ref ? await socioPorCodigo(texto(b.ref, 40)) : null;
+  let socioDelLead: { uid: string; nombre: string } | null = socio;
+  if (socio) {
+    const previo = await leadExistente(email, "");
+    if (previo) {
+      socioDelLead = previo.data.socio_id ? { uid: String(previo.data.socio_id), nombre: String(previo.data.socio_nombre ?? "") } : null;
+      if (previo.data.socio_id !== socio.uid)
+        await avisarAdmin(
+          `Lead repetido: ${negocio}`,
+          `${socio.nombre} lo trajo por su link, pero ya era lead${previo.data.socio_id ? ` de ${previo.data.socio_nombre || "otro socio"}` : ""}. Queda para quien lo trajo primero.`,
+          `/web?lead=${previo.id}`,
+          `socio-repetido:${id}`,
+          appUrl(req)
+        );
+    }
+  }
   await guardarDoc(pool, COL, id, {
     created_at: at,
     updated_at: at,
@@ -146,10 +177,13 @@ async function aplicar(req: VercelRequest) {
     dudoso,
     estado,
     notas: "",
-    origen: texto(b.origen, 80),
+    origen: socio ? "socio" : texto(b.origen, 80),
+    ...(socioDelLead ? { socio_id: socioDelLead.uid, socio_nombre: socioDelLead.nombre } : {}),
+    ...(socio ? { ref: socio.uid } : {}),
     ip_hash,
-    historial: [{ at, de: null, a: estado, por: null, por_nombre: "Web" }],
+    historial: [{ at, de: null, a: estado, por: null, por_nombre: socio ? `Web · link de ${socio.nombre}` : "Web" }],
   });
+  if (socioDelLead) await avisarEstadoAlSocio({ negocio, socio_id: socioDelLead.uid }, id, estado, appUrl(req));
   return { id, califica };
 }
 
@@ -158,9 +192,11 @@ const ID_OK = /^[0-9a-f-]{36}$/i;
 async function reunion(req: VercelRequest) {
   const id = texto(body<{ id?: string }>(req).id, 40);
   if (!ID_OK.test(id)) throw new HttpError(400, "Falta el id");
+  let delSocio: Record<string, unknown> | null = null;
   await enTransaccion(async (cli) => {
     const d = await leerDoc(cli, COL, id, true);
     if (!d || d.estado !== "calificado") return;
+    if (d.socio_id) delSocio = d;
     const at = new Date().toISOString();
     await guardarDoc(cli, COL, id, {
       ...d,
@@ -169,12 +205,19 @@ async function reunion(req: VercelRequest) {
       historial: [...(Array.isArray(d.historial) ? d.historial : []), { at, de: "calificado", a: "reunion_agendada", por: null, por_nombre: "Web" }].slice(-50),
     });
   });
+  if (delSocio) await avisarEstadoAlSocio(delSocio, id, "reunion_agendada", appUrl(req));
   return { ok: true };
 }
 
 // ---- Panel ----
 
 async function cambiar(req: VercelRequest, campo: "estado" | "notas") {
+  const r = await cambiarLead(req, campo);
+  if (r.avisar) await avisarEstadoAlSocio(r.avisar.lead, r.avisar.id, r.avisar.estado, appUrl(req));
+  return { ok: true };
+}
+
+async function cambiarLead(req: VercelRequest, campo: "estado" | "notas"): Promise<{ avisar?: { lead: Record<string, unknown>; id: string; estado: string } }> {
   const caller = await requireCaller(req, ["admin"]);
   const b = body<{ id?: string; estado?: string; notas?: string }>(req);
   const id = texto(b.id, 40);
@@ -184,7 +227,7 @@ async function cambiar(req: VercelRequest, campo: "estado" | "notas") {
   return enTransaccion(async (cli) => {
     const d = await leerDoc(cli, COL, id, true);
     if (!d) throw new HttpError(404, "No encontramos esa aplicación");
-    if (d[campo] === valor) return { ok: true };
+    if (d[campo] === valor) return {};
     const at = new Date().toISOString();
     const nuevo = { ...d, [campo]: valor, updated_at: at, updated_by: caller.uid };
     if (campo === "estado") {
@@ -195,7 +238,7 @@ async function cambiar(req: VercelRequest, campo: "estado" | "notas") {
       nuevo.ultimo_contacto_at = at;
     }
     await guardarDoc(cli, COL, id, nuevo);
-    return { ok: true };
+    return campo === "estado" && d.socio_id ? { avisar: { lead: d, id, estado: valor } } : {};
   });
 }
 
@@ -302,6 +345,162 @@ async function manual(req: VercelRequest) {
   return { id };
 }
 
+// ---- Socios comerciales ----
+
+/** Un lead que ya existe con ese email o teléfono (el más viejo: el primero que llegó). */
+async function leadExistente(email: string, telefono: string): Promise<{ id: string; data: Record<string, unknown> } | null> {
+  const tel = claveTelefono(telefono);
+  if (!email && !tel) return null;
+  const r = await getPool().query(
+    `select id, data from documentos where coleccion = $1 and (($2 <> '' and lower(data->>'email') = $2) or ($3 <> '' and right(regexp_replace(coalesce(data->>'telefono', ''), '[^0-9]', '', 'g'), 10) = $3))
+      order by data->>'created_at' limit 1`,
+    [COL, email, tel]
+  );
+  const row = r.rows[0] as { id: string; data: Record<string, unknown> } | undefined;
+  return row ?? null;
+}
+
+/** Lo que el socio ve de cada lead suyo: nada de notas internas, conversación de Meta ni datos de contacto de más. */
+function leadParaSocio(id: string, d: Record<string, unknown>) {
+  return {
+    id,
+    negocio: String(d.negocio ?? ""),
+    nombre: String(d.nombre ?? ""),
+    rubro: String(d.rubro ?? ""),
+    estado: String(d.estado ?? "calificado"),
+    created_at: String(d.created_at ?? ""),
+    updated_at: String(d.updated_at ?? d.created_at ?? ""),
+    por_link: d.origen === "socio",
+  };
+}
+
+async function socioPanel(caller: Caller, req: VercelRequest) {
+  const perfil = (await adminDb().collection("profiles").doc(caller.uid).get()).data() ?? {};
+  const cfg = (perfil.socio ?? null) as { codigo?: string } | null;
+  const r = await getPool().query("select id, data from documentos where coleccion = $1 and data->>'socio_id' = $2 order by data->>'created_at' desc", [COL, caller.uid]);
+  const leads = (r.rows as { id: string; data: Record<string, unknown> }[]).map((x) => leadParaSocio(x.id, x.data));
+  const base = (process.env.WEB_SOCIO_URL || "https://somosprodi.com").replace(/\/$/, "");
+  return { codigo: cfg?.codigo ?? null, link: cfg?.codigo ? `${base}/?ref=${encodeURIComponent(cfg.codigo)}` : null, leads, app: appUrl(req) };
+}
+
+/** El socio carga un empresario que entrevistó. Si ya existía (mismo teléfono), queda para quien lo trajo primero. */
+async function socioCargar(caller: Caller, req: VercelRequest) {
+  const b = body<Record<string, unknown>>(req);
+  const negocio = texto(b.negocio, 80);
+  const nombre = texto(b.nombre, 80);
+  const telefono = texto(b.telefono, 40);
+  if (negocio.length < 2) throw new HttpError(400, "Poné el nombre de la empresa");
+  if (nombre.length < 2) throw new HttpError(400, "Poné el nombre del empresario");
+  if (!claveTelefono(telefono)) throw new HttpError(400, "Poné un teléfono (con característica)");
+  const previo = await leadExistente("", telefono);
+  if (previo) {
+    if (previo.data.socio_id !== caller.uid)
+      await avisarAdmin(
+        `Lead repetido: ${negocio}`,
+        `${caller.nombre || "Un socio"} lo cargó, pero ya era lead${previo.data.socio_id ? ` de ${previo.data.socio_nombre || "otro socio"}` : ""}. Queda para quien lo trajo primero.`,
+        `/web?lead=${previo.id}`,
+        `socio-repetido:${previo.id}:${caller.uid}`,
+        appUrl(req)
+      );
+    return { repetido: true, tuyo: previo.data.socio_id === caller.uid };
+  }
+  const { temporada } = await leerConfig();
+  const id = randomUUID();
+  const at = new Date().toISOString();
+  await guardarDoc(getPool(), COL, id, {
+    created_at: at,
+    updated_at: at,
+    temporada,
+    nombre,
+    negocio,
+    email: "",
+    telefono,
+    rubro: texto(b.rubro, 60),
+    califica: true,
+    dudoso: false,
+    estado: "calificado",
+    notas: String(b.nota ?? "").trim() ? `Nota de la entrevista (${caller.nombre || "socio"}): ${String(b.nota).trim().slice(0, 3000)}` : "",
+    manual: true,
+    fuente: "Socio comercial",
+    origen: "socio",
+    socio_id: caller.uid,
+    socio_nombre: caller.nombre,
+    creado_por: caller.uid,
+    historial: [{ at, de: null, a: "calificado", por: caller.uid, por_nombre: `${caller.nombre || "Socio"} (socio)` }],
+  });
+  await avisarAdmin(`Nuevo lead de ${caller.nombre || "un socio"}`, `${negocio}${nombre ? ` · ${nombre}` : ""}`, `/web?lead=${id}`, `socio-lead-nuevo:${id}`, appUrl(req));
+  return { id };
+}
+
+/** El admin asigna (o cambia, o saca) el socio de un lead. */
+async function socioAsignar(caller: Caller, req: VercelRequest) {
+  const b = body<{ id?: string; socio_id?: string | null }>(req);
+  const socioId = b.socio_id ? texto(b.socio_id, 60) : null;
+  const socio = socioId ? (await listarSocios()).find((s) => s.uid === socioId) : null;
+  if (socioId && !socio) throw new HttpError(404, "No encontramos ese socio");
+  const at = new Date().toISOString();
+  await conLead(texto(b.id, 40), (d) => ({
+    socio_id: socio?.uid ?? null,
+    socio_nombre: socio?.nombre ?? null,
+    historial: conHistorial(d, { at, tipo: "nota", texto: socio ? `Traído por: ${socio.nombre}` : "Sin socio", por: caller.uid, por_nombre: caller.nombre || caller.email || "" }),
+  }));
+  return { ok: true };
+}
+
+/** Cliente nuevo que salió de un lead: queda con el socio del lead y la fecha de alta (y el lead, ganado). */
+async function socioAlta(caller: Caller, req: VercelRequest) {
+  const b = body<{ lead_id?: string; proyecto_id?: string }>(req);
+  const leadId = texto(b.lead_id, 40);
+  const pid = texto(b.proyecto_id, 60);
+  const proyecto = await adminDb().collection("projects").doc(pid).get();
+  if (!proyecto.exists) throw new HttpError(404, "No encontramos el cliente");
+  let lead: Record<string, unknown> | null = null;
+  let estadoAntes = "";
+  await conLead(leadId, (d) => {
+    lead = d;
+    estadoAntes = String(d.estado ?? "");
+    const at = new Date().toISOString();
+    return {
+      cliente_id: pid,
+      ...(d.estado !== "ganado" ? { estado: "ganado" } : {}),
+      historial: conHistorial(d, { at, ...(d.estado !== "ganado" ? { de: d.estado ?? null, a: "ganado" } : { tipo: "nota", texto: "" }), texto: `Alta como cliente: ${proyecto.data()?.nombre ?? ""}`, por: caller.uid, por_nombre: caller.nombre || caller.email || "" }),
+    };
+  });
+  const l = lead as Record<string, unknown> | null;
+  const hoy = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
+  await proyecto.ref.update({ lead_id: leadId, ...(l?.socio_id ? { socio_id: String(l.socio_id), socio_alta: hoy } : {}) });
+  if (l?.socio_id && estadoAntes !== "ganado") await avisarEstadoAlSocio(l, leadId, "ganado", appUrl(req));
+  return { ok: true, socio_id: l?.socio_id ?? null };
+}
+
+/** El admin cambia a mano el socio de un cliente (y la fecha de alta, si no tenía). */
+async function socioCliente(req: VercelRequest) {
+  const b = body<{ proyecto_id?: string; socio_id?: string | null; socio_alta?: string | null }>(req);
+  const ref = adminDb().collection("projects").doc(texto(b.proyecto_id, 60));
+  const p = await ref.get();
+  if (!p.exists) throw new HttpError(404, "No encontramos el cliente");
+  const socioId = b.socio_id ? texto(b.socio_id, 60) : null;
+  if (socioId && !(await listarSocios()).some((s) => s.uid === socioId)) throw new HttpError(404, "No encontramos ese socio");
+  const fecha = /^\d{4}-\d{2}-\d{2}$/.test(String(b.socio_alta ?? "")) ? String(b.socio_alta) : null;
+  const d = p.data() ?? {};
+  await ref.update({
+    socio_id: socioId,
+    socio_alta: socioId ? fecha ?? d.socio_alta ?? String(d.alta ?? d.created_at ?? "").slice(0, 10) ?? null : null,
+  });
+  return { ok: true };
+}
+
+/** Ganancias del socio: la comisión de los últimos meses (lo cobrado), mes por mes. */
+async function socioGanancias(caller: Caller, req: VercelRequest) {
+  const b = body<{ meses?: number; uid?: string }>(req);
+  const uid = caller.roles.includes("admin") && b.uid ? texto(b.uid, 60) : caller.uid;
+  const n = Math.min(Math.max(Math.round(Number(b.meses) || 6), 1), 12);
+  const hoy = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 7);
+  const meses = Array.from({ length: n }, (_, i) => sumarMeses(hoy, -i));
+  const lista = await Promise.all(meses.map(async (m) => (await comisionesDelMes(m, uid))[0] ?? null));
+  return { meses: lista.filter(Boolean) };
+}
+
 async function config(req: VercelRequest) {
   await requireCaller(req, ["admin"]);
   const b = body<{ temporada?: unknown; cupos_total?: unknown }>(req);
@@ -339,6 +538,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.status(405).json({ error: "Method not allowed" });
       return;
     }
+    if (accion.startsWith("socio-")) {
+      // Socio comercial: lo suyo. Admin: asignar, dar de alta y el resumen.
+      if (["socio-panel", "socio-cargar", "socio-ganancias"].includes(accion)) {
+        const caller = await requireCaller(req, accion === "socio-ganancias" ? ["socio", "admin"] : ["socio"]);
+        if (accion === "socio-panel") res.status(200).json(await socioPanel(caller, req));
+        else if (accion === "socio-cargar") res.status(200).json(await socioCargar(caller, req));
+        else res.status(200).json(await socioGanancias(caller, req));
+        return;
+      }
+      // El resumen también lo ve administración (Pagos al equipo); lo demás, solo el admin.
+      const admin = await requireCaller(req, accion === "socio-resumen" ? ["admin", "administracion"] : ["admin"]);
+      if (accion === "socio-asignar") res.status(200).json(await socioAsignar(admin, req));
+      else if (accion === "socio-alta") res.status(200).json(await socioAlta(admin, req));
+      else if (accion === "socio-cliente") res.status(200).json(await socioCliente(req));
+      else if (accion === "socio-resumen") {
+        const mes = texto(body<{ mes?: string }>(req).mes, 7);
+        res.status(200).json({ socios: await resumenSocios(mes) });
+      } else if (accion === "socio-lista") res.status(200).json({ socios: (await listarSocios()).map((x) => ({ uid: x.uid, nombre: x.nombre, activo: x.activo, codigo: x.config?.codigo ?? null })) });
+      else res.status(404).json({ error: "Acción desconocida" });
+      return;
+    }
     if (accion === "aplicar") res.status(200).json(await aplicar(req));
     else if (accion === "reunion") res.status(200).json(await reunion(req));
     else if (accion === "estado") res.status(200).json(await cambiar(req, "estado"));
@@ -354,14 +574,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const id = texto(b.id, 40);
       const productos = await linksParaMandar(appUrl(req), "prodi", Array.isArray(b.ids) ? b.ids.map(String) : [], { col: "leads_web", id });
       res.status(200).json(await enviarProductos(id, productos, { uid: caller.uid, nombre: caller.nombre || caller.email || "" }));
-    } else if (accion === "unir") {
-      const caller = await requireCaller(req, ["admin"]);
-      const b = body<{ id?: string; otro?: string }>(req);
-      res.status(200).json(await unirLeads(texto(b.id, 40), texto(b.otro, 40), { uid: caller.uid, nombre: caller.nombre || caller.email || "" }));
-    } else if (accion === "foto") {
-      await requireCaller(req, ["admin"]);
-      const b = body<{ id?: string; foto?: string }>(req);
-      res.status(200).json(await fotoManual(texto(b.id, 40), String(b.foto ?? "")));
+    } else if (accion === "unir") {
+
+      const caller = await requireCaller(req, ["admin"]);
+
+      const b = body<{ id?: string; otro?: string }>(req);
+
+      res.status(200).json(await unirLeads(texto(b.id, 40), texto(b.otro, 40), { uid: caller.uid, nombre: caller.nombre || caller.email || "" }));
+
+    } else if (accion === "foto") {
+
+      await requireCaller(req, ["admin"]);
+
+      const b = body<{ id?: string; foto?: string }>(req);
+
+      res.status(200).json(await fotoManual(texto(b.id, 40), String(b.foto ?? "")));
+
     } else if (accion === "wa-estado") {
       await requireCaller(req, ["admin"]);
       res.status(200).json(await estadoWhatsApp());
