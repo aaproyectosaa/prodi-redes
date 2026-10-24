@@ -84,6 +84,7 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
       <button
         key={item.path + item.label}
         type="button"
+        data-tour={item.path}
         onClick={() => navigate(item.path)}
         title={collapsed ? item.label : undefined}
         className={cn(

@@ -496,6 +496,7 @@ export function ChatDock() {
         onClick={() => !burbuja.fueArrastre() && abrirDesdeBoton()}
         {...burbuja.handlers}
         title="Tocá para abrir · mantené y arrastrá para moverla"
+        data-tour="chat"
         aria-label={abiertos.length ? `Chats abiertos${chatsNoLeidos ? ` (${chatsNoLeidos} sin leer)` : ""}` : `Abrir chat${chatsNoLeidos ? ` (${chatsNoLeidos} sin leer)` : ""}`}
         aria-expanded={abiertos.length ? selector : false}
         aria-haspopup={abiertos.length ? "menu" : undefined}

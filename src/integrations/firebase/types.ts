@@ -66,6 +66,8 @@ export interface Profile {
   activo?: boolean;
   /** Cuándo el cliente vio (o cerró) la guía de bienvenida. */
   guia_cliente_at?: string | null;
+  /** Recorrido por la pantalla del cliente (dónde está cada cosa): cuándo lo terminó o salteó. */
+  tour_cliente_at?: string | null;
   /** Vio el recorrido de bienvenida (primera vez que entra). */
   bienvenida_at?: string | null;
   /** Novedades que ya vio (ids de src/lib/novedades.ts). */

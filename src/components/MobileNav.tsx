@@ -318,6 +318,7 @@ export const MobileTabBar = ({ role }: { role?: UserRole }) => {
             <button
               key={item.path + item.label}
               type="button"
+              data-tour={item.path}
               onClick={() => navigate(item.path)}
               className={cn(
                 "flex h-16 flex-col items-center justify-center gap-1 text-[11px]",

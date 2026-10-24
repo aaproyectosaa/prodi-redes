@@ -1,3 +1,6 @@
+import { doc, updateDoc } from "@/lib/db";
+import { db } from "@/integrations/firebase/client";
+import { RecorridoCliente } from "@/components/redes/cliente/RecorridoCliente";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loSubeElCliente } from "@/lib/redes/extra";
 import { HorariosPublicar } from "@/components/redes/cliente/HorariosPublicar";
@@ -100,6 +103,9 @@ export default function ClientePortal() {
   const [piezaOpen, setPiezaOpen] = useState(false);
   const verificado = useRef(false);
   const [guia, setGuia] = useState(false);
+  // Recorrido por la pantalla (dónde está cada cosa): una vez, después de la bienvenida.
+  const [tour, setTour] = useState(false);
+  const tourHecho = useRef(false);
   const [pedirVideo, setPedirVideo] = useState(false);
   // "Solo edición" desde Mi plan: el pedido arranca con "Yo mando el material".
   const [soloEdicion, setSoloEdicion] = useState(false);
@@ -228,7 +234,21 @@ export default function ClientePortal() {
     // En "ver como" el admin no necesita la bienvenida (la abre con "¿Cómo funciona?").
     if (viewingAs) return;
     if (!profile.guia_cliente_at || marcaObligatoria) setGuia(true);
+    // Ya vio la bienvenida antes de que existiera el recorrido: se lo mostramos una vez.
+    else if (!profile.tour_cliente_at) window.setTimeout(() => setTour(true), 1500);
   }, [profile, cliente, viewingAs, marcaObligatoria]);
+
+  const cerrarGuia = (v: boolean) => {
+    setGuia(v);
+    // Al cerrar la bienvenida por primera vez, sigue el recorrido por la pantalla.
+    if (!v && !viewingAs && !profile?.tour_cliente_at && !tourHecho.current) window.setTimeout(() => setTour(true), 450);
+  };
+  const cerrarTour = () => {
+    setTour(false);
+    tourHecho.current = true;
+    if (!user?.uid || viewingAs) return;
+    void updateDoc(doc(db, "profiles", user.uid), { tour_cliente_at: new Date().toISOString() }).catch(() => undefined);
+  };
 
   if (!cliente) {
     return (
@@ -293,6 +313,7 @@ export default function ClientePortal() {
           {/* En el CRM no va "Pedir un video": con el CRM activo es "Nuevo contacto" o "Nuevo vendedor"; en el resto, nada. */}
           {(!esCrm || (enCrm && cliente.crm_activo)) && (
             <Button
+              data-tour-btn={enCrm ? undefined : "pedir-video"}
               onClick={() => (enCrm && cliente.crm_activo ? setCrmNuevo(true) : setPedirVideo(true))}
               className="group h-11 w-full rounded-full sm:h-10 sm:w-auto bg-gradient-to-r from-primary to-fuchsia-500 px-5 font-semibold shadow-lg shadow-primary/25 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/35"
             >
@@ -302,9 +323,10 @@ export default function ClientePortal() {
         </>
       }
     >
+      <RecorridoCliente open={tour} onCerrar={cerrarTour} />
       <GuiaCliente
         open={guia}
-        onOpenChange={setGuia}
+        onOpenChange={cerrarGuia}
         cliente={cliente}
         nombre={nombre}
         uid={user?.uid}
