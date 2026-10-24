@@ -479,7 +479,7 @@ export default function ClientePortal() {
           <>
             {(["contactos", "vende", "equipo"] as const).map((t) => (
               <TabsContent key={t} value={t}>
-                <CrmProximamente seccion={t} rubro={cliente.marca?.rubro} />
+                <CrmProximamente seccion={t} rubro={cliente.marca?.rubro} negocio={cliente.nombre} />
               </TabsContent>
             ))}
           </>

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, Clapperboard, HelpCircle, Lightbulb, MessageCircle, ShieldAlert, Sparkles, Trophy } from "lucide-react";
+import { MessageCircle, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DemoContactos } from "@/components/redes/crm/DemoContactos";
+import { DemoVende } from "@/components/redes/crm/DemoVende";
 
 // CRM en "Próximamente": el cliente ya lo ve en su menú pero todavía no lo puede usar (falta que Meta habilite la app
 // para que los mensajes entren solos). En cada sección, una animación paso a paso con un tablero de ejemplo muestra
@@ -56,90 +57,6 @@ function Marco({ titulo, children }: { titulo: string; children: React.ReactNode
       </div>
       {children}
     </div>
-  );
-}
-
-// --- Qué te vende: los videos que venden y lo que preguntan -------------------------------------------------------
-
-const PASOS_VENDE = [
-  "Cada venta queda atada al video que la trajo",
-  "Ves qué video te vendió más (y cuánto te costó cada venta)",
-  "La IA lee tus charlas y encuentra lo que más te preguntan",
-  "Y te propone el video que lo responde: entra en tu plan del mes",
-];
-const VIDEOS = [
-  { titulo: "Promo 2x1 de los jueves", monto: "$ 240.000", ancho: 100 },
-  { titulo: "Cómo hacemos la masa madre", monto: "$ 96.500", ancho: 42 },
-  { titulo: "Delivery hasta las 2 AM", monto: "$ 32.700", ancho: 16 },
-];
-
-function DemoVende() {
-  const [paso, setPaso] = usePasos(PASOS_VENDE.length, 3200);
-  return (
-    <Marco titulo="Qué video te vende y qué te preguntan tus clientes">
-      <div className="grid gap-3 md:grid-cols-2">
-        <div className={cn("space-y-2 rounded-2xl border bg-card p-3 transition-opacity duration-500", paso >= 2 && "opacity-50")}>
-          <p className="flex items-center gap-1.5 text-xs font-semibold">
-            <Clapperboard className="h-3.5 w-3.5 text-primary" /> Los videos que te vendieron
-          </p>
-          {paso >= 1 && (
-            <div className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-primary/15 to-transparent p-2 text-[11px] animate-in fade-in duration-500">
-              <Trophy className="h-4 w-4 text-primary" /> «Promo 2x1» te vendió <b className="text-emerald-600 dark:text-emerald-400">$ 240.000</b>
-            </div>
-          )}
-          {VIDEOS.map((v, i) => (
-            <div key={v.titulo} className="space-y-1">
-              <div className="flex items-center justify-between gap-2 text-[11px]">
-                <span className="truncate font-medium">{v.titulo}</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400">{v.monto}</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-primary to-fuchsia-500 transition-all duration-1000 ease-out motion-reduce:transition-none"
-                  style={{ width: paso >= 0 ? `${v.ancho}%` : "0%", transitionDelay: `${i * 200}ms` }}
-                />
-              </div>
-            </div>
-          ))}
-          {paso >= 1 && <p className="text-[10px] text-muted-foreground animate-in fade-in duration-500">Cada venta te costó $ 2.100 de publicidad</p>}
-        </div>
-
-        <div className={cn("space-y-2 rounded-2xl border bg-card p-3 transition-opacity duration-500", paso < 2 && "opacity-50")}>
-          <p className="flex items-center gap-1.5 text-xs font-semibold">
-            <HelpCircle className="h-3.5 w-3.5 text-primary" /> Lo que más te preguntan
-          </p>
-          {paso >= 2 ? (
-            <div className="space-y-1.5">
-              {[
-                { t: "¿Hacen delivery a mi barrio?", n: 4, icono: HelpCircle, clase: "bg-sky-500/12 text-sky-700 dark:text-sky-300" },
-                { t: "Les parece caro para grupos", n: 3, icono: ShieldAlert, clase: "bg-amber-500/12 text-amber-700 dark:text-amber-300" },
-              ].map((x, i) => (
-                <div key={x.t} className="flex items-center justify-between gap-2 rounded-lg border bg-background p-2 animate-in fade-in slide-in-from-right-2 duration-500" style={{ animationDelay: `${i * 250}ms` }}>
-                  <span className="truncate text-[11px] font-medium">{x.t}</span>
-                  <span className={cn("inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold", x.clase)}>
-                    <x.icono className="h-2.5 w-2.5" /> {x.n} personas
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="py-6 text-center text-[11px] text-muted-foreground">Leyendo tus charlas…</p>
-          )}
-          {paso >= 3 && (
-            <div className="rounded-lg bg-gradient-to-br from-primary/[0.12] to-fuchsia-500/[0.08] p-2 animate-in fade-in zoom-in-95 duration-500">
-              <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-primary">
-                <Lightbulb className="h-3 w-3" /> Video que lo responde
-              </p>
-              <p className="text-xs font-semibold">Hasta tu puerta en 30 minutos</p>
-              <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700 dark:text-emerald-300">
-                <CheckCircle2 className="h-2.5 w-2.5" /> En tu plan del mes
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-      <Pasos textos={PASOS_VENDE} paso={paso} onPaso={setPaso} />
-    </Marco>
   );
 }
 
@@ -200,8 +117,13 @@ function DemoEquipo() {
   );
 }
 
-export function CrmProximamente({ seccion = "contactos", rubro }: { seccion?: SeccionCrm; rubro?: string | null }) {
-  if (seccion === "vende") return <DemoVende />;
+export function CrmProximamente({ seccion = "contactos", rubro, negocio }: { seccion?: SeccionCrm; rubro?: string | null; negocio?: string }) {
+  if (seccion === "vende")
+    return (
+      <Marco titulo="Qué video te trae ventas y qué video hacer después">
+        <DemoVende rubro={rubro} negocio={negocio} />
+      </Marco>
+    );
   if (seccion === "equipo") return <DemoEquipo />;
   return (
     <Marco titulo="Así vas a atender y venderle a cada cliente que te escribe">
