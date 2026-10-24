@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { ElegirServicios } from "@/components/redes/ServiciosCliente";
+import { servicioInfo, serviciosDe, type IdServicio } from "@/lib/redes/servicios";
 import { avisar } from "@/lib/redes/avisos";
 import { Link, useNavigate } from "react-router-dom";
 import { addDoc, collection } from "@/lib/db";
@@ -174,6 +176,18 @@ export default function Clientes() {
                       {isAdmin && plan.precioMensual > 0 && (
                         <span className="text-[11px] font-medium tabular-nums text-muted-foreground">{formatARS(plan.precioMensual)}</span>
                       )}
+                      {serviciosDe(c).map((sv) => {
+                        const info = servicioInfo(sv.id);
+                        return (
+                          <span
+                            key={sv.id}
+                            title={`${info.nombre} · ${sv.estado === "activo" ? "activo" : "en desarrollo"}`}
+                            className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground"
+                          >
+                            <info.icon className="h-3 w-3" /> {info.nombre}
+                          </span>
+                        );
+                      })}
                       {c.produccion?.publica === "cliente" && (
                         <span className="inline-flex items-center rounded-full bg-amber-500/12 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
                           Sube el cliente
@@ -244,6 +258,7 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   const [equipo, setEquipo] = useState<Record<"productor" | "editor" | "pauta", string>>({ productor: "", editor: "", pauta: "" });
   const [contacto, setContacto] = useState({ nombre: "", email: "" });
   const [tipo, setTipo] = useState<"boleta" | "factura">("boleta");
+  const [servicios, setServicios] = useState<IdServicio[]>([]);
   const [saving, setSaving] = useState(false);
   const [alta, setAlta] = useState<Alta | null>(null);
 
@@ -254,6 +269,7 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     setEquipo({ productor: "", editor: "", pauta: "" });
     setContacto({ nombre: "", email: "" });
     setTipo("boleta");
+    setServicios([]);
     setAlta(null);
   };
   const cerrar = (v: boolean) => {
@@ -288,6 +304,7 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
         },
         contacto_emails: email ? [email] : [],
         facturacion: { tipo },
+        servicios: servicios.map((id) => ({ id, estado: "desarrollo", desde: hoyISO() })),
         alta: hoyISO(),
         created_at: new Date().toISOString(),
       });
@@ -444,6 +461,14 @@ function NuevoClienteDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                 />
               ))}
             </div>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <p className={ETIQUETA}>Qué más contrató</p>
+              <p className="text-xs text-muted-foreground">Además de Redes. Cada uno le suma un módulo a su panel (después se edita desde su ficha).</p>
+            </div>
+            <ElegirServicios valor={servicios} onChange={setServicios} />
           </div>
 
           <div className="space-y-3">

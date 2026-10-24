@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { serviciosEnMenu } from "@/lib/redes/servicios";
 import { asset } from "@/lib/asset";
 import { useLocation, useNavigate } from "react-router-dom";
 import { signOut } from "@/lib/auth";
@@ -70,7 +71,7 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
   const { empresa } = useEmpresa();
   // En la compu el chat está en el botón flotante: el menú no lo repite (en el celular sigue en la barra de abajo).
   const conDock = !viewingAs && ROLES_DOCK.includes(role ?? "");
-  const sections = navForRoles(role, roles, empresa, { crm: estadoCrm(clientes) })
+  const sections = navForRoles(role, roles, empresa, { crm: estadoCrm(clientes), servicios: serviciosEnMenu(clientes) })
     .map((s) => ({ ...s, items: conDock ? s.items.filter((i) => i.path !== "/chat") : s.items }))
     .filter((s) => s.items.length > 0);
   const pendientes = usePendientes();

@@ -324,6 +324,8 @@ export interface Project {
   } | null;
   /** CRM (beta): si el cliente ve "Mis contactos". Lo prende el admin. */
   crm_activo?: boolean;
+  /** Lo que contrató además de Redes (web, sistema ERP, app, mantenimiento): cada uno suma un módulo a su panel. */
+  servicios?: import("@/lib/redes/servicios").ServicioCliente[] | null;
   /** CRM en "Próximamente": lo ve en el menú con la etiqueta "Pronto" y una pantalla de lo que va a poder hacer. */
   crm_proximamente?: boolean;
   /** Última vez que se trajeron la pauta y el Instagram de Meta (lo escribe el servidor). */

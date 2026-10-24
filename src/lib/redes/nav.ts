@@ -23,6 +23,7 @@ import {
   FolderOpen,
   Sparkles,
   ListTodo, Inbox, Globe, Megaphone, FileText, Contact, Trophy, BookOpen } from "lucide-react";
+import { servicioInfo, type IdServicio } from "@/lib/redes/servicios";
 import type { UserRole } from "@/integrations/firebase/types";
 
 export interface NavItem {
@@ -102,6 +103,8 @@ export function navForRoles(role: UserRole | undefined, roles: UserRole[] = [], 
 export interface OpcionesNav {
   /** El CRM (beta) del cliente: prendido o en "Próximamente". */
   crm?: "activo" | "pronto" | null;
+  /** Lo que contrató además de Redes (web, ERP…): cada uno es un ítem en «Mis servicios». */
+  servicios?: IdServicio[];
 }
 
 export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {}): NavSection[] {
@@ -244,6 +247,14 @@ export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {
                 ],
               },
             ] : []),
+        ...(opciones.servicios?.length
+          ? [
+              {
+                title: "Mis servicios",
+                items: opciones.servicios.map((id) => ({ label: servicioInfo(id).nombre, icon: servicioInfo(id).icon, path: `/cliente?tab=servicios&s=${id}` })),
+              },
+            ]
+          : []),
         {
           title: "Mi cuenta",
           items: [

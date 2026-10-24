@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { EditarServicios } from "@/components/redes/ServiciosCliente";
 import { RUBROS_PAUTA, ZONAS_PAUTA } from "../../../api/_lib/pauta-rubros";
 import { PautaMeta } from "@/components/redes/PautaMeta";
 import { CrecimientoRedes } from "@/components/redes/CrecimientoRedes";
@@ -493,6 +494,7 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
               </div>
             </div>
             {cliente.crm_activo && <WebCatalogoPendiente negocio={cliente.id} />}
+            <EditarServicios cliente={cliente} />
             <div className="flex flex-wrap gap-2">
               {COLORES.map((c) => (
                 <button

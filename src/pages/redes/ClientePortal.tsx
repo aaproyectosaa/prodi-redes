@@ -45,11 +45,12 @@ import { QueTeVende } from "@/components/redes/crm/QueTeVende";
 import { CrmProximamente } from "@/components/redes/crm/CrmProximamente";
 import { QueIncluyeCrm } from "@/components/redes/crm/QueIncluyeCrm";
 import { LogoCliente } from "@/components/redes/LogoCliente";
+import { MisServicios } from "@/components/redes/ServiciosCliente";
 import { DATOS_COBRO_DEFAULT } from "@/lib/redes/types";
 import { SelectorVista, VistaCalendario, useVista } from "@/components/redes/VistaCalendario";
 import { faltaMarca, pasosCliente, resumenMarca } from "@/lib/redes/proximoPaso";
 
-type Tab = "inicio" | "resultados" | "piezas" | "crm" | "contactos" | "vende" | "equipo" | "material" | "plan" | "negocio";
+type Tab = "inicio" | "resultados" | "piezas" | "crm" | "contactos" | "vende" | "equipo" | "material" | "plan" | "negocio" | "servicios";
 
 const TITULOS: Partial<Record<Tab, string>> = {
   resultados: "Resultados",
@@ -61,6 +62,7 @@ const TITULOS: Partial<Record<Tab, string>> = {
   material: "Material",
   plan: "Mi plan",
   negocio: "Mi negocio",
+  servicios: "Mis servicios",
 };
 const SUBTITULOS: Partial<Record<Tab, string>> = {
   resultados: "Qué lograron tus videos con la pauta.",
@@ -72,6 +74,7 @@ const SUBTITULOS: Partial<Record<Tab, string>> = {
   material: "Todo lo que filmamos y lo que ya está editado, para ver y descargar.",
   plan: "Si estás al día, qué incluye tu plan, cuánto usaste y tus boletas.",
   negocio: "Tu marca y lo que vendés: con esto armamos tus videos y piezas.",
+  servicios: "Lo que hacemos para tu negocio además de las redes: cómo va, dónde entrar y cómo pedirnos cambios.",
 };
 
 function saludoDelDia() {
@@ -90,7 +93,7 @@ export default function ClientePortal() {
   // El "+" del CRM (nuevo contacto o nuevo vendedor) va arriba, donde los otros módulos tienen "Pedir un video".
   const [crmNuevo, setCrmNuevo] = useState(false);
   const enCrm = tab === "contactos" || tab === "equipo";
-  const esCrm = enCrm || tab === "crm" || tab === "vende";
+  const esCrm = enCrm || tab === "crm" || tab === "vende" || tab === "servicios";
   const cliente = clientes.find((c) => c.id === clienteId) ?? clientes[0];
   const mes = mesActual();
   const [mesRes, setMesRes] = useState(mes);
@@ -511,6 +514,10 @@ export default function ClientePortal() {
             <EquipoCrm cliente={cliente} nuevo={crmNuevo} onNuevo={setCrmNuevo} />
           </TabsContent>
         )}
+
+        <TabsContent value="servicios">
+          <MisServicios cliente={cliente} resaltar={params.get("s")} />
+        </TabsContent>
 
         <TabsContent value="negocio" className="space-y-6">
           <TarjetaPerfil cliente={cliente} onCompletar={() => document.getElementById("datos-marca")?.scrollIntoView({ behavior: "smooth", block: "start" })} />
