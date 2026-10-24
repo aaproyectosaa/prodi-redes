@@ -90,6 +90,7 @@ export default function ClientePortal() {
   // El "+" del CRM (nuevo contacto o nuevo vendedor) va arriba, donde los otros módulos tienen "Pedir un video".
   const [crmNuevo, setCrmNuevo] = useState(false);
   const enCrm = tab === "contactos" || tab === "equipo";
+  const esCrm = enCrm || tab === "crm" || tab === "vende";
   const cliente = clientes.find((c) => c.id === clienteId) ?? clientes[0];
   const mes = mesActual();
   const [mesRes, setMesRes] = useState(mes);
@@ -286,12 +287,15 @@ export default function ClientePortal() {
           >
             <HelpCircle className="h-[18px] w-[18px]" />
           </Button>
-          <Button
-            onClick={() => (enCrm && cliente.crm_activo ? setCrmNuevo(true) : setPedirVideo(true))}
-            className="group h-11 w-full rounded-full sm:h-10 sm:w-auto bg-gradient-to-r from-primary to-fuchsia-500 px-5 font-semibold shadow-lg shadow-primary/25 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/35"
-          >
-            <Plus className="mr-1.5 h-4 w-4 transition-transform group-hover:rotate-90" /> {cliente.crm_activo && tab === "contactos" ? "Nuevo contacto" : cliente.crm_activo && tab === "equipo" ? "Nuevo vendedor" : "Pedir un video"}
-          </Button>
+          {/* En el CRM no va "Pedir un video": con el CRM activo es "Nuevo contacto" o "Nuevo vendedor"; en el resto, nada. */}
+          {(!esCrm || (enCrm && cliente.crm_activo)) && (
+            <Button
+              onClick={() => (enCrm && cliente.crm_activo ? setCrmNuevo(true) : setPedirVideo(true))}
+              className="group h-11 w-full rounded-full sm:h-10 sm:w-auto bg-gradient-to-r from-primary to-fuchsia-500 px-5 font-semibold shadow-lg shadow-primary/25 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/35"
+            >
+              <Plus className="mr-1.5 h-4 w-4 transition-transform group-hover:rotate-90" /> {enCrm ? (tab === "contactos" ? "Nuevo contacto" : "Nuevo vendedor") : "Pedir un video"}
+            </Button>
+          )}
         </>
       }
     >
