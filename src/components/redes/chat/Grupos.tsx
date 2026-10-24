@@ -36,6 +36,7 @@ import {
   sacarDeGrupoAuto,
   volverASumarAuto,
   salirDelGrupo,
+  sumarAGrupoAuto,
   sumarAlGrupo,
   tituloChat,
 } from "@/lib/redes/chat";
@@ -415,7 +416,7 @@ export function InfoChat({
           <div className="flex-1 space-y-3 p-5">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold">{(chat.miembros ?? []).length} miembros</p>
-              {esGrupo && admin && (
+              {((esGrupo && admin) || sacaAuto) && (
                 <Button size="sm" variant="outline" onClick={() => setSumando((v) => !v)}>
                   <UserPlus className="mr-1.5 h-4 w-4" /> Sumar
                 </Button>
@@ -430,7 +431,8 @@ export function InfoChat({
                   disabled={ocupado || !elegidas.size}
                   onClick={() =>
                     void hacer(async () => {
-                      await sumarAlGrupo(chat, uid, yo, Object.fromEntries(disponibles.filter((p) => elegidas.has(p.id)).map((p) => [p.id, p.nombre])));
+                      const nuevos = Object.fromEntries(disponibles.filter((p) => elegidas.has(p.id)).map((p) => [p.id, p.nombre]));
+                      await (sacaAuto ? sumarAGrupoAuto(chat, uid, yo, nuevos) : sumarAlGrupo(chat, uid, yo, nuevos));
                       setElegidas(new Set());
                       setSumando(false);
                     }, "Listo, ya están en el grupo")

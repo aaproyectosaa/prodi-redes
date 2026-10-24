@@ -547,6 +547,8 @@ export interface Chat {
   borrado?: boolean;
   /** Grupos automáticos: gente que el super admin sacó (no vuelve a entrar sola). */
   excluidos?: string[];
+  /** Grupos automáticos: gente que el super admin sumó a mano (queda aunque no tenga rol en el cliente). */
+  sumados?: string[];
   /** Mensajes fijados arriba del chat (hasta 3): el guion, el brief del mes… */
   fijados?: { id: string; texto: string; by: string; at: string }[] | null;
   /** Equipo / grupo de cliente con nombre puesto a mano por el super admin (la sincronización no lo pisa). */

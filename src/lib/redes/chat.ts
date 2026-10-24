@@ -47,6 +47,8 @@ export async function sincronizarChats(projects: Project[], profiles: Profile[],
     const actual = chats.find((c) => c.id === id);
     // Los que el super admin sacó de este grupo no vuelven a entrar solos.
     const fuera = new Set(actual?.excluidos ?? []);
+    // Y los que sumó a mano quedan, aunque no tengan rol en el cliente.
+    if (actual?.sumados?.length) data = { ...data, miembros: Array.from(new Set([...data.miembros, ...actual.sumados])) };
     if (fuera.size) data = { ...data, miembros: data.miembros.filter((m) => !fuera.has(m)) };
     const nombres = Object.fromEntries(data.miembros.map((m) => [m, nombreDe(m)]));
     // Grupo dado de baja por el super admin: no se vuelve a armar.
@@ -475,9 +477,34 @@ export async function sacarDeGrupoAuto(chat: Chat, uid: string, remitente: strin
   lote.update(doc(db, CHATS, chat.id), {
     miembros: chat.miembros.filter((m) => m !== quien),
     excluidos: Array.from(new Set([...(chat.excluidos ?? []), quien])),
+    sumados: (chat.sumados ?? []).filter((m) => m !== quien),
     ...extra,
   });
   await lote.commit();
+}
+
+/** Super admin: suma a mano a quien quiera a un grupo automático (equipo, Software o cliente); queda fijo. */
+export async function sumarAGrupoAuto(chat: Chat, uid: string, remitente: string, nuevos: Record<string, string>) {
+  assertEditable();
+  const ids = Object.keys(nuevos).filter((id) => !chat.miembros.includes(id));
+  if (!ids.length) return;
+  const lote = writeBatch(db);
+  const extra = sistema(lote, chat.id, uid, remitente, `sumó a ${listaNombres(ids.map((id) => primerNombre(nuevos[id])))}`);
+  lote.update(doc(db, CHATS, chat.id), {
+    miembros: [...chat.miembros, ...ids],
+    nombres: { ...(chat.nombres ?? {}), ...nuevos },
+    sumados: Array.from(new Set([...(chat.sumados ?? []), ...ids])),
+    excluidos: (chat.excluidos ?? []).filter((m) => !ids.includes(m)),
+    ...extra,
+  });
+  await lote.commit();
+  void avisar({
+    destinatarios: ids,
+    titulo: chat.nombre ?? "Grupo",
+    cuerpo: `${remitente} te sumó al grupo`,
+    link: `/chat?c=${chat.id}`,
+    clave: `chat:${chat.id}`,
+  });
 }
 
 /** Super admin: vuelve a sumar a alguien que había sacado de un grupo automático. */
