@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { BellRing, CheckCircle2, Clapperboard, HelpCircle, Image as ImageIcon, Lightbulb, MessageCircle, Package, Send, ShieldAlert, Sparkles, Trophy } from "lucide-react";
+import { CheckCircle2, Clapperboard, HelpCircle, Lightbulb, MessageCircle, ShieldAlert, Sparkles, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DemoContactos } from "@/components/redes/crm/DemoContactos";
 
 // CRM en "Próximamente": el cliente ya lo ve en su menú pero todavía no lo puede usar (falta que Meta habilite la app
 // para que los mensajes entren solos). En cada sección, una animación paso a paso con un tablero de ejemplo muestra
@@ -55,120 +56,6 @@ function Marco({ titulo, children }: { titulo: string; children: React.ReactNode
       </div>
       {children}
     </div>
-  );
-}
-
-// --- Mis contactos: el tablero en acción --------------------------------------------------------------------------
-
-const COLUMNAS = [
-  { label: "Nuevos", raya: "border-t-sky-500" },
-  { label: "Les escribí", raya: "border-t-violet-500" },
-  { label: "Presupuesto", raya: "border-t-orange-500" },
-  { label: "Vendido", raya: "border-t-emerald-500" },
-];
-const PASOS_CONTACTOS = [
-  "Marta te escribe por WhatsApp desde tu anuncio: entra sola a «Nuevos»",
-  "Te avisa a quién contestarle hoy",
-  "Le escribís desde acá y le mandás fotos, videos o productos",
-  "Le pasaste el precio: te recuerda volver a escribirle",
-  "Vendió: anotás cuánto y sabés qué video la trajo",
-];
-
-function TarjetaFondo({ nombre, texto }: { nombre: string; texto: string }) {
-  return (
-    <div className="rounded-lg border bg-card p-2 opacity-60">
-      <p className="truncate text-[11px] font-semibold">{nombre}</p>
-      <p className="truncate text-[10px] text-muted-foreground">{texto}</p>
-    </div>
-  );
-}
-
-function DemoContactos() {
-  const [paso, setPaso] = usePasos(PASOS_CONTACTOS.length, 3000);
-  const col = [0, 0, 1, 2, 3][paso];
-  return (
-    <Marco titulo="Tus contactos, desde que te escriben hasta que te compran">
-      {/* Arriba: lo vendido y a quién escribirle hoy */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="rounded-xl border bg-card px-3 py-1.5">
-          <p className="text-[10px] text-muted-foreground">Vendiste este mes</p>
-          <p className={cn("text-sm font-bold tabular-nums transition-colors duration-500", paso === 4 ? "text-emerald-600 dark:text-emerald-400" : "")}>{paso === 4 ? "$ 352.700" : "$ 256.700"}</p>
-        </div>
-        <div
-          className={cn(
-            "flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs transition-all duration-500",
-            paso === 1 ? "border-amber-500/60 bg-amber-500/10 text-amber-700 shadow-md shadow-amber-500/10 dark:text-amber-300" : "bg-card text-muted-foreground"
-          )}
-        >
-          <BellRing className={cn("h-3.5 w-3.5", paso === 1 && "animate-bounce")} /> Hoy escribiles a: <b>{paso <= 1 ? "Marta" : "Julián"}</b>
-        </div>
-      </div>
-
-      {/* El tablero */}
-      <div className="relative">
-        <div className="grid grid-cols-4 gap-2">
-          {COLUMNAS.map((c, i) => (
-            <div key={c.label} className={cn("min-h-[190px] space-y-1.5 rounded-xl border border-t-4 bg-muted/40 p-1.5 sm:min-h-[210px]", c.raya, col === i && "ring-2 ring-primary/30")}>
-              <p className="px-1 text-[10px] font-semibold sm:text-xs">{c.label}</p>
-              <div className="h-[58px]" />
-              {i === 0 && <TarjetaFondo nombre="Julián" texto="Promo familiar" />}
-              {i === 1 && <TarjetaFondo nombre="Sofía" texto="¿Tienen sin TACC?" />}
-              {i === 2 && <TarjetaFondo nombre="Club Sur" texto="30 pizzas para el 14" />}
-              {i === 3 && <TarjetaFondo nombre="Ana" texto="$ 18.500" />}
-            </div>
-          ))}
-        </div>
-
-        {/* Marta: se mueve de columna en columna */}
-        <div
-          className="absolute top-7 px-1.5 transition-all duration-700 ease-out motion-reduce:transition-none"
-          style={{ left: `${col * 25}%`, width: "25%" }}
-        >
-          <div className={cn("rounded-lg border-2 bg-card p-2 shadow-lg", paso === 4 ? "border-emerald-500/70" : "border-primary/60", paso === 0 && "animate-in fade-in zoom-in-95 duration-500")}>
-            <div className="flex items-center justify-between gap-1">
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700 dark:text-emerald-300">
-                <MessageCircle className="h-2.5 w-2.5" /> <span className="hidden sm:inline">WhatsApp</span>
-              </span>
-              {paso === 0 && <span className="rounded-full bg-sky-500 px-1.5 py-0.5 text-[9px] font-bold text-white">Nuevo</span>}
-            </div>
-            <p className="mt-1 truncate text-xs font-semibold">Marta Gómez</p>
-            <p className="truncate text-[10px] text-muted-foreground">2 grandes para el sábado</p>
-            {paso === 1 && (
-              <span className="mt-1 inline-flex items-center gap-0.5 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:text-amber-300">
-                <BellRing className="h-2.5 w-2.5" /> Escribile hoy
-              </span>
-            )}
-            {paso === 3 && <span className="mt-1 inline-block rounded-full bg-orange-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-orange-700 dark:text-orange-300">En 3 días: volver a escribir</span>}
-            {paso === 4 && <span className="mt-1 inline-block rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">$ 96.000</span>}
-          </div>
-        </div>
-
-        {/* El chat: le manda la promo con foto y producto */}
-        {paso === 2 && (
-          <div className="absolute bottom-2 right-2 w-[58%] max-w-[260px] space-y-1.5 rounded-xl border bg-background/95 p-2 shadow-xl backdrop-blur animate-in fade-in slide-in-from-bottom-3 duration-500 sm:right-4">
-            <div className="ml-auto w-fit max-w-[90%] rounded-2xl rounded-br-sm bg-gradient-to-br from-primary to-fuchsia-500 px-2.5 py-1.5 text-[11px] text-white">¡Hola Marta! Te paso la promo del sábado</div>
-            <div className="ml-auto flex w-fit items-center gap-1.5 rounded-xl border bg-card p-1.5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-md bg-orange-500/20 text-orange-600">
-                <Package className="h-4 w-4" />
-              </span>
-              <span>
-                <span className="block text-[10px] font-semibold">Promo 2 grandes</span>
-                <span className="block text-[10px] font-bold text-primary">$ 24.000</span>
-              </span>
-            </div>
-            <div className="flex items-center gap-1 text-[9px] text-muted-foreground">
-              <ImageIcon className="h-3 w-3" /> Fotos y videos · <Package className="h-3 w-3" /> Productos · <Send className="ml-auto h-3 w-3 text-primary" />
-            </div>
-          </div>
-        )}
-        {paso === 4 && (
-          <div className="absolute bottom-2 right-2 flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-background/95 px-2.5 py-1.5 text-[11px] shadow-xl animate-in fade-in slide-in-from-bottom-3 duration-500 sm:right-4">
-            <Clapperboard className="h-3.5 w-3.5 text-primary" /> La trajo el video <b>«Promo 2x1 de los jueves»</b>
-          </div>
-        )}
-      </div>
-      <Pasos textos={PASOS_CONTACTOS} paso={paso} onPaso={setPaso} />
-    </Marco>
   );
 }
 
@@ -313,8 +200,12 @@ function DemoEquipo() {
   );
 }
 
-export function CrmProximamente({ seccion = "contactos" }: { seccion?: SeccionCrm }) {
+export function CrmProximamente({ seccion = "contactos", rubro }: { seccion?: SeccionCrm; rubro?: string | null }) {
   if (seccion === "vende") return <DemoVende />;
   if (seccion === "equipo") return <DemoEquipo />;
-  return <DemoContactos />;
+  return (
+    <Marco titulo="Así vas a atender y venderle a cada cliente que te escribe">
+      <DemoContactos rubro={rubro} />
+    </Marco>
+  );
 }
