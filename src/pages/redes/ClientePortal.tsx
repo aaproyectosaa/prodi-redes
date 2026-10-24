@@ -43,16 +43,18 @@ import { Contactos } from "@/components/redes/crm/Contactos";
 import { EquipoCrm } from "@/components/redes/crm/EquipoCrm";
 import { QueTeVende } from "@/components/redes/crm/QueTeVende";
 import { CrmProximamente } from "@/components/redes/crm/CrmProximamente";
+import { QueIncluyeCrm } from "@/components/redes/crm/QueIncluyeCrm";
 import { LogoCliente } from "@/components/redes/LogoCliente";
 import { DATOS_COBRO_DEFAULT } from "@/lib/redes/types";
 import { SelectorVista, VistaCalendario, useVista } from "@/components/redes/VistaCalendario";
 import { faltaMarca, pasosCliente, resumenMarca } from "@/lib/redes/proximoPaso";
 
-type Tab = "inicio" | "resultados" | "piezas" | "contactos" | "vende" | "equipo" | "material" | "plan" | "negocio";
+type Tab = "inicio" | "resultados" | "piezas" | "crm" | "contactos" | "vende" | "equipo" | "material" | "plan" | "negocio";
 
 const TITULOS: Partial<Record<Tab, string>> = {
   resultados: "Resultados",
   piezas: "Piezas gráficas",
+  crm: "Qué incluye tu CRM",
   contactos: "Mis contactos",
   vende: "Qué te vende",
   equipo: "Equipo de ventas",
@@ -64,6 +66,7 @@ const SUBTITULOS: Partial<Record<Tab, string>> = {
   resultados: "Qué lograron tus videos con la pauta.",
   piezas: "Posteos, historias, afiches, carteles y banners con tu marca.",
   contactos: "Los que te escriben: a quién contestarle hoy, cuánto vendiste y cuánto te costó cada venta.",
+  crm: "Todo lo que vas a poder hacer, explicado.",
   vende: "Qué video te trajo cada venta y qué te preguntan tus clientes (para tus próximos videos).",
   equipo: "Quiénes atienden tus contactos y cómo le va a cada uno este mes.",
   material: "Todo lo que filmamos y lo que ya está editado, para ver y descargar.",
@@ -475,6 +478,11 @@ export default function ClientePortal() {
           />
         </TabsContent>
 
+        {(cliente.crm_activo || cliente.crm_proximamente) && (
+          <TabsContent value="crm">
+            <QueIncluyeCrm pronto={!cliente.crm_activo} />
+          </TabsContent>
+        )}
         {!cliente.crm_activo && cliente.crm_proximamente && (
           <>
             {(["contactos", "vende", "equipo"] as const).map((t) => (

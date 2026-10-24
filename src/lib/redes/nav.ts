@@ -22,7 +22,7 @@ import {
   Store,
   FolderOpen,
   Sparkles,
-  ListTodo, Inbox, Globe, Megaphone, FileText, Contact, Trophy } from "lucide-react";
+  ListTodo, Inbox, Globe, Megaphone, FileText, Contact, Trophy, BookOpen } from "lucide-react";
 import type { UserRole } from "@/integrations/firebase/types";
 
 export interface NavItem {
@@ -237,6 +237,7 @@ export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {
               {
                 title: "CRM",
                 items: [
+                  { label: "Qué incluye", icon: BookOpen, path: "/cliente?tab=crm", pronto: opciones.crm === "pronto" },
                   { label: "Mis contactos", icon: Contact, path: "/cliente?tab=contactos", pronto: opciones.crm === "pronto" },
                   { label: "Qué te vende", icon: Trophy, path: "/cliente?tab=vende", pronto: opciones.crm === "pronto" },
                   { label: "Equipo", icon: Users, path: "/cliente?tab=equipo", pronto: opciones.crm === "pronto" },
