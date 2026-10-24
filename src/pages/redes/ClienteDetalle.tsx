@@ -433,6 +433,8 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
       .filter((p) => {
         // Lo que ya está tildado se sigue viendo (para poder sacarlo), aunque esté desactivado.
         if (asignados.includes(p.id)) return true;
+        // El admin que está editando queda como comodín en todos los roles del equipo.
+        if (rol !== "cliente" && p.id === user?.uid) return true;
         // Su rol principal o uno adicional (ej. Producción que también hace Pauta).
         if (p.activo === false || (p.role !== rol && !(p.roles_extra ?? []).includes(rol as never))) return false;
         // Los super admin ya ven todo: no hace falta ofrecerlos en cada rol.
