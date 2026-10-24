@@ -561,6 +561,8 @@ export interface Chat {
   nombres?: Record<string, string>;
   /** Grupo de un cliente: quiénes son contactos (solo chat), para marcarlos aunque no se lean sus perfiles. */
   contactos?: string[];
+  /** Grupo de un cliente con Prodi Software (su web, su sistema): el cliente con el equipo de Software, no el de Redes. */
+  area?: "software" | null;
   /** Última lectura de cada miembro: { uid: ISO } */
   leido: Record<string, string>;
   created_at: string;

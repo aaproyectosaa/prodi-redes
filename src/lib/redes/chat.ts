@@ -15,6 +15,7 @@ import { avisar } from "./avisos";
 import { callApi } from "./api";
 import { assertEditable, enModoVista } from "./vistaComo";
 import type { Chat, Mensaje, ReferenciaChat, TipoMensaje } from "./types";
+import { serviciosDe } from "./servicios";
 
 export const CHATS = "chats";
 const TEAM = ["admin", "productor", "editor", "pauta", "diseno", "administracion"];
@@ -23,6 +24,8 @@ const now = () => new Date().toISOString();
 const mismo = (a: string[], b: string[]) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
 
 export const chatClienteId = (pid: string) => `cliente_${pid}`;
+/** Grupo del cliente con el equipo de Software (si contrató web, sistema, app o mantenimiento). */
+export const chatSoftwareId = (pid: string) => `software_${pid}`;
 export const chatDirectoId = (a: string, b: string) => `dm_${[a, b].sort().join("_")}`;
 
 /**
@@ -30,6 +33,8 @@ export const chatDirectoId = (a: string, b: string) => `dm_${[a, b].sort().join(
  * - "equipo": todo el equipo interno.
  * - "cliente_<id>": equipo asignado al cliente + usuarios del cliente + admins.
  * - "software": Prodi Software (admins y programación).
+ * - "software_<id>": el cliente que contrató web, sistema, app o mantenimiento, con el equipo de Software
+ *   (no el de Redes: son dos equipos distintos).
  */
 export async function sincronizarChats(projects: Project[], profiles: Profile[], chats: Chat[]) {
   if (enModoVista()) return;
@@ -82,6 +87,10 @@ export async function sincronizarChats(projects: Project[], profiles: Profile[],
       new Set([...(t.productor ?? []), ...(t.editor ?? []), ...(t.pauta ?? []), ...(t.diseno ?? []), ...(t.cliente ?? []), ...contactos, ...admins])
     );
     asegurar(chatClienteId(p.id), { tipo: "cliente", proyecto_id: p.id, nombre: p.nombre, miembros, contactos });
+    if (serviciosDe(p).length) {
+      const conSoftware = Array.from(new Set([...(t.cliente ?? []), ...contactos, ...deSoftware]));
+      asegurar(chatSoftwareId(p.id), { tipo: "cliente", area: "software", proyecto_id: p.id, nombre: p.nombre, miembros: conSoftware, contactos });
+    }
   }
   await Promise.allSettled(tareas);
 }
@@ -314,6 +323,8 @@ export function tituloChat(chat: Chat, uid: string | undefined, profiles: Profil
   if (chat.tipo === "prodi") return "Prodi";
   if (chat.tipo === "equipo") return "Equipo Prodi";
   if (chat.tipo === "software") return chat.nombre_propio && chat.nombre ? chat.nombre : "Equipo Software";
+  if (chat.tipo === "cliente" && chat.area === "software")
+    return role === "cliente" || role === "contacto" ? `Prodi Software · ${chat.nombre ?? ""}` : `${chat.nombre ?? "Cliente"} · Software`;
   if (chat.tipo === "cliente") return role === "cliente" || role === "contacto" ? `Prodi · ${chat.nombre ?? ""}` : chat.nombre ?? "Cliente";
   if (chat.tipo === "grupo") return chat.nombre ?? "Grupo";
   const otro = chat.miembros.find((m) => m !== uid) ?? "";

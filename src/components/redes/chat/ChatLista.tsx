@@ -173,7 +173,7 @@ export function ChatLista({
   const { enVoz } = useChatVoz();
   // Clientes de Redes que también son de Software: su grupo lleva la etiqueta "Software" (solo para el equipo).
   const proyectosSw = useProyectosSoftware(role !== "cliente" && role !== "contacto");
-  const esDeSoftware = (c: ChatT) => c.tipo === "software" || (c.tipo === "cliente" && !!c.proyecto_id && proyectosSw.has(c.proyecto_id));
+  const esDeSoftware = (c: ChatT) => c.tipo === "software" || c.area === "software" || (c.tipo === "cliente" && !!c.proyecto_id && proyectosSw.has(c.proyecto_id));
   const prefs = useChatPrefs(uid);
   const [verGuardados, setVerGuardados] = useState(false);
   const [q, setQ] = useState("");

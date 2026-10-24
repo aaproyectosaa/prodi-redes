@@ -9,6 +9,7 @@ import { db } from "@/integrations/firebase/client";
 import { hoyISO } from "@/lib/redes/format";
 import { ESTADO_SERVICIO, SERVICIOS, serviciosDe, servicioInfo, urlCompleta, type EstadoServicio, type IdServicio, type ServicioCliente } from "@/lib/redes/servicios";
 import { cn } from "@/lib/utils";
+import { chatSoftwareId } from "@/lib/redes/chat";
 
 /** Al dar de alta: qué más contrató además de Redes (chips para tildar). */
 export function ElegirServicios({ valor, onChange }: { valor: IdServicio[]; onChange: (v: IdServicio[]) => void }) {
@@ -135,7 +136,7 @@ function CampoGuardable({ inicial, placeholder, onGuardar }: { inicial: string; 
 }
 
 /** En el panel del cliente: sus servicios, cada uno con su estado, el link para entrar y cómo pedir cambios. */
-export function MisServicios({ cliente, resaltar }: { cliente: { servicios?: ServicioCliente[] | null }; resaltar?: string | null }) {
+export function MisServicios({ cliente, resaltar }: { cliente: { id: string; servicios?: ServicioCliente[] | null }; resaltar?: string | null }) {
   const lista = serviciosDe(cliente);
   if (!lista.length) return <p className="py-10 text-center text-sm text-muted-foreground">Todavía no tenés otros servicios con nosotros.</p>;
   return (
@@ -172,7 +173,7 @@ export function MisServicios({ cliente, resaltar }: { cliente: { servicios?: Ser
                 </Button>
               )}
               <Button asChild variant="outline" className="h-11 flex-1 rounded-2xl font-semibold">
-                <Link to="/chat">
+                <Link to={`/chat?c=${chatSoftwareId(cliente.id)}`}>
                   <MessageCircle className="mr-2 h-4 w-4" /> Pedir un cambio o ayuda
                 </Link>
               </Button>

@@ -218,7 +218,7 @@ export function RedesDataProvider({ children }: { children: ReactNode }) {
   const syncKey = useMemo(
     () =>
       JSON.stringify([
-        projects.map((p) => [p.id, p.nombre, p.enabled, p.team_roles]),
+        projects.map((p) => [p.id, p.nombre, p.enabled, p.team_roles, (p.servicios ?? []).length > 0]),
         profiles.map((p) => [p.id, p.role]),
         chats.map((c) => [c.id, c.miembros, c.nombre]),
       ]),
