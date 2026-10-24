@@ -3,7 +3,10 @@ import { Brain, CalendarDays, Clapperboard, Loader2, Megaphone, RotateCcw, Send,
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { AdjuntosEnviados, BotonAdjuntar, ListaAdjuntos, useAdjuntosIA, type AdjuntoIA } from "@/components/redes/AdjuntosIA";
+import { EstadoBorrador } from "@/components/redes/EstadoBorrador";
 import { callApi } from "@/lib/redes/api";
+import { useBorrador } from "@/lib/redes/borradores";
 import { mesLabel } from "@/lib/redes/format";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +43,7 @@ interface Mensaje {
   texto: string;
   recordado?: string | null;
   conPropuesta?: number;
+  archivos?: string[];
 }
 
 const SUGERENCIAS = [
@@ -59,6 +63,9 @@ function leer(pid: string): { mensajes: Mensaje[]; propuesta: Propuesta | null }
   }
   return { mensajes: [], propuesta: null };
 }
+
+type Charla = { mensajes: Mensaje[]; propuesta: Propuesta | null };
+const charlaVacia = (c: Charla) => !c.mensajes.length && !c.propuesta;
 
 export function CampaniaIA({
   proyectoId,
@@ -81,6 +88,7 @@ export function CampaniaIA({
   const [cargando, setCargando] = useState(false);
   const [cupos, setCupos] = useState<Cupo[] | null>(null);
   const fin = useRef<HTMLDivElement>(null);
+  const adj = useAdjuntosIA();
 
   // Cada cliente tiene su charla (sigue ahí si se cierra la ventana).
   useEffect(() => {
@@ -95,6 +103,22 @@ export function CampaniaIA({
       /* sin almacenamiento */
     }
   }, [proyectoId, mensajes, propuesta]);
+
+  // Y en el servidor: así no se pierde al cambiar de compu o de celular, y la ve todo el equipo.
+  const charla = useMemo<Charla>(() => ({ mensajes: mensajes.slice(-40), propuesta }), [mensajes, propuesta]);
+  const borrador = useBorrador<Charla>({
+    tipo: "campania",
+    clave: proyectoId,
+    proyectoId,
+    valor: charla,
+    vacio: charlaVacia,
+    alCargar: (d) => {
+      // Si en esta compu hay una charla más larga (sin subir todavía), queda esa.
+      if ((d.mensajes?.length ?? 0) < leer(proyectoId).mensajes.length) return;
+      setMensajes(d.mensajes ?? []);
+      setPropuesta(d.propuesta ?? null);
+    },
+  });
 
   // Lugares libres de los próximos meses.
   useEffect(() => {
@@ -113,9 +137,17 @@ export function CampaniaIA({
   }, [mensajes.length, enviando]);
 
   const enviar = async (pedido?: string) => {
-    const t = (pedido ?? texto).trim();
+    const t = (pedido ?? texto).trim() || (adj.archivos.length ? "Te mando esto: miralo y usalo para la campaña." : "");
     if (!t || enviando) return;
-    const nuevos: Mensaje[] = [...mensajes, { rol: "yo", texto: t }];
+    let adjuntos: AdjuntoIA[] = [];
+    const elegidos = adj.archivos;
+    try {
+      adjuntos = await adj.preparar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudieron preparar los archivos");
+      return;
+    }
+    const nuevos: Mensaje[] = [...mensajes, { rol: "yo", texto: t, ...(adjuntos.length ? { archivos: adjuntos.map((a) => a.nombre) } : {}) }];
     setMensajes(nuevos);
     setTexto("");
     setEnviando(true);
@@ -126,6 +158,7 @@ export function CampaniaIA({
         mes: mesDesde,
         actual: propuesta?.videos ?? [],
         mensajes: nuevos.map((m) => ({ rol: m.rol, texto: m.texto })),
+        ...(adjuntos.length ? { adjuntos } : {}),
       });
       if (r.propuesta?.videos?.length) {
         setPropuesta({ campania: r.propuesta.campania, rodaje: r.propuesta.rodaje, videos: r.propuesta.videos });
@@ -136,6 +169,7 @@ export function CampaniaIA({
       toast.error(e instanceof Error ? e.message : "La IA no respondió");
       setMensajes((prev) => prev.slice(0, -1));
       setTexto(t);
+      if (adjuntos.length) adj.sumar(elegidos);
     } finally {
       setEnviando(false);
     }
@@ -145,6 +179,7 @@ export function CampaniaIA({
     setMensajes([]);
     setPropuesta(null);
     setTexto("");
+    void borrador.descartar();
   };
 
   const cambiarVideo = (id: string, cambios: Partial<VideoCampania>) =>
@@ -211,11 +246,14 @@ export function CampaniaIA({
 
       {/* La charla. */}
       <div className="overflow-hidden rounded-3xl border bg-card">
-        <div className="flex items-center gap-2 border-b bg-gradient-to-r from-primary/[0.08] to-fuchsia-500/[0.06] px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-2 border-b bg-gradient-to-r from-primary/[0.08] to-fuchsia-500/[0.06] px-4 py-2.5">
           <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-primary to-fuchsia-500 text-white">
             <Sparkles className="h-3.5 w-3.5" />
           </span>
           <p className="flex-1 text-sm font-semibold">Planificá la campaña con la IA</p>
+          {mensajes.length > 0 && (
+            <EstadoBorrador estado={borrador.estado} guardadoAt={borrador.guardadoAt} porNombre={borrador.porNombre} onGuardar={() => void borrador.guardar()} />
+          )}
           {mensajes.length > 0 && (
             <Button size="sm" variant="ghost" className="h-7 rounded-full text-xs text-muted-foreground" onClick={empezarDeNuevo} disabled={enviando || cargando}>
               <RotateCcw className="mr-1 h-3.5 w-3.5" /> Empezar de nuevo
@@ -231,7 +269,7 @@ export function CampaniaIA({
                   <Clapperboard className="h-4 w-4" />
                 </span>
                 <p className="text-sm leading-relaxed text-muted-foreground">
-                  Contame la campaña de <b className="text-foreground">{nombre}</b>: qué se lanza, qué querés mostrar y cuándo es el rodaje. Te voy a preguntar lo que me
+                  Contame la campaña de <b className="text-foreground">{nombre}</b>: qué se lanza, qué querés mostrar y cuándo es el rodaje (también me podés mandar fotos, capturas o PDF). Te voy a preguntar lo que me
                   falte y, cuando tenga todo, te propongo los videos repartidos en los meses según su plan.
                 </p>
               </div>
@@ -253,6 +291,7 @@ export function CampaniaIA({
             m.rol === "yo" ? (
               <div key={i} className="ml-auto max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-gradient-to-br from-primary to-violet-600 px-3.5 py-2 text-sm text-white shadow-sm animate-in fade-in slide-in-from-bottom-1">
                 {m.texto}
+                <AdjuntosEnviados nombres={m.archivos} claro />
               </div>
             ) : (
               <div key={i} className="flex max-w-[92%] items-start gap-2 animate-in fade-in slide-in-from-bottom-1">
@@ -288,7 +327,10 @@ export function CampaniaIA({
           <div ref={fin} />
         </div>
 
-        <div className="flex items-end gap-2 border-t p-3">
+        <div className="space-y-2 border-t p-3" {...adj.alSoltar}>
+          <ListaAdjuntos adj={adj} />
+          <div className="flex items-end gap-2">
+          <BotonAdjuntar adj={adj} className="h-11 w-11" disabled={enviando} />
           <Textarea
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
@@ -298,6 +340,7 @@ export function CampaniaIA({
                 void enviar();
               }
             }}
+            onPaste={adj.alPegar}
             rows={1}
             placeholder={
               propuesta ? "Pedile cambios: “pasá el de la promo a diciembre”, “uno más de detrás de escena”…" : "Ej.: el 12/11 filmamos un día entero en la fábrica, lanzan el horno pizzero nuevo…"
@@ -309,11 +352,12 @@ export function CampaniaIA({
             size="icon"
             className="h-11 w-11 shrink-0 rounded-full bg-gradient-to-br from-primary to-fuchsia-500 shadow-md shadow-primary/25"
             onClick={() => void enviar()}
-            disabled={!texto.trim() || enviando}
+            disabled={(!texto.trim() && !adj.archivos.length) || enviando}
             aria-label="Mandar"
           >
             {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
+          </div>
         </div>
       </div>
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ElegirCliente } from "@/components/redes/ElegirCliente";
 import { BotonAplicar, ChatIA } from "@/components/redes/ChatIA";
 import { AvisoPausaEquipo } from "@/components/redes/MoraAvisos";
 import { es } from "date-fns/locale";
@@ -154,6 +155,12 @@ export function RodajeDialog({
         .sort((a, b) => a.mes.localeCompare(b.mes) || a.created_at.localeCompare(b.created_at)),
     [videos, clienteId, rodaje]
   );
+  // Campañas con videos para filmar: se eligen todos de un toque (un rodaje de campaña filma varios meses juntos).
+  const campanias = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const v of candidatos) if (v.campania) m.set(v.campania, [...(m.get(v.campania) ?? []), v.id]);
+    return [...m.entries()].filter(([, ids]) => ids.length > 1);
+  }, [candidatos]);
   const sinLlegar = Object.entries(pendientes).filter(([id]) => !candidatos.some((v) => v.id === id));
   // Si el cliente filma siempre él, sus videos no llevan rodaje: no se cargan desde acá.
   const puedeCrear = !!cliente && quienFilma(cliente) !== "cliente";
@@ -299,35 +306,18 @@ export function RodajeDialog({
             </div>
           )}
           {/* Cliente */}
-          <Select
+          <ElegirCliente
             value={clienteId}
-            onValueChange={(v) => {
+            onChange={(v) => {
               setClienteId(v);
               setSel(new Set());
               setPendientes({});
             }}
             disabled={!!rodaje}
-          >
-            <SelectTrigger className="h-14 rounded-2xl border-white/10 bg-muted/40 px-4 text-base font-medium">
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-xs font-bold text-primary">
-                  {cliente ? iniciales(cliente.nombre ?? "") : <Building2 className="h-4 w-4" />}
-                </div>
-                <div className="min-w-0 truncate">
-                  <SelectValue placeholder="¿Para qué cliente?" />
-                </div>
-              </div>
-            </SelectTrigger>
-            <SelectContent>
-              {[...clientes]
-                .sort((a, b) => (a.nombre ?? "").localeCompare(b.nombre ?? ""))
-                .map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.nombre}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
+            clientes={clientes}
+            placeholder="¿Para qué cliente?"
+            className="h-14 rounded-2xl border-white/10 bg-muted/40 px-4 text-base font-medium"
+          />
 
           {/* Día */}
           <section className="space-y-2.5">
@@ -470,6 +460,32 @@ export function RodajeDialog({
               </div>
             ) : (
               <div className="space-y-2">
+                {campanias.map(([nombre, ids]) => {
+                  const todos = ids.every((id) => sel.has(id));
+                  return (
+                    <button
+                      key={nombre}
+                      type="button"
+                      onClick={() =>
+                        setSel((prev) => {
+                          const next = new Set(prev);
+                          for (const id of ids) todos ? next.delete(id) : next.add(id);
+                          return next;
+                        })
+                      }
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-2xl border border-dashed px-4 py-2.5 text-left text-xs transition-colors",
+                        todos ? "border-primary/60 bg-primary/[0.08] text-primary" : "border-primary/40 hover:bg-primary/[0.05]"
+                      )}
+                    >
+                      <Clapperboard className="h-4 w-4 shrink-0 text-primary" />
+                      <span className="min-w-0 flex-1">
+                        <span className="font-semibold">{todos ? "Quitar" : "Elegir"} toda la campaña “{nombre}”</span>
+                        <span className="text-muted-foreground"> · {ids.length} videos</span>
+                      </span>
+                    </button>
+                  );
+                })}
                 {candidatos.map((v) => {
                   const marcado = sel.has(v.id);
                   return (
@@ -492,7 +508,10 @@ export function RodajeDialog({
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold">{v.titulo}</span>
-                        <span className="text-xs capitalize text-muted-foreground">{mesLabel(v.mes)}</span>
+                        <span className="text-xs text-muted-foreground">
+                          <span className="capitalize">{mesLabel(v.mes)}</span>
+                          {v.campania ? ` · ${v.campania}` : ""}
+                        </span>
                       </span>
                     </button>
                   );

@@ -23,6 +23,38 @@
       "destination": "/index.html"
     }
   ],
+  "functions": {
+    "api/avisos.ts": {
+      "memory": 1024
+    },
+    "api/auth/[accion].ts": {
+      "memory": 1024
+    },
+    "api/db/[accion].ts": {
+      "memory": 1024
+    },
+    "api/drive/[accion].ts": {
+      "memory": 1024
+    },
+    "api/in-app-notifications/delete.ts": {
+      "memory": 1024
+    },
+    "api/pagos/[accion].ts": {
+      "memory": 1024
+    },
+    "api/publico/[accion].ts": {
+      "memory": 1024
+    },
+    "api/software/[accion].ts": {
+      "memory": 1024
+    },
+    "api/usuarios/[accion].ts": {
+      "memory": 1024
+    },
+    "api/web/[accion].ts": {
+      "memory": 1024
+    }
+  },
   "crons": [
     {
       "path": "/api/informes/cron",

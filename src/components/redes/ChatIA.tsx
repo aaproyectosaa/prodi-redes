@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { callApi } from "@/lib/redes/api";
 import { cn } from "@/lib/utils";
+import { AdjuntosEnviados, BotonAdjuntar, ListaAdjuntos, useAdjuntosIA, type AdjuntoIA } from "./AdjuntosIA";
 import { destrabarAudio, LlamadaIA } from "./LlamadaIA";
 
 // Charlar con la IA donde se planifica (plan del mes, guion, texto del posteo, preparar el rodaje): pedirle cambios
@@ -20,6 +21,8 @@ interface Mensaje {
   propuesta?: Record<string, unknown> | null;
   recordado?: string | null;
   aplicada?: boolean;
+  /** Nombres de los archivos que iban con el mensaje. */
+  archivos?: string[];
 }
 
 const SUGERENCIAS: Record<TipoCharla, string[]> = {
@@ -72,6 +75,9 @@ export function ChatIA({
   // La llamada manda mensajes desde sus propios eventos: siempre con la charla al día.
   const mensajesRef = useRef<Mensaje[]>([]);
   mensajesRef.current = mensajes;
+  // Fotos, capturas y PDF (la de pauta no los lee).
+  const adj = useAdjuntosIA();
+  const conAdjuntos = tipo !== "pauta";
 
   useEffect(() => {
     fin.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -79,9 +85,20 @@ export function ChatIA({
 
   /** Manda un mensaje y devuelve lo que contestó la IA (null si falló). `voz`: viene de la llamada (respuesta corta). */
   const enviar = async (pedido?: string, voz = false): Promise<string | null> => {
-    const t = (pedido ?? texto).trim();
+    const conArchivos = !voz && conAdjuntos && adj.archivos.length > 0;
+    const t = (pedido ?? texto).trim() || (conArchivos ? "Te mando esto: miralo y usalo." : "");
     if (!t || (enviando && !voz)) return null;
-    const nuevos: Mensaje[] = [...mensajesRef.current, { rol: "yo", texto: t }];
+    let adjuntos: AdjuntoIA[] = [];
+    const elegidos = adj.archivos;
+    if (conArchivos) {
+      try {
+        adjuntos = await adj.preparar();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "No se pudieron preparar los archivos");
+        return null;
+      }
+    }
+    const nuevos: Mensaje[] = [...mensajesRef.current, { rol: "yo", texto: t, ...(adjuntos.length ? { archivos: adjuntos.map((a) => a.nombre) } : {}) }];
     mensajesRef.current = nuevos;
     setMensajes(nuevos);
     if (!voz) setTexto("");
@@ -96,6 +113,7 @@ export function ChatIA({
         actual: actual(),
         mensajes: nuevos.map((m) => ({ rol: m.rol, texto: m.texto })),
         ...(voz ? { voz: true } : {}),
+        ...(adjuntos.length ? { adjuntos } : {}),
       });
       setMensajes((prev) => [...prev, { rol: "ia", texto: r.respuesta, propuesta: r.propuesta, recordado: r.recordado }]);
       return r.respuesta;
@@ -103,6 +121,7 @@ export function ChatIA({
       toast.error(e instanceof Error ? e.message : "La IA no respondió");
       setMensajes((prev) => prev.slice(0, -1));
       if (!voz) setTexto(t);
+      if (adjuntos.length) adj.sumar(elegidos);
       return null;
     } finally {
       setEnviando(false);
@@ -190,7 +209,7 @@ export function ChatIA({
         {mensajes.length === 0 && (
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">
-              Ya sabe todo lo del cliente (marca, productos, lo que aprendió). Contale lo que le falta o pedile cambios. Si le contás algo que sirve siempre, lo anota.
+              Ya sabe todo lo del cliente (marca, productos, lo que aprendió). Contale lo que le falta o pedile cambios{conAdjuntos ? " (también le podés mandar fotos, capturas o PDF)" : ""}. Si le contás algo que sirve siempre, lo anota.
             </p>
             <div className="flex flex-wrap gap-1.5">
               {SUGERENCIAS[tipo].map((s) => (
@@ -205,6 +224,7 @@ export function ChatIA({
           m.rol === "yo" ? (
             <div key={i} className="ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-primary px-3 py-2 text-xs text-primary-foreground">
               {m.texto}
+              <AdjuntosEnviados nombres={m.archivos} claro />
             </div>
           ) : (
             <div key={i} className="max-w-[95%] space-y-2">
@@ -240,7 +260,10 @@ export function ChatIA({
           <LlamadaIA titulo={titulo} onDecir={(t) => enviar(t, true)} onCortar={() => setLlamada(false)} />
         </div>
       ) : (
-      <div className="flex items-end gap-2 border-t p-2">
+      <div className="space-y-2 border-t p-2" {...(conAdjuntos ? adj.alSoltar : {})}>
+      {conAdjuntos && <ListaAdjuntos adj={adj} />}
+      <div className="flex items-end gap-2">
+        {conAdjuntos && <BotonAdjuntar adj={adj} className="h-9 w-9" disabled={enviando} />}
         <Textarea
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
@@ -250,14 +273,16 @@ export function ChatIA({
               void enviar();
             }
           }}
+          onPaste={conAdjuntos ? adj.alPegar : undefined}
           rows={1}
           placeholder={PLACEHOLDER[tipo]}
           className="min-h-9 resize-none text-xs"
           maxLength={1500}
         />
-        <Button size="icon" className="h-9 w-9 shrink-0" onClick={() => void enviar()} disabled={!texto.trim() || enviando} aria-label="Mandar">
+        <Button size="icon" className="h-9 w-9 shrink-0" onClick={() => void enviar()} disabled={(!texto.trim() && !adj.archivos.length) || enviando} aria-label="Mandar">
           <Send className="h-4 w-4" />
         </Button>
+      </div>
       </div>
       )}
     </div>

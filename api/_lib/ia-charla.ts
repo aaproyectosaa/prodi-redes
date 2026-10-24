@@ -9,7 +9,7 @@
 
 import { adminDb } from "./db";
 import { HttpError, type Caller } from "./http";
-import { generarJSON } from "./ia";
+import { generarJSON, type Adjunto } from "./ia";
 import { estudiarWeb, linksEnTexto } from "./leer-web";
 
 /** Páginas ya leídas (en esta instancia, 30 min): la charla sigue teniendo la web sin volver a bajarla en cada mensaje. */
@@ -40,7 +40,11 @@ export interface PedidoCharla {
   actual?: unknown;
   /** Es una llamada de voz: la respuesta se escucha (corta y hablada). */
   voz?: boolean;
+  /** Fotos, capturas o PDF que mandaron con el último mensaje (base64). */
+  adjuntos?: { nombre?: string; mime?: string; data?: string }[];
 }
+
+const MIMES_ADJUNTO = new Set(["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"]);
 
 const t = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
 
@@ -170,7 +174,7 @@ async function contextoDe(tipo: TipoCharla, b: PedidoCharla, pid: string): Promi
     return { texto: `Videos por mes del plan y lugares libres:\n${lineas.join("\n")}${propuesta}`, mes };
   }
   if (tipo === "preparar") {
-    const ids = (b.video_ids ?? []).slice(0, 10).map(String);
+    const ids = (b.video_ids ?? []).slice(0, 30).map(String);
     const vids = await Promise.all(ids.map((id) => db.collection("videos").doc(id).get()));
     const lista = vids
       .map((v) => v.data())
@@ -210,6 +214,12 @@ export async function charlarIA(caller: Caller, b: PedidoCharla): Promise<{ resp
     .filter((m) => m.texto)
     .slice(-12);
   if (!mensajes.length || mensajes[mensajes.length - 1].rol !== "yo") throw new HttpError(400, "Escribí qué querés pedirle");
+  const adjuntos: Adjunto[] = (Array.isArray(b.adjuntos) ? b.adjuntos : [])
+    .slice(0, 6)
+    .filter((a) => typeof a?.data === "string" && MIMES_ADJUNTO.has(String(a?.mime)))
+    .map((a) => ({ data: Buffer.from(String(a.data), "base64"), mime: a.mime as Adjunto["mime"] }))
+    .filter((a) => a.data.length > 0 && a.data.length < 4 * 1024 * 1024);
+  const nombresAdjuntos = (b.adjuntos ?? []).map((a) => t(a?.nombre, 80)).filter(Boolean);
 
   const db = adminDb();
   const [proj, mem, cfg] = await Promise.all([
@@ -240,7 +250,8 @@ Cómo responder:
 - "respuesta": lo que le decís a la persona, corto y claro (1 a 4 frases), en español rioplatense con voseo. Si cambiaste algo, contá qué cambiaste. Si te pregunta algo, respondé la pregunta.
 - Completá el contenido nuevo SOLO si te piden cambios o algo nuevo. Si es solo una pregunta o un comentario, dejalo vacío.
 - "recordar": si la persona te cuenta un dato del cliente que sirve para siempre (ej. "no quiere mostrar precios", "el dueño no sale en cámara", "abren solo a la noche"), escribilo en una frase corta para anotarlo en su memoria. Si no, vacío.
-- No inventes precios, promociones ni datos que no estén abajo o en la charla. Si te falta un dato para hacerlo bien, preguntalo en la respuesta.${webs.length ? `
+- No inventes precios, promociones ni datos que no estén abajo o en la charla. Si te falta un dato para hacerlo bien, preguntalo en la respuesta.${adjuntos.length ? `
+- Con este último mensaje te mandaron ${adjuntos.length} archivo(s) (fotos, capturas o PDF${nombresAdjuntos.length ? `: ${nombresAdjuntos.join(", ")}` : ""}): miralos con atención y usalos (productos, lugar, estilo, promos, referencias, lo que diga el cliente en una captura). En la respuesta contá en una frase qué viste. Los datos del negocio que sirvan para siempre van en "recordar".` : ""}${webs.length ? `
 - Te pasaron una página web: en "resumen_web" resumí en 3 a 6 frases qué vende el negocio (productos o servicios principales, precios si figuran, a quién le vende y cómo se presenta) para guardarlo en su memoria. En la respuesta contá brevemente que la leíste y qué encontraste.` : ""}${sinLeer.length ? `
 - No pudiste abrir ${sinLeer.map((u) => u.hostname).join(", ")} (puede estar caída o armada de una forma que no se puede leer): decilo en la respuesta y pedí que te cuenten los productos o que peguen el texto.` : ""}
 
@@ -261,7 +272,8 @@ ${mensajes.map((m) => `${m.rol === "yo" ? "Equipo" : "Vos"}: ${m.texto}`).join("
   const r = await generarJSON<Record<string, any>>(
     prompt,
     { type: "OBJECT", properties: { respuesta: { type: "STRING" }, recordar: { type: "STRING" }, resumen_web: { type: "STRING" }, ...ESQUEMAS[tipo] }, required: ["respuesta"] },
-    0.7
+    0.7,
+    adjuntos
   );
 
   const respuesta = t(r.respuesta, 1500) || "Listo.";

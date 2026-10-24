@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ElegirCliente } from "@/components/redes/ElegirCliente";
 import { Check, ChevronDown, HandCoins, Loader2, Plus, Undo2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -142,21 +143,7 @@ function NuevaDeuda({ open, onOpenChange }: { open: boolean; onOpenChange: (v: b
         <div className="space-y-3">
           <div className="space-y-1.5">
             <Label>Cliente</Label>
-            <Select value={clienteId} onValueChange={setClienteId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Elegí el cliente" />
-              </SelectTrigger>
-              <SelectContent>
-                {[...clientes]
-                  .sort((a, b) => a.nombre.localeCompare(b.nombre))
-                  .map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.nombre}
-                    </SelectItem>
-                  ))}
-                <SelectItem value={OTRO}>Otro (no está cargado)</SelectItem>
-              </SelectContent>
-            </Select>
+            <ElegirCliente value={clienteId} onChange={setClienteId} clientes={clientes} opciones={[{ value: OTRO, label: "Otro (no está cargado)" }]} placeholder="Elegí el cliente" />
             {clienteId === OTRO && <Input value={otro} onChange={(e) => setOtro(e.target.value)} placeholder="Nombre del cliente" />}
           </div>
           <div className="space-y-1.5">

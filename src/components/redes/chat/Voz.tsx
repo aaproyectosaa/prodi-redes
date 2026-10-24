@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Mic, Pause, Play, Send, Trash2 } from "lucide-react";
+import { ChevronDown, Loader2, Mic, Pause, Play, Send, Trash2 } from "lucide-react";
+import { callApi } from "@/lib/redes/api";
+import { enModoVista } from "@/lib/redes/vistaComo";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { AUDIO_MAX_SEG, duracionTexto, urlAudio } from "@/lib/redes/chat";
@@ -48,37 +50,162 @@ async function formaDeOnda(id: string, url: string, n = 36): Promise<number[]> {
 
 const VELOCIDADES = [1, 1.5, 2];
 
+// Como en WhatsApp: suena un audio por vez (tocar otro corta el anterior), la velocidad elegida queda para
+// todos, y al terminar uno arranca solo el siguiente audio de la charla (si está justo abajo, como los audios
+// seguidos). En la pantalla bloqueada se ve qué suena y se puede pausar.
+const CLAVE_VEL = "prodi-audio-vel";
+let velGlobal = (() => {
+  try {
+    const v = Number(localStorage.getItem(CLAVE_VEL));
+    return VELOCIDADES.includes(v) ? v : 1;
+  } catch {
+    return 1;
+  }
+})();
+interface Reproductor {
+  nodo: () => HTMLElement | null;
+  reproducir: () => Promise<void>;
+  pausar: () => void;
+  ponerVelocidad: (v: number) => void;
+}
+const reproductores = new Set<Reproductor>();
+let sonandoAhora: Reproductor | null = null;
+/** El siguiente audio en la pantalla (el que está más abajo, pegado en el orden de la charla). */
+function siguienteDe(r: Reproductor): Reproductor | null {
+  const yo = r.nodo();
+  if (!yo) return null;
+  let mejor: Reproductor | null = null;
+  for (const o of reproductores) {
+    const n = o.nodo();
+    if (o === r || !n || !(yo.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+    const m = mejor?.nodo();
+    if (!m || n.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING) mejor = o;
+  }
+  return mejor;
+}
+
 export function AudioMensaje({
   chatId,
+  mensajeId,
   audio,
   mio,
+  transcripcion,
+  escuchado,
+  nombreDe,
 }: {
   chatId: string;
+  mensajeId?: string;
   audio: { id: string; mime: string; duracion: number };
   mio: boolean;
+  transcripcion?: string | null;
+  escuchado?: Record<string, string> | null;
+  nombreDe?: (uid: string) => string;
 }) {
+  const [texto, setTexto] = useState<string | null>(transcripcion ?? null);
+  const [verTexto, setVerTexto] = useState(false);
+  const [transcribiendo, setTranscribiendo] = useState(false);
+  const avisado = useRef(false);
+  useEffect(() => {
+    if (transcripcion) setTexto(transcripcion);
+  }, [transcripcion]);
+  const quienes = Object.keys(escuchado ?? {});
+  const transcribir = async () => {
+    if (texto) return setVerTexto(!verTexto);
+    if (!mensajeId) return;
+    setVerTexto(true);
+    setTranscribiendo(true);
+    try {
+      const r = await callApi<{ texto: string }>("/api/ia/audio-transcribir", { chat_id: chatId, mensaje_id: mensajeId });
+      setTexto(r.texto);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo transcribir");
+      setVerTexto(false);
+    } finally {
+      setTranscribiendo(false);
+    }
+  };
   const ref = useRef<HTMLAudioElement | null>(null);
   const url = useRef<string | null>(null);
   const [cargando, setCargando] = useState(false);
   const [sonando, setSonando] = useState(false);
   const [t, setT] = useState(0);
-  const [vel, setVel] = useState(1);
+  const [vel, setVel] = useState(velGlobal);
+  const caja = useRef<HTMLDivElement | null>(null);
+  const yo = useRef<Reproductor | null>(null);
+  const arrastrando = useRef(false);
   const [forma, setForma] = useState<number[]>(() => ondas.get(audio.id) ?? barras(audio.id));
   const progreso = audio.duracion ? Math.min(1, t / audio.duracion) : 0;
 
-  useEffect(() => () => ref.current?.pause(), []);
+  useEffect(() => {
+    const r: Reproductor = {
+      nodo: () => caja.current,
+      reproducir: async () => {
+        try {
+          setCargando(true);
+          const el = await preparar();
+          el.currentTime = 0;
+          await el.play();
+        } catch {
+          /* sin permiso de reproducir solo: queda para tocarlo */
+        } finally {
+          setCargando(false);
+        }
+      },
+      pausar: () => ref.current?.pause(),
+      ponerVelocidad: (v) => {
+        setVel(v);
+        if (ref.current) ref.current.playbackRate = v;
+      },
+    };
+    yo.current = r;
+    reproductores.add(r);
+    return () => {
+      reproductores.delete(r);
+      if (sonandoAhora === r) sonandoAhora = null;
+      ref.current?.pause();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const preparar = async () => {
     if (ref.current) return ref.current;
     if (!url.current) url.current = await urlAudio(chatId, audio.id);
     const el = new Audio(url.current);
     el.playbackRate = vel;
-    el.ontimeupdate = () => setT(el.currentTime);
-    el.onplay = () => setSonando(true);
-    el.onpause = () => setSonando(false);
+    el.ontimeupdate = () => !arrastrando.current && setT(el.currentTime);
+    el.onplay = () => {
+      // Uno por vez: el que estaba sonando se pausa.
+      if (sonandoAhora && sonandoAhora !== yo.current) sonandoAhora.pausar();
+      sonandoAhora = yo.current;
+      el.playbackRate = velGlobal;
+      setSonando(true);
+      // "Escuchado": se le avisa al que lo mandó (una vez, y no en "ver como").
+      if (!mio && mensajeId && !avisado.current && !enModoVista()) {
+        avisado.current = true;
+        void callApi("/api/ia/audio-escuchado", { chat_id: chatId, mensaje_id: mensajeId }).catch(() => {});
+      }
+      // Pantalla bloqueada / auriculares: qué suena y pausar o seguir.
+      if ("mediaSession" in navigator) {
+        try {
+          navigator.mediaSession.metadata = new MediaMetadata({ title: "Mensaje de voz", artist: "Prodi Chat" });
+          navigator.mediaSession.setActionHandler("pause", () => el.pause());
+          navigator.mediaSession.setActionHandler("play", () => void el.play());
+        } catch {
+          /* navegador sin controles */
+        }
+      }
+    };
+    el.onpause = () => {
+      setSonando(false);
+      if (sonandoAhora === yo.current) sonandoAhora = null;
+    };
     el.onended = () => {
       setSonando(false);
       setT(0);
+      if (sonandoAhora === yo.current) sonandoAhora = null;
+      // El siguiente audio de la charla arranca solo.
+      const sig = yo.current ? siguienteDe(yo.current) : null;
+      if (sig) void sig.reproducir();
     };
     ref.current = el;
     // La forma de onda real, sin trabar el play.
@@ -104,28 +231,48 @@ export function AudioMensaje({
     }
   };
 
-  // Tocar la onda: salta a ese momento (y arranca si estaba parado).
-  const saltar = async (e: React.MouseEvent<HTMLDivElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    const p = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+  // Tocar o arrastrar sobre la onda: salta a ese momento (y arranca si estaba parado).
+  const posicion = (clientX: number, r: DOMRect) => Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+  const saltarA = async (p: number, arrancar: boolean) => {
     try {
       const el = await preparar();
       el.currentTime = p * (audio.duracion || el.duration || 0);
       setT(el.currentTime);
-      if (el.paused) await el.play();
+      if (arrancar && el.paused) await el.play();
     } catch {
       /* nada */
     }
   };
+  const alApretar = (e: React.PointerEvent<HTMLDivElement>) => {
+    arrastrando.current = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setT(posicion(e.clientX, e.currentTarget.getBoundingClientRect()) * audio.duracion);
+  };
+  const alMover = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!arrastrando.current) return;
+    setT(posicion(e.clientX, e.currentTarget.getBoundingClientRect()) * audio.duracion);
+  };
+  const alSoltar = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!arrastrando.current) return;
+    arrastrando.current = false;
+    void saltarA(posicion(e.clientX, e.currentTarget.getBoundingClientRect()), true);
+  };
 
+  // La velocidad queda elegida para todos los audios (como en WhatsApp).
   const cambiarVelocidad = () => {
     const v = VELOCIDADES[(VELOCIDADES.indexOf(vel) + 1) % VELOCIDADES.length];
-    setVel(v);
-    if (ref.current) ref.current.playbackRate = v;
+    velGlobal = v;
+    try {
+      localStorage.setItem(CLAVE_VEL, String(v));
+    } catch {
+      /* sin almacenamiento */
+    }
+    reproductores.forEach((r) => r.ponerVelocidad(v));
   };
 
   return (
-    <div className="flex min-w-[230px] items-center gap-2.5 py-0.5">
+    <div className="space-y-1">
+    <div ref={caja} className="flex min-w-[230px] items-center gap-2.5 py-0.5">
       <button
         type="button"
         onClick={toggle}
@@ -144,7 +291,16 @@ export function AudioMensaje({
         )}
       </button>
       <div className="min-w-0 flex-1">
-        <div className="flex h-7 cursor-pointer items-center gap-[2px]" onClick={(e) => void saltar(e)} role="slider" aria-label="Posición del audio" aria-valuenow={Math.round(progreso * 100)}>
+        <div
+          className="relative flex h-7 cursor-pointer touch-none items-center gap-[2px]"
+          onPointerDown={alApretar}
+          onPointerMove={alMover}
+          onPointerUp={alSoltar}
+          onPointerCancel={() => (arrastrando.current = false)}
+          role="slider"
+          aria-label="Posición del audio"
+          aria-valuenow={Math.round(progreso * 100)}
+        >
           {forma.map((v, i) => (
             <span
               key={i}
@@ -155,6 +311,12 @@ export function AudioMensaje({
               style={{ height: `${Math.round(v * 100)}%` }}
             />
           ))}
+          {(sonando || t > 0) && (
+            <span
+              className={cn("pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full shadow", mio ? "bg-white" : "bg-primary")}
+              style={{ left: `${progreso * 100}%` }}
+            />
+          )}
         </div>
         <p className={cn("text-[10px] tabular-nums", mio ? "text-primary-foreground/80" : "text-muted-foreground")}>
           {duracionTexto(sonando || t > 0 ? t : audio.duracion)}
@@ -173,6 +335,28 @@ export function AudioMensaje({
       >
         {vel === 1.5 ? "1,5" : vel}x
       </button>
+    </div>
+    <div className={cn("flex items-center gap-2 pl-[2.875rem] text-[10px]", mio ? "text-primary-foreground/75" : "text-muted-foreground")}>
+      {mensajeId && (
+        <button type="button" onClick={() => void transcribir()} className="inline-flex items-center gap-0.5 font-medium underline-offset-2 hover:underline">
+          {transcribiendo ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronDown className={cn("h-3 w-3 transition-transform", verTexto && "rotate-180")} />}
+          {verTexto ? "Ocultar texto" : "Ver texto"}
+        </button>
+      )}
+      {mio && (
+        <span
+          className={cn("ml-auto inline-flex items-center gap-0.5", quienes.length && "font-semibold text-sky-300")}
+          title={quienes.length ? `Lo escuchó: ${quienes.map((u) => nombreDe?.(u) || "alguien").join(", ")}` : "Todavía nadie lo escuchó"}
+        >
+          <Mic className="h-3 w-3" /> {quienes.length ? "Escuchado" : "Sin escuchar"}
+        </span>
+      )}
+    </div>
+    {verTexto && (
+      <p className={cn("whitespace-pre-wrap rounded-lg px-2.5 py-1.5 text-xs leading-relaxed", mio ? "bg-white/15" : "bg-muted/70")}>
+        {transcribiendo ? "Transcribiendo…" : texto}
+      </p>
+    )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ElegirCliente } from "@/components/redes/ElegirCliente";
 import { useSearchParams } from "react-router-dom";
 import { deleteDoc, doc } from "@/lib/db";
 import { db } from "@/integrations/firebase/client";
@@ -403,19 +404,13 @@ function NuevaReunionDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label className={ETIQUETA}>Cliente</Label>
-              <Select value={clienteId} onValueChange={elegirCliente}>
-                <SelectTrigger className={cn(SUAVE, "h-12")}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl">
-                  <SelectItem value="interna">Reunión interna</SelectItem>
-                  {clientes.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ElegirCliente
+                value={clienteId}
+                onChange={elegirCliente}
+                clientes={clientes}
+                opciones={[{ value: "interna", label: "Reunión interna" }]}
+                className={cn(SUAVE, "h-12")}
+              />
             </div>
             <div className="space-y-2">
               <Label className={ETIQUETA}>Día y hora</Label>

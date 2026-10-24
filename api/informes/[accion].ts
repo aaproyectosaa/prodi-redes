@@ -5,6 +5,7 @@
 //                              también: la IA aprende de los chats de clientes y avisa las tareas que vencen hoy)
 // POST /api/informes/meta    { video_id }  (equipo) → trae ya los resultados de Meta
 
+import { actualizarCatalogos } from "../_lib/catalogo";
 import { importarMensajes } from "../_lib/meta-leads";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { adminDb, getPool } from "../_lib/db";
@@ -110,6 +111,8 @@ async function diario(req: VercelRequest) {
   const redesMeta = await fotoRedesTodos().catch((err) => `error: ${err}`);
   // Pauta de toda la cuenta e Instagram día por día (últimos 3 días, Meta corrige los recientes).
   const cuentasMeta = await sincronizarCuentasTodos(base).catch((err) => `error: ${err}`);
+  // Catálogos del CRM conectados a una web: precios y stock al día (api/_lib/catalogo.ts).
+  const catalogos = await actualizarCatalogos().catch((err) => `error: ${err}`);
   // Mensajes nuevos al Instagram y Facebook de Prodi → leads (api/_lib/meta-leads.ts).
   const mensajesLeads = await importarMensajes(base, true).catch((err) => `error: ${err}`);
   // Mora: escalón de cada cliente según sus días de atraso (después de los recordatorios de cobro).
@@ -118,7 +121,7 @@ async function diario(req: VercelRequest) {
   const manana = await enviarRetenidos(base).catch((err) => `error: ${err}`);
   // Lo borrado se anota unos días para que las pantallas abiertas se enteren; después se limpia.
   await getPool().query("delete from borrados where borrado < now() - interval '7 days'").catch(() => undefined);
-  return { ok: true, mensajes_leads: mensajesLeads, meta: metaRes, recordatorios_rodaje: rodajes, recordatorios_aprobar: aprobar, recordatorios_plan: planes, facturacion, vencimientos, recordatorios_cobro: cobros, mora, redes_meta: redesMeta, cuentas_meta: cuentasMeta, aprendizaje_chats: chats, tareas, entregas_edicion: edicion, resumen_manana: manana };
+  return { ok: true, catalogos, mensajes_leads: mensajesLeads, meta: metaRes, recordatorios_rodaje: rodajes, recordatorios_aprobar: aprobar, recordatorios_plan: planes, facturacion, vencimientos, recordatorios_cobro: cobros, mora, redes_meta: redesMeta, cuentas_meta: cuentasMeta, aprendizaje_chats: chats, tareas, entregas_edicion: edicion, resumen_manana: manana };
 }
 
 async function cron(req: VercelRequest) {

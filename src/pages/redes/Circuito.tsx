@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react";
+import { ElegirCliente } from "@/components/redes/ElegirCliente";
 import { MiRendimientoPauta } from "@/components/redes/MiRendimientoPauta";
-import { AccionTile, GrillaAcciones } from "@/components/redes/AccionesTablero";
-import { AlertTriangle, Building2, CalendarPlus, CalendarRange, Clapperboard, Plus, Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { AlertTriangle, Building2, CalendarRange, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -21,14 +20,14 @@ import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { ETAPAS, estaTrabado, etapaInfo } from "@/lib/redes/etapas";
 import { mesActual, mesLabel, sumarMeses } from "@/lib/redes/format";
 import { canManageProduction } from "@/lib/roles";
-import { BotonNuevaPieza } from "@/components/redes/NuevaPiezaEquipo";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { forzarEtapa } from "@/lib/redes/videos";
 import type { EtapaVideo } from "@/lib/redes/types";
 import { tableroDe, type TableroRol } from "@/lib/redes/tableros";
 import { SelectorVista, VistaCalendario, useVista } from "@/components/redes/VistaCalendario";
-import { BotonArmarMes, PlanesAviso } from "@/components/redes/PlanesAviso";
+import { PlanesAviso } from "@/components/redes/PlanesAviso";
+import { BotonFiltros, MenuMas, MenuNuevo } from "@/components/redes/BarraVideos";
 import { ordenEntrega } from "@/lib/redes/entrega";
 import { useBorrarVideos } from "@/components/redes/BorrarVideos";
 import { CLASE_FILTRO, FiltrosTablero, porFecha, useFiltrosTablero } from "@/components/redes/FiltrosTablero";
@@ -64,39 +63,30 @@ function TableroEquipo({ tablero }: { tablero: TableroRol }) {
       subtitle={tablero.ayuda}
       className="max-w-none"
       actions={
-        <>
-          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
-            <FiltrosTablero {...filtros} clientes={clientes} conOrden={vista === "kanban"} />
-          </div>
-          {esProd && (
-            <GrillaAcciones>
-              <BotonArmarMes tile clienteId={cliente === "todos" ? null : cliente} />
-              <BotonNuevaPieza tile clienteId={cliente === "todos" ? null : cliente} />
-              <AccionTile icon={CalendarPlus} label="Rodaje" color="from-amber-400 to-orange-500" onClick={() => setRodaje(true)} title="Agendar rodaje" />
-              <AccionTile
-                icon={Clapperboard}
-                label="Ya lo filmé"
-                color="from-sky-500 to-blue-600"
-                onClick={() => setPlanificar("filmado")}
-                title="Fuiste a grabar sin planificar: creás el video y subís el material"
-              />
-              <Button
-                onClick={() => setPlanificar("planificar")}
-                className="col-span-4 h-11 rounded-2xl bg-gradient-to-r from-[#6F40FC] to-[#9B6BFF] text-base font-semibold shadow-md shadow-primary/25 sm:col-auto sm:h-10 sm:rounded-xl sm:text-sm"
-              >
-                <Plus className="mr-2 h-4 w-4" /> Planificar
-              </Button>
-            </GrillaAcciones>
-          )}
-        </>
+        esProd ? (
+          <MenuNuevo clienteId={cliente === "todos" ? null : cliente} onPlanificar={setPlanificar} onRodaje={() => setRodaje(true)} />
+        ) : undefined
       }
     >
-      {esProd && <PlanesAviso />}
       <BotonMiDia />
       {tieneRol("pauta") && <MiRendimientoPauta />}
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <SelectorVista vista={vista} onChange={setVista} />
-        {esProd && vista === "kanban" && borrar.boton}
+        {(clientes.length > 1 || vista === "kanban") && (
+          <BotonFiltros
+            activos={(cliente !== "todos" ? 1 : 0) + (vista === "kanban" && filtros.orden !== "urgente" ? 1 : 0)}
+            onLimpiar={() => {
+              filtros.setCliente("todos");
+              filtros.setOrden("urgente");
+            }}
+          >
+            <FiltrosTablero {...filtros} clientes={clientes} conOrden={vista === "kanban"} />
+          </BotonFiltros>
+        )}
+        {esProd && <PlanesAviso />}
+        <div className="ml-auto flex items-center gap-2">
+          <SelectorVista vista={vista} onChange={setVista} compacto />
+          {esProd && vista === "kanban" && <MenuMas modoBorrar={borrar.modo} onBorrar={borrar.entrar} onCancelar={borrar.salir} />}
+        </div>
       </div>
       {vista === "calendario" ? (
         <VistaCalendario videos={mios} />
@@ -193,6 +183,7 @@ function CircuitoCompleto() {
   const [q, setQ] = useState("");
   const [soloTrabados, setSoloTrabados] = useState(false);
   const [planificar, setPlanificar] = useState<false | ModoPlanificar>(false);
+  const [rodaje, setRodaje] = useState(false);
   const [vista, setVista] = useVista("circuito");
 
   const meses = [0, -1, -2, -3, 1].map((d) => sumarMeses(mesActual(), d));
@@ -226,29 +217,11 @@ function CircuitoCompleto() {
       className="max-w-none"
       actions={
         canManageProduction(role) && (
-          <GrillaAcciones className="grid-cols-3">
-            <BotonArmarMes tile clienteId={cliente === "todos" ? null : cliente} />
-            <BotonNuevaPieza tile clienteId={cliente === "todos" ? null : cliente} />
-            <AccionTile
-              icon={Clapperboard}
-              label="Ya lo filmé"
-              color="from-sky-500 to-blue-600"
-              onClick={() => setPlanificar("filmado")}
-              title="Fuiste a grabar sin planificar: creás el video y subís el material"
-            />
-            <Button
-                onClick={() => setPlanificar("planificar")}
-                className="col-span-3 h-11 rounded-2xl bg-gradient-to-r from-[#6F40FC] to-[#9B6BFF] text-base font-semibold shadow-md shadow-primary/25 sm:col-auto sm:h-10 sm:rounded-xl sm:text-sm"
-              >
-                <Plus className="mr-2 h-4 w-4" /> Planificar
-              </Button>
-          </GrillaAcciones>
+          <MenuNuevo clienteId={cliente === "todos" ? null : cliente} onPlanificar={setPlanificar} onRodaje={() => setRodaje(true)} />
         )
       }
     >
-      {canManageProduction(role) && <PlanesAviso />}
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <SelectorVista vista={vista} onChange={setVista} />
         <div className="relative w-full sm:w-64">
           <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
           <Input
@@ -258,23 +231,23 @@ function CircuitoCompleto() {
             className="h-11 rounded-2xl border-transparent bg-muted/60 pl-10 shadow-none focus-visible:border-primary focus-visible:bg-background focus-visible:ring-4 focus-visible:ring-primary/15 focus-visible:ring-offset-0"
           />
         </div>
-        <Select value={cliente} onValueChange={setCliente}>
-          <SelectTrigger className={cn(CLASE_FILTRO, "w-full gap-2 sm:w-56 [&>span]:truncate")}>
-            <Building2 className="h-4 w-4 shrink-0 text-primary" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos los clientes</SelectItem>
-            {clientes.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.nombre}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <BotonFiltros
+          activos={(cliente !== "todos" ? 1 : 0) + (vista === "kanban" && mes !== "activos" ? 1 : 0)}
+          onLimpiar={() => {
+            setCliente("todos");
+            setMes("activos");
+          }}
+        >
+        <ElegirCliente
+          value={cliente}
+          onChange={setCliente}
+          clientes={clientes}
+          opciones={[{ value: "todos", label: "Todos los clientes" }]}
+          className={cn(CLASE_FILTRO, "w-full")}
+        />
         {vista === "kanban" && (
         <Select value={mes} onValueChange={setMes}>
-          <SelectTrigger className={cn(CLASE_FILTRO, "w-full gap-2 sm:w-48 [&>span]:truncate")}>
+          <SelectTrigger className={cn(CLASE_FILTRO, "w-full gap-2 [&>span]:truncate")}>
             <CalendarRange className="h-4 w-4 shrink-0 text-primary" />
             <SelectValue />
           </SelectTrigger>
@@ -288,7 +261,9 @@ function CircuitoCompleto() {
           </SelectContent>
         </Select>
         )}
-        {vista === "kanban" && (
+        </BotonFiltros>
+        {/* Trabados: solo si hay (o si el filtro está puesto). */}
+        {vista === "kanban" && (trabados > 0 || soloTrabados) && (
         <button
           type="button"
           onClick={() => setSoloTrabados((v) => !v)}
@@ -299,13 +274,17 @@ function CircuitoCompleto() {
           )}
         >
           <AlertTriangle className="h-4 w-4" />
-          Trabados
+          <span className="hidden sm:inline">Trabados</span>
           {trabados > 0 && (
             <span className={cn("rounded-full px-2 py-0.5 text-xs tabular-nums", soloTrabados ? "bg-white/25" : "bg-amber-500/20")}>{trabados}</span>
           )}
         </button>
         )}
-        {vista === "kanban" && puedeBorrar && borrar.boton}
+        {canManageProduction(role) && <PlanesAviso />}
+        <div className="ml-auto flex items-center gap-2">
+          <SelectorVista vista={vista} onChange={setVista} compacto />
+          {vista === "kanban" && puedeBorrar && <MenuMas modoBorrar={borrar.modo} onBorrar={borrar.entrar} onCancelar={borrar.salir} />}
+        </div>
       </div>
 
       {vista === "calendario" ? (
@@ -388,6 +367,7 @@ function CircuitoCompleto() {
       )}
 
       <PlanificarDialog open={!!planificar} onOpenChange={(v) => !v && setPlanificar(false)} modoInicial={planificar || "planificar"} />
+      <RodajeDialog open={rodaje} onOpenChange={setRodaje} />
       {puedeBorrar && borrar.barra}
     </PageShell>
   );

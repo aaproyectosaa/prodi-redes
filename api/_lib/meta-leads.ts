@@ -359,6 +359,10 @@ export async function importarMensajes(base: string, forzar = false, todo = fals
         meta: {
           conversacion_id: String(c.id),
           plataforma,
+          persona_id: String(persona.id ?? ""),
+          chat: chatConNuevos(null, mensajes.map((m: any) => aMensaje(m, propios))),
+          foto: await fotoDe(String(persona.id ?? ""), plataforma, token),
+          foto_at: new Date().toISOString(),
           ultimo_mensaje_at: recientes[recientes.length - 1]?.created_time ?? at,
           ultimo_texto: limpio(suyos[suyos.length - 1]?.message ?? "", 300),
         },
@@ -385,6 +389,18 @@ export async function importarMensajes(base: string, forzar = false, todo = fals
   return { revisado: true, nuevos, errores, detalle, cada };
 }
 
+/**
+ * Foto de perfil de quien escribió (Instagram: con su ID de la conversación; Messenger: igual, si hay permiso).
+ * Meta la da como un link que vence en unos días: se vuelve a pedir cada vez que se abre el chat.
+ */
+async function fotoDe(personaId: string, plataforma: string, token: string): Promise<string | null> {
+  if (!personaId) return null;
+  void plataforma;
+  const r = await graph(personaId, { fields: "profile_pic" }, token).catch(() => null);
+  const url = String(r?.profile_pic ?? "");
+  return /^https:\/\//.test(url) ? url.slice(0, 2000) : null;
+}
+
 /** Mensajes nuevos de alguien que ya es lead: se suman a su línea de tiempo y se avisa. Devuelve true si había. */
 async function sumarMensajesNuevos(id: string, lead: any, c: any, propios: Set<string>, plataforma: string, base: string): Promise<boolean> {
   // Los que ya estaban cuando se creó el lead quedaron en sus notas.
@@ -399,7 +415,12 @@ async function sumarMensajesNuevos(id: string, lead: any, c: any, propios: Set<s
   await guardarDoc(getPool(), COL, id, {
     ...lead,
     updated_at: new Date().toISOString(),
-    meta: { ...(lead.meta ?? {}), ultimo_mensaje_at: ultimo, ultimo_texto: limpio(nuevos[nuevos.length - 1].message, 300) },
+    meta: {
+      ...(lead.meta ?? {}),
+      ultimo_mensaje_at: ultimo,
+      ultimo_texto: limpio(nuevos[nuevos.length - 1].message, 300),
+      chat: chatConNuevos(lead, [...(c.messages?.data ?? [])].reverse().map((m: any) => aMensaje(m, propios))),
+    },
     historial: [...(Array.isArray(lead.historial) ? lead.historial : []), ...eventos].slice(-100),
   });
   const admins = (await adminDb().collection("profiles").where("role", "==", "admin").get()).docs.filter((d) => d.data().activo !== false).map((d) => d.id);
@@ -435,6 +456,16 @@ const VENTANA_MS = 24 * 3600_000;
 // Con el permiso "Human Agent" de Meta, una persona (no un bot) puede responder hasta 7 días después.
 const VENTANA_AGENTE_MS = 7 * 24 * 3600_000;
 
+/** El ID del Instagram de Prodi (se guarda la primera vez). */
+async function igPropio(g: { id: string; token: string }): Promise<string | null> {
+  const pool = getPool();
+  const d = (await leerDoc(pool, SECRETO.col, SECRETO.id)) as any;
+  if (d?.ig_id) return String(d.ig_id);
+  const ig = (await graph(g.id, { fields: "instagram_business_account{id}" }, g.token).catch(() => null))?.instagram_business_account?.id ?? null;
+  if (ig && d) await guardarDoc(pool, SECRETO.col, SECRETO.id, { ...d, ig_id: String(ig) }).catch(() => undefined);
+  return ig ? String(ig) : null;
+}
+
 async function contextoConversacion(leadId: string) {
   const lead = await leerDoc(getPool(), COL, leadId);
   if (!lead) throw new HttpError(404, "No encontramos ese lead");
@@ -442,24 +473,65 @@ async function contextoConversacion(leadId: string) {
   if (!convId) throw new HttpError(400, "Este lead no llegó por mensaje de Instagram o Facebook");
   const guardado = await tokenGuardado();
   if (!guardado) throw new HttpError(400, "Primero conectá la página de Prodi en Temporada y cupos");
-  const ig = (await graph(guardado.id, { fields: "instagram_business_account{id}" }, guardado.token).catch(() => null))?.instagram_business_account ?? null;
-  const propios = new Set([guardado.id, ig?.id].filter(Boolean).map(String));
+  const propios = new Set([guardado.id, await igPropio(guardado)].filter(Boolean).map(String));
   return { lead, convId, plataforma: String((lead.meta as any)?.plataforma ?? "instagram"), propios, ...guardado };
 }
 
-/** Los mensajes de la conversación del lead (del más viejo al más nuevo) y si todavía se le puede responder. */
-export async function conversacionLead(leadId: string) {
-  const c = await contextoConversacion(leadId);
-  const d = await graph(c.convId, { fields: "participants,messages.limit(50){id,message,from,created_time,attachments,story,shares,sticker}" }, c.token);
-  const mensajes = [...(d.messages?.data ?? [])].reverse().map((m: any) => ({
+/** Un mensaje de Meta como lo muestra el chat del CRM. */
+function aMensaje(m: any, propios: Set<string>) {
+  return {
     id: String(m.id),
     texto: String(m.message ?? ""),
     adjunto: !!m.attachments?.data?.length,
     // Lo que no es texto: para mostrar algo en vez de una burbuja vacía.
     tipo: m.story ? "historia" : m.shares?.data?.length ? "publicacion" : m.sticker ? "sticker" : m.attachments?.data?.length ? "archivo" : m.message ? "texto" : "otro",
     at: m.created_time,
-    mio: propiosDe(c.propios, m.from?.id),
-  }));
+    mio: propios.has(String(m.from?.id ?? "")),
+  };
+}
+
+/**
+ * Copia de los últimos mensajes guardada en el lead: el chat abre al instante con esto y, como el lead se escucha en
+ * tiempo real, cuando llega un mensaje (aviso de Meta) aparece solo en el chat abierto.
+ */
+function chatConNuevos(lead: any, mensajes: ReturnType<typeof aMensaje>[]) {
+  const previos: any[] = Array.isArray(lead?.meta?.chat?.mensajes) ? lead.meta.chat.mensajes : [];
+  const porId = new Map<string, any>(previos.map((m) => [m.id, m]));
+  for (const m of mensajes) porId.set(m.id, m);
+  const todos = [...porId.values()].sort((a, b) => String(a.at).localeCompare(String(b.at))).slice(-50);
+  return { mensajes: todos, at: new Date().toISOString() };
+}
+const mismoChat = (a: any, b: any) => {
+  const x: any[] = a?.mensajes ?? [];
+  const y: any[] = b?.mensajes ?? [];
+  return x.length === y.length && x[x.length - 1]?.id === y[y.length - 1]?.id;
+};
+
+/** Los mensajes de la conversación del lead (del más viejo al más nuevo) y si todavía se le puede responder. */
+export async function conversacionLead(leadId: string) {
+  const c = await contextoConversacion(leadId);
+  const lead = c.lead as any;
+  // La foto vence: se renueva si tiene más de 12 h (y se pide al mismo tiempo que los mensajes).
+  const personaConocida = String(lead.meta?.persona_id ?? "");
+  const fotoVieja = !lead.meta?.foto || Date.now() - Date.parse(String(lead.meta?.foto_at ?? 0)) > 12 * 3600_000;
+  const [d, fotoYa] = await Promise.all([
+    graph(c.convId, { fields: "participants,messages.limit(50){id,message,from,created_time,attachments,story,shares,sticker}" }, c.token),
+    personaConocida && fotoVieja ? fotoDe(personaConocida, c.plataforma, c.token) : Promise.resolve(null),
+  ]);
+  const mensajes = [...(d.messages?.data ?? [])].reverse().map((m: any) => aMensaje(m, c.propios));
+  const persona = (d.participants?.data ?? []).find((p: any) => !c.propios.has(String(p.id)));
+  const foto = fotoYa ?? (!personaConocida && persona?.id && fotoVieja ? await fotoDe(String(persona.id), c.plataforma, c.token) : null);
+  const chat = chatConNuevos(lead, mensajes);
+  if ((foto && foto !== lead.meta?.foto) || !mismoChat(chat, lead.meta?.chat))
+    await guardarDoc(getPool(), COL, leadId, {
+      ...lead,
+      meta: {
+        ...(lead.meta ?? {}),
+        chat,
+        ...(persona?.id ? { persona_id: String(persona.id) } : {}),
+        ...(foto ? { foto, foto_at: new Date().toISOString() } : {}),
+      },
+    }).catch(() => undefined);
   const ultimoSuyo = [...mensajes].reverse().find((m) => !m.mio);
   const desde = ultimoSuyo ? Date.parse(ultimoSuyo.at) : 0;
   const vence = desde ? desde + VENTANA_MS : 0;
@@ -469,13 +541,13 @@ export async function conversacionLead(leadId: string) {
   const ventana = vence > ahora ? "normal" : venceAgente > ahora ? "agente" : "cerrada";
   return {
     plataforma: c.plataforma,
+    foto,
     mensajes,
     puede_responder: ventana !== "cerrada",
     ventana,
     vence: ventana === "agente" ? new Date(venceAgente).toISOString() : vence ? new Date(vence).toISOString() : null,
   };
 }
-const propiosDe = (propios: Set<string>, id: unknown) => propios.has(String(id ?? ""));
 
 /** Manda una respuesta al lead por Instagram o Messenger y la anota en su línea de tiempo. */
 export async function responderLead(leadId: string, texto: string, quien: { uid: string; nombre: string }) {
@@ -556,4 +628,65 @@ export async function guardarRespuestas(lista: unknown) {
     .slice(0, 30);
   await guardarDoc(getPool(), RESPUESTAS.col, RESPUESTAS.id, { lista: limpia, updated_at: new Date().toISOString() });
   return { ok: true, lista: limpia };
+}
+
+// ── Productos del catálogo ────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Manda productos del catálogo por Instagram o Messenger como tarjetas (foto, nombre, precio y botón "Ver producto",
+ * con el link que avisa cuando lo abren). Si Meta no acepta la tarjeta, va como texto con los links.
+ */
+export async function enviarProductos(
+  leadId: string,
+  productos: { nombre: string; precio_texto: string; foto: string | null; link: string; descripcion?: string }[],
+  quien: { uid: string; nombre: string }
+) {
+  if (!productos.length) throw new HttpError(400, "Elegí al menos un producto");
+  const c = await contextoConversacion(leadId);
+  const d = await graph(c.convId, { fields: "participants,messages.limit(10){from,created_time}" }, c.token);
+  const persona = (d.participants?.data ?? []).find((p: any) => !c.propios.has(String(p.id)));
+  if (!persona?.id) throw new HttpError(400, "No encontramos a quién mandarle");
+  const suyo = (d.messages?.data ?? []).find((m: any) => !c.propios.has(String(m.from?.id)));
+  const fueraDe24 = suyo ? Date.now() - Date.parse(suyo.created_time) > VENTANA_MS : false;
+  const tipo = fueraDe24 ? { messaging_type: "MESSAGE_TAG", tag: "HUMAN_AGENT" } : { messaging_type: "RESPONSE" };
+  const mandar = (message: unknown) => graph(`${c.id}/messages`, { recipient: JSON.stringify({ id: persona.id }), message: JSON.stringify(message), ...tipo }, c.token, "POST");
+  const tarjeta = {
+    attachment: {
+      type: "template",
+      payload: {
+        template_type: "generic",
+        elements: productos.slice(0, 10).map((p) => ({
+          title: limpio(p.nombre, 80),
+          subtitle: limpio([p.precio_texto, p.descripcion].filter(Boolean).join(" · "), 80) || undefined,
+          ...(p.foto ? { image_url: p.foto } : {}),
+          default_action: { type: "web_url", url: p.link },
+          buttons: [{ type: "web_url", url: p.link, title: "Ver producto" }],
+        })),
+      },
+    },
+  };
+  let como = "tarjeta";
+  try {
+    await mandar(tarjeta);
+  } catch {
+    // Sin tarjeta (ej. Messenger sin permiso de plantillas): los mismos productos como texto.
+    como = "texto";
+    try {
+      await mandar({ text: productos.map((p) => `${p.nombre}${p.precio_texto ? ` — ${p.precio_texto}` : ""}\n${p.link}`).join("\n\n").slice(0, 1000) });
+    } catch (err) {
+      if (fueraDe24) throw new HttpError(400, "Pasaron más de 24 h desde su último mensaje: Meta no deja mandarle desde acá todavía.");
+      throw err;
+    }
+  }
+  const red = c.plataforma === "instagram" ? "Instagram" : "Facebook";
+  const at = new Date().toISOString();
+  const lead = c.lead as any;
+  const nombres = productos.map((p) => p.nombre).join(", ");
+  await guardarDoc(getPool(), COL, leadId, {
+    ...lead,
+    updated_at: at,
+    ultimo_contacto_at: at,
+    historial: [...(Array.isArray(lead.historial) ? lead.historial : []), { at, tipo: "presupuesto", texto: `Le mandaste por ${red}: ${limpio(nombres, 400)}`, por: quien.uid, por_nombre: quien.nombre }].slice(-100),
+  });
+  return { ok: true, como };
 }

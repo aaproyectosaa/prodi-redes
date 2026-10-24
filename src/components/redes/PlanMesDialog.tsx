@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ElegirCliente } from "@/components/redes/ElegirCliente";
 import { BotonAplicar, ChatIA } from "@/components/redes/ChatIA";
 import { CampaniaIA } from "@/components/redes/CampaniaIA";
 import {
@@ -90,25 +91,48 @@ export function PlanMesDialog({
   const { plan, loading } = usePlanMes(open ? clienteId : null, mes);
   const delMes = usePlanesDelMes(open ? [mes] : [], open);
   const libres = usoPlan(cliente, planes, videos, mes).disponibles;
-  const meses = [0, 1, 2].map((d) => sumarMeses(mesActual(), d));
+  const meses = [0, 1, 2, 3, 4, 5].map((d) => sumarMeses(mesActual(), d));
   // "mes": las ideas de un mes (lo de siempre). "campania": charlar una campaña con la IA (un día de rodaje, varios meses).
   const [modo, setModo] = useState<"mes" | "campania">("mes");
   useEffect(() => {
     if (open) setModo("mes");
   }, [open]);
+  // Al bajar, el encabezado se achica (queda el título, el cliente y el mes) para dejar lugar a las ideas.
+  const [compacto, setCompacto] = useState(false);
+  useEffect(() => {
+    setCompacto(false);
+  }, [open, modo]);
+  const alScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const y = e.currentTarget.scrollTop;
+    if (y > 48 && !compacto) setCompacto(true);
+    else if (y < 8 && compacto) setCompacto(false);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[94dvh] w-[calc(100vw-1.5rem)] max-w-3xl flex-col gap-0 overflow-hidden rounded-3xl border-0 p-0 shadow-2xl [&>button.absolute]:right-4 [&>button.absolute]:top-4 [&>button.absolute]:rounded-full [&>button.absolute]:bg-white/15 [&>button.absolute]:p-1.5 [&>button.absolute]:text-white [&>button.absolute]:opacity-100 [&>button.absolute]:backdrop-blur">
-        <DialogHeader className="relative shrink-0 space-y-1 overflow-hidden bg-gradient-to-br from-primary via-violet-600 to-fuchsia-500 px-5 pb-4 pt-5 text-left text-white">
+        <DialogHeader
+          className={cn(
+            "relative shrink-0 space-y-1 overflow-clip bg-gradient-to-br from-primary via-violet-600 to-fuchsia-500 px-5 text-left text-white transition-[padding] duration-200",
+            compacto ? "pb-3 pt-3" : "pb-4 pt-5"
+          )}
+        >
           <div className="pointer-events-none absolute -right-12 -top-16 h-48 w-48 rounded-full bg-white/15 blur-3xl" aria-hidden />
           <div className="pointer-events-none absolute -bottom-20 left-10 h-40 w-40 rounded-full bg-fuchsia-300/25 blur-3xl" aria-hidden />
-          <DialogTitle className="relative flex items-center gap-2.5 pr-10 text-xl text-white">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/20 ring-1 ring-white/30 backdrop-blur">
-              <Sparkles className="h-5 w-5" />
+          <DialogTitle className={cn("relative flex items-center gap-2.5 pr-10 text-white transition-all duration-200", compacto ? "text-base" : "text-xl")}>
+            <span
+              className={cn(
+                "flex items-center justify-center rounded-xl bg-white/20 ring-1 ring-white/30 backdrop-blur transition-all duration-200",
+                compacto ? "h-7 w-7" : "h-9 w-9"
+              )}
+            >
+              <Sparkles className={compacto ? "h-4 w-4" : "h-5 w-5"} />
             </span>
             {modo === "mes" ? "Armar el mes con IA" : "Campaña con IA"}
           </DialogTitle>
+          {/* Lo que se esconde al bajar: la explicación y el cambio de modo. */}
+          <div className={cn("relative grid transition-[grid-template-rows,opacity] duration-200", compacto ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100")} aria-hidden={compacto}>
+          <div className="min-h-0 space-y-1 overflow-clip">
           <DialogDescription className="relative text-white/80">
             {modo === "mes"
               ? "La IA propone las ideas con lo que sabe del cliente. Vos las revisás y recién ahí le llegan. Lo que cambies, lo aprende para la próxima."
@@ -135,26 +159,23 @@ export function PlanMesDialog({
               </button>
             ))}
           </div>
-          <div className="relative flex flex-wrap items-center gap-2 pt-2">
-            <Select value={clienteId} onValueChange={setClienteId}>
-              <SelectTrigger className="h-9 w-full rounded-full border-white/25 bg-white/15 text-white backdrop-blur sm:w-64 [&>svg]:text-white">
-                <SelectValue placeholder="Elegí el cliente">{cliente?.nombre}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {clientes.map((c) => {
-                  const p = delMes.find((x) => x.proyecto_id === c.id);
-                  const e = ESTADO_PLAN[p?.estado ?? "nada"];
-                  return (
-                    <SelectItem key={c.id} value={c.id}>
-                      <span className="flex items-center gap-2 whitespace-nowrap">
-                        {c.nombre}
-                        <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-medium", e.clase)}>{e.label}</span>
-                      </span>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
+          </div>
+          </div>
+          <div className={cn("relative flex flex-wrap items-center gap-2", compacto ? "pt-1" : "pt-2")}>
+            <ElegirCliente
+              value={clienteId ?? ""}
+              onChange={setClienteId}
+              clientes={clientes}
+              placeholder="Elegí el cliente"
+              className={cn(
+                "h-9 rounded-full border-white/25 bg-white/15 text-white backdrop-blur hover:border-white/50 sm:w-64 sm:flex-none [&_svg]:text-white",
+                compacto ? "w-auto min-w-0 flex-1" : "w-full"
+              )}
+              detalle={(id) => {
+                const e = ESTADO_PLAN[delMes.find((x) => x.proyecto_id === id)?.estado ?? "nada"];
+                return <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium", e.clase)}>{e.label}</span>;
+              }}
+            />
             <div className="flex items-center gap-1 rounded-full border border-white/25 bg-white/15 p-0.5 backdrop-blur">
               {modo === "campania" && <span className="pl-2.5 text-xs text-white/75">Desde</span>}
               <Button
@@ -179,13 +200,13 @@ export function PlanMesDialog({
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
-            {cliente && !loading && modo === "mes" && (
+            {cliente && !loading && modo === "mes" && !compacto && (
               <span className="rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-primary shadow-sm">{ESTADO_PLAN[plan?.estado ?? "nada"].label}</span>
             )}
           </div>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 pb-5 pt-5">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 pb-5 pt-5" onScroll={alScroll}>
           {!cliente ? (
             <p className="py-8 text-center text-sm text-muted-foreground">Elegí un cliente.</p>
           ) : modo === "campania" ? (
@@ -376,6 +397,22 @@ function Borrador({ plan, nombre }: { plan: PlanMes; nombre: string }) {
   const ideasRef = useRef(ideas);
   ideasRef.current = ideas;
 
+  // Campaña: los otros meses del cliente que todavía están en borrador con ideas de la misma campaña. Se pueden
+  // mandar todos juntos: al cliente le llega un solo link para aprobar la campaña entera.
+  const campania = ideas.find((i) => i.campania)?.campania ?? null;
+  const proximos = useMemo(() => [0, 1, 2, 3, 4, 5, 6, 7].map((d) => sumarMeses(mesActual(), d)), []);
+  const planesCliente = usePlanesDelMes(campania ? proximos : [], !!campania);
+  const deCampania = campania
+    ? planesCliente
+        .filter((p) => p.proyecto_id === plan.proyecto_id && p.estado === "borrador" && (p.id === plan.id || (p.ideas ?? []).some((i) => i.campania === campania)))
+        .sort((a, b) => a.mes.localeCompare(b.mes))
+    : [];
+  const ideasCampania = deCampania.reduce((n, p) => n + (p.id === plan.id ? ideas.length : (p.ideas ?? []).length), 0);
+  const rangoCampania =
+    deCampania.length > 1
+      ? `${mesLabel(deCampania[0].mes).split(" ")[0].toLowerCase()} a ${mesLabel(deCampania[deCampania.length - 1].mes).split(" ")[0].toLowerCase()}`
+      : "";
+
   // Si cambian las ideas en el servidor (rehacer con IA), se toma la versión nueva.
   const firma = `${plan.generado_at ?? ""}|${plan.ideas_ia?.length ?? 0}`;
   useEffect(() => {
@@ -460,6 +497,32 @@ function Borrador({ plan, nombre }: { plan: PlanMes; nombre: string }) {
     try {
       await enviarPlan(plan.proyecto_id, plan.mes, ideas, nota.trim() || null);
       toast.success(`Le llegó a ${nombre}. La IA guardó tus cambios para aprender.`);
+    } catch (e) {
+      err(e);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const enviarCampania = async () => {
+    const malas = new Set(ideas.filter((i) => i.titulo.trim().length < 3 || i.idea.trim().length < 10).map((i) => i.id));
+    setErrores(malas);
+    if (malas.size) {
+      toast.error("Completá el título y la descripción de las ideas marcadas");
+      return;
+    }
+    if (
+      !window.confirm(
+        `¿Mandar a ${nombre} toda la campaña “${campania}”? Son ${ideasCampania} ideas de ${rangoCampania} (${deCampania.length} meses). Le llega un solo aviso con un link para aprobarlas todas.`
+      )
+    )
+      return;
+    setBusy("campania");
+    try {
+      await guardarBorrador(plan, ideas, nota.trim() || null);
+      setDirty(false);
+      await callApi("/api/ia/plan-enviar-campania", { proyecto_id: plan.proyecto_id, meses: deCampania.map((p) => p.mes), nota_equipo: nota.trim() || null });
+      toast.success(`Le llegó a ${nombre} la campaña entera: ${ideasCampania} ideas de ${rangoCampania}.`);
     } catch (e) {
       err(e);
     } finally {
@@ -659,9 +722,24 @@ function Borrador({ plan, nombre }: { plan: PlanMes; nombre: string }) {
           </Button>
         </PistaPopover>
         <div className="flex flex-col items-stretch gap-1 sm:items-end">
-          <Button onClick={() => void enviar()} disabled={!!busy}>
+          {deCampania.length > 1 && (
+            <Button
+              onClick={() => void enviarCampania()}
+              disabled={!!busy}
+              className="h-auto flex-col items-stretch gap-0 bg-gradient-to-r from-primary to-fuchsia-500 py-2 text-left font-semibold shadow-md shadow-primary/25 sm:items-end sm:text-right"
+            >
+              <span className="flex items-center gap-2 sm:justify-end">
+                {busy === "campania" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clapperboard className="h-4 w-4" />}
+                Mandar toda la campaña a {nombre.split(" ")[0]}
+              </span>
+              <span className="text-[11px] font-normal text-white/85">
+                {ideasCampania} ideas de {rangoCampania}, en un solo link
+              </span>
+            </Button>
+          )}
+          <Button onClick={() => void enviar()} disabled={!!busy} variant={deCampania.length > 1 ? "outline" : "default"}>
             {busy === "enviar" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-            Aprobar y mandar a {nombre.split(" ")[0]}
+            {deCampania.length > 1 ? `Mandar solo ${mesLabel(plan.mes).split(" ")[0].toLowerCase()}` : `Aprobar y mandar a ${nombre.split(" ")[0]}`}
           </Button>
           <Button variant="outline" onClick={() => void aprobadoPorFuera()} disabled={!!busy} title="Lo aprobó por WhatsApp, en persona o todavía no usa el sistema">
             <Check className="mr-2 h-4 w-4 text-emerald-600" />

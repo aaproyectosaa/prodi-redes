@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, Check, Clock, Instagram, Loader2, MessageCircle, Paperclip, Pencil, Phone, Plus, RefreshCw, Send, Smile, Sparkles, Trash2, X, Zap, AtSign } from "lucide-react";
+import { ArrowDown, Check, Clock, Instagram, Loader2, MessageCircle, Paperclip, Pencil, Phone, Plus, RefreshCw, Send, Smile, Sparkles, Trash2, X, Zap, AtSign, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { db, doc, onSnapshot } from "@/lib/db";
+import { db, doc, onSnapshot, suscribirEscribiendo } from "@/lib/db";
 import { callApi } from "@/lib/redes/api";
 import { cn } from "@/lib/utils";
+import { ConfigCatalogo, SelectorProductos, type Producto } from "./CatalogoProductos";
 
 // Chat de un lead que llegó por Instagram o Messenger: se lee y se contesta desde el CRM (api/_lib/meta-leads.ts).
 // Herramientas del vendedor: respuestas rápidas del equipo (con {nombre}), tres respuestas sugeridas por la IA según
@@ -21,6 +22,8 @@ interface Mensaje {
   tipo?: "texto" | "historia" | "publicacion" | "sticker" | "archivo" | "otro";
   at: string;
   mio: boolean;
+  /** Solo los que mandé recién: se ven al instante mientras viajan a Meta. */
+  estado?: "enviando" | "error";
 }
 interface Conversacion {
   plataforma: string;
@@ -41,6 +44,27 @@ export interface LeadChat {
   instagram?: string;
   telefono?: string;
   email?: string;
+  /** Copia de los últimos mensajes guardada en el lead (abre al instante y llega en tiempo real). */
+  meta?: { plataforma?: string; chat?: { mensajes?: unknown[]; at?: string } | null } | null;
+}
+
+const VENTANA_MS = 24 * 3600_000;
+const VENTANA_AGENTE_MS = 7 * VENTANA_MS;
+/** La conversación armada con la copia guardada (el plazo para responder se calcula acá). */
+function desdeCopia(lead: LeadChat): Conversacion | null {
+  const lista = lead.meta?.chat?.mensajes as Mensaje[] | undefined;
+  if (!Array.isArray(lista) || !lista.length) return null;
+  const ultimoSuyo = [...lista].reverse().find((m) => !m.mio);
+  const desde = ultimoSuyo ? Date.parse(ultimoSuyo.at) : 0;
+  const ahora = Date.now();
+  const ventana = desde + VENTANA_MS > ahora ? "normal" : desde + VENTANA_AGENTE_MS > ahora ? "agente" : "cerrada";
+  return {
+    plataforma: lead.meta?.plataforma ?? "instagram",
+    mensajes: lista,
+    puede_responder: ventana !== "cerrada",
+    ventana,
+    vence: desde ? new Date(desde + (ventana === "agente" ? VENTANA_AGENTE_MS : VENTANA_MS)).toISOString() : null,
+  };
 }
 
 const RESPUESTAS_BASE: Respuesta[] = [
@@ -172,12 +196,11 @@ function EditarRespuestas({ lista, onClose }: { lista: Respuesta[]; onClose: () 
 }
 
 export function ChatLead({ lead }: { lead: LeadChat }) {
-  const [conv, setConv] = useState<Conversacion | null>(null);
+  const [conv, setConv] = useState<Conversacion | null>(() => desdeCopia(lead));
   const [error, setError] = useState<string | null>(null);
   const [texto, setTexto] = useState("");
-  const [enviando, setEnviando] = useState(false);
   const [cargando, setCargando] = useState(false);
-  const [panel, setPanel] = useState<null | "rapidas" | "ia" | "editar">(null);
+  const [panel, setPanel] = useState<null | "rapidas" | "ia" | "editar" | "productos" | "catalogo">(null);
   const [sugerencias, setSugerencias] = useState<string[] | null>(null);
   const [pensando, setPensando] = useState(false);
   const [pedido, setPedido] = useState("");
@@ -188,6 +211,23 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
   const caja = useRef<HTMLDivElement>(null);
   const entrada = useRef<HTMLTextAreaElement>(null);
   const cantidad = useRef(0);
+
+  // Con el chat abierto el sistema pregunta más seguido si cambió algo (cada 4 s, como los chats del equipo).
+  useEffect(() => suscribirEscribiendo(() => undefined), []);
+  const copia = lead.meta?.chat;
+  useEffect(() => {
+    const nueva = desdeCopia(lead);
+    if (!nueva) return;
+    setConv((c) => {
+      if (!c) return nueva;
+      const ids = new Set(c.mensajes.map((m) => m.id));
+      const faltan = nueva.mensajes.filter((m) => !ids.has(m.id));
+      if (!faltan.length) return c;
+      const mensajes = [...c.mensajes, ...faltan].sort((a, b) => a.at.localeCompare(b.at));
+      return { ...nueva, mensajes };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [copia]);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -204,7 +244,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
 
   useEffect(() => {
     void cargar();
-    const t = setInterval(() => document.visibilityState === "visible" && void cargar(), 15_000);
+    const t = setInterval(() => document.visibilityState === "visible" && void cargar(), 30_000);
     const reloj = setInterval(() => setAhora(Date.now()), 60_000);
     return () => {
       clearInterval(t);
@@ -260,22 +300,47 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
     }
   };
 
-  const enviar = async () => {
+  // Lo que mandé y todavía no volvió de Meta: se muestra al instante (sin esperar).
+  const [pendientes, setPendientes] = useState<Mensaje[]>([]);
+  const mandar = (t: string, id = `local-${Date.now()}`) => {
+    const at = new Date().toISOString();
+    setPendientes((l) => [...l.filter((x) => x.id !== id), { id, texto: t, adjunto: false, tipo: "texto", at, mio: true, estado: "enviando" }]);
+    requestAnimationFrame(() => bajar());
+    callApi("/api/web/meta-responder", { id: lead.id, texto: t })
+      .then(() => {
+        // Ya salió: queda como enviado hasta que Meta lo devuelva en la conversación.
+        setPendientes((l) => l.map((x) => (x.id === id ? { ...x, estado: undefined } : x)));
+        setTimeout(() => void cargar(), 1200);
+      })
+      .catch((e) => {
+        setPendientes((l) => l.map((x) => (x.id === id ? { ...x, estado: "error" } : x)));
+        toast.error(e instanceof Error ? e.message : "No se pudo enviar");
+      });
+  };
+  const mandarProductos = (lista: Producto[]) => {
+    const id = `local-p-${Date.now()}`;
+    const texto = `🛍️ ${lista.map((p) => p.nombre).join(" · ")}`;
+    setPanel(null);
+    setPendientes((l) => [...l, { id, texto, adjunto: false, tipo: "texto", at: new Date().toISOString(), mio: true, estado: "enviando" }]);
+    requestAnimationFrame(() => bajar());
+    callApi<{ como: string }>("/api/web/meta-productos", { id: lead.id, ids: lista.map((p) => p.id) })
+      .then(() => {
+        setPendientes((l) => l.filter((x) => x.id !== id));
+        toast.success(lista.length === 1 ? "Producto enviado" : `${lista.length} productos enviados`);
+        setTimeout(() => void cargar(), 1200);
+      })
+      .catch((e) => {
+        setPendientes((l) => l.filter((x) => x.id !== id));
+        toast.error(e instanceof Error ? e.message : "No se pudieron mandar");
+      });
+  };
+  const enviar = () => {
     const t = texto.trim();
-    if (!t || enviando) return;
-    setEnviando(true);
-    try {
-      await callApi("/api/web/meta-responder", { id: lead.id, texto: t });
-      setTexto("");
-      setSugerencias(null);
-      setConv((c) => (c ? { ...c, mensajes: [...c.mensajes, { id: `local-${Date.now()}`, texto: t, adjunto: false, tipo: "texto", at: new Date().toISOString(), mio: true }] } : c));
-      requestAnimationFrame(() => bajar());
-      setTimeout(() => void cargar(), 1500);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo enviar");
-    } finally {
-      setEnviando(false);
-    }
+    if (!t) return;
+    setTexto("");
+    setSugerencias(null);
+    mandar(t);
+    requestAnimationFrame(() => entrada.current?.focus());
   };
 
   const guardarDato = async (campo: "telefono" | "email", valor: string) => {
@@ -299,8 +364,16 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
   const esperandoRespuesta = !!conv && conv.mensajes.length > 0 && !conv.mensajes[conv.mensajes.length - 1].mio;
 
   // Mensajes agrupados por día y seguidos del mismo lado.
+  const mensajesVer = useMemo(() => {
+    const base = conv?.mensajes ?? [];
+    const faltan = pendientes.filter(
+      (p) => !base.some((m) => m.mio && m.texto.trim() === p.texto.trim() && Date.parse(m.at) >= Date.parse(p.at) - 120_000)
+    );
+    return [...base, ...faltan];
+  }, [conv, pendientes]);
+
   const filas = useMemo(() => {
-    const lista = conv?.mensajes ?? [];
+    const lista = mensajesVer;
     const res: ({ tipo: "dia"; label: string; key: string } | { tipo: "msj"; m: Mensaje; primero: boolean; ultimo: boolean; key: string })[] = [];
     lista.forEach((m, i) => {
       const ant = lista[i - 1];
@@ -311,7 +384,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
       res.push({ tipo: "msj", m, primero: !mismoAnt, ultimo: !mismoSig, key: m.id });
     });
     return res;
-  }, [conv]);
+  }, [mensajesVer]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
@@ -391,8 +464,20 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
                     </span>
                   )}
                   <span className={cn("mt-0.5 flex items-center justify-end gap-1 text-[10px]", f.m.mio ? "text-white/75" : "text-muted-foreground")}>
-                    {hora(f.m.at)}
-                    {f.m.mio && <Check className="h-3 w-3" />}
+                    {f.m.estado === "error" ? (
+                      <button
+                        type="button"
+                        onClick={() => mandar(f.m.texto, f.m.id)}
+                        className="rounded-full bg-white/20 px-2 py-0.5 font-semibold text-white hover:bg-white/30"
+                      >
+                        No se envió · Reintentar
+                      </button>
+                    ) : (
+                      <>
+                        {hora(f.m.at)}
+                        {f.m.mio && (f.m.estado === "enviando" ? <Clock className="h-3 w-3 animate-pulse" /> : <Check className="h-3 w-3" />)}
+                      </>
+                    )}
                   </span>
                 </div>
               </div>
@@ -465,6 +550,22 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
           <EditarRespuestas lista={respuestas} onClose={() => setPanel("rapidas")} />
         </div>
       )}
+      {panel === "productos" && (
+        <div className="border-t bg-muted/40 p-2">
+          <SelectorProductos negocio="prodi" onElegir={(l) => mandarProductos(l)} onCerrar={() => setPanel(null)} onConfigurar={() => setPanel("catalogo")} />
+        </div>
+      )}
+      {panel === "catalogo" && (
+        <div className="max-h-[50vh] overflow-y-auto border-t bg-muted/40 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Catálogo de Prodi</p>
+            <button type="button" onClick={() => setPanel("productos")} className="text-[11px] font-semibold text-primary hover:underline">
+              Volver a elegir
+            </button>
+          </div>
+          <ConfigCatalogo negocio="prodi" />
+        </div>
+      )}
       {panel === "ia" && (
         <div className="border-t bg-gradient-to-br from-primary/[0.06] to-fuchsia-500/[0.06] p-2">
           <div className="mb-1.5 flex items-center justify-between px-1">
@@ -519,6 +620,9 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
               <Herramienta activo={panel === "rapidas" || panel === "editar"} onClick={() => setPanel(panel === "rapidas" ? null : "rapidas")} titulo="Respuestas guardadas del equipo">
                 <Zap className="h-3.5 w-3.5" /> Rápidas
               </Herramienta>
+              <Herramienta activo={panel === "productos" || panel === "catalogo"} onClick={() => setPanel(panel === "productos" ? null : "productos")} titulo="Mandar productos del catálogo (tarjeta con foto, precio y link)">
+                <ShoppingBag className="h-3.5 w-3.5" /> Productos
+              </Herramienta>
               <Herramienta activo={panel === "ia"} onClick={() => void sugerir()} titulo="La IA lee la charla y te propone 3 respuestas">
                 <Sparkles className="h-3.5 w-3.5" /> Sugerir con IA
               </Herramienta>
@@ -556,7 +660,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
-                    void enviar();
+                    enviar();
                   }
                 }}
                 rows={1}
@@ -568,11 +672,11 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
               <Button
                 size="icon"
                 className="h-[42px] w-[42px] shrink-0 rounded-full bg-gradient-to-br from-primary to-fuchsia-500 shadow-md shadow-primary/25"
-                onClick={() => void enviar()}
-                disabled={!texto.trim() || enviando || !conv}
+                onClick={enviar}
+                disabled={!texto.trim() || !conv}
                 aria-label="Enviar"
               >
-                {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                <Send className="h-4 w-4" />
               </Button>
             </div>
             {texto.length > 700 && <p className="mt-1 px-1 text-right text-[10px] text-muted-foreground">{texto.length}/1000</p>}

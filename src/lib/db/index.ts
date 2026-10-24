@@ -347,27 +347,29 @@ function refrescarColecciones(patrones: Iterable<string>) {
   });
 }
 
-// Cuánto pregunta "¿qué cambió?" (cada pregunta despierta la base, que cobra por tiempo despierta):
-// - usándola: cada 6 s;
-// - abierta pero sin tocarla hace 5 min: cada 30 s;
-// - sin tocarla hace 20 min, o escondida hace 2 min: deja de preguntar hasta que se vuelva a usar
+// Cuánto pregunta "¿qué cambió?" (cada pregunta es una llamada a Vercel y despierta la base: las dos cobran):
+// - usándola: cada 10 s (con un chat abierto, cada 4 s);
+// - abierta pero sin tocarla hace 2 min: cada 30 s;
+// - sin tocarla hace 5 min, o escondida hace 2 min: deja de preguntar hasta que se vuelva a usar
 //   (los avisos push siguen llegando). Al volver se pone al día sola (solo lo nuevo).
 let rev: number | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let ocultaDesde: number | null = null;
 let ultimoUso = Date.now();
 let pausada = false;
-const ACTIVA = 6_000;
+const ACTIVA = 10_000;
 /** Con un chat abierto pregunta más seguido, para que "escribiendo…" llegue enseguida (como WhatsApp). */
-const ACTIVA_CHAT = 2_500;
+const ACTIVA_CHAT = 4_000;
 const QUIETA = 30_000;
-const QUIETA_DESDE = 5 * 60_000;
-const PAUSA_QUIETA = 20 * 60_000;
+const QUIETA_DESDE = 2 * 60_000;
+const PAUSA_QUIETA = 5 * 60_000;
+/** Con un chat abierto (esperando que contesten) tarda más en pausar: si no, el mensaje no aparece hasta tocar algo. */
+const PAUSA_QUIETA_CHAT = 20 * 60_000;
 const PAUSA_OCULTA = 2 * 60_000;
 
 function debePausar() {
   const ahora = Date.now();
-  return (ocultaDesde !== null && ahora - ocultaDesde > PAUSA_OCULTA) || ahora - ultimoUso > PAUSA_QUIETA;
+  return (ocultaDesde !== null && ahora - ocultaDesde > PAUSA_OCULTA) || ahora - ultimoUso > (interesEscribiendo > 0 ? PAUSA_QUIETA_CHAT : PAUSA_QUIETA);
 }
 
 async function sondear() {

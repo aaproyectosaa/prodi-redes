@@ -15,6 +15,7 @@ import type { Project } from "@/integrations/firebase/types";
 import { avisar, equipoDe } from "./avisos";
 import { callApi } from "./api";
 import type {
+  EstadoFilmado,
   EtapaVideo,
   HistorialVideo,
   PautaVideo,
@@ -330,6 +331,52 @@ export async function terminarRodaje(rodaje: Rodaje) {
   const duracion = Math.max(1, Math.round((Date.parse(fin) - Date.parse(rodaje.inicio_at)) / 60_000));
   await updateDoc(doc(db, RODAJES, rodaje.id), { fin_at: fin, duracion_min: duracion, estado: "realizado" });
   return duracion;
+}
+
+/** El día del rodaje: este video se filmó, quedó a medias o no se filmó (null = sin marcar). */
+export async function marcarFilmado(rodaje: Rodaje, videoId: string, estado: EstadoFilmado | null, nota?: string | null) {
+  assertEditable();
+  await updateDoc(doc(db, RODAJES, rodaje.id), {
+    [`filmados.${videoId}`]: estado,
+    ...(nota !== undefined ? { [`notas_filmado.${videoId}`]: nota?.trim() || null } : {}),
+  });
+}
+
+/** Tomas tildadas de un video en la hoja de rodaje (quedan guardadas para todo el equipo). */
+export async function marcarTomas(rodaje: Rodaje, videoId: string, hechas: number[]) {
+  assertEditable();
+  await updateDoc(doc(db, RODAJES, rodaje.id), { [`tomas_hechas.${videoId}`]: [...new Set(hechas)].sort((a, b) => a - b) });
+}
+
+/** Lo que ya se cargó de "Qué llevar". */
+export async function marcarLlevar(rodaje: Rodaje, hechos: number[]) {
+  assertEditable();
+  await updateDoc(doc(db, RODAJES, rodaje.id), { llevar_hecho: [...new Set(hechos)].sort((a, b) => a - b) });
+}
+
+/**
+ * Al terminar el rodaje: los videos marcados "no se filmó" vuelven a Planificado (sin rodaje) para agendarlos en otro,
+ * con la nota de por qué. Así no quedan colgados en un rodaje que ya pasó. Devuelve cuántos volvieron.
+ */
+export async function devolverNoFilmados(rodaje: Rodaje, videos: Video[], by: string): Promise<number> {
+  assertEditable();
+  const no = videos.filter((v) => rodaje.filmados?.[v.id] === "no" && v.rodaje_id === rodaje.id && v.etapa === "agendado");
+  if (!no.length) return 0;
+  const ts = now();
+  const batch = writeBatch(db);
+  for (const v of no) {
+    const nota = rodaje.notas_filmado?.[v.id] ?? null;
+    batch.update(doc(db, VIDEOS, v.id), {
+      rodaje_id: null,
+      etapa: "planificado",
+      etapa_desde: ts,
+      updated_at: ts,
+      historial: arrayUnion(evento(by, `No se filmó en el rodaje del ${fechaCorta(rodaje.fecha)}: vuelve a Planificado`, nota)),
+    });
+  }
+  batch.update(doc(db, RODAJES, rodaje.id), { video_ids: rodaje.video_ids.filter((id) => !no.some((v) => v.id === id)) });
+  await batch.commit();
+  return no.length;
 }
 
 /** "1 h 25 min" / "40 min". */

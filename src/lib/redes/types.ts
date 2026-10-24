@@ -140,6 +140,8 @@ export interface Video {
   recordatorio_cliente_at?: string | null;
   /** Salió de una idea del plan del mes. */
   plan_idea_id?: string | null;
+  /** Campaña a la que pertenece (viene de la idea del plan; se filman juntos en un rodaje de campaña). */
+  campania?: string | null;
   /** Lo filma el cliente y nos manda el material (no lleva rodaje). */
   filma_cliente?: boolean;
   /** Extra que el cliente pidió "pasámelo": al aprobarlo se le entrega y no pasa por pauta (lo escribe el servidor). */
@@ -194,6 +196,26 @@ export interface Rodaje {
   /** Lo que duró la filmación (minutos). */
   duracion_min?: number | null;
   iniciado_por?: string | null;
+  /** El día del rodaje, video por video: se filmó, quedó a medias o no se filmó (se ve igual en todos los celulares). */
+  filmados?: Record<string, EstadoFilmado | null>;
+  /** Qué falta de un video que quedó a medias o por qué no se filmó. */
+  notas_filmado?: Record<string, string | null>;
+  /** Tomas tildadas de cada video (por número de toma). */
+  tomas_hechas?: Record<string, number[]>;
+  /** El día ordenado por momento y lugar (lo arma la IA): qué videos van juntos y qué llevar para cada parte. */
+  bloques?: BloqueRodaje[] | null;
+  /** Qué llevar al rodaje (productos, utilería, gente) y qué ya está. */
+  llevar?: string[] | null;
+  llevar_hecho?: number[];
+}
+
+export type EstadoFilmado = "si" | "parcial" | "no";
+
+export interface BloqueRodaje {
+  nombre: string;
+  /** Cuándo o dónde (ej. "De día, en el patio y la pileta"). */
+  detalle?: string | null;
+  video_ids: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -222,6 +244,8 @@ export interface PlanMes {
   proyecto_id: string;
   mes: string;
   estado: EstadoPlanMes;
+  /** Se mandó junto con otros meses como una campaña (el cliente los aprueba todos en un link). */
+  enviado_en_campania?: string[] | null;
   ideas: IdeaPlan[];
   ideas_ia?: IdeaPlan[];
   descartadas?: string[];
@@ -573,6 +597,9 @@ export interface Mensaje {
   reunion_id?: string | null;
   /** Mensaje de voz: el audio está en chats/{chat}/audios/{id} (se baja al reproducirlo). */
   audio?: { id: string; mime: string; duracion: number } | null;
+  /** Mensaje de voz: lo que dice (se transcribe a pedido o cuando se le habla a Prodi) y quién lo escuchó { uid: cuándo }. */
+  transcripcion?: string | null;
+  escuchado?: Record<string, string> | null;
   /** Sticker (tipo "sticker"): código del emoji animado, ej. "1f602". */
   sticker?: string | null;
   /** Encuesta rápida: pregunta y opciones; votos = { uid: [índices] }. */

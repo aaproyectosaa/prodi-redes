@@ -112,9 +112,9 @@ export async function generarTextos(prompt: string, cantidad = 3): Promise<strin
 }
 
 /** Respuesta estructurada (JSON con el esquema indicado). */
-export async function generarJSON<T>(prompt: string, schema: unknown, temperature = 0.6): Promise<T> {
+export async function generarJSON<T>(prompt: string, schema: unknown, temperature = 0.6, adjuntos: { data: Buffer; mime: string }[] = []): Promise<T> {
   const json = await call(TEXT_MODEL(), {
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    contents: [{ role: "user", parts: [...adjuntos.map((a) => ({ inline_data: { mime_type: a.mime, data: a.data.toString("base64") } })), { text: prompt }] }],
     generationConfig: { temperature, responseMimeType: "application/json", responseSchema: schema },
   });
   const text = json?.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? "").join("") ?? "";

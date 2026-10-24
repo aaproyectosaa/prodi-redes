@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { AccionTile } from "@/components/redes/AccionesTablero";
 import { useSearchParams } from "react-router-dom";
-import { ChevronRight, Clock, MessageSquareWarning, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronRight, ClipboardList, Clock, MessageSquareWarning, Sparkles } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { PlanMesDialog } from "@/components/redes/PlanMesDialog";
 import { useRedes } from "@/contexts/redes-data-context";
@@ -31,6 +32,8 @@ interface Item {
   key: string;
   tono: "cambios" | "borrador" | "falta";
   texto: string;
+  /** Lo que dice el chip (el texto completo queda de tooltip). */
+  corto: string;
   boton: string;
   clienteId: string;
   mes: string;
@@ -45,6 +48,7 @@ export function PlanesAviso() {
   const { clientes, planes, videos } = useRedes();
   const [params, setParams] = useSearchParams();
   const [abrir, setAbrir] = useState<{ clienteId: string; mes: string } | null>(null);
+  const [verLista, setVerLista] = useState(false);
   const meses = [mesActual(), sumarMeses(mesActual(), 1)];
   const lista = usePlanesDelMes(meses).filter((p) => clientes.some((c) => c.id === p.proyecto_id));
 
@@ -61,6 +65,7 @@ export function PlanesAviso() {
   }, [desdeLink]);
 
   const nombre = (id: string) => clientes.find((c) => c.id === id)?.nombre ?? "Cliente";
+  const mesCorto = (m: string) => mesLabel(m).split(" ")[0].slice(0, 3).toLowerCase();
   const items: Item[] = [];
   for (const p of lista) {
     const n = cambiosPendientes(p).length;
@@ -69,6 +74,7 @@ export function PlanesAviso() {
         key: p.id,
         tono: "cambios",
         texto: `${nombre(p.proyecto_id)} pidió cambios en ${n === 1 ? "1 idea" : `${n} ideas`} de ${mesLabel(p.mes).split(" ")[0].toLowerCase()}`,
+        corto: `${nombre(p.proyecto_id)} pidió ${n === 1 ? "1 cambio" : `${n} cambios`} · ${mesCorto(p.mes)}`,
         boton: "Ajustar",
         clienteId: p.proyecto_id,
         mes: p.mes,
@@ -78,6 +84,7 @@ export function PlanesAviso() {
         key: p.id,
         tono: "borrador",
         texto: `Borrador sin mandar: ${nombre(p.proyecto_id)} · ${mesLabel(p.mes).split(" ")[0].toLowerCase()}`,
+        corto: `Borrador ${nombre(p.proyecto_id)} · ${mesCorto(p.mes)}`,
         boton: "Revisar",
         clienteId: p.proyecto_id,
         mes: p.mes,
@@ -97,44 +104,65 @@ export function PlanesAviso() {
           faltan.length === 1
             ? `Falta armar ${mesLabel(proximo).split(" ")[0].toLowerCase()} de ${faltan[0].nombre}`
             : `Faltan armar los videos de ${mesLabel(proximo).split(" ")[0].toLowerCase()} de ${faltan.length} clientes`,
+        corto: faltan.length === 1 ? `Falta ${faltan[0].nombre} · ${mesCorto(proximo)}` : `Faltan ${faltan.length} clientes · ${mesCorto(proximo)}`,
         boton: "Armar con IA",
         clienteId: faltan[0].id,
         mes: proximo,
       });
   }
 
+  // Lo más urgente primero: cambios del cliente, borradores, lo que falta armar.
+  const orden = { cambios: 0, borrador: 1, falta: 2 } as const;
+  items.sort((a, b) => orden[a.tono] - orden[b.tono]);
+
+  const urgentes = items.filter((it) => it.tono === "cambios").length;
+
   return (
     <>
       {items.length > 0 && (
-        <div className="mb-4 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-300 motion-reduce:animate-none">
-          {items.slice(0, 4).map((it) => {
-            const Icono = it.tono === "cambios" ? MessageSquareWarning : it.tono === "borrador" ? Clock : Sparkles;
-            return (
-              <button
-                key={it.key}
-                type="button"
-                onClick={() => setAbrir({ clienteId: it.clienteId, mes: it.mes })}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition-all hover:-translate-y-0.5 hover:shadow-sm",
-                  it.tono === "cambios" && "border-orange-500/40 bg-orange-500/[0.07]",
-                  it.tono === "borrador" && "border-amber-500/40 bg-amber-500/[0.07]",
-                  it.tono === "falta" && "border-primary/30 bg-primary/[0.05]"
-                )}
-              >
-                <Icono
-                  className={cn(
-                    "h-4 w-4 shrink-0",
-                    it.tono === "cambios" ? "text-orange-600" : it.tono === "borrador" ? "text-amber-600" : "text-primary"
-                  )}
-                />
-                <span className="min-w-0 flex-1">{it.texto}</span>
-                <span className="inline-flex shrink-0 items-center text-xs font-semibold text-primary">
-                  {it.boton} <ChevronRight className="h-3.5 w-3.5" />
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        <Popover open={verLista} onOpenChange={setVerLista}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                "inline-flex h-11 shrink-0 items-center gap-2 rounded-2xl px-4 text-sm font-semibold transition-colors animate-in fade-in",
+                urgentes ? "bg-orange-500/15 text-orange-700 hover:bg-orange-500/25 dark:text-orange-300" : "bg-primary/10 text-primary hover:bg-primary/15"
+              )}
+            >
+              <ClipboardList className="h-4 w-4" />
+              {items.length === 1 ? "1 plan" : `${items.length} planes`}
+              <span className="-ml-1 hidden sm:inline">para revisar</span>
+              <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-[min(22rem,calc(100vw-2rem))] rounded-2xl p-1.5">
+            {items.map((it) => {
+              const Icono = it.tono === "cambios" ? MessageSquareWarning : it.tono === "borrador" ? Clock : Sparkles;
+              return (
+                <button
+                  key={it.key}
+                  type="button"
+                  onClick={() => {
+                    setVerLista(false);
+                    setAbrir({ clienteId: it.clienteId, mes: it.mes });
+                  }}
+                  className="flex w-full items-start gap-2.5 rounded-xl px-2.5 py-2 text-left text-sm transition-colors hover:bg-muted"
+                >
+                  <Icono
+                    className={cn(
+                      "mt-0.5 h-4 w-4 shrink-0",
+                      it.tono === "cambios" ? "text-orange-500" : it.tono === "borrador" ? "text-amber-500" : "text-primary"
+                    )}
+                  />
+                  <span className="min-w-0 flex-1 leading-snug">{it.texto}</span>
+                  <span className="inline-flex shrink-0 items-center text-xs font-semibold text-primary">
+                    {it.boton} <ChevronRight className="h-3.5 w-3.5" />
+                  </span>
+                </button>
+              );
+            })}
+          </PopoverContent>
+        </Popover>
       )}
       <PlanMesDialog open={!!abrir} onOpenChange={(o) => !o && setAbrir(null)} clienteId={abrir?.clienteId} mes={abrir?.mes} />
     </>

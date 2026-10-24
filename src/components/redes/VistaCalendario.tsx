@@ -36,7 +36,7 @@ export function useVista(clave: string): [Vista, (v: Vista) => void] {
   return [vista, cambiar];
 }
 
-export function SelectorVista({ vista, onChange }: { vista: Vista; onChange: (v: Vista) => void }) {
+export function SelectorVista({ vista, onChange, compacto }: { vista: Vista; onChange: (v: Vista) => void; compacto?: boolean }) {
   const ops: { v: Vista; label: string; icon: LucideIcon }[] = [
     { v: "kanban", label: "Kanban", icon: LayoutGrid },
     { v: "calendario", label: "Calendario", icon: CalendarDays },
@@ -49,13 +49,16 @@ export function SelectorVista({ vista, onChange }: { vista: Vista; onChange: (v:
           type="button"
           role="tab"
           aria-selected={vista === o.v}
+          aria-label={o.label}
+          title={o.label}
           onClick={() => onChange(o.v)}
           className={cn(
-            "inline-flex h-9 items-center gap-1.5 rounded-xl px-3.5 text-sm font-medium transition-all",
+            "inline-flex h-9 items-center gap-1.5 rounded-xl text-sm font-medium transition-all",
+            compacto ? "px-2.5" : "px-3.5",
             vista === o.v ? "bg-background text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
           )}
         >
-          <o.icon className="h-4 w-4" /> {o.label}
+          <o.icon className="h-4 w-4" /> {!compacto && o.label}
         </button>
       ))}
     </div>
