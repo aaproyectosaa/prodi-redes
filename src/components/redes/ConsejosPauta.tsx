@@ -84,12 +84,97 @@ const SOBRE: Record<string, { icono: React.ElementType; label: string }> = {
 
 const plata = (n: number, moneda: string) => `${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(n)} ${moneda}`;
 
-const TIPO: Record<Sugerencia["tipo"], { label: string; icono: React.ElementType; chip: string; barra: string; caja: string }> = {
-  cortar: { label: "Cortar", icono: Scissors, chip: "bg-red-500/15 text-red-600 dark:text-red-300", barra: "bg-red-500", caja: "bg-red-500/15 text-red-500" },
-  mejorar: { label: "Mejorar", icono: TrendingUp, chip: "bg-sky-500/15 text-sky-700 dark:text-sky-300", barra: "bg-sky-500", caja: "bg-sky-500/15 text-sky-500" },
-  probar: { label: "Probar", icono: FlaskConical, chip: "bg-violet-500/15 text-violet-700 dark:text-violet-300", barra: "bg-violet-500", caja: "bg-violet-500/15 text-violet-500" },
-  mantener: { label: "Mantener", icono: CheckCircle2, chip: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", barra: "bg-emerald-500", caja: "bg-emerald-500/15 text-emerald-500" },
+const TIPO: Record<Sugerencia["tipo"], { label: string; icono: React.ElementType; chip: string; barra: string; caja: string; texto: string }> = {
+  cortar: { label: "Cortar", icono: Scissors, chip: "bg-red-500/15 text-red-600 dark:text-red-300", barra: "bg-red-500", caja: "bg-red-500/15 text-red-500", texto: "text-red-600 dark:text-red-400" },
+  mejorar: { label: "Mejorar", icono: TrendingUp, chip: "bg-sky-500/15 text-sky-700 dark:text-sky-300", barra: "bg-sky-500", caja: "bg-sky-500/15 text-sky-500", texto: "text-sky-600 dark:text-sky-400" },
+  probar: { label: "Probar", icono: FlaskConical, chip: "bg-violet-500/15 text-violet-700 dark:text-violet-300", barra: "bg-violet-500", caja: "bg-violet-500/15 text-violet-500", texto: "text-violet-600 dark:text-violet-400" },
+  mantener: { label: "Mantener", icono: CheckCircle2, chip: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", barra: "bg-emerald-500", caja: "bg-emerald-500/15 text-emerald-500", texto: "text-emerald-600 dark:text-emerald-400" },
 };
+
+/** Cuándo hacer cada consejo (reemplaza las barras de colores y el «Urgente» en cada fila). */
+const GRUPOS: { prioridad: Sugerencia["prioridad"]; titulo: string; icono: React.ElementType; clase: string }[] = [
+  { prioridad: "alta", titulo: "Hacelo hoy", icono: Flame, clase: "text-red-600 dark:text-red-400" },
+  { prioridad: "media", titulo: "Esta semana", icono: Clock, clase: "text-amber-600 dark:text-amber-400" },
+  { prioridad: "baja", titulo: "Cuando puedas", icono: Lightbulb, clase: "text-muted-foreground" },
+];
+
+/**
+ * Un consejo: cerrado se lee entero (qué hacer y sobre qué); abierto, el porqué y los botones
+ * (Hacer, Ya lo hice, Escuchar), todos juntos abajo.
+ */
+function FilaConsejo({
+  s,
+  i,
+  proyectoId,
+  abierto,
+  onAbrir,
+  onHecho,
+}: {
+  s: Sugerencia;
+  i: number;
+  proyectoId: string;
+  abierto: boolean;
+  onAbrir: () => void;
+  onHecho: () => void;
+}) {
+  const t = TIPO[s.tipo] ?? TIPO.mejorar;
+  const accion = s.accion || s.titulo;
+  const porque = s.porque || primeraFrase(s.detalle);
+  const so = s.sobre && s.sobre.tipo !== "general" ? SOBRE[s.sobre.tipo] ?? null : null;
+  const [masDetalle, setMasDetalle] = useState(false);
+  return (
+    <li className={cn("rounded-2xl border bg-card transition-all", abierto ? "border-primary/30 shadow-md" : "hover:border-foreground/20")}>
+      <button type="button" onClick={onAbrir} aria-expanded={abierto} className="flex w-full items-start gap-3 p-3 text-left sm:p-3.5">
+        <span className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl", t.caja)}>
+          <t.icono className="h-4 w-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
+            <span className={cn("font-bold uppercase tracking-wide", t.texto)}>{t.label}</span>
+            {so && s.sobre?.nombre && (
+              <span className="inline-flex min-w-0 items-center gap-1 text-muted-foreground">
+                <so.icono className="h-3 w-3 shrink-0" />
+                <span className="truncate">{s.sobre.nombre}</span>
+              </span>
+            )}
+          </span>
+          <span className="mt-0.5 block text-sm font-semibold leading-snug">{accion}</span>
+        </span>
+        <ChevronDown className={cn("mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform", abierto && "rotate-180")} />
+      </button>
+      {abierto && (
+        <div className="space-y-3 px-3 pb-3 animate-in fade-in slide-in-from-top-1 duration-150 sm:px-3.5 sm:pb-3.5">
+          <div className="rounded-xl bg-muted/50 p-3 text-sm leading-relaxed">
+            <p className="mb-0.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Por qué</p>
+            {porque}
+            {s.detalle && s.detalle !== porque && (
+              <>
+                {masDetalle ? (
+                  <p className="mt-2 border-t pt-2 text-[13px] text-muted-foreground">{s.detalle}</p>
+                ) : (
+                  <button type="button" onClick={() => setMasDetalle(true)} className="mt-1 block text-xs font-semibold text-primary hover:underline">
+                    Ver más detalle
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {s.tipo !== "mantener" && <HacerConsejo proyectoId={proyectoId} indice={i} />}
+            <button
+              type="button"
+              onClick={onHecho}
+              className="inline-flex h-9 items-center gap-1.5 rounded-full border bg-card px-4 text-xs font-semibold transition-colors hover:border-emerald-500 hover:text-emerald-600"
+            >
+              <Check className="h-3.5 w-3.5" /> Ya lo hice
+            </button>
+            <LeerEnVoz className="ml-auto" texto={[accion, `Por qué: ${porque}`, s.detalle && s.detalle !== porque ? s.detalle : ""].filter(Boolean).join(". ")} />
+          </div>
+        </div>
+      )}
+    </li>
+  );
+}
 
 const ESTADO: Record<NonNullable<Consejos["estado"]>, { label: string; clase: string; punto: string; fondo: string }> = {
   bien: { label: "Viene bien", clase: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", punto: "bg-emerald-500", fondo: "from-emerald-500/[0.14]" },
@@ -149,9 +234,7 @@ function useHechos(proyectoId: string, deLaBase: Hechos | undefined) {
 export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
   const [datos, setDatos] = useState<Consejos | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
-  const [filtro, setFiltro] = useState<Sugerencia["tipo"] | null>(null);
   const [abierto, setAbierto] = useState<number | null>(null);
-  const [listaAbierta, setListaAbierta] = useState(true);
   const { esHecho, quien, alternar } = useHechos(proyectoId, datos?.hechos);
 
   useEffect(() => {
@@ -181,8 +264,6 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
       .map((s, i) => ({ s, i }))
       .sort((a, b) => PESO[a.s.prioridad] - PESO[b.s.prioridad] || orden.indexOf(a.s.tipo) - orden.indexOf(b.s.tipo));
   }, [datos?.sugerencias]);
-  const visibles = filtro ? lista.filter((x) => x.s.tipo === filtro) : lista;
-  const cuenta = (t: Sugerencia["tipo"]) => lista.filter((x) => x.s.tipo === t).length;
   const titular = datos ? datos.titular || primeraFrase(datos.resumen) : "";
   const estado = datos?.estado ? ESTADO[datos.estado] : null;
   const hechas = lista.filter((x) => esHecho(x.i)).length;
@@ -289,161 +370,78 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
             )}
           </div>
 
-          {/* Qué hacer ahora: lista para tildar. */}
-          <div className="space-y-2.5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-[12rem] flex-1 space-y-1.5">
-                <button
-                  type="button"
-                  onClick={() => setListaAbierta((v) => !v)}
-                  aria-expanded={listaAbierta}
-                  className="group flex flex-wrap items-center gap-2 text-left text-sm font-bold"
-                >
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/15 text-primary">
-                    <ListChecks className="h-4 w-4" />
-                  </span>
-                  Qué hacer ahora
-                  <span className="whitespace-nowrap text-xs font-medium text-muted-foreground">
-                    {hechas} de {lista.length} hechas
-                  </span>
-                  {/* Bien visible: dice qué hace el toque. */}
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold transition-colors",
-                      listaAbierta ? "bg-muted text-foreground group-hover:bg-muted/70" : "bg-primary text-primary-foreground shadow-md shadow-primary/25 group-hover:bg-primary/90"
-                    )}
-                  >
-                    {listaAbierta ? "Ocultar" : `Ver los ${lista.length} consejos`}
-                    <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", listaAbierta && "rotate-180")} />
-                  </span>
-                </button>
-                <div className="h-1.5 max-w-xs overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all duration-500"
-                    style={{ width: `${lista.length ? (hechas / lista.length) * 100 : 0}%` }}
-                  />
-                </div>
+          {/* Qué hacer ahora: agrupado por cuándo hacerlo; lo hecho baja a «Hechas». */}
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="flex items-center gap-2 text-base font-bold">
+                  <ListChecks className="h-4 w-4 text-primary" /> Qué hacer ahora
+                </p>
+                <span className="text-xs font-medium text-muted-foreground">
+                  {hechas} de {lista.length} hechas
+                </span>
               </div>
-              <div className={cn("flex flex-wrap gap-1 rounded-2xl bg-muted/50 p-1", !listaAbierta && "hidden")}>
-                <button
-                  type="button"
-                  onClick={() => setFiltro(null)}
-                  className={cn("rounded-xl px-3 py-1.5 text-xs font-semibold transition-all", !filtro ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
-                >
-                  Todas
-                </button>
-                {(Object.keys(TIPO) as Sugerencia["tipo"][]).filter(cuenta).map((t) => {
-                  const IconoT = TIPO[t].icono;
-                  return (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setFiltro(filtro === t ? null : t)}
-                      className={cn(
-                        "inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-all",
-                        filtro === t ? cn("shadow-sm", TIPO[t].chip) : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      <IconoT className="h-3.5 w-3.5" />
-                      {TIPO[t].label}
-                      <span className="rounded-full bg-background/60 px-1.5 text-[10px] tabular-nums">{cuenta(t)}</span>
-                    </button>
-                  );
-                })}
+              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all duration-500"
+                  style={{ width: `${lista.length ? (hechas / lista.length) * 100 : 0}%` }}
+                />
               </div>
             </div>
 
-            {listaAbierta && (
-            <ul className="space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
-              {visibles.map(({ s, i }) => {
-                const t = TIPO[s.tipo] ?? TIPO.mejorar;
-                const Icono = t.icono;
-                const hecho = esHecho(i);
-                const marco = hecho ? quien(i) : null;
-                const accion = s.accion || s.titulo;
-                const porque = s.porque || primeraFrase(s.detalle);
-                const desplegado = abierto === i;
-                const so = s.sobre ? SOBRE[s.sobre.tipo] ?? SOBRE.general : null;
-                const IconoSobre = so?.icono;
-                return (
-                  <li
-                    key={i}
-                    className={cn(
-                      "relative overflow-hidden rounded-xl border bg-card transition-all",
-                      hecho && "opacity-55",
-                      desplegado ? "shadow-md" : "hover:border-foreground/20"
-                    )}
-                  >
-                    <span className={cn("absolute inset-y-0 left-0 w-1", t.barra)} aria-hidden />
-                    {/* Fila compacta: tilde, tipo, la acción en una línea y la flecha para desplegar. */}
-                    <div className="flex items-center gap-2.5 py-2 pl-3.5 pr-2">
-                      <button
-                        type="button"
-                        onClick={() => alternar(i)}
-                        className={cn(
-                          "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
-                          hecho ? "border-emerald-500 bg-emerald-500 text-white" : "border-muted-foreground/40 hover:border-emerald-500"
-                        )}
-                        aria-label={hecho ? "Marcar como pendiente" : "Marcar como hecho"}
-                        title={hecho ? "Hecho" : "Marcar como hecho"}
-                      >
-                        {hecho && <Check className="h-3 w-3" />}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAbierto(desplegado ? null : i)}
-                        aria-expanded={desplegado}
-                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                      >
-                        <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-lg", t.caja)} title={t.label}>
-                          <Icono className="h-3.5 w-3.5" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className={cn("block text-sm font-semibold leading-snug", !desplegado && "truncate", hecho && "line-through")}>{accion}</span>
+            {GRUPOS.map((g) => {
+              const items = lista.filter((x) => x.s.prioridad === g.prioridad && !esHecho(x.i));
+              if (!items.length) return null;
+              return (
+                <div key={g.prioridad} className="space-y-2">
+                  <p className={cn("flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide", g.clase)}>
+                    <g.icono className="h-3.5 w-3.5" /> {g.titulo}
+                    <span className="font-medium normal-case tracking-normal text-muted-foreground">· {items.length}</span>
+                  </p>
+                  <ul className="space-y-2">
+                    {items.map(({ s, i }) => (
+                      <FilaConsejo key={i} s={s} i={i} proyectoId={proyectoId} abierto={abierto === i} onAbrir={() => setAbierto(abierto === i ? null : i)} onHecho={() => alternar(i)} />
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+
+            {hechas > 0 && (
+              <details className="group">
+                <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400 [&::-webkit-details-marker]:hidden">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Hechas · {hechas}
+                  <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
+                </summary>
+                <ul className="mt-2 space-y-1">
+                  {lista
+                    .filter((x) => esHecho(x.i))
+                    .map(({ s, i }) => {
+                      const marco = quien(i);
+                      return (
+                        <li key={i} className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-sm">
+                          <button
+                            type="button"
+                            onClick={() => alternar(i)}
+                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white"
+                            aria-label="Volver a pendiente"
+                            title="Volver a pendiente"
+                          >
+                            <Check className="h-3 w-3" />
+                          </button>
+                          <span className="min-w-0 flex-1 truncate text-muted-foreground line-through">{s.accion || s.titulo}</span>
                           {marco && (
-                            <span className="block text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-                              Hecho por {marco.nombre.split(" ")[0] || "alguien"} · {new Date(marco.at).toLocaleString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                            <span className="shrink-0 text-[10px] text-muted-foreground">
+                              {marco.nombre.split(" ")[0] || "alguien"} · {new Date(marco.at).toLocaleDateString("es-AR", { day: "numeric", month: "short" })}
                             </span>
                           )}
-                        </span>
-                        {s.prioridad === "alta" && (
-                          <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-red-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-red-600 dark:text-red-300">
-                            <Flame className="h-3 w-3" />
-                            <span className="hidden sm:inline">Urgente</span>
-                          </span>
-                        )}
-                        <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", desplegado && "rotate-180")} />
-                      </button>
-                    </div>
-                    {desplegado && (
-                      <div className="space-y-2 pb-3 pl-[3.25rem] pr-3 animate-in fade-in slide-in-from-top-1 duration-150">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold", t.chip)}>
-                            <Icono className="h-3 w-3" /> {t.label}
-                          </span>
-                          {so && IconoSobre && s.sobre && (
-                            <span className="inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground" title={s.sobre.nombre}>
-                              <IconoSobre className="h-3 w-3 shrink-0" />
-                              <span className="truncate">
-                                {so.label}
-                                {s.sobre.nombre && s.sobre.tipo !== "general" ? `: ${s.sobre.nombre}` : ""}
-                              </span>
-                            </span>
-                          )}
-                        </div>
-                        <LeerEnVoz texto={[accion, `Por qué: ${porque}`, s.detalle && s.detalle !== porque ? s.detalle : ""].filter(Boolean).join(". ")} />
-                        <p className="text-xs leading-relaxed">
-                          <b>Por qué:</b> <span className="text-muted-foreground">{porque}</span>
-                        </p>
-                        {s.detalle && s.detalle !== porque && <p className="rounded-xl bg-muted/40 p-2.5 text-xs leading-relaxed text-muted-foreground">{s.detalle}</p>}
-                        {s.tipo !== "mantener" && <HacerConsejo proyectoId={proyectoId} indice={i} />}
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+                        </li>
+                      );
+                    })}
+                </ul>
+              </details>
             )}
+
             {!datos.titular && (
               <p className="text-[11px] text-muted-foreground">Tocá “Analizar de nuevo” para verlo con el semáforo y los números clave.</p>
             )}
