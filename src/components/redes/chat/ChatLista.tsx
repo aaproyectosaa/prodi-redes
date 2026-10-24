@@ -231,6 +231,13 @@ export function ChatLista({
     const ms = Date.now() - new Date(c.ultimo.at).getTime();
     return ms >= SIN_RESPONDER_MS ? ms : null;
   };
+  /** A quién le toca contestar: la productora del cliente (la que lleva la cuenta). En los de Software, nadie fijo. */
+  const aCargo = (c: ChatT): { id: string; nombre: string } | null => {
+    if (c.area === "software") return null;
+    const ids = clienteById(c.proyecto_id)?.team_roles?.productor ?? [];
+    const p = ids.map((id) => profiles.find((x) => x.id === id)).find((x) => x && x.activo !== false);
+    return p ? { id: p.id, nombre: (p.nombre ?? "").split(" ")[0] } : null;
+  };
   const horasEspera = (ms: number) => {
     const h = Math.floor(ms / 3600_000);
     return h < 24 ? `${h} h` : `${Math.floor(h / 24)} d`;
@@ -509,8 +516,12 @@ export function ChatLista({
                       )}
                       {fijado && <Pin className="h-3 w-3 rotate-45 text-primary" aria-label="Fijado" />}
                       {espera != null ? (
-                        <span className="rounded-full bg-red-500 px-1.5 py-px text-[10px] font-semibold text-white" title="El cliente escribió y nadie le contestó">
+                        <span className="rounded-full bg-red-500 px-1.5 py-px text-[10px] font-semibold text-white" title={`El cliente escribió y nadie le contestó${aCargo(c) ? `. Le toca a ${aCargo(c)!.id === uid ? "vos" : aCargo(c)!.nombre} (lleva la cuenta)` : ""}`}>
                           Sin responder · {horasEspera(espera)}
+                          {(() => {
+                            const quien = aCargo(c);
+                            return quien ? ` · ${quien.id === uid ? "te toca" : quien.nombre}` : "";
+                          })()}
                         </span>
                       ) : (
                         c.ultimo && horaCorta(c.ultimo.at)
