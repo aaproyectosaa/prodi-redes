@@ -760,6 +760,17 @@ export function ChatConversacion({
   };
 
   const voz = useGrabadorVoz();
+  // El audio es del chat donde se empezó a grabar. La pantalla de la conversación se reusa al cambiar de chat:
+  // si se cambia mientras graba, ese audio se descarta (antes se mandaba al chat nuevo).
+  const chatDelAudio = useRef<string | null>(null);
+  useEffect(() => {
+    if (voz.grabando && chatDelAudio.current && chatDelAudio.current !== chat.id) {
+      voz.descartar();
+      chatDelAudio.current = null;
+      toast.info("Cambiaste de chat: el audio que estabas grabando se descartó.");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat.id]);
   useEffect(() => {
     avisarEscribiendo(voz.grabando ? "grabando" : null);
   }, [voz.grabando, avisarEscribiendo]);
@@ -772,8 +783,11 @@ export function ChatConversacion({
     return () => ro.disconnect();
   }, [voz.grabando]);
   const enviarVoz = async () => {
+    const delAudio = chatDelAudio.current;
     const r = await voz.detener();
+    chatDelAudio.current = null;
     if (!r) return;
+    if (delAudio && delAudio !== chat.id) return toast.info("Ese audio era de otro chat: no se mandó.");
     setEnviando(true);
     try {
       const id = await enviarAudio(chat, uid, r.blob, r.duracion, nombre);
@@ -1579,7 +1593,10 @@ export function ChatConversacion({
               seg={voz.seg}
               niveles={voz.niveles}
               enviando={enviando}
-              onCancelar={() => void voz.detener(true)}
+              onCancelar={() => {
+                chatDelAudio.current = null;
+                void voz.detener(true);
+              }}
               onEnviar={() => void enviarVoz()}
             />
           ) : (
@@ -1798,7 +1815,13 @@ export function ChatConversacion({
               {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
           ) : (
-            <BotonMic onClick={() => void voz.empezar()} disabled={enviando} />
+            <BotonMic
+              onClick={() => {
+                chatDelAudio.current = chat.id;
+                void voz.empezar();
+              }}
+              disabled={enviando}
+            />
           )}
           </>
           )}

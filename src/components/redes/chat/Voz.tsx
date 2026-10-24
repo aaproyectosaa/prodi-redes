@@ -441,7 +441,8 @@ export function useGrabadorVoz() {
   const [seg, setSeg] = useState(0);
   const [niveles, setNiveles] = useState<number[]>(Array(24).fill(0.1));
   const rec = useRef<MediaRecorder | null>(null);
-  const partes = useRef<Blob[]>([]);
+  /** Mientras pide el micrófono: un doble toque no arranca dos grabaciones. */
+  const iniciando = useRef(false);
   const inicio = useRef(0);
   const limpiar = useRef<() => void>(() => undefined);
   const resolver = useRef<((b: Blob | null) => void) | null>(null);
@@ -454,6 +455,18 @@ export function useGrabadorVoz() {
   };
 
   const empezar = async () => {
+    // Ya está grabando (o arrancando): no se abre otra grabación. Antes un doble toque dejaba una grabando de fondo
+    // que se metía en los audios siguientes, aunque fueran de otro chat.
+    if (iniciando.current || rec.current?.state === "recording") return;
+    iniciando.current = true;
+    try {
+      await arrancar();
+    } finally {
+      iniciando.current = false;
+    }
+  };
+
+  const arrancar = async () => {
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
       toast.error("Este navegador no permite grabar audio");
       return;
@@ -470,13 +483,16 @@ export function useGrabadorVoz() {
     // Antes iba a 24 kbps y en el iPhone sonaba metálico. 3 minutos siguen entrando en el límite (~2 MB).
     const esAac = (mimeType ?? "").includes("mp4") || (!mimeType && /iPhone|iPad|Macintosh/i.test(navigator.userAgent));
     const r = new MediaRecorder(stream, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: esAac ? 64000 : 48000 });
-    partes.current = [];
+    // Los pedazos de ESTA grabación (cada grabación tiene los suyos: nunca se mezclan con otra).
+    const partes: Blob[] = [];
     r.ondataavailable = (e) => {
-      if (e.data.size) partes.current.push(e.data);
+      if (e.data.size) partes.push(e.data);
     };
     cortado.current = null;
     r.onstop = () => {
-      const blob = partes.current.length ? new Blob(partes.current, { type: r.mimeType || mimeType || "audio/webm" }) : null;
+      // Una grabación que ya no es la actual (se descartó al cambiar de chat o al cerrar): no va a ningún lado.
+      if (rec.current !== r) return;
+      const blob = partes.length ? new Blob(partes, { type: r.mimeType || mimeType || "audio/webm" }) : null;
       if (resolver.current) resolver.current(blob);
       else cortado.current = blob;
       resolver.current = null;
@@ -543,9 +559,40 @@ export function useGrabadorVoz() {
       r.stop();
     });
 
-  useEffect(() => () => limpiar.current(), []);
+  /** Corta y tira la grabación en curso (al cambiar de chat o al cerrar la conversación). */
+  const descartar = () => {
+    const r = rec.current;
+    rec.current = null;
+    resolver.current = null;
+    cortado.current = null;
+    if (r && r.state !== "inactive") {
+      try {
+        r.stop();
+      } catch {
+        /* ya estaba parada */
+      }
+    }
+    terminar();
+  };
 
-  return { grabando, seg, niveles, empezar, detener };
+  useEffect(
+    () => () => {
+      // Al cerrar: si quedó grabando, se corta (no queda el micrófono abierto ni grabando de fondo).
+      const r = rec.current;
+      rec.current = null;
+      if (r && r.state !== "inactive") {
+        try {
+          r.stop();
+        } catch {
+          /* nada */
+        }
+      }
+      limpiar.current();
+    },
+    []
+  );
+
+  return { grabando, seg, niveles, empezar, detener, descartar };
 }
 
 export function BarraGrabando({
