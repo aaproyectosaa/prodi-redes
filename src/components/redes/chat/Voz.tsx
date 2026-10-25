@@ -63,6 +63,8 @@ let velGlobal = (() => {
   }
 })();
 interface Reproductor {
+  /** El chat del audio: el siguiente solo puede ser del mismo chat. */
+  chat: string;
   nodo: () => HTMLElement | null;
   reproducir: () => Promise<void>;
   pausar: () => void;
@@ -70,14 +72,21 @@ interface Reproductor {
 }
 const reproductores = new Set<Reproductor>();
 let sonandoAhora: Reproductor | null = null;
-/** El siguiente audio en la pantalla (el que está más abajo, pegado en el orden de la charla). */
+/**
+ * El siguiente audio de la MISMA conversación y que se ve (el que está más abajo). Nunca uno de otro chat: la app
+ * deja montadas, ocultas, las conversaciones minimizadas (y antes seguía con los audios de esas).
+ */
 function siguienteDe(r: Reproductor): Reproductor | null {
   const yo = r.nodo();
   if (!yo) return null;
+  const lista = yo.closest(".fondo-chat");
+  const seVe = (n: HTMLElement) => n.isConnected && n.getClientRects().length > 0;
+  if (!lista || !seVe(yo)) return null;
   let mejor: Reproductor | null = null;
   for (const o of reproductores) {
     const n = o.nodo();
-    if (o === r || !n || !(yo.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+    if (o === r || o.chat !== r.chat || !n || !seVe(n) || n.closest(".fondo-chat") !== lista) continue;
+    if (!(yo.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
     const m = mejor?.nodo();
     if (!m || n.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING) mejor = o;
   }
@@ -138,6 +147,7 @@ export function AudioMensaje({
 
   useEffect(() => {
     const r: Reproductor = {
+      chat: chatId,
       nodo: () => caja.current,
       reproducir: async () => {
         try {
