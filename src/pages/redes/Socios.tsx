@@ -173,30 +173,32 @@ export default function Socios() {
 
 /** La comisión estándar (para todos los que no tienen una propia). */
 function useEstandar(version: number) {
-  const [e, setE] = useState<{ comision_pct: number; meses: number } | null | undefined>(undefined);
+  const [e, setE] = useState<{ comision_pct: number; meses: number; modo: "mensual" | "entrada" } | null | undefined>(undefined);
   useEffect(() => {
-    callApi<{ estandar: { comision_pct: number; meses: number } | null }>("/api/web/socio-estandar", { ver: true })
+    callApi<{ estandar: { comision_pct: number; meses: number; modo: "mensual" | "entrada" } | null }>("/api/web/socio-estandar", { ver: true })
       .then((r) => setE(r.estandar))
       .catch(() => setE(null));
   }, [version]);
   return e;
 }
 
-function ComisionEstandar({ actual, onListo }: { actual: { comision_pct: number; meses: number } | null | undefined; onListo: () => void }) {
+function ComisionEstandar({ actual, onListo }: { actual: { comision_pct: number; meses: number; modo: "mensual" | "entrada" } | null | undefined; onListo: () => void }) {
   const [editando, setEditando] = useState(false);
   const [pct, setPct] = useState("");
   const [meses, setMeses] = useState("");
+  const [modo, setModo] = useState<"mensual" | "entrada">("entrada");
   const [guardando, setGuardando] = useState(false);
   if (actual === undefined) return null;
   const abrir = () => {
     setPct(actual ? String(actual.comision_pct) : "");
-    setMeses(actual ? String(actual.meses) : "");
+    setMeses(actual && actual.modo === "mensual" ? String(actual.meses) : "");
+    setModo(actual?.modo ?? "entrada");
     setEditando(true);
   };
   const guardar = async () => {
     setGuardando(true);
     try {
-      await callApi("/api/web/socio-estandar", { comision_pct: pct, meses });
+      await callApi("/api/web/socio-estandar", { comision_pct: pct, meses, modo });
       toast.success("Comisión estándar guardada");
       setEditando(false);
       onListo();
@@ -211,16 +213,28 @@ function ComisionEstandar({ actual, onListo }: { actual: { comision_pct: number;
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold">Comisión estándar</span>
         <span className="block text-xs text-muted-foreground">
-          {actual ? `${actual.comision_pct}% del abono durante ${actual.meses} meses, para todos los que no tienen otra.` : "Cargala una vez y vale para todos (cada uno puede tener la suya)."}
+          {actual
+            ? actual.modo === "entrada"
+              ? `Premio de entrada: ${actual.comision_pct}% del primer abono, una vez. Para todos los que no tienen otra.`
+              : `${actual.comision_pct}% del abono durante ${actual.meses} meses, para todos los que no tienen otra.`
+            : "Cargala una vez y vale para todos (cada uno puede tener la suya)."}
         </span>
       </span>
       {editando ? (
         <span className="flex flex-wrap items-center gap-2">
+          <select value={modo} onChange={(e) => setModo(e.target.value as "mensual" | "entrada")} className="h-10 rounded-xl border bg-background px-2 text-sm" aria-label="Cómo cobra">
+            <option value="entrada">Premio de entrada</option>
+            <option value="mensual">Cada mes</option>
+          </select>
           <Input type="number" inputMode="decimal" value={pct} onChange={(e) => setPct(e.target.value)} placeholder="%" className="h-10 w-20 rounded-xl" aria-label="Porcentaje" />
-          <span className="text-sm text-muted-foreground">% por</span>
-          <Input type="number" inputMode="numeric" value={meses} onChange={(e) => setMeses(e.target.value)} placeholder="meses" className="h-10 w-20 rounded-xl" aria-label="Meses" />
-          <span className="text-sm text-muted-foreground">meses</span>
-          <Button size="sm" className="h-10 rounded-xl" disabled={guardando || !pct || !meses} onClick={() => void guardar()}>
+          <span className="text-sm text-muted-foreground">{modo === "entrada" ? "% del primer abono" : "% por"}</span>
+          {modo === "mensual" && (
+            <>
+              <Input type="number" inputMode="numeric" value={meses} onChange={(e) => setMeses(e.target.value)} placeholder="meses" className="h-10 w-20 rounded-xl" aria-label="Meses" />
+              <span className="text-sm text-muted-foreground">meses</span>
+            </>
+          )}
+          <Button size="sm" className="h-10 rounded-xl" disabled={guardando || !pct || (modo === "mensual" && !meses)} onClick={() => void guardar()}>
             Guardar
           </Button>
         </span>
