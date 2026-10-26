@@ -1,6 +1,6 @@
 // Módulo Web: reservas de la landing de la campaña «No empezamos de cero» (somosprodi.com).
 // Públicos (los llama la landing, con CORS solo para somosprodi.com):
-// POST /api/web/aplicar   { nombre, negocio, email, instagram, rubro, facturacion, …, inversion, … } → { id, califica }
+// POST /api/web/aplicar   { nombre, negocio, email, instagram, rubro, facturacion, …, inversion, …, plan?, ref? } → { id, califica }
 // POST /api/web/reunion   { id }                                → pasa de "calificado" a "reunion_agendada"
 // GET  /api/web/cupos                                           → { temporada, total, ocupados }
 // Desde el panel (solo el super admin):
@@ -57,6 +57,8 @@ const RUBROS = ["Comercio", "Industria / fábrica", "Gastronomía", "Servicios p
 const YA_PAUTO = ["Sí, con una agencia", "Sí, por mi cuenta", "Nunca"];
 const CUANDO = ["Lo antes posible", "Durante el verano 2027", "Más adelante"];
 const ESTADOS = ["no_califica", "calificado", "reunion_agendada", "propuesta", "ganado", "perdido"];
+// Planes de Redes que se muestran en somosprodi.com (el formulario manda cuál eligió, si eligió uno).
+const PLANES_REDES: Record<string, string> = { esencial: "Esencial ($450.000)", crecimiento: "Crecimiento ($600.000)", completa: "Campaña completa ($750.000)" };
 
 // La landing en producción. Para probar desde otro lado: WEB_ORIGENES_EXTRA="http://localhost:3000,https://….vercel.app".
 const ORIGENES = [
@@ -180,7 +182,9 @@ async function aplicar(req: VercelRequest) {
     califica,
     dudoso,
     estado,
-    notas: "",
+    // Plan que eligió en somosprodi.com antes de completar el formulario (si vino de una tarjeta de plan).
+    notas: PLANES_REDES[texto(b.plan, 20)] ? `Le interesa el plan ${PLANES_REDES[texto(b.plan, 20)]}.` : "",
+    ...(PLANES_REDES[texto(b.plan, 20)] ? { plan_interes: texto(b.plan, 20) } : {}),
     origen: socio ? "socio" : texto(b.origen, 80),
     ...(socioDelLead ? { socio_id: socioDelLead.uid, socio_nombre: socioDelLead.nombre } : {}),
     ...(socio ? { ref: socio.uid } : {}),
