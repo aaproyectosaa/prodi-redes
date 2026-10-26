@@ -310,13 +310,56 @@ export async function urlAudio(chatId: string, audioId: string): Promise<string>
   return url;
 }
 
-/** Baja un mensaje de voz como archivo (nombre con la fecha del mensaje). */
+/** Pasa un audio a WAV (mono, 16 bits) en el mismo navegador: se abre en cualquier lado, también en el iPhone. */
+async function aWav(blob: Blob): Promise<Blob> {
+  const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  const ctx = new Ctx();
+  try {
+    const buf = await ctx.decodeAudioData(await blob.arrayBuffer());
+    const n = buf.length;
+    const canales = Array.from({ length: buf.numberOfChannels }, (_, i) => buf.getChannelData(i));
+    const out = new DataView(new ArrayBuffer(44 + n * 2));
+    const txt = (o: number, t: string) => [...t].forEach((c, i) => out.setUint8(o + i, c.charCodeAt(0)));
+    txt(0, "RIFF");
+    out.setUint32(4, 36 + n * 2, true);
+    txt(8, "WAVE");
+    txt(12, "fmt ");
+    out.setUint32(16, 16, true);
+    out.setUint16(20, 1, true);
+    out.setUint16(22, 1, true);
+    out.setUint32(24, buf.sampleRate, true);
+    out.setUint32(28, buf.sampleRate * 2, true);
+    out.setUint16(32, 2, true);
+    out.setUint16(34, 16, true);
+    txt(36, "data");
+    out.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) {
+      let v = 0;
+      for (const c of canales) v += c[i];
+      v = Math.max(-1, Math.min(1, v / canales.length));
+      out.setInt16(44 + i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true);
+    }
+    return new Blob([out.buffer], { type: "audio/wav" });
+  } finally {
+    void ctx.close();
+  }
+}
+
+/** Baja un mensaje de voz como archivo (nombre con la fecha del mensaje). Los .webm/.ogg (que el iPhone no abre) salen en .wav. */
 export async function descargarAudio(chatId: string, audio: { id: string; mime: string }, at?: string) {
   const url = await urlAudio(chatId, audio.id);
-  const ext = /ogg/.test(audio.mime) ? "ogg" : /mp4|m4a|aac/.test(audio.mime) ? "m4a" : /mpeg|mp3/.test(audio.mime) ? "mp3" : "webm";
+  let ext = /ogg/.test(audio.mime) ? "ogg" : /mp4|m4a|aac/.test(audio.mime) ? "m4a" : /mpeg|mp3/.test(audio.mime) ? "mp3" : /wav/.test(audio.mime) ? "wav" : "webm";
   const f = at ? new Date(at) : new Date();
   const dos = (n: number) => String(n).padStart(2, "0");
-  const blob = await (await fetch(url)).blob();
+  let blob = await (await fetch(url)).blob();
+  if (ext === "webm" || ext === "ogg") {
+    try {
+      blob = await aWav(blob);
+      ext = "wav";
+    } catch {
+      /* si no se puede convertir, va como está */
+    }
+  }
   await guardarArchivo(blob, `audio-${f.getFullYear()}-${dos(f.getMonth() + 1)}-${dos(f.getDate())}-${dos(f.getHours())}${dos(f.getMinutes())}.${ext}`);
 }
 
