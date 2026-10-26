@@ -21,6 +21,7 @@ export interface ResumenSocio {
   sin_config: boolean;
   /** La comisión que se le aplica: la suya o la estándar. */
   vigente: { comision_pct: number; meses: number; propia: boolean; modo: "mensual" | "entrada" } | null;
+  grupo: "equipo" | "externo";
   leads: number;
   ganados: number;
   clientes: number;
@@ -77,7 +78,7 @@ export default function Socios() {
         <p className="mb-4 flex items-start gap-2 rounded-2xl bg-amber-500/10 p-3.5 text-sm text-amber-800 dark:text-amber-200">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            <b>{faltan.map((s) => s.nombre.split(" ")[0]).join(", ")}</b> no {faltan.length === 1 ? "tiene" : "tienen"} comisión: cargá la estándar arriba (o una propia con «Editar»).
+            <b>{faltan.map((s) => s.nombre.split(" ")[0]).join(", ")}</b> no {faltan.length === 1 ? "tiene" : "tienen"} comisión: cargá la estándar de su grupo arriba (o una propia con «Editar»).
           </span>
         </p>
       )}
@@ -119,8 +120,8 @@ export default function Socios() {
                         <b className="text-amber-600 dark:text-amber-400">sin comisión</b>
                       ) : (
                         s.vigente!.modo === "entrada"
-                          ? `premio de entrada: ${s.vigente!.comision_pct}% del primer abono`
-                          : `${s.vigente!.comision_pct}% por ${s.vigente!.meses} meses${s.vigente!.propia ? "" : " (estándar)"}`
+                          ? `${s.grupo === "externo" ? "De afuera" : "Del equipo"} · ${s.vigente!.comision_pct}% del primer abono${s.vigente!.propia ? " (propia)" : ""}`
+                          : `${s.grupo === "externo" ? "De afuera" : "Del equipo"} · ${s.vigente!.comision_pct}% por ${s.vigente!.meses} meses${s.vigente!.propia ? " (propia)" : ""}`
                       )}
                     </span>
                   </span>
@@ -171,34 +172,48 @@ export default function Socios() {
   );
 }
 
-/** La comisión estándar (para todos los que no tienen una propia). */
+type Estandar = { comision_pct: number; meses: number; modo: "mensual" | "entrada" };
+type Estandares = { equipo: Estandar | null; externo: Estandar | null };
+
+/** La comisión estándar de cada grupo (para los que no tienen una propia). */
 function useEstandar(version: number) {
-  const [e, setE] = useState<{ comision_pct: number; meses: number } | null | undefined>(undefined);
+  const [e, setE] = useState<Estandares | null | undefined>(undefined);
   useEffect(() => {
-    callApi<{ estandar: { comision_pct: number; meses: number } | null }>("/api/web/socio-estandar", { ver: true })
+    callApi<{ estandar: Estandares }>("/api/web/socio-estandar", { ver: true })
       .then((r) => setE(r.estandar))
       .catch(() => setE(null));
   }, [version]);
   return e;
 }
 
-function ComisionEstandar({ actual, onListo }: { actual: { comision_pct: number; meses: number } | null | undefined; onListo: () => void }) {
-  const [editando, setEditando] = useState(false);
+const GRUPOS = [
+  { k: "equipo" as const, titulo: "Del equipo", ayuda: "Venden y además trabajan en Prodi (ya cobran por otro lado)", sugerido: "50" },
+  { k: "externo" as const, titulo: "De afuera", ayuda: "Solo venden (no cobran nada más de Prodi)", sugerido: "100" },
+];
+
+const textoEstandar = (e: Estandar | null) =>
+  !e ? "Sin cargar" : e.modo === "entrada" ? `${e.comision_pct}% del primer abono, una vez` : `${e.comision_pct}% cada mes, durante ${e.meses} meses`;
+
+function ComisionEstandar({ actual, onListo }: { actual: Estandares | null | undefined; onListo: () => void }) {
+  const [editando, setEditando] = useState<"equipo" | "externo" | null>(null);
   const [pct, setPct] = useState("");
   const [meses, setMeses] = useState("");
+  const [modo, setModo] = useState<"mensual" | "entrada">("entrada");
   const [guardando, setGuardando] = useState(false);
   if (actual === undefined) return null;
-  const abrir = () => {
-    setPct(actual ? String(actual.comision_pct) : "");
-    setMeses(actual ? String(actual.meses) : "");
-    setEditando(true);
+  const abrir = (g: (typeof GRUPOS)[number]) => {
+    const e = actual?.[g.k] ?? null;
+    setPct(e ? String(e.comision_pct) : g.sugerido);
+    setMeses(e && e.modo === "mensual" ? String(e.meses) : "");
+    setModo(e?.modo ?? "entrada");
+    setEditando(g.k);
   };
   const guardar = async () => {
     setGuardando(true);
     try {
-      await callApi("/api/web/socio-estandar", { comision_pct: pct, meses });
-      toast.success("Comisión estándar guardada");
-      setEditando(false);
+      await callApi("/api/web/socio-estandar", { grupo: editando, comision_pct: pct, meses, modo });
+      toast.success("Comisión guardada");
+      setEditando(null);
       onListo();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo guardar");
@@ -207,28 +222,44 @@ function ComisionEstandar({ actual, onListo }: { actual: { comision_pct: number;
     }
   };
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border bg-card p-4">
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold">Comisión estándar</span>
-        <span className="block text-xs text-muted-foreground">
-          {actual ? `${actual.comision_pct}% del abono durante ${actual.meses} meses, para todos los que no tienen otra.` : "Cargala una vez y vale para todos (cada uno puede tener la suya)."}
-        </span>
-      </span>
-      {editando ? (
-        <span className="flex flex-wrap items-center gap-2">
-          <Input type="number" inputMode="decimal" value={pct} onChange={(e) => setPct(e.target.value)} placeholder="%" className="h-10 w-20 rounded-xl" aria-label="Porcentaje" />
-          <span className="text-sm text-muted-foreground">% por</span>
-          <Input type="number" inputMode="numeric" value={meses} onChange={(e) => setMeses(e.target.value)} placeholder="meses" className="h-10 w-20 rounded-xl" aria-label="Meses" />
-          <span className="text-sm text-muted-foreground">meses</span>
-          <Button size="sm" className="h-10 rounded-xl" disabled={guardando || !pct || !meses} onClick={() => void guardar()}>
-            Guardar
-          </Button>
-        </span>
-      ) : (
-        <Button size="sm" variant={actual ? "outline" : "default"} className="h-9 rounded-full" onClick={abrir}>
-          {actual ? "Cambiar" : "Cargar"}
-        </Button>
-      )}
+    <div className="mb-4 overflow-hidden rounded-2xl border bg-card">
+      <p className="border-b px-4 py-2.5 text-sm font-semibold">Comisión estándar · vale para todos los que no tienen una propia</p>
+      {GRUPOS.map((g) => (
+        <div key={g.k} className="flex flex-wrap items-center gap-3 border-b px-4 py-3 last:border-0">
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold">{g.titulo}</span>
+            <span className="block text-xs text-muted-foreground">
+              {g.ayuda} · <b className={actual?.[g.k] ? "text-foreground" : "text-amber-600 dark:text-amber-400"}>{textoEstandar(actual?.[g.k] ?? null)}</b>
+            </span>
+          </span>
+          {editando === g.k ? (
+            <span className="flex flex-wrap items-center gap-2">
+              <select value={modo} onChange={(e) => setModo(e.target.value as "mensual" | "entrada")} className="h-10 rounded-xl border bg-background px-2 text-sm" aria-label="Cómo cobra">
+                <option value="entrada">Premio de entrada</option>
+                <option value="mensual">Cada mes</option>
+              </select>
+              <Input type="number" inputMode="decimal" value={pct} onChange={(e) => setPct(e.target.value)} placeholder="%" className="h-10 w-20 rounded-xl" aria-label="Porcentaje" />
+              <span className="text-sm text-muted-foreground">{modo === "entrada" ? "% del primer abono" : "% por"}</span>
+              {modo === "mensual" && (
+                <>
+                  <Input type="number" inputMode="numeric" value={meses} onChange={(e) => setMeses(e.target.value)} placeholder="meses" className="h-10 w-20 rounded-xl" aria-label="Meses" />
+                  <span className="text-sm text-muted-foreground">meses</span>
+                </>
+              )}
+              <Button size="sm" className="h-10 rounded-xl" disabled={guardando || !pct || (modo === "mensual" && !meses)} onClick={() => void guardar()}>
+                Guardar
+              </Button>
+              <Button size="sm" variant="ghost" className="h-10 rounded-xl" onClick={() => setEditando(null)}>
+                Cancelar
+              </Button>
+            </span>
+          ) : (
+            <Button size="sm" variant={actual?.[g.k] ? "outline" : "default"} className="h-9 rounded-full" onClick={() => abrir(g)}>
+              {actual?.[g.k] ? "Cambiar" : "Cargar"}
+            </Button>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

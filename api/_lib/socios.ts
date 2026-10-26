@@ -52,34 +52,65 @@ export const esSocio = (p: Record<string, unknown> | undefined | null) =>
   !!p && p.activo !== false && (p.role === "socio" || (Array.isArray(p.roles_extra) && p.roles_extra.includes("socio")));
 
 /** Comisión estándar para todos los vendedores (la carga el admin en CRM → Vendedores). Null si no está cargada. */
-export async function comisionEstandar(): Promise<{ comision_pct: number; meses: number } | null> {
-  const d = (await adminDb().collection("web_config").doc("general").get()).data() ?? {};
-  const s = (d.socio_comision ?? null) as { comision_pct?: number; meses?: number } | null;
+export type Estandar = { comision_pct: number; meses: number; modo: "mensual" | "entrada" };
+/**
+ * Comisión estándar por grupo: "equipo" (vende y además trabaja en Prodi: ya cobra por otro lado) y "externo"
+ * (solo vende). Cada vendedor puede tener la suya; si no, la de su grupo.
+ */
+export type Estandares = { equipo: Estandar | null; externo: Estandar | null };
+
+function leerEstandar(s: { comision_pct?: unknown; meses?: unknown; modo?: unknown } | null | undefined): Estandar | null {
   const pct = Number(s?.comision_pct);
+  if (!(pct > 0 && pct <= 100)) return null;
+  // Premio de entrada: un % del primer abono, una vez (los meses no cuentan).
+  if (s?.modo === "entrada") return { comision_pct: pct, meses: 1, modo: "entrada" };
   const meses = Math.round(Number(s?.meses));
-  return pct > 0 && pct <= 100 && meses >= 1 && meses <= 120 ? { comision_pct: pct, meses } : null;
+  return meses >= 1 && meses <= 120 ? { comision_pct: pct, meses, modo: "mensual" } : null;
+}
+
+export async function comisionEstandar(): Promise<Estandares> {
+  const d = (await adminDb().collection("web_config").doc("general").get()).data() ?? {};
+  const s = (d.socio_comision ?? null) as Record<string, unknown> | null;
+  // Formato viejo (una sola para todos): vale para los dos grupos.
+  if (s && ("comision_pct" in s)) {
+    const una = leerEstandar(s as { comision_pct?: unknown });
+    return { equipo: una, externo: una };
+  }
+  return { equipo: leerEstandar(s?.equipo as never), externo: leerEstandar(s?.externo as never) };
 }
 
 export async function guardarEstandar(entrada: unknown) {
-  const s = (entrada ?? {}) as Record<string, unknown>;
-  const pct = Number(s.comision_pct);
-  const meses = Math.round(Number(s.meses));
+  const b = (entrada ?? {}) as Record<string, unknown>;
+  const grupo = b.grupo === "externo" ? "externo" : "equipo";
+  const pct = Number(b.comision_pct);
+  const modo = b.modo === "entrada" ? "entrada" : "mensual";
+  const meses = modo === "entrada" ? 1 : Math.round(Number(b.meses));
   if (!(pct > 0 && pct <= 100)) throw new HttpError(400, "La comisión es un porcentaje entre 0 y 100");
   if (!(meses >= 1 && meses <= 120)) throw new HttpError(400, "Los meses van de 1 a 120");
-  await adminDb().collection("web_config").doc("general").set({ socio_comision: { comision_pct: pct, meses } }, { merge: true });
+  const actual = await comisionEstandar();
+  const nuevo = { ...actual, [grupo]: { comision_pct: pct, meses, modo } };
+  // Se reemplaza entera (sin mezclar con el formato viejo de una sola comisión).
+  const ref = adminDb().collection("web_config").doc("general");
+  const d = (await ref.get()).data() ?? {};
+  await ref.set({ ...d, socio_comision: nuevo });
   return { ok: true };
 }
 
+/** ¿Vende desde afuera (su único rol es vendedor) o es del equipo (vende y además trabaja en Prodi)? */
+export const grupoDe = (p: Record<string, unknown>): "equipo" | "externo" => (p.role === "socio" ? "externo" : "equipo");
+
 /** La comisión que vale para un vendedor: la suya (si la tiene cargada) o la estándar. */
-export function comisionVigente(c: ConfigSocio | null, estandar: { comision_pct: number; meses: number } | null): Vigente | null {
-  if (c?.modo === "entrada") return c.comision_pct ? { comision_pct: c.comision_pct, meses: 1, propia: true, modo: "entrada" } : null;
-  if (c?.comision_pct && c.meses) return { comision_pct: c.comision_pct, meses: c.meses, propia: true, modo: "mensual" };
-  if (estandar) return { comision_pct: c?.comision_pct || estandar.comision_pct, meses: c?.meses || estandar.meses, propia: !!(c?.comision_pct || c?.meses), modo: "mensual" };
+export function comisionVigente(c: ConfigSocio | null, estandares: Estandares, grupo: "equipo" | "externo"): Vigente | null {
+  const estandar = estandares[grupo];
+  // La propia (completa) manda; si no tiene, la estándar tal cual.
+  if (c?.modo === "entrada" && c.comision_pct) return { comision_pct: c.comision_pct, meses: 1, propia: true, modo: "entrada" };
+  if (c?.modo !== "entrada" && c?.comision_pct && c.meses) return { comision_pct: c.comision_pct, meses: c.meses, propia: true, modo: "mensual" };
+  if (estandar) return { ...estandar, propia: false };
   return null;
 }
 
 /** Todos los socios (activos o no) con su configuración. */
-export async function listarSocios(): Promise<{ uid: string; nombre: string; activo: boolean; config: ConfigSocio | null }[]> {
+export async function listarSocios(): Promise<{ uid: string; nombre: string; activo: boolean; config: ConfigSocio | null; grupo: "equipo" | "externo" }[]> {
   const r = await getPool().query(
     "select id, data from documentos where coleccion = 'profiles' and (data->>'role' = 'socio' or data->'roles_extra' @> '[\"socio\"]'::jsonb)"
   );
@@ -88,6 +119,7 @@ export async function listarSocios(): Promise<{ uid: string; nombre: string; act
     nombre: String(x.data.nombre ?? ""),
     activo: x.data.activo !== false,
     config: configDe(x.data),
+    grupo: grupoDe(x.data),
   }));
 }
 
@@ -183,6 +215,7 @@ export interface ComisionSocio {
   sin_config: boolean;
   /** La que se aplica (la suya o la estándar). */
   vigente: Vigente | null;
+  grupo: "equipo" | "externo";
   base: number;
   total: number;
   lineas: LineaComision[];
@@ -218,7 +251,7 @@ export async function comisionesDelMes(mes: string, soloUid?: string): Promise<C
   const porId = new Map(clientes.map((c) => [c.id, c]));
   // Premio de entrada: cuál fue el primer abono cobrado de cada cliente (el período más viejo con boleta cobrada).
   const primeros = new Map<string, string>();
-  if (lista.some((s) => s.config?.modo === "entrada") && clientes.length) {
+  if (clientes.length) {
     const r0 = await getPool().query(
       `select data->>'proyecto_id' as pid, min(coalesce(nullif(data->>'periodo', ''), data->>'mes')) as primero
          from documentos where coleccion = 'facturas' and data->>'estado' = 'cobrada' and data->>'proyecto_id' = any($1) and coalesce(data->>'demo_ejemplo', '') <> 'true'
@@ -240,8 +273,8 @@ export async function comisionesDelMes(mes: string, soloUid?: string): Promise<C
     lista.map((s) => [
       s.uid,
       (() => {
-        const vigente = comisionVigente(s.config, estandar);
-        return { uid: s.uid, nombre: s.nombre, mes, config: s.config, vigente, sin_config: !vigente, base: 0, total: 0, lineas: [] as LineaComision[] };
+        const vigente = comisionVigente(s.config, estandar, s.grupo);
+        return { uid: s.uid, nombre: s.nombre, mes, config: s.config, grupo: s.grupo, vigente, sin_config: !vigente, base: 0, total: 0, lineas: [] as LineaComision[] };
       })(),
     ])
   );
@@ -268,7 +301,7 @@ export async function comisionesDelMes(mes: string, soloUid?: string): Promise<C
       const meses = s.vigente?.meses ?? 0;
       const dentro =
         s.vigente?.modo === "entrada"
-          ? periodo >= c.desde && periodo === (primeros.get(pid) ?? periodo)
+          ? periodo >= c.desde && periodo === primeros.get(pid)
           : periodo >= c.desde && (!meses || periodo <= sumarMeses(c.desde, meses - 1));
       if (!dentro) continue;
       const comision = s.vigente ? Math.round((base * s.vigente.comision_pct) / 100) : 0;

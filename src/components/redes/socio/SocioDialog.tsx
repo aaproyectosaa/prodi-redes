@@ -289,7 +289,7 @@ export function SocioDialog({ socio, open, onOpenChange, onListo }: { socio: Soc
             )}
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               Solo por clientes nuevos que traiga, sobre el abono neto cobrado (sin IVA, sin pauta ni reintegros).
-              {modoCom === "mensual" ? (!pct || !meses) && <b> Vacío = la comisión estándar.</b> : " Se paga una vez, cuando el cliente paga su primer mes."}
+              {modoCom === "mensual" ? (!pct || !meses) && <b> Vacío = la estándar de su grupo (del equipo o de afuera).</b> : " Se paga una vez, cuando el cliente paga su primer mes."}
             </p>
           </div>
         )}

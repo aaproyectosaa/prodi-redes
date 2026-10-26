@@ -18,6 +18,7 @@
 // POST /api/web/meta-mensajes     (admin) { forzar? } trae los mensajes nuevos de IG y FB como leads
 // POST /api/web/meta-conectar     (admin) suscribe la página de Prodi y trae los formularios de 30 días
 // POST /api/web/manual    { negocio, nombre?, email?, telefono?, instagram?, ubicacion?, rubro?, fuente?, notas?, estado? } → { id }  (lead cargado a mano)
+// POST /api/web/crm-espera { nombre, negocio, email, telefono?, plan, rubro? } → { ok }  (pública: lista de espera del CRM en somosprodi.com)
 // Socios comerciales (ver api/_lib/socios.ts):
 // POST /api/web/aplicar acepta `ref` (código del socio que guardó la landing): el lead entra con origen "socio".
 // POST /api/web/socio-panel                  (socio) → { codigo, link, leads[] } solo los suyos, sin notas internas
@@ -307,7 +308,64 @@ async function actividad(req: VercelRequest) {
 }
 
 /** De dónde vino un lead cargado a mano. */
-const FUENTES = ["Recomendación", "WhatsApp", "Instagram", "Llamada", "Evento", "Cliente actual", "Otro"];
+const FUENTES = ["Recomendación", "WhatsApp", "Instagram", "Llamada", "Evento", "Cliente actual", "Lista de espera CRM", "Otro"];
+
+// Planes del CRM que se muestran en somosprodi.com (acceso anticipado).
+const PLANES_CRM: Record<string, string> = { inicial: "Inicial · hasta 2 usuarios", equipo: "Equipo · hasta 5 usuarios", empresa: "Empresa · hasta 15 usuarios" };
+
+/** Lista de espera del CRM (somosprodi.com): entra al mismo tablero de leads, con su fuente, y avisa al admin. */
+async function crmEspera(req: VercelRequest) {
+  const b = body<Record<string, unknown>>(req);
+  const nombre = texto(b.nombre, 80);
+  const negocio = texto(b.negocio, 80);
+  const email = texto(b.email, 120).toLowerCase();
+  const telefono = texto(b.telefono, 40);
+  const plan = texto(b.plan, 20);
+  if (nombre.length < 2 || negocio.length < 2) throw new HttpError(400, "Completá tu nombre y el de tu empresa");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new HttpError(400, "Revisá el email");
+  if (!PLANES_CRM[plan]) throw new HttpError(400, "Elegí un plan");
+
+  // Mismo anti-spam que el formulario de la temporada.
+  const ip_hash = huellaIp(req);
+  const ahora = Date.now();
+  const pool = getPool();
+  const spam = await pool.query(
+    `select
+       count(*) filter (where data->>'ip_hash' = $2 and data->>'created_at' > $3)::int as por_ip,
+       count(*) filter (where data->>'email' = $4 and data->>'created_at' > $5)::int as por_email
+     from documentos where coleccion = $1 and data->>'created_at' > $3`,
+    [COL, ip_hash, new Date(ahora - 3_600_000).toISOString(), email, new Date(ahora - 600_000).toISOString()]
+  );
+  if ((spam.rows[0]?.por_ip ?? 0) >= 5) throw new HttpError(429, "Recibimos muchos pedidos desde tu conexión. Probá en un rato.");
+  if ((spam.rows[0]?.por_email ?? 0) > 0) return { ok: true };
+
+  const { temporada } = await leerConfig();
+  const id = randomUUID();
+  const at = new Date(ahora).toISOString();
+  const fuente = "Lista de espera CRM";
+  await guardarDoc(pool, COL, id, {
+    created_at: at,
+    updated_at: at,
+    temporada,
+    nombre,
+    negocio,
+    email,
+    telefono,
+    rubro: texto(b.rubro, 60),
+    califica: true,
+    dudoso: false,
+    estado: "calificado",
+    notas: `Quiere el CRM (acceso anticipado). Plan: ${PLANES_CRM[plan]}.`,
+    interes: "crm",
+    plan_crm: plan,
+    fuente,
+    origen: "somosprodi.com:crm",
+    ip_hash,
+    historial: [{ at, de: null, a: "calificado", por: null, por_nombre: "Web · lista de espera CRM" }],
+  });
+  await avisarAdmin(`Lista de espera del CRM: ${negocio}`, `${nombre} quiere el plan ${PLANES_CRM[plan]}.`, `/web?lead=${id}`, `crm-espera:${id}`, appUrl(req)).catch(() => undefined);
+  return { ok: true };
+}
 
 /** Lead cargado a mano desde el panel (no pasó por el formulario de la web): entra al mismo tablero. */
 async function manual(req: VercelRequest) {
@@ -534,7 +592,7 @@ async function config(req: VercelRequest) {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const accion = String(req.query.accion ?? "");
   res.setHeader("Cache-Control", "no-store");
-  const publica = ["aplicar", "reunion", "cupos"].includes(accion);
+  const publica = ["aplicar", "reunion", "cupos", "crm-espera"].includes(accion);
   if (publica) cors(req, res);
   try {
     if (req.method === "OPTIONS" && publica) {
@@ -581,6 +639,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
     if (accion === "aplicar") res.status(200).json(await aplicar(req));
+    else if (accion === "crm-espera") res.status(200).json(await crmEspera(req));
     else if (accion === "reunion") res.status(200).json(await reunion(req));
     else if (accion === "estado") res.status(200).json(await cambiar(req, "estado"));
     else if (accion === "notas") res.status(200).json(await cambiar(req, "notas"));
