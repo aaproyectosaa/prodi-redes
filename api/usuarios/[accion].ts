@@ -28,7 +28,7 @@ import { mailAvisoHtml } from "../_lib/mail-aviso";
 import { borrarEjemplo, cargarEjemplo } from "../_lib/ejemplo";
 import { anotarMinuto, anotarMinutosPasados, nuevoToken, resumenTiempo, tieneToken, uidDelToken } from "../_lib/mi-tiempo";
 import { rachaVacia, rachasDeRespuesta } from "../_lib/racha";
-import { avisarAdmin, configValida } from "../_lib/socios";
+import { avisarAdmin, comisionEstandar, configValida } from "../_lib/socios";
 
 export const config = { maxDuration: 60 };
 
@@ -94,8 +94,8 @@ async function crear(req: VercelRequest) {
     activo: true,
     created_at: new Date().toISOString(),
   });
-  if (socio && (!socio.comision_pct || !socio.meses))
-    await avisarAdmin(`Falta la comisión de ${nombre}`, "Cargale el porcentaje y los meses en Equipo: sin eso no se le calcula comisión.", "/equipo", `socio-config:${user.uid}`, appUrl(req));
+  if (socio && (!socio.comision_pct || !socio.meses) && !(await comisionEstandar()))
+    await avisarAdmin(`Falta la comisión de ${nombre}`, "Cargale el porcentaje y los meses (o una comisión estándar en CRM → Vendedores): sin eso no se le calcula comisión.", "/equipo", `socio-config:${user.uid}`, appUrl(req));
   if (b.clientes?.length) await asignarClientes(user.uid, [rol, ...extrasValidos(rol, b.roles_extra)], b.clientes);
   return { ok: true, uid: user.uid, password };
 }
@@ -127,8 +127,8 @@ async function editar(req: VercelRequest, adminUid: string) {
   if ((rolFinal === "socio" || extras.includes("socio")) && b.socio !== undefined) {
     patch.socio = await configValida(b.socio, b.uid);
     const s = patch.socio as { comision_pct: number | null; meses: number | null };
-    if (!s.comision_pct || !s.meses)
-      await avisarAdmin(`Falta la comisión de ${String(patch.nombre ?? prev.nombre ?? "un socio")}`, "Cargale el porcentaje y los meses en Equipo: sin eso no se le calcula comisión.", "/equipo", `socio-config:${b.uid}`, appUrl(req));
+    if ((!s.comision_pct || !s.meses) && !(await comisionEstandar()))
+      await avisarAdmin(`Falta la comisión de ${String(patch.nombre ?? prev.nombre ?? "un vendedor")}`, "Cargale el porcentaje y los meses (o una comisión estándar en CRM → Vendedores): sin eso no se le calcula comisión.", "/equipo", `socio-config:${b.uid}`, appUrl(req));
   }
   if (patch.nombre) await adminAuth().updateUser(b.uid, { displayName: patch.nombre as string }).catch(() => undefined);
   if (Object.keys(patch).length) await ref.set(patch, { merge: true });

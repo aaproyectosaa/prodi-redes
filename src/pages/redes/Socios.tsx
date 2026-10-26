@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
 import { AlertTriangle, ChevronDown, Handshake, Loader2, Pencil, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SocioDialog, type SocioEditable } from "@/components/redes/socio/SocioDialog";
@@ -18,6 +19,8 @@ export interface ResumenSocio {
   activo: boolean;
   config: { codigo: string; comision_pct: number | null; meses: number | null } | null;
   sin_config: boolean;
+  /** La comisión que se le aplica: la suya o la estándar. */
+  vigente: { comision_pct: number; meses: number; propia: boolean } | null;
   leads: number;
   ganados: number;
   clientes: number;
@@ -52,30 +55,31 @@ export default function Socios() {
   // Nuevo socio (null) o editar uno; undefined = cerrado.
   const [dialogo, setDialogo] = useState<SocioEditable | null | undefined>(undefined);
   const total = (socios ?? []).reduce((a, s) => a + s.total, 0);
+  const estandar = useEstandar(version);
   const faltan = (socios ?? []).filter((s) => s.activo && s.sin_config);
 
   return (
     <PageShell
-      title="Socios comerciales"
-      subtitle="Los que traen clientes: sus leads, lo cobrado de sus clientes y su comisión."
+      title="Vendedores"
+      subtitle="Los que te pasan clientes a comisión: cuántos trajeron, lo cobrado y lo que ganan."
       actions={
         <div className="flex flex-wrap items-center gap-2">
           <MesNav mes={mes} setMes={setMes} max={mesActual()} />
           <Button onClick={() => setDialogo(null)} className="h-11 rounded-2xl bg-[#6F40FC] px-4 font-semibold text-white hover:bg-[#5d32e6]">
-            <Plus className="mr-1.5 h-4 w-4" /> Nuevo socio
+            <Plus className="mr-1.5 h-4 w-4" /> Nuevo vendedor
           </Button>
         </div>
       }
     >
+      <ComisionEstandar actual={estandar} onListo={() => setVersion((x) => x + 1)} />
       <SocioDialog socio={dialogo ?? null} open={dialogo !== undefined} onOpenChange={(v) => !v && setDialogo(undefined)} onListo={() => setVersion((x) => x + 1)} />
       {faltan.length > 0 && (
-        <Link to="/equipo" className="mb-4 flex items-start gap-2 rounded-2xl bg-amber-500/10 p-3.5 text-sm text-amber-800 dark:text-amber-200">
+        <p className="mb-4 flex items-start gap-2 rounded-2xl bg-amber-500/10 p-3.5 text-sm text-amber-800 dark:text-amber-200">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            <b>{faltan.map((s) => s.nombre.split(" ")[0]).join(", ")}</b> no {faltan.length === 1 ? "tiene" : "tienen"} cargado el porcentaje o los meses de comisión: no se calcula.
-            Cargalo en Equipo →
+            <b>{faltan.map((s) => s.nombre.split(" ")[0]).join(", ")}</b> no {faltan.length === 1 ? "tiene" : "tienen"} comisión: cargá la estándar arriba (o una propia con «Editar»).
           </span>
-        </Link>
+        </p>
       )}
       {error && <p className="rounded-2xl bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
       {!socios && !error ? (
@@ -85,10 +89,10 @@ export default function Socios() {
       ) : socios && socios.length === 0 ? (
         <div className="flex flex-col items-center rounded-3xl border border-dashed p-10 text-center">
           <Handshake className="h-8 w-8 text-[#6F40FC]" />
-          <p className="mt-2 font-semibold">Todavía no hay socios</p>
-          <p className="mt-1 text-sm text-muted-foreground">Crealo acá o en Equipo con el rol «Socio comercial» (solo o junto a otro rol).</p>
+          <p className="mt-2 font-semibold">Todavía no hay vendedores</p>
+          <p className="mt-1 text-sm text-muted-foreground">Crealo acá: alguien nuevo o alguien que ya tiene usuario.</p>
           <Button onClick={() => setDialogo(null)} className="mt-4 h-11 rounded-2xl bg-[#6F40FC] px-5 font-semibold text-white hover:bg-[#5d32e6]">
-            <Plus className="mr-1.5 h-4 w-4" /> Nuevo socio
+            <Plus className="mr-1.5 h-4 w-4" /> Nuevo vendedor
           </Button>
         </div>
       ) : (
@@ -111,12 +115,15 @@ export default function Socios() {
                       {s.nombre} {!s.activo && <span className="text-xs font-normal text-muted-foreground">(desactivado)</span>}
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
-                      {s.config?.codigo ? `?ref=${s.config.codigo}` : "sin código"} ·{" "}
-                      {s.sin_config ? <b className="text-amber-600 dark:text-amber-400">sin comisión cargada</b> : `${s.config!.comision_pct}% por ${s.config!.meses} meses`}
+                      {s.sin_config ? (
+                        <b className="text-amber-600 dark:text-amber-400">sin comisión</b>
+                      ) : (
+                        `${s.vigente!.comision_pct}% por ${s.vigente!.meses} meses${s.vigente!.propia ? "" : " (estándar)"}`
+                      )}
                     </span>
                   </span>
                   <span className="hidden text-right text-xs text-muted-foreground sm:block">
-                    {s.leads} leads · {s.ganados} ganados · {s.clientes} clientes
+                    {s.leads} pasados · {s.ganados} ganados
                   </span>
                   <span className="text-right">
                     <span className="block font-bold tabular-nums">{formatARS(s.total)}</span>
@@ -127,7 +134,7 @@ export default function Socios() {
                 {abierto === s.uid && (
                   <div className="border-t bg-muted/30 px-4 py-3 text-sm">
                     <p className="mb-2 text-xs text-muted-foreground sm:hidden">
-                      {s.leads} leads · {s.ganados} ganados · {s.clientes} clientes
+                      {s.leads} pasados · {s.ganados} ganados
                     </p>
                     {s.lineas.length === 0 ? (
                       <p className="text-muted-foreground">Sin abonos cobrados de sus clientes en este mes.</p>
@@ -148,7 +155,7 @@ export default function Socios() {
                     <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                       <p className="text-[11px] text-muted-foreground">Abono neto cobrado, sin IVA, sin pauta ni reintegros. Se paga en Pagos al equipo.</p>
                       <Button size="sm" variant="outline" className="h-8 rounded-full" onClick={() => setDialogo({ uid: s.uid, nombre: s.nombre, config: s.config })}>
-                        <Pencil className="mr-1.5 h-3.5 w-3.5" /> Editar código y comisión
+                        <Pencil className="mr-1.5 h-3.5 w-3.5" /> Editar comisión
                       </Button>
                     </div>
                   </div>
@@ -159,6 +166,68 @@ export default function Socios() {
         </>
       )}
     </PageShell>
+  );
+}
+
+/** La comisión estándar (para todos los que no tienen una propia). */
+function useEstandar(version: number) {
+  const [e, setE] = useState<{ comision_pct: number; meses: number } | null | undefined>(undefined);
+  useEffect(() => {
+    callApi<{ estandar: { comision_pct: number; meses: number } | null }>("/api/web/socio-estandar", { ver: true })
+      .then((r) => setE(r.estandar))
+      .catch(() => setE(null));
+  }, [version]);
+  return e;
+}
+
+function ComisionEstandar({ actual, onListo }: { actual: { comision_pct: number; meses: number } | null | undefined; onListo: () => void }) {
+  const [editando, setEditando] = useState(false);
+  const [pct, setPct] = useState("");
+  const [meses, setMeses] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  if (actual === undefined) return null;
+  const abrir = () => {
+    setPct(actual ? String(actual.comision_pct) : "");
+    setMeses(actual ? String(actual.meses) : "");
+    setEditando(true);
+  };
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      await callApi("/api/web/socio-estandar", { comision_pct: pct, meses });
+      toast.success("Comisión estándar guardada");
+      setEditando(false);
+      onListo();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo guardar");
+    } finally {
+      setGuardando(false);
+    }
+  };
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border bg-card p-4">
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">Comisión estándar</span>
+        <span className="block text-xs text-muted-foreground">
+          {actual ? `${actual.comision_pct}% del abono durante ${actual.meses} meses, para todos los que no tienen otra.` : "Cargala una vez y vale para todos (cada uno puede tener la suya)."}
+        </span>
+      </span>
+      {editando ? (
+        <span className="flex flex-wrap items-center gap-2">
+          <Input type="number" inputMode="decimal" value={pct} onChange={(e) => setPct(e.target.value)} placeholder="%" className="h-10 w-20 rounded-xl" aria-label="Porcentaje" />
+          <span className="text-sm text-muted-foreground">% por</span>
+          <Input type="number" inputMode="numeric" value={meses} onChange={(e) => setMeses(e.target.value)} placeholder="meses" className="h-10 w-20 rounded-xl" aria-label="Meses" />
+          <span className="text-sm text-muted-foreground">meses</span>
+          <Button size="sm" className="h-10 rounded-xl" disabled={guardando || !pct || !meses} onClick={() => void guardar()}>
+            Guardar
+          </Button>
+        </span>
+      ) : (
+        <Button size="sm" variant={actual ? "outline" : "default"} className="h-9 rounded-full" onClick={abrir}>
+          {actual ? "Cambiar" : "Cargar"}
+        </Button>
+      )}
+    </div>
   );
 }
 

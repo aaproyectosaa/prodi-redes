@@ -117,7 +117,7 @@ const ORIGENES: Record<Origen, { label: string; icono: React.ElementType; clase:
   whatsapp: { label: "WhatsApp", icono: MessageCircle, clase: "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" },
   formulario: { label: "Formulario", icono: FileText, clase: "bg-blue-500/12 text-blue-700 dark:text-blue-300" },
   mano: { label: "A mano", icono: Hand, clase: "bg-muted text-muted-foreground" },
-  socio: { label: "Socio", icono: Handshake, clase: "bg-[#6F40FC]/12 text-[#6F40FC] dark:text-[#a98bff]" },
+  socio: { label: "Vendedor", icono: Handshake, clase: "bg-[#6F40FC]/12 text-[#6F40FC] dark:text-[#a98bff]" },
 };
 function origenDe(l: LeadWeb): Origen {
   if (l.origen === "socio") return "socio";
@@ -1054,7 +1054,7 @@ function TraidoPor({ lead }: { lead: LeadWeb }) {
             onChange={(e) => void cambiar(e.target.value)}
             disabled={guardando}
             className="h-10 min-w-0 flex-1 rounded-xl border bg-background px-3 text-sm"
-            aria-label="Socio comercial que lo trajo"
+            aria-label="Vendedor que lo trajo"
           >
             <option value="">Nadie (lo trajo Prodi)</option>
             {lead.socio_id && !socios.some((s) => s.uid === lead.socio_id) && <option value={lead.socio_id}>{lead.socio_nombre || "Socio"}</option>}

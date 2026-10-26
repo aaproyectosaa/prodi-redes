@@ -444,9 +444,8 @@ function UsuarioDialog({
   const p = persona && persona !== "nuevo" ? persona : null;
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
-  const [rol, setRol] = useState("productor");
-  /** Roles además del principal (ej. Producción que también hace Pauta). */
-  const [extras, setExtras] = useState<Set<string>>(new Set());
+  /** Los roles que hace, en orden: el primero es el principal (su pantalla de inicio); los demás suman su módulo. */
+  const [roles, setRoles] = useState<string[]>(["productor"]);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   /** Socio comercial: su código de referido y la comisión (sin % o sin meses no se calcula). */
@@ -462,8 +461,8 @@ function UsuarioDialog({
     if (p) {
       setNombre(p.nombre ?? "");
       setEmail(p.email ?? "");
-      setRol(!p.role || LEGACY_ROLES.includes(p.role) ? "pending" : p.role);
-      setExtras(new Set(p.roles_extra ?? []));
+      const principal = !p.role || LEGACY_ROLES.includes(p.role) ? null : p.role;
+      setRoles(principal && principal !== "pending" ? rolesDe(principal, p.roles_extra) : []);
       setSel(
         new Set(
           clientes
@@ -474,8 +473,7 @@ function UsuarioDialog({
     } else {
       setNombre("");
       setEmail("");
-      setRol("productor");
-      setExtras(new Set());
+      setRoles(["productor"]);
       setSel(new Set());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -507,9 +505,18 @@ function UsuarioDialog({
     }
   };
 
-  // Solo el equipo interno suma roles (un cliente o un contacto, no).
-  const sumaRoles = ["admin", ...ROLES_ADICIONALES].includes(rol as never);
-  const extrasValidos = sumaRoles ? ROLES_ADICIONALES.filter((r) => r !== rol && extras.has(r)) : [];
+  // Solo el equipo interno combina roles: cliente y «solo chat» van solos.
+  const SOLOS = ["cliente", "contacto"];
+  const tocarRol = (r: string) =>
+    setRoles((x) => {
+      if (x.includes(r)) return x.filter((v) => v !== r);
+      if (SOLOS.includes(r)) return [r];
+      const sinSolos = x.filter((v) => !SOLOS.includes(v));
+      // El super admin, si se suma, pasa a ser el de inicio.
+      return r === "admin" ? [r, ...sinSolos] : [...sinSolos, r];
+    });
+  const rol = roles[0] ?? "pending";
+  const extrasValidos = ["admin", ...ROLES_ADICIONALES].includes(rol as never) ? ROLES_ADICIONALES.filter((r) => r !== rol && roles.includes(r)) : [];
   const usaClientes = ["productor", "editor", "pauta", "diseno", "cliente"].includes(rol) || extrasValidos.some((r) => r !== "administracion" && r !== "socio");
   const esSocio = rol === "socio" || extrasValidos.includes("socio");
   const codigoOk = /^[a-z0-9][a-z0-9-]{2,29}$/.test(socio.codigo);
@@ -538,23 +545,56 @@ function UsuarioDialog({
             </div>
           </div>
           <div className="space-y-2">
-            <Label className={ETIQUETA}>Rol</Label>
-            <Select value={rol} onValueChange={setRol}>
-              <SelectTrigger className={cn(SUAVE, "h-12")}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl">
-                {ROLES.map((r) => (
-                  <SelectItem key={r.value} value={r.value}>
-                    {r.label} · <span className="text-muted-foreground">{r.description.split(".")[0]}</span>
-                  </SelectItem>
-                ))}
-                <SelectItem value="contacto">
-                  Solo chat · <span className="text-muted-foreground">Entra solo a los grupos de chat donde lo sumes</span>
-                </SelectItem>
-                {!nuevo && <SelectItem value="pending">Sin rol (bloqueado)</SelectItem>}
-              </SelectContent>
-            </Select>
+            <Label className={ETIQUETA}>
+              Roles <span className="font-normal normal-case tracking-normal">· tildá todos los que hace; cada uno le suma su módulo al menú</span>
+            </Label>
+            <div className="space-y-1.5">
+              {[
+                ...ROLES.map((r) => ({ value: r.value as string, label: r.label, texto: r.description.split(".")[0] })),
+                { value: "contacto", label: "Solo chat", texto: "Entra solo a los grupos de chat donde lo sumes" },
+              ].map((r) => {
+                const on = roles.includes(r.value);
+                const inicio = on && roles[0] === r.value && roles.length > 1;
+                return (
+                  <div
+                    key={r.value}
+                    className={cn(
+                      "flex items-center gap-3 rounded-2xl px-3 py-2.5 transition-colors",
+                      on ? "bg-primary/10 ring-1 ring-inset ring-primary/40" : "bg-muted/50 hover:bg-muted"
+                    )}
+                  >
+                    <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
+                      <Checkbox checked={on} onCheckedChange={() => tocarRol(r.value)} />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold">{r.label}</span>
+                        <span className="block text-[11px] leading-snug text-muted-foreground">{r.texto}</span>
+                      </span>
+                    </label>
+                    {inicio && <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">Inicio</span>}
+                    {on && !inicio && roles.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setRoles((x) => [r.value, ...x.filter((v) => v !== r.value)])}
+                        className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-muted-foreground hover:bg-background hover:text-foreground"
+                        title="Que su pantalla de inicio sea la de este rol"
+                      >
+                        Usar de inicio
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {roles.length === 0 && (
+              <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                {nuevo ? "Elegí al menos un rol." : "Sin roles queda bloqueado: no entra al sistema hasta que le asignes uno."}
+              </p>
+            )}
+            {roles.length > 1 && (
+              <p className="text-[11px] text-muted-foreground">
+                Ve el menú de cada rol como un módulo aparte (con su nombre), en los mismos clientes que elijas abajo. Entra a la pantalla de «Inicio».
+              </p>
+            )}
           </div>
           {rol === "contacto" && (
             <p className="rounded-2xl bg-muted/60 p-3.5 text-xs leading-relaxed text-muted-foreground">
@@ -562,41 +602,9 @@ function UsuarioDialog({
               (en el chat: abrí el grupo → Sumar) y puede escribirle por privado a la gente de esos grupos.
             </p>
           )}
-          {sumaRoles && rol !== "admin" && (
-            <div className="space-y-2">
-              <Label className={ETIQUETA}>También hace</Label>
-              <div className="flex flex-wrap gap-2">
-                {ROLES_ADICIONALES.filter((r) => r !== rol).map((r) => (
-                  <label
-                    key={r}
-                    className={cn(
-                      "flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-colors",
-                      extras.has(r) ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary/40" : "bg-muted/60 hover:bg-muted"
-                    )}
-                  >
-                    <Checkbox
-                      checked={extras.has(r)}
-                      onCheckedChange={() =>
-                        setExtras((prev) => {
-                          const n = new Set(prev);
-                          if (n.has(r)) n.delete(r);
-                          else n.add(r);
-                          return n;
-                        })
-                      }
-                    />
-                    {getRoleInfo(r).label}
-                  </label>
-                ))}
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                Suma lo de esos roles (menú, permisos y avisos) en los mismos clientes que elijas abajo. Su pantalla de inicio es la del rol principal.
-              </p>
-            </div>
-          )}
           {esSocio && (
             <div className="space-y-3 rounded-2xl bg-primary/5 p-3.5 ring-1 ring-inset ring-primary/20">
-              <p className="text-sm font-semibold">Socio comercial</p>
+              <p className="text-sm font-semibold">Vendedor a comisión</p>
               <div className="space-y-1.5">
                 <Label htmlFor="s-codigo" className={ETIQUETA}>Código de su link</Label>
                 <Input
@@ -674,7 +682,7 @@ function UsuarioDialog({
           <Button variant="ghost" onClick={onClose} className="h-12 rounded-2xl font-semibold">
             Cancelar
           </Button>
-          <Button onClick={save} disabled={saving || !nombre.trim() || !email.trim() || (esSocio && !codigoOk)} className="h-12 rounded-2xl px-6 font-semibold shadow-lg shadow-primary/25">
+          <Button onClick={save} disabled={saving || !nombre.trim() || !email.trim() || (nuevo && roles.length === 0) || (esSocio && !codigoOk)} className="h-12 rounded-2xl px-6 font-semibold shadow-lg shadow-primary/25">
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {nuevo ? "Crear usuario" : "Guardar"}
           </Button>

@@ -64,8 +64,8 @@ export const ROLES: RoleInfo[] = [
   },
   {
     value: "socio",
-    label: "Socio comercial",
-    description: "Trae clientes con su link y cobra comisión. Ve solo sus leads, su link y sus ganancias.",
+    label: "Vendedor a comisión",
+    description: "Pasa clientes y cobra comisión cuando se hacen clientes. Ve solo los suyos y lo que gana.",
   },
   {
     value: "cliente",

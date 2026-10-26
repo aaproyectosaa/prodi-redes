@@ -46,6 +46,32 @@ export function configDe(p: Record<string, unknown> | undefined | null): ConfigS
 export const esSocio = (p: Record<string, unknown> | undefined | null) =>
   !!p && p.activo !== false && (p.role === "socio" || (Array.isArray(p.roles_extra) && p.roles_extra.includes("socio")));
 
+/** Comisión estándar para todos los vendedores (la carga el admin en CRM → Vendedores). Null si no está cargada. */
+export async function comisionEstandar(): Promise<{ comision_pct: number; meses: number } | null> {
+  const d = (await adminDb().collection("web_config").doc("general").get()).data() ?? {};
+  const s = (d.socio_comision ?? null) as { comision_pct?: number; meses?: number } | null;
+  const pct = Number(s?.comision_pct);
+  const meses = Math.round(Number(s?.meses));
+  return pct > 0 && pct <= 100 && meses >= 1 && meses <= 120 ? { comision_pct: pct, meses } : null;
+}
+
+export async function guardarEstandar(entrada: unknown) {
+  const s = (entrada ?? {}) as Record<string, unknown>;
+  const pct = Number(s.comision_pct);
+  const meses = Math.round(Number(s.meses));
+  if (!(pct > 0 && pct <= 100)) throw new HttpError(400, "La comisión es un porcentaje entre 0 y 100");
+  if (!(meses >= 1 && meses <= 120)) throw new HttpError(400, "Los meses van de 1 a 120");
+  await adminDb().collection("web_config").doc("general").set({ socio_comision: { comision_pct: pct, meses } }, { merge: true });
+  return { ok: true };
+}
+
+/** La comisión que vale para un vendedor: la suya (si la tiene cargada) o la estándar. */
+export function comisionVigente(c: ConfigSocio | null, estandar: { comision_pct: number; meses: number } | null): { comision_pct: number; meses: number; propia: boolean } | null {
+  if (c?.comision_pct && c.meses) return { comision_pct: c.comision_pct, meses: c.meses, propia: true };
+  if (estandar) return { comision_pct: c?.comision_pct || estandar.comision_pct, meses: c?.meses || estandar.meses, propia: !!(c?.comision_pct || c?.meses) };
+  return null;
+}
+
 /** Todos los socios (activos o no) con su configuración. */
 export async function listarSocios(): Promise<{ uid: string; nombre: string; activo: boolean; config: ConfigSocio | null }[]> {
   const r = await getPool().query(
@@ -144,6 +170,8 @@ export interface ComisionSocio {
   config: ConfigSocio | null;
   /** Falta el porcentaje o los meses: no se calcula. */
   sin_config: boolean;
+  /** La que se aplica (la suya o la estándar). */
+  vigente: { comision_pct: number; meses: number; propia: boolean } | null;
   base: number;
   total: number;
   lineas: LineaComision[];
@@ -174,7 +202,7 @@ async function clientesConSocio(): Promise<ClienteSocio[]> {
  */
 export async function comisionesDelMes(mes: string, soloUid?: string): Promise<ComisionSocio[]> {
   if (!MES_OK.test(mes)) throw new HttpError(400, "Mes inválido");
-  const [socios, clientes] = await Promise.all([listarSocios(), clientesConSocio()]);
+  const [socios, clientes, estandar] = await Promise.all([listarSocios(), clientesConSocio(), comisionEstandar()]);
   const lista = socios.filter((s) => !soloUid || s.uid === soloUid);
   const porId = new Map(clientes.map((c) => [c.id, c]));
   const porNombre = new Map(clientes.map((c) => [c.nombre.trim().toLowerCase(), c]));
@@ -189,7 +217,10 @@ export async function comisionesDelMes(mes: string, soloUid?: string): Promise<C
   const out = new Map<string, ComisionSocio>(
     lista.map((s) => [
       s.uid,
-      { uid: s.uid, nombre: s.nombre, mes, config: s.config, sin_config: !s.config?.comision_pct || !s.config?.meses, base: 0, total: 0, lineas: [] },
+      (() => {
+        const vigente = comisionVigente(s.config, estandar);
+        return { uid: s.uid, nombre: s.nombre, mes, config: s.config, vigente, sin_config: !vigente, base: 0, total: 0, lineas: [] as LineaComision[] };
+      })(),
     ])
   );
   for (const row of r.rows as { id: string; data: Record<string, unknown> }[]) {
@@ -212,10 +243,10 @@ export async function comisionesDelMes(mes: string, soloUid?: string): Promise<C
       const c = porId.get(pid)!;
       const s = out.get(c.socio_id);
       if (!s || !(base > 0) || !c.desde) continue;
-      const meses = s.config?.meses ?? 0;
+      const meses = s.vigente?.meses ?? 0;
       const dentro = periodo >= c.desde && (!meses || periodo <= sumarMeses(c.desde, meses - 1));
       if (!dentro) continue;
-      const comision = s.sin_config ? 0 : Math.round((base * (s.config!.comision_pct ?? 0)) / 100);
+      const comision = s.vigente ? Math.round((base * s.vigente.comision_pct) / 100) : 0;
       s.lineas.push({ factura_id: row.id, proyecto_id: pid, cliente: c.nombre, periodo, base: Math.round(base), comision });
       s.base += Math.round(base);
       s.total += comision;

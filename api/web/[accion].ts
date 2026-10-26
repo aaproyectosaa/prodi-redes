@@ -34,7 +34,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { enTransaccion, getPool, guardarDoc, leerDoc } from "../_lib/db";
 import { appUrl, body, HttpError, requireCaller, sendError, type Caller } from "../_lib/http";
 import { adminDb } from "../_lib/db";
-import { avisarAdmin, avisarEstadoAlSocio, comisionesDelMes, listarSocios, resumenSocios, socioPorCodigo, sumarMeses } from "../_lib/socios";
+import { avisarAdmin, avisarEstadoAlSocio, comisionEstandar, comisionesDelMes, guardarEstandar, listarSocios, resumenSocios, socioPorCodigo, sumarMeses } from "../_lib/socios";
 import { claveTelefono } from "../_lib/leads-unir";
 
 /** Trabajan los leads de Prodi: el admin y quien tenga el rol Ventas. */
@@ -154,7 +154,7 @@ async function aplicar(req: VercelRequest) {
       if (previo.data.socio_id !== socio.uid)
         await avisarAdmin(
           `Lead repetido: ${negocio}`,
-          `${socio.nombre} lo trajo por su link, pero ya era lead${previo.data.socio_id ? ` de ${previo.data.socio_nombre || "otro socio"}` : ""}. Queda para quien lo trajo primero.`,
+          `${socio.nombre} lo trajo por su link, pero ya era lead${previo.data.socio_id ? ` de ${previo.data.socio_nombre || "otro vendedor"}` : ""}. Queda para quien lo trajo primero.`,
           `/web?lead=${previo.id}`,
           `socio-repetido:${id}`,
           appUrl(req)
@@ -383,7 +383,13 @@ async function socioPanel(caller: Caller, req: VercelRequest) {
   const r = await getPool().query("select id, data from documentos where coleccion = $1 and data->>'socio_id' = $2 order by data->>'created_at' desc", [COL, caller.uid]);
   const leads = (r.rows as { id: string; data: Record<string, unknown> }[]).map((x) => leadParaSocio(x.id, x.data));
   const base = (process.env.WEB_SOCIO_URL || "https://somosprodi.com").replace(/\/$/, "");
-  return { codigo: cfg?.codigo ?? null, link: cfg?.codigo ? `${base}/?ref=${encodeURIComponent(cfg.codigo)}` : null, leads, app: appUrl(req) };
+  // Lo que ganó en el año (comisión de lo cobrado de sus clientes), para el resumen de una línea.
+  const hoy = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 7);
+  const meses = Array.from({ length: 12 }, (_, i) => sumarMeses(hoy, -i));
+  const comisiones = await Promise.all(meses.map(async (m) => (await comisionesDelMes(m, caller.uid))[0] ?? null));
+  const ganado = comisiones.reduce((a, c) => a + (c?.total ?? 0), 0);
+  const vigente = comisiones[0]?.vigente ?? null;
+  return { codigo: cfg?.codigo ?? null, link: cfg?.codigo ? `${base}/?ref=${encodeURIComponent(cfg.codigo)}` : null, leads, ganado, comision: vigente, app: appUrl(req) };
 }
 
 /** El socio carga un empresario que entrevistó. Si ya existía (mismo teléfono), queda para quien lo trajo primero. */
@@ -400,7 +406,7 @@ async function socioCargar(caller: Caller, req: VercelRequest) {
     if (previo.data.socio_id !== caller.uid)
       await avisarAdmin(
         `Lead repetido: ${negocio}`,
-        `${caller.nombre || "Un socio"} lo cargó, pero ya era lead${previo.data.socio_id ? ` de ${previo.data.socio_nombre || "otro socio"}` : ""}. Queda para quien lo trajo primero.`,
+        `${caller.nombre || "Un socio"} lo cargó, pero ya era lead${previo.data.socio_id ? ` de ${previo.data.socio_nombre || "otro vendedor"}` : ""}. Queda para quien lo trajo primero.`,
         `/web?lead=${previo.id}`,
         `socio-repetido:${previo.id}:${caller.uid}`,
         appUrl(req)
@@ -424,14 +430,14 @@ async function socioCargar(caller: Caller, req: VercelRequest) {
     estado: "calificado",
     notas: String(b.nota ?? "").trim() ? `Nota de la entrevista (${caller.nombre || "socio"}): ${String(b.nota).trim().slice(0, 3000)}` : "",
     manual: true,
-    fuente: "Socio comercial",
+    fuente: "Vendedor",
     origen: "socio",
     socio_id: caller.uid,
     socio_nombre: caller.nombre,
     creado_por: caller.uid,
-    historial: [{ at, de: null, a: "calificado", por: caller.uid, por_nombre: `${caller.nombre || "Socio"} (socio)` }],
+    historial: [{ at, de: null, a: "calificado", por: caller.uid, por_nombre: `${caller.nombre || "Vendedor"} (vendedor)` }],
   });
-  await avisarAdmin(`Nuevo lead de ${caller.nombre || "un socio"}`, `${negocio}${nombre ? ` · ${nombre}` : ""}`, `/web?lead=${id}`, `socio-lead-nuevo:${id}`, appUrl(req));
+  await avisarAdmin(`Nuevo lead de ${caller.nombre || "un vendedor"}`, `${negocio}${nombre ? ` · ${nombre}` : ""}`, `/web?lead=${id}`, `socio-lead-nuevo:${id}`, appUrl(req));
   return { id };
 }
 
@@ -567,6 +573,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       else if (accion === "socio-resumen") {
         const mes = texto(body<{ mes?: string }>(req).mes, 7);
         res.status(200).json({ socios: await resumenSocios(mes) });
+      } else if (accion === "socio-estandar") {
+        const b = body<{ comision_pct?: unknown; meses?: unknown; ver?: boolean }>(req);
+        res.status(200).json(b.ver ? { estandar: await comisionEstandar() } : await guardarEstandar(b));
       } else if (accion === "socio-lista") res.status(200).json({ socios: (await listarSocios()).map((x) => ({ uid: x.uid, nombre: x.nombre, activo: x.activo, codigo: x.config?.codigo ?? null })) });
       else res.status(404).json({ error: "Acción desconocida" });
       return;
