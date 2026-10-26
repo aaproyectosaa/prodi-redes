@@ -19,6 +19,7 @@ export type UserRole =
   | "programador" // Programación de Prodi Software: ve sus ganancias y los clientes/pagos de Software
   | "cliente"
   | "socio" // Socio comercial: trae clientes y cobra comisión (de afuera o del equipo)
+  | "ventas" // Ventas: trabaja el CRM de Prodi (leads y presupuestos); se suma a otro rol
   | "contacto" // Contacto de un cliente que usa solo Prodi Chat (proyecto_id = su cliente)
   // Roles del modelo anterior. Se leen para no romper datos viejos, pero ya
   // no se asignan: un usuario con alguno de estos queda "pendiente" hasta que

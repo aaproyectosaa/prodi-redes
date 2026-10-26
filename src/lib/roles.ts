@@ -11,6 +11,7 @@ import type { Project, UserRole } from "@/integrations/firebase/types";
  * - diseno     → diseño gráfico: arma las piezas de sus clientes (los asignados en la ficha).
  * - administracion → facturación, cobros, pagos al equipo y gastos.
  * - cliente    → aprueba videos, ve resultados y pide piezas con IA.
+ * - ventas     → trabaja el CRM de Prodi: leads y presupuestos (se suma a otro rol del equipo).
  * - socio      → socio comercial: trae clientes (su link o cargándolos) y cobra comisión. Solo ve lo suyo.
  */
 export interface RoleInfo {
@@ -55,6 +56,11 @@ export const ROLES: RoleInfo[] = [
     value: "programador",
     label: "Programación",
     description: "Prodi Software: ve lo que le toca por su porcentaje, los clientes y los pagos de las apps.",
+  },
+  {
+    value: "ventas",
+    label: "Ventas",
+    description: "Trabaja el CRM de Prodi: leads, seguimiento y presupuestos. No ve la plata ni la configuración.",
   },
   {
     value: "socio",
@@ -148,6 +154,8 @@ export const defaultRouteForRole = (role: UserRole | undefined): string => {
       return "/software";
     case "socio":
       return "/socio";
+    case "ventas":
+      return "/web";
     default:
       return "/auth";
   }
@@ -170,7 +178,7 @@ export function trabajaEnCliente(
 }
 
 /** Roles que se le pueden sumar a una persona del equipo además del principal (igual que en el servidor). */
-export const ROLES_ADICIONALES: UserRole[] = ["productor", "editor", "pauta", "diseno", "administracion", "programador", "socio"];
+export const ROLES_ADICIONALES: UserRole[] = ["productor", "editor", "pauta", "diseno", "administracion", "programador", "ventas", "socio"];
 
 /** Rol principal + adicionales válidos (solo el equipo interno suma roles). */
 export function rolesDe(role: UserRole | undefined, extra: unknown): UserRole[] {

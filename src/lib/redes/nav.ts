@@ -225,6 +225,17 @@ export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {
           ],
         },
       ];
+    case "ventas":
+      // Ventas: el CRM de Prodi (los que todavía no son clientes y las propuestas).
+      return [
+        {
+          title: "CRM",
+          items: [
+            { label: "Leads", icon: Globe, path: "/web", mobile: true },
+            { label: "Presupuestos", icon: FileText, path: "/presupuestos", mobile: true },
+          ],
+        },
+      ];
     case "socio":
       // Socio comercial: sus empresarios, su link y lo que gana. Nada más del sistema.
       return [

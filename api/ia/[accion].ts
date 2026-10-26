@@ -2179,7 +2179,7 @@ async function borrador(req: VercelRequest) {
 
 /** Charla con la IA que arma la propuesta comercial con lo que cuenta el admin, capturas, PDF o un chat de WhatsApp (ver api/_lib/presupuesto-ia.ts). */
 async function presupuestoConIA(req: VercelRequest) {
-  const caller = await requireCaller(req, ["admin"]);
+  const caller = await requireCaller(req, ["admin", "ventas"]);
   await controlarTopeIA(caller, "presupuesto-ia");
   return propuestaIA(body<PedidoPropuestaIA>(req));
 }

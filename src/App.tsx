@@ -128,7 +128,7 @@ const App = () => (
                 <Route path="/tablero" element={<RequireRole roles={["admin", "administracion"]}><Tablero /></RequireRole>} />
                 <Route path="/facturacion" element={<RequireRole roles={["admin", "administracion"]}><Facturacion /></RequireRole>} />
                 <Route path="/gastos" element={<RequireRole roles={["admin", "administracion"]}><Gastos /></RequireRole>} />
-                <Route path="/web" element={<RequireRole roles={["admin"]}><Web /></RequireRole>} />
+                <Route path="/web" element={<RequireRole roles={["admin", "ventas"]}><Web /></RequireRole>} />
                 <Route path="/administracion" element={<RequireRole roles={["admin", "administracion"]}><Administracion /></RequireRole>} />
                 <Route path="/cobros" element={<RequireRole roles={["admin", "administracion"]}><Cobros /></RequireRole>} />
                 <Route path="/pagos-equipo" element={<RequireRole roles={["admin", "administracion"]}><PagosEquipo /></RequireRole>} />
@@ -151,7 +151,7 @@ const App = () => (
                 {/* Equipo */}
                 <Route path="/pedidos" element={<RequireRole roles={["admin", "productor"]}><Pedidos /></RequireRole>} />
                 <Route path="/pauta" element={<RequireRole roles={["admin", "pauta"]}><Pauta /></RequireRole>} />
-                <Route path="/presupuestos" element={<RequireRole roles={["admin"]}><Presupuestos /></RequireRole>} />
+                <Route path="/presupuestos" element={<RequireRole roles={["admin", "ventas"]}><Presupuestos /></RequireRole>} />
                 <Route path="/videos" element={<RequireRole roles={["admin", "productor", "editor", "pauta"]}><Circuito /></RequireRole>} />
                 <Route path="/rodajes" element={<RequireRole roles={["admin", "productor"]}><Rodajes /></RequireRole>} />
                 <Route path="/piezas" element={<RequireRole roles={["admin", "productor", "diseno"]}><Piezas /></RequireRole>} />

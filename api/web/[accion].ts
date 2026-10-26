@@ -36,6 +36,9 @@ import { appUrl, body, HttpError, requireCaller, sendError, type Caller } from "
 import { adminDb } from "../_lib/db";
 import { avisarAdmin, avisarEstadoAlSocio, comisionesDelMes, listarSocios, resumenSocios, socioPorCodigo, sumarMeses } from "../_lib/socios";
 import { claveTelefono } from "../_lib/leads-unir";
+
+/** Trabajan los leads de Prodi: el admin y quien tenga el rol Ventas. */
+const VENTAS = ["admin", "ventas"];
 import { fotoManual, unirLeads } from "../_lib/leads-unir";
 import { linksParaMandar } from "../_lib/catalogo";
 
@@ -218,7 +221,7 @@ async function cambiar(req: VercelRequest, campo: "estado" | "notas") {
 }
 
 async function cambiarLead(req: VercelRequest, campo: "estado" | "notas"): Promise<{ avisar?: { lead: Record<string, unknown>; id: string; estado: string } }> {
-  const caller = await requireCaller(req, ["admin"]);
+  const caller = await requireCaller(req, VENTAS);
   const b = body<{ id?: string; estado?: string; notas?: string }>(req);
   const id = texto(b.id, 40);
   if (!ID_OK.test(id)) throw new HttpError(400, "Falta el id");
@@ -245,7 +248,7 @@ async function cambiarLead(req: VercelRequest, campo: "estado" | "notas"): Promi
 /** Datos del lead que se completan o corrigen después (lo que faltó al cargarlo). Solo cambia los que vienen. */
 const DATOS_EDITABLES: Record<string, number> = { negocio: 80, nombre: 80, email: 120, telefono: 40, instagram: 120, ubicacion: 300, rubro: 60 };
 async function datos(req: VercelRequest) {
-  const caller = await requireCaller(req, ["admin"]);
+  const caller = await requireCaller(req, VENTAS);
   const b = body<Record<string, unknown>>(req);
   const id = texto(b.id, 40);
   if (!ID_OK.test(id)) throw new HttpError(400, "Falta el id");
@@ -277,7 +280,7 @@ const conHistorial = (d: Record<string, unknown>, e: Record<string, unknown>) =>
 
 /** Próximo paso: qué hay que hacer y para cuándo (sin fecha = sin recordatorio). */
 async function seguimiento(req: VercelRequest) {
-  const caller = await requireCaller(req, ["admin"]);
+  const caller = await requireCaller(req, VENTAS);
   const b = body<{ id?: string; texto?: string; fecha?: string | null }>(req);
   const txt = texto(b.texto, 200);
   const fecha = /^\d{4}-\d{2}-\d{2}$/.test(String(b.fecha ?? "")) ? String(b.fecha) : null;
@@ -290,7 +293,7 @@ async function seguimiento(req: VercelRequest) {
 
 /** Algo que pasó con el lead (llamada, WhatsApp, nota…): va a la línea de tiempo y cuenta como contacto. */
 async function actividad(req: VercelRequest) {
-  const caller = await requireCaller(req, ["admin"]);
+  const caller = await requireCaller(req, VENTAS);
   const b = body<{ id?: string; tipo?: string; texto?: string; cumplido?: boolean }>(req);
   const tipo = texto(b.tipo, 20);
   if (!TIPOS_ACTIVIDAD.includes(tipo)) throw new HttpError(400, "Tipo inválido");
@@ -308,7 +311,7 @@ const FUENTES = ["Recomendación", "WhatsApp", "Instagram", "Llamada", "Evento",
 
 /** Lead cargado a mano desde el panel (no pasó por el formulario de la web): entra al mismo tablero. */
 async function manual(req: VercelRequest) {
-  const caller = await requireCaller(req, ["admin"]);
+  const caller = await requireCaller(req, VENTAS);
   const b = body<Record<string, unknown>>(req);
   const negocio = texto(b.negocio, 80);
   const nombre = texto(b.nombre, 80);
@@ -557,7 +560,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return;
       }
       // El resumen también lo ve administración (Pagos al equipo); lo demás, solo el admin.
-      const admin = await requireCaller(req, accion === "socio-resumen" ? ["admin", "administracion"] : ["admin"]);
+      const admin = await requireCaller(req, accion === "socio-resumen" ? ["admin", "administracion"] : accion === "socio-lista" ? VENTAS : ["admin"]);
       if (accion === "socio-asignar") res.status(200).json(await socioAsignar(admin, req));
       else if (accion === "socio-alta") res.status(200).json(await socioAlta(admin, req));
       else if (accion === "socio-cliente") res.status(200).json(await socioCliente(req));
@@ -578,14 +581,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "actividad") res.status(200).json(await actividad(req));
     else if (accion === "datos") res.status(200).json(await datos(req));
     else if (accion === "meta-productos") {
-      const caller = await requireCaller(req, ["admin"]);
+      const caller = await requireCaller(req, VENTAS);
       const b = body<{ id?: string; ids?: string[] }>(req);
       const id = texto(b.id, 40);
       const productos = await linksParaMandar(appUrl(req), "prodi", Array.isArray(b.ids) ? b.ids.map(String) : [], { col: "leads_web", id });
       res.status(200).json(await enviarProductos(id, productos, { uid: caller.uid, nombre: caller.nombre || caller.email || "" }));
     } else if (accion === "unir") {
 
-      const caller = await requireCaller(req, ["admin"]);
+      const caller = await requireCaller(req, VENTAS);
 
       const b = body<{ id?: string; otro?: string }>(req);
 
@@ -593,7 +596,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     } else if (accion === "foto") {
 
-      await requireCaller(req, ["admin"]);
+      await requireCaller(req, VENTAS);
 
       const b = body<{ id?: string; foto?: string }>(req);
 
@@ -609,17 +612,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await requireCaller(req, ["admin"]);
       res.status(200).json(await conectarWhatsApp(body<{ code?: string; waba_id?: string; phone_number_id?: string }>(req)));
     } else if (accion === "meta-sugerir") {
-      await requireCaller(req, ["admin"]);
+      await requireCaller(req, VENTAS);
       const b = body<{ id?: string; pedido?: string }>(req);
       res.status(200).json(await sugerirRespuestas(texto(b.id, 40), texto(b.pedido, 300)));
     } else if (accion === "respuestas") {
-      await requireCaller(req, ["admin"]);
+      await requireCaller(req, VENTAS);
       res.status(200).json(await guardarRespuestas(body<{ lista?: unknown }>(req).lista));
     } else if (accion === "meta-conversacion") {
-      await requireCaller(req, ["admin"]);
+      await requireCaller(req, VENTAS);
       res.status(200).json(await conversacionLead(texto(body<{ id?: string }>(req).id, 40)));
     } else if (accion === "meta-responder") {
-      const caller = await requireCaller(req, ["admin"]);
+      const caller = await requireCaller(req, VENTAS);
       const b = body<{ id?: string; texto?: string }>(req);
       res.status(200).json(await responderLead(texto(b.id, 40), String(b.texto ?? ""), { uid: caller.uid, nombre: caller.nombre || caller.email || "" }));
     } else if (accion === "meta-estado") {

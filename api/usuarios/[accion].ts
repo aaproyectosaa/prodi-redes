@@ -32,7 +32,7 @@ import { avisarAdmin, configValida } from "../_lib/socios";
 
 export const config = { maxDuration: 60 };
 
-const ROLES = ["admin", "productor", "editor", "pauta", "diseno", "administracion", "programador", "socio", "cliente", "pending"];
+const ROLES = ["admin", "productor", "editor", "pauta", "diseno", "administracion", "programador", "ventas", "socio", "cliente", "pending"];
 const ROL_EN_CLIENTE: Record<string, string> = { productor: "productor", editor: "editor", pauta: "pauta", diseno: "diseno", cliente: "cliente" };
 
 /**

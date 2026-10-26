@@ -386,7 +386,10 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
     // El socio comercial ve sus leads por /api/web/socio-panel (sin notas internas ni datos de Meta), no desde acá.
     case "leads_web":
     case "web_config":
-      return esAdmin(c);
+      // Ventas trabaja el CRM de Prodi (leads), igual que el admin.
+      return esAdmin(c) || tiene(c, "ventas");
+    case "presupuestos":
+      return esAdmin(c) || tiene(c, "ventas");
     case "planes_redes":
     case "app_settings":
       // whatsapp_bot: configuración del bot de WhatsApp (eliminado), ya no se expone.
@@ -718,8 +721,8 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
     }
     case "crm_galeria": // se cargan por /api/drive/crm-archivo; desde la app solo se borran
       return !despues && (equipoDe(c, antes!.proyecto_id) || clienteDe(c, antes!.proyecto_id));
-    case "presupuestos": // los arma el admin; lo aceptado lo escribe el servidor
-      return esAdmin(c) && (crea || antes!.estado !== "aceptado" || borra);
+    case "presupuestos": // los arma el admin (o ventas); lo aceptado lo escribe el servidor
+      return (esAdmin(c) || tiene(c, "ventas")) && (crea || antes!.estado !== "aceptado" || borra);
     case "in_app_notifications":
       if (crea) return false;
       if (borra) return antes!.recipient_user_id === c.uid;

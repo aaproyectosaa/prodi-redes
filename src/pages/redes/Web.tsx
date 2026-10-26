@@ -44,6 +44,7 @@ import { ChatLead } from "@/components/redes/crm/ChatLead";
 import { ConectarWhatsApp } from "@/components/redes/crm/ConectarWhatsApp";
 import { ConfigCatalogo } from "@/components/redes/crm/CatalogoProductos";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { Handshake } from "lucide-react";
 
 // Reservas de la landing de la campaña «No empezamos de cero» (somosprodi.com).
@@ -246,7 +247,10 @@ export default function Web() {
     setParams(next, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
-  const [ajustes, setAjustes] = useState(false);
+  const [ajustesAbiertos, setAjustes] = useState(false);
+  // Temporada, cupos y conexión con Meta / WhatsApp: solo el admin (Ventas trabaja los leads).
+  const esAdminCrm = useUserProfileContext().role === "admin";
+  const ajustes = ajustesAbiertos && esAdminCrm;
   const [nuevo, setNuevo] = useState(false);
   const [arrastrando, setArrastrando] = useState<string | null>(null);
   const [sobre, setSobre] = useState<string | null>(null);
@@ -303,9 +307,11 @@ export default function Web() {
       actions={
         <>
           {deTemporada.length > 0 && <SelectorVista vista={vista} onChange={setVista} />}
-          <Button variant="outline" size="icon" onClick={() => setAjustes(true)} title="Temporada, cupos y conexión con Meta" aria-label="Temporada, cupos y conexión con Meta">
-            <Settings2 className="h-4 w-4" />
-          </Button>
+          {esAdminCrm && (
+            <Button variant="outline" size="icon" onClick={() => setAjustes(true)} title="Temporada, cupos y conexión con Meta" aria-label="Temporada, cupos y conexión con Meta">
+              <Settings2 className="h-4 w-4" />
+            </Button>
+          )}
           <Button onClick={() => setNuevo(true)} className="bg-gradient-to-r from-primary to-fuchsia-500 shadow-md shadow-primary/25">
             <Plus className="mr-2 h-4 w-4" /> Nuevo lead
           </Button>
