@@ -32,6 +32,7 @@ import {
   type PagoMP,
 } from "../_lib/mercadopago";
 import { aplicarPago, estadoSuscripcion, precioAbono, proyectoDeSuscripcion, registrarAbono } from "../_lib/cobros";
+import { completarAlta, marcarAlta } from "../_lib/alta-web";
 import { destinatariosDe, disenadorasDe, enviarAviso } from "../_lib/notify";
 import { ESTADOS_IDEA_EDITABLE, FORMATOS_PIEZA, cupoPieza, leerPedidoPieza, piezaDoc, precioPieza } from "../_lib/piezas";
 import { prepararFacturacion } from "../_lib/facturar";
@@ -209,6 +210,12 @@ async function procesarWebhook(req: VercelRequest) {
   // Alta, pausa o baja del débito automático.
   if (tipo === "subscription_preapproval") {
     const s = await obtenerSuscripcion(id);
+    // Compra de un plan en somosprodi.com: al autorizarse el débito se crea el cliente (api/_lib/alta-web.ts).
+    if (s.external_reference?.startsWith("alta:")) {
+      const altaId = s.external_reference.slice(5);
+      if (s.status === "authorized") await completarAlta(altaId, s, base);
+      else await marcarAlta(altaId, estadoSuscripcion(s.status));
+    }
     const pid = await proyectoDeSuscripcion(s.id, s.external_reference);
     if (!pid) return { ok: true, ignorado: "sin cliente" };
     const ref = adminDb().collection("projects").doc(pid);
@@ -244,6 +251,8 @@ async function procesarWebhook(req: VercelRequest) {
     const c = await obtenerCobroSuscripcion(id);
     // Se busca el cliente por la referencia de la suscripción (sirve aunque ya no sea la vigente).
     const sus = await obtenerSuscripcion(c.preapproval_id).catch(() => null);
+    // Si el primer cobro de una compra de la web llega antes que el aviso de la suscripción, primero se crea el cliente.
+    if (sus?.external_reference?.startsWith("alta:") && sus.status === "authorized") await completarAlta(sus.external_reference.slice(5), sus, base);
     const pid = await proyectoDeSuscripcion(c.preapproval_id, sus?.external_reference);
     if (!pid || !c.payment?.id) return { ok: true, ignorado: "sin pago" };
     const pago = await obtenerPago(String(c.payment.id));

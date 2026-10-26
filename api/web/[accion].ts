@@ -19,6 +19,9 @@
 // POST /api/web/meta-conectar     (admin) suscribe la página de Prodi y trae los formularios de 30 días
 // POST /api/web/manual    { negocio, nombre?, email?, telefono?, instagram?, ubicacion?, rubro?, fuente?, notas?, estado? } → { id }  (lead cargado a mano)
 // POST /api/web/crm-espera { nombre, negocio, email, telefono?, plan, rubro? } → { ok }  (pública: lista de espera del CRM en somosprodi.com)
+// GET  /api/web/precios   → { planes: [{ id, nombre, neto, iva, comision, monto, … }] }  (pública: desglose para comprar)
+// POST /api/web/comprar   { plan, nombre, negocio, email, email_mp?, telefono, instagram?, cuit?, ref? } → { init_point }
+//      (pública: compra de un plan con débito automático; el alta del cliente la hace el webhook, ver api/_lib/alta-web.ts)
 // Socios comerciales (ver api/_lib/socios.ts):
 // POST /api/web/aplicar acepta `ref` (código del socio que guardó la landing): el lead entra con origen "socio".
 // POST /api/web/socio-panel                  (socio) → { codigo, link, leads[] } solo los suyos, sin notas internas
@@ -37,6 +40,8 @@ import { appUrl, body, HttpError, requireCaller, sendError, type Caller } from "
 import { adminDb } from "../_lib/db";
 import { avisarAdmin, avisarEstadoAlSocio, comisionEstandar, comisionesDelMes, guardarEstandar, listarSocios, resumenSocios, socioPorCodigo, sumarMeses } from "../_lib/socios";
 import { claveTelefono } from "../_lib/leads-unir";
+import { PLANES_WEB, precioPlanWeb } from "../_lib/alta-web";
+import { crearSuscripcion } from "../_lib/mercadopago";
 
 /** Trabajan los leads de Prodi: el admin y quien tenga el rol Ventas. */
 const VENTAS = ["admin", "ventas"];
@@ -317,6 +322,121 @@ const FUENTES = ["Recomendación", "WhatsApp", "Instagram", "Llamada", "Evento",
 // Planes del CRM que se muestran en somosprodi.com (acceso anticipado).
 const PLANES_CRM: Record<string, string> = { inicial: "Inicial · hasta 2 usuarios", equipo: "Equipo · hasta 5 usuarios", empresa: "Empresa · hasta 15 usuarios" };
 
+/** Precios de los planes que se compran en la web: neto + IVA + comisión del débito automático (para el desglose). */
+async function precios() {
+  const lista = await Promise.all(Object.keys(PLANES_WEB).map((id) => precioPlanWeb(id)));
+  return { planes: lista.filter(Boolean) };
+}
+
+/**
+ * Compra de un plan desde somosprodi.com (ver api/_lib/alta-web.ts): chequea cupos, deja la compra pendiente con su
+ * lead y crea la suscripción de Mercado Pago. Devuelve el link para que el cliente autorice el débito automático.
+ */
+async function comprar(req: VercelRequest) {
+  const b = body<Record<string, unknown>>(req);
+  const planId = texto(b.plan, 20);
+  const nombre = texto(b.nombre, 80);
+  const negocio = texto(b.negocio, 80);
+  const email = texto(b.email, 120).toLowerCase();
+  const emailMp = texto(b.email_mp, 120).toLowerCase();
+  const telefono = texto(b.telefono, 40);
+  const cuit = texto(b.cuit, 20).replace(/[^0-9]/g, "");
+  const MAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+  const precio = await precioPlanWeb(planId);
+  if (!precio) throw new HttpError(400, "Elegí un plan");
+  if (nombre.length < 2 || negocio.length < 2) throw new HttpError(400, "Completá tu nombre y el de tu negocio");
+  if (!MAIL.test(email)) throw new HttpError(400, "Revisá el email");
+  if (emailMp && !MAIL.test(emailMp)) throw new HttpError(400, "Revisá el email de Mercado Pago");
+  if (telefono.replace(/\D/g, "").length < 8) throw new HttpError(400, "Revisá el teléfono");
+  if (cuit && cuit.length !== 11) throw new HttpError(400, "El CUIT tiene 11 números");
+  if (!(precio.monto > 0)) throw new HttpError(500, "El plan no tiene precio cargado");
+
+  // Cupos de la temporada: si están completos no se vende.
+  const c = await cupos();
+  if (c.ocupados >= c.total) throw new HttpError(409, "Los cupos de esta temporada están completos. Escribinos para la próxima.");
+
+  // Anti-spam: hasta 5 compras empezadas por IP por hora.
+  const ip_hash = huellaIp(req);
+  const ahora = new Date();
+  const pool = getPool();
+  const r = await pool.query(
+    "select count(*)::int as n from documentos where coleccion = 'altas_web' and data->>'ip_hash' = $1 and data->>'created_at' > $2",
+    [ip_hash, new Date(ahora.getTime() - 3_600_000).toISOString()]
+  );
+  if ((r.rows[0]?.n ?? 0) >= 5) throw new HttpError(429, "Recibimos muchos pedidos desde tu conexión. Probá en un rato.");
+
+  // El lead: si ya existía (por mail o teléfono) se usa ese; si no, se crea. Vendedor por su link (?ref=).
+  const at = ahora.toISOString();
+  const socio = b.ref ? await socioPorCodigo(texto(b.ref, 40)) : null;
+  const previo = await leadExistente(email, telefono);
+  let leadId: string;
+  if (previo) {
+    leadId = previo.id;
+    await conLead(leadId, (d) => ({
+      plan_interes: planId,
+      ...(d.telefono ? {} : { telefono }),
+      ...(d.estado === "no_califica" || d.estado === "perdido" ? { estado: "calificado" } : {}),
+      historial: conHistorial(d, { at, tipo: "nota", texto: `Empezó a comprar el plan ${precio.nombre} en la web`, por: null, por_nombre: "Web" }),
+    }));
+  } else {
+    leadId = randomUUID();
+    const { temporada } = await leerConfig();
+    await guardarDoc(pool, COL, leadId, {
+      created_at: at,
+      updated_at: at,
+      temporada,
+      nombre,
+      negocio,
+      email,
+      telefono,
+      instagram: texto(b.instagram, 120),
+      califica: true,
+      dudoso: false,
+      estado: "calificado",
+      notas: `Empezó a comprar el plan ${precio.nombre} en la web.`,
+      plan_interes: planId,
+      fuente: "Compra web",
+      origen: socio ? "socio" : "somosprodi.com:compra",
+      ...(socio ? { socio_id: socio.uid, socio_nombre: socio.nombre, ref: socio.uid } : {}),
+      ip_hash,
+      historial: [{ at, de: null, a: "calificado", por: null, por_nombre: socio ? `Web · link de ${socio.nombre}` : "Web · compra" }],
+    });
+  }
+
+  // La compra pendiente y la suscripción de Mercado Pago (débito automático desde el primer mes).
+  const altaId = randomUUID();
+  const s = await crearSuscripcion({
+    titulo: `Prodi · Plan ${precio.nombre} · ${negocio}`,
+    monto: precio.monto,
+    email: emailMp || email,
+    externalReference: `alta:${altaId}`,
+    backUrl: `https://somosprodi.com/gracias?plan=${planId}`,
+  });
+  await guardarDoc(pool, "altas_web", altaId, {
+    created_at: at,
+    updated_at: at,
+    estado: "pendiente",
+    plan: planId,
+    nombre,
+    negocio,
+    email,
+    ...(emailMp ? { email_mp: emailMp } : {}),
+    telefono,
+    instagram: texto(b.instagram, 120),
+    ...(cuit ? { cuit } : {}),
+    lead_id: leadId,
+    neto: precio.neto,
+    iva: precio.iva,
+    total: precio.total,
+    comision: precio.comision,
+    comision_pct: precio.comision_pct,
+    monto: precio.monto,
+    mp_preapproval_id: s.id,
+    ip_hash,
+  });
+  return { init_point: s.init_point, monto: precio.monto };
+}
+
 /** Lista de espera del CRM (somosprodi.com): entra al mismo tablero de leads, con su fuente, y avisa al admin. */
 async function crmEspera(req: VercelRequest) {
   const b = body<Record<string, unknown>>(req);
@@ -596,11 +716,15 @@ async function config(req: VercelRequest) {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const accion = String(req.query.accion ?? "");
   res.setHeader("Cache-Control", "no-store");
-  const publica = ["aplicar", "reunion", "cupos", "crm-espera"].includes(accion);
+  const publica = ["aplicar", "reunion", "cupos", "crm-espera", "precios", "comprar"].includes(accion);
   if (publica) cors(req, res);
   try {
     if (req.method === "OPTIONS" && publica) {
       res.status(204).end();
+      return;
+    }
+    if (accion === "precios" && req.method === "GET") {
+      res.status(200).json(await precios());
       return;
     }
     if (accion === "cupos" && req.method === "GET") {
@@ -644,6 +768,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (accion === "aplicar") res.status(200).json(await aplicar(req));
     else if (accion === "crm-espera") res.status(200).json(await crmEspera(req));
+    else if (accion === "comprar") res.status(200).json(await comprar(req));
     else if (accion === "reunion") res.status(200).json(await reunion(req));
     else if (accion === "estado") res.status(200).json(await cambiar(req, "estado"));
     else if (accion === "notas") res.status(200).json(await cambiar(req, "notas"));
