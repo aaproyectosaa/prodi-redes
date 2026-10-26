@@ -11,6 +11,7 @@ import { AvisoDescargarChat, InstalarChatHost } from "@/components/InstalarChat"
 import { VideoSheet } from "@/components/redes/VideoSheet";
 import { ChatDock } from "@/components/redes/chat/ChatDock";
 import { VerComoBanner } from "@/components/redes/VerComo";
+import { AvisoAcademia } from "@/components/redes/AvisoAcademia";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { RedesDataProvider } from "@/contexts/redes-data-context";
 import { BadgeApp } from "@/components/BadgeApp";
@@ -61,6 +62,7 @@ const LayoutInner = () => {
           {/* En el celular el encabezado va primero: es el que deja libre la barra de estado del iPhone. */}
           <MobileAppHeader profile={profile} role={role} />
           <VerComoBanner />
+          <AvisoAcademia />
           {/* Se abrió desde Prodi Chat (en el celular no puede abrir la otra app): un toque para volver a los chats. */}
           {vinoDeChat() && (
             <button
