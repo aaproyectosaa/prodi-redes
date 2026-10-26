@@ -477,12 +477,47 @@ async function contextoConversacion(leadId: string) {
   return { lead, convId, plataforma: String((lead.meta as any)?.plataforma ?? "instagram"), propios, ...guardado };
 }
 
+/** Lo adjunto de un mensaje (foto, video, audio, archivo o la tarjeta de un producto), para mostrarlo en el chat. */
+export interface AdjuntoChat {
+  tipo: "imagen" | "video" | "audio" | "archivo" | "tarjeta";
+  url?: string | null;
+  preview?: string | null;
+  titulo?: string | null;
+  subtitulo?: string | null;
+  link?: string | null;
+}
+function adjuntosDe(m: any): AdjuntoChat[] {
+  const out: AdjuntoChat[] = [];
+  for (const a of m.attachments?.data ?? []) {
+    const mime = String(a.mime_type ?? "");
+    if (a.generic_template) {
+      const g = a.generic_template;
+      out.push({ tipo: "tarjeta", url: g.media_url ?? null, titulo: g.title ?? null, subtitulo: g.subtitle ?? null, link: g.url ?? g.cta?.url ?? null });
+    } else if (a.image_data?.url || mime.startsWith("image/")) {
+      out.push({ tipo: "imagen", url: a.image_data?.url ?? a.file_url ?? null, preview: a.image_data?.preview_url ?? null });
+    } else if (a.video_data?.url || mime.startsWith("video/")) {
+      out.push({ tipo: "video", url: a.video_data?.url ?? a.file_url ?? null, preview: a.video_data?.preview_url ?? null });
+    } else if (mime.startsWith("audio/")) {
+      out.push({ tipo: "audio", url: a.file_url ?? null });
+    } else if (a.file_url) {
+      out.push({ tipo: "archivo", url: a.file_url, titulo: a.name ?? null });
+    }
+  }
+  for (const sh of m.shares?.data ?? []) {
+    if (sh.template?.payload?.product?.elements?.data?.length) {
+      for (const e of sh.template.payload.product.elements.data) out.push({ tipo: "tarjeta", url: e.image_url ?? null, titulo: e.name ?? null, link: e.url ?? null });
+    } else if (sh.link || sh.name) out.push({ tipo: "tarjeta", url: null, titulo: sh.name ?? null, subtitulo: sh.description ?? null, link: sh.link ?? null });
+  }
+  return out.slice(0, 10);
+}
+
 /** Un mensaje de Meta como lo muestra el chat del CRM. */
 function aMensaje(m: any, propios: Set<string>) {
   return {
     id: String(m.id),
     texto: String(m.message ?? ""),
     adjunto: !!m.attachments?.data?.length,
+    adjuntos: adjuntosDe(m),
     // Lo que no es texto: para mostrar algo en vez de una burbuja vacía.
     tipo: m.story ? "historia" : m.shares?.data?.length ? "publicacion" : m.sticker ? "sticker" : m.attachments?.data?.length ? "archivo" : m.message ? "texto" : "otro",
     at: m.created_time,
@@ -515,7 +550,15 @@ export async function conversacionLead(leadId: string) {
   const personaConocida = String(lead.meta?.persona_id ?? "");
   const fotoVieja = !lead.meta?.foto || Date.now() - Date.parse(String(lead.meta?.foto_at ?? 0)) > 12 * 3600_000;
   const [d, fotoYa] = await Promise.all([
-    graph(c.convId, { fields: "participants,messages.limit(50){id,message,from,created_time,attachments,story,shares,sticker}" }, c.token),
+    // Con el contenido de lo adjunto (fotos, videos, audios, tarjetas). Si Meta no acepta algún campo, como antes.
+    graph(
+      c.convId,
+      {
+        fields:
+          "participants,messages.limit(50){id,message,from,created_time,story,sticker,attachments{mime_type,name,file_url,image_data{url,preview_url},video_data{url,preview_url},generic_template{title,subtitle,url,media_url,cta}},shares{link,name,description,template}}",
+      },
+      c.token
+    ).catch(() => graph(c.convId, { fields: "participants,messages.limit(50){id,message,from,created_time,attachments,story,shares,sticker}" }, c.token)),
     personaConocida && fotoVieja ? fotoDe(personaConocida, c.plataforma, c.token) : Promise.resolve(null),
   ]);
   const mensajes = [...(d.messages?.data ?? [])].reverse().map((m: any) => aMensaje(m, c.propios));

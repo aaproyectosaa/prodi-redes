@@ -15,10 +15,21 @@ import { ConfigCatalogo, SelectorProductos, type Producto } from "./CatalogoProd
 // la charla, emojis, la cuenta regresiva de las 24 h que da Meta para responder y guardar el WhatsApp o el mail que
 // el lead escribió en el chat. Se actualiza solo cada 15 segundos.
 
+/** Lo adjunto que vino de Meta (las URLs de Meta vencen: se renuevan cada vez que se actualiza el chat). */
+interface AdjuntoChat {
+  tipo: "imagen" | "video" | "audio" | "archivo" | "tarjeta";
+  url?: string | null;
+  preview?: string | null;
+  titulo?: string | null;
+  subtitulo?: string | null;
+  link?: string | null;
+}
+
 interface Mensaje {
   id: string;
   texto: string;
   adjunto: boolean;
+  adjuntos?: AdjuntoChat[];
   tipo?: "texto" | "historia" | "publicacion" | "sticker" | "archivo" | "otro";
   at: string;
   mio: boolean;
@@ -457,8 +468,15 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
                     f.ultimo && (f.m.mio ? "rounded-br-sm" : "rounded-bl-sm")
                   )}
                 >
+                  {!!f.m.adjuntos?.length && (
+                    <span className={cn("block space-y-1.5", f.m.texto && "mb-1.5")}>
+                      {f.m.adjuntos.map((a, i) => (
+                        <AdjuntoVista key={i} a={a} mio={f.m.mio} />
+                      ))}
+                    </span>
+                  )}
                   {f.m.texto && <span className="whitespace-pre-wrap break-words">{f.m.texto}</span>}
-                  {(f.m.adjunto || !f.m.texto) && (
+                  {((f.m.adjunto && !f.m.adjuntos?.length) || (!f.m.texto && !f.m.adjuntos?.length)) && (
                     <span className={cn("flex items-center gap-1 text-xs italic", f.m.texto ? "mt-1 opacity-80" : "opacity-80")}>
                       <Paperclip className="h-3 w-3" /> {TIPO_SIN_TEXTO[f.m.tipo ?? "otro"] ?? TIPO_SIN_TEXTO.otro}
                     </span>
@@ -684,5 +702,42 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
         )}
       </div>
     </div>
+  );
+}
+
+/** Foto, video, audio, archivo o tarjeta de producto de un mensaje de Instagram / Facebook. */
+function AdjuntoVista({ a, mio }: { a: AdjuntoChat; mio: boolean }) {
+  const [roto, setRoto] = useState(false);
+  const caja = cn("block overflow-hidden rounded-xl", mio ? "bg-white/10" : "bg-muted");
+  if (a.tipo === "imagen" && a.url && !roto)
+    return (
+      <a href={a.url} target="_blank" rel="noopener noreferrer" className={caja}>
+        <img src={a.preview || a.url} alt="Foto" loading="lazy" onError={() => setRoto(true)} className="max-h-64 w-full object-cover" />
+      </a>
+    );
+  if (a.tipo === "video" && a.url && !roto)
+    return <video src={a.url} poster={a.preview ?? undefined} controls playsInline preload="metadata" onError={() => setRoto(true)} className="max-h-72 w-full rounded-xl bg-black" />;
+  if (a.tipo === "audio" && a.url && !roto) return <audio src={a.url} controls preload="metadata" onError={() => setRoto(true)} className="w-60 max-w-full" />;
+  if (a.tipo === "tarjeta")
+    return (
+      <a href={a.link ?? undefined} target="_blank" rel="noopener noreferrer" className={cn(caja, "w-56 max-w-full")}>
+        {a.url && !roto && <img src={a.url} alt="" loading="lazy" onError={() => setRoto(true)} className="h-32 w-full object-cover" />}
+        <span className="block px-2.5 py-2">
+          {a.titulo && <span className="block truncate text-xs font-semibold">{a.titulo}</span>}
+          {a.subtitulo && <span className={cn("block truncate text-[11px]", mio ? "text-white/75" : "text-muted-foreground")}>{a.subtitulo}</span>}
+          {a.link && <span className={cn("mt-0.5 block truncate text-[10px] underline", mio ? "text-white/80" : "text-primary")}>Ver</span>}
+        </span>
+      </a>
+    );
+  // Vencido o sin vista previa: el aviso de siempre, con link si hay.
+  const etiqueta = a.tipo === "imagen" ? "Foto" : a.tipo === "video" ? "Video" : a.tipo === "audio" ? "Audio" : a.titulo || "Archivo";
+  return a.url ? (
+    <a href={a.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs italic underline opacity-90">
+      <Paperclip className="h-3 w-3" /> {etiqueta}
+    </a>
+  ) : (
+    <span className="flex items-center gap-1 text-xs italic opacity-80">
+      <Paperclip className="h-3 w-3" /> {etiqueta}
+    </span>
   );
 }
