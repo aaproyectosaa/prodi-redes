@@ -385,7 +385,9 @@ export function AudioMensaje({
 // Grabador (barra que reemplaza al cuadro de texto mientras se graba)
 // ---------------------------------------------------------------------------
 
-const TIPOS = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4", "audio/webm"];
+// Primero .m4a (AAC): se abre en todos lados, también descargado en el iPhone. Chrome, Edge y Safari lo graban;
+// Firefox no, y ahí queda en .webm/.ogg.
+const TIPOS = ["audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/webm"];
 
 // Micrófono: si el navegador recuerda el permiso (Chrome, Android), se pide y se suelta en cada audio (no pregunta).
 // En el iPhone, iOS vuelve a preguntar cada vez que se suelta (aunque diga que ya está permitido): ahí queda tomado
