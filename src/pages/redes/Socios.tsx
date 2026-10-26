@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, ChevronDown, Handshake, Loader2 } from "lucide-react";
+import { AlertTriangle, ChevronDown, Handshake, Loader2, Pencil, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { SocioDialog, type SocioEditable } from "@/components/redes/socio/SocioDialog";
 import { PageShell } from "@/components/redes/PageShell";
 import { MesNav } from "@/components/redes/admin/FacturaPartes";
 import { callApi } from "@/lib/redes/api";
@@ -24,7 +26,7 @@ export interface ResumenSocio {
   lineas: { factura_id: string; cliente: string; periodo: string; base: number; comision: number }[];
 }
 
-export function useResumenSocios(mes: string, activo = true) {
+export function useResumenSocios(mes: string, activo = true, version = 0) {
   const [socios, setSocios] = useState<ResumenSocio[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -37,15 +39,18 @@ export function useResumenSocios(mes: string, activo = true) {
     return () => {
       vivo = false;
     };
-  }, [mes, activo]);
+  }, [mes, activo, version]);
   return { socios, error };
 }
 
 export default function Socios() {
   // A mes vencido: lo que se paga ahora es lo cobrado el mes pasado.
   const [mes, setMes] = useState(sumarMeses(mesActual(), -1));
-  const { socios, error } = useResumenSocios(mes);
+  const [version, setVersion] = useState(0);
+  const { socios, error } = useResumenSocios(mes, true, version);
   const [abierto, setAbierto] = useState<string | null>(null);
+  // Nuevo socio (null) o editar uno; undefined = cerrado.
+  const [dialogo, setDialogo] = useState<SocioEditable | null | undefined>(undefined);
   const total = (socios ?? []).reduce((a, s) => a + s.total, 0);
   const faltan = (socios ?? []).filter((s) => s.activo && s.sin_config);
 
@@ -53,8 +58,16 @@ export default function Socios() {
     <PageShell
       title="Socios comerciales"
       subtitle="Los que traen clientes: sus leads, lo cobrado de sus clientes y su comisión."
-      actions={<MesNav mes={mes} setMes={setMes} max={mesActual()} />}
+      actions={
+        <div className="flex flex-wrap items-center gap-2">
+          <MesNav mes={mes} setMes={setMes} max={mesActual()} />
+          <Button onClick={() => setDialogo(null)} className="h-11 rounded-2xl bg-[#6F40FC] px-4 font-semibold text-white hover:bg-[#5d32e6]">
+            <Plus className="mr-1.5 h-4 w-4" /> Nuevo socio
+          </Button>
+        </div>
+      }
     >
+      <SocioDialog socio={dialogo ?? null} open={dialogo !== undefined} onOpenChange={(v) => !v && setDialogo(undefined)} onListo={() => setVersion((x) => x + 1)} />
       {faltan.length > 0 && (
         <Link to="/equipo" className="mb-4 flex items-start gap-2 rounded-2xl bg-amber-500/10 p-3.5 text-sm text-amber-800 dark:text-amber-200">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -73,7 +86,10 @@ export default function Socios() {
         <div className="flex flex-col items-center rounded-3xl border border-dashed p-10 text-center">
           <Handshake className="h-8 w-8 text-[#6F40FC]" />
           <p className="mt-2 font-semibold">Todavía no hay socios</p>
-          <p className="mt-1 text-sm text-muted-foreground">Crealos en Equipo con el rol «Socio comercial» (solo o junto a otro rol).</p>
+          <p className="mt-1 text-sm text-muted-foreground">Crealo acá o en Equipo con el rol «Socio comercial» (solo o junto a otro rol).</p>
+          <Button onClick={() => setDialogo(null)} className="mt-4 h-11 rounded-2xl bg-[#6F40FC] px-5 font-semibold text-white hover:bg-[#5d32e6]">
+            <Plus className="mr-1.5 h-4 w-4" /> Nuevo socio
+          </Button>
         </div>
       ) : (
         <>
@@ -129,7 +145,12 @@ export default function Socios() {
                         ))}
                       </ul>
                     )}
-                    <p className="mt-2 text-[11px] text-muted-foreground">Abono neto cobrado, sin IVA, sin pauta ni reintegros. Se paga en Pagos al equipo.</p>
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[11px] text-muted-foreground">Abono neto cobrado, sin IVA, sin pauta ni reintegros. Se paga en Pagos al equipo.</p>
+                      <Button size="sm" variant="outline" className="h-8 rounded-full" onClick={() => setDialogo({ uid: s.uid, nombre: s.nombre, config: s.config })}>
+                        <Pencil className="mr-1.5 h-3.5 w-3.5" /> Editar código y comisión
+                      </Button>
+                    </div>
                   </div>
                 )}
               </li>
