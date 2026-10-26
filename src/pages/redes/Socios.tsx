@@ -17,10 +17,10 @@ export interface ResumenSocio {
   uid: string;
   nombre: string;
   activo: boolean;
-  config: { codigo: string; comision_pct: number | null; meses: number | null } | null;
+  config: { codigo: string; comision_pct: number | null; meses: number | null; modo?: "mensual" | "entrada" } | null;
   sin_config: boolean;
   /** La comisión que se le aplica: la suya o la estándar. */
-  vigente: { comision_pct: number; meses: number; propia: boolean } | null;
+  vigente: { comision_pct: number; meses: number; propia: boolean; modo: "mensual" | "entrada" } | null;
   leads: number;
   ganados: number;
   clientes: number;
@@ -118,7 +118,9 @@ export default function Socios() {
                       {s.sin_config ? (
                         <b className="text-amber-600 dark:text-amber-400">sin comisión</b>
                       ) : (
-                        `${s.vigente!.comision_pct}% por ${s.vigente!.meses} meses${s.vigente!.propia ? "" : " (estándar)"}`
+                        s.vigente!.modo === "entrada"
+                          ? `premio de entrada: ${s.vigente!.comision_pct}% del primer abono`
+                          : `${s.vigente!.comision_pct}% por ${s.vigente!.meses} meses${s.vigente!.propia ? "" : " (estándar)"}`
                       )}
                     </span>
                   </span>

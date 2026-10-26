@@ -17,7 +17,11 @@ export interface ConfigSocio {
   codigo: string;
   comision_pct: number | null;
   meses: number | null;
+  /** "mensual" (el % de cada abono, los meses acordados) o "entrada" (el % del primer abono cobrado, una sola vez). */
+  modo?: "mensual" | "entrada";
 }
+
+export type Vigente = { comision_pct: number; meses: number; propia: boolean; modo: "mensual" | "entrada" };
 
 export const CODIGO_OK = /^[a-z0-9][a-z0-9-]{2,29}$/;
 
@@ -40,6 +44,7 @@ export function configDe(p: Record<string, unknown> | undefined | null): ConfigS
     codigo: s.codigo,
     comision_pct: s.comision_pct != null && pct > 0 && pct <= 100 ? pct : null,
     meses: s.meses != null && meses >= 1 && meses <= 120 ? meses : null,
+    modo: s.modo === "entrada" ? "entrada" : "mensual",
   };
 }
 
@@ -66,9 +71,10 @@ export async function guardarEstandar(entrada: unknown) {
 }
 
 /** La comisión que vale para un vendedor: la suya (si la tiene cargada) o la estándar. */
-export function comisionVigente(c: ConfigSocio | null, estandar: { comision_pct: number; meses: number } | null): { comision_pct: number; meses: number; propia: boolean } | null {
-  if (c?.comision_pct && c.meses) return { comision_pct: c.comision_pct, meses: c.meses, propia: true };
-  if (estandar) return { comision_pct: c?.comision_pct || estandar.comision_pct, meses: c?.meses || estandar.meses, propia: !!(c?.comision_pct || c?.meses) };
+export function comisionVigente(c: ConfigSocio | null, estandar: { comision_pct: number; meses: number } | null): Vigente | null {
+  if (c?.modo === "entrada") return c.comision_pct ? { comision_pct: c.comision_pct, meses: 1, propia: true, modo: "entrada" } : null;
+  if (c?.comision_pct && c.meses) return { comision_pct: c.comision_pct, meses: c.meses, propia: true, modo: "mensual" };
+  if (estandar) return { comision_pct: c?.comision_pct || estandar.comision_pct, meses: c?.meses || estandar.meses, propia: !!(c?.comision_pct || c?.meses), modo: "mensual" };
   return null;
 }
 
@@ -111,7 +117,12 @@ export async function configValida(entrada: unknown, uid?: string): Promise<Conf
   const meses = s.meses === "" || s.meses == null ? null : Math.round(Number(s.meses));
   if (pct != null && !(pct > 0 && pct <= 100)) throw new HttpError(400, "La comisión es un porcentaje entre 0 y 100");
   if (meses != null && !(meses >= 1 && meses <= 120)) throw new HttpError(400, "Los meses de comisión van de 1 a 120");
-  return { codigo, comision_pct: pct, meses };
+  // Premio de entrada: un % del primer abono, una sola vez (los meses no cuentan). Necesita su porcentaje.
+  if (s.modo === "entrada") {
+    if (pct == null) throw new HttpError(400, "Poné el porcentaje del premio de entrada");
+    return { codigo, comision_pct: pct, meses: null, modo: "entrada" };
+  }
+  return { codigo, comision_pct: pct, meses, modo: "mensual" };
 }
 
 async function admins(): Promise<string[]> {
@@ -171,7 +182,7 @@ export interface ComisionSocio {
   /** Falta el porcentaje o los meses: no se calcula. */
   sin_config: boolean;
   /** La que se aplica (la suya o la estándar). */
-  vigente: { comision_pct: number; meses: number; propia: boolean } | null;
+  vigente: Vigente | null;
   base: number;
   total: number;
   lineas: LineaComision[];
@@ -205,6 +216,17 @@ export async function comisionesDelMes(mes: string, soloUid?: string): Promise<C
   const [socios, clientes, estandar] = await Promise.all([listarSocios(), clientesConSocio(), comisionEstandar()]);
   const lista = socios.filter((s) => !soloUid || s.uid === soloUid);
   const porId = new Map(clientes.map((c) => [c.id, c]));
+  // Premio de entrada: cuál fue el primer abono cobrado de cada cliente (el período más viejo con boleta cobrada).
+  const primeros = new Map<string, string>();
+  if (lista.some((s) => s.config?.modo === "entrada") && clientes.length) {
+    const r0 = await getPool().query(
+      `select data->>'proyecto_id' as pid, min(coalesce(nullif(data->>'periodo', ''), data->>'mes')) as primero
+         from documentos where coleccion = 'facturas' and data->>'estado' = 'cobrada' and data->>'proyecto_id' = any($1) and coalesce(data->>'demo_ejemplo', '') <> 'true'
+        group by 1`,
+      [clientes.map((c) => c.id)]
+    );
+    for (const x of r0.rows as { pid: string; primero: string }[]) primeros.set(x.pid, x.primero);
+  }
   const porNombre = new Map(clientes.map((c) => [c.nombre.trim().toLowerCase(), c]));
   // Boletas cobradas en el mes (un día de margen por la zona horaria; se filtra exacto abajo).
   const [y, m] = mes.split("-").map(Number);
@@ -244,7 +266,10 @@ export async function comisionesDelMes(mes: string, soloUid?: string): Promise<C
       const s = out.get(c.socio_id);
       if (!s || !(base > 0) || !c.desde) continue;
       const meses = s.vigente?.meses ?? 0;
-      const dentro = periodo >= c.desde && (!meses || periodo <= sumarMeses(c.desde, meses - 1));
+      const dentro =
+        s.vigente?.modo === "entrada"
+          ? periodo >= c.desde && periodo === (primeros.get(pid) ?? periodo)
+          : periodo >= c.desde && (!meses || periodo <= sumarMeses(c.desde, meses - 1));
       if (!dentro) continue;
       const comision = s.vigente ? Math.round((base * s.vigente.comision_pct) / 100) : 0;
       s.lineas.push({ factura_id: row.id, proyecto_id: pid, cliente: c.nombre, periodo, base: Math.round(base), comision });

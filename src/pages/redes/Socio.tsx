@@ -34,7 +34,7 @@ interface Panel {
   link: string | null;
   leads: LeadSocio[];
   ganado: number;
-  comision: { comision_pct: number; meses: number } | null;
+  comision: { comision_pct: number; meses: number; modo?: "mensual" | "entrada" } | null;
 }
 
 const ESTADOS: Record<string, { label: string; icono: React.ElementType; clase: string }> = {
@@ -101,7 +101,11 @@ export default function Socio() {
         <span>
           <span className="block text-xl font-bold">Pasame un cliente</span>
           <span className="block text-sm text-white/80">
-            Nombre, empresa y teléfono. {panel?.comision ? `Si se hace cliente, ganás el ${panel.comision.comision_pct}%.` : "Nosotros lo llamamos."}
+            Nombre, empresa y teléfono. {panel?.comision
+              ? panel.comision.modo === "entrada"
+                ? `Si se hace cliente, ganás el ${panel.comision.comision_pct}% de su primer mes.`
+                : `Si se hace cliente, ganás el ${panel.comision.comision_pct}% cada mes.`
+              : "Nosotros lo llamamos."}
           </span>
         </span>
       </button>
