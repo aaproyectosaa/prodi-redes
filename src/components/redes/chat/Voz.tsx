@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Loader2, Mic, Pause, Play, Send, Trash2 } from "lucide-react";
+import { ChevronDown, Download, Loader2, Mic, Pause, Play, Send, Trash2 } from "lucide-react";
 import { callApi } from "@/lib/redes/api";
 import { enModoVista } from "@/lib/redes/vistaComo";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { AUDIO_MAX_SEG, duracionTexto, urlAudio } from "@/lib/redes/chat";
+import { AUDIO_MAX_SEG, descargarAudio, duracionTexto, urlAudio } from "@/lib/redes/chat";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -101,9 +101,12 @@ export function AudioMensaje({
   transcripcion,
   escuchado,
   nombreDe,
+  at,
 }: {
   chatId: string;
   mensajeId?: string;
+  /** Fecha del mensaje (para el nombre del archivo al bajarlo). */
+  at?: string;
   audio: { id: string; mime: string; duracion: number };
   mio: boolean;
   transcripcion?: string | null;
@@ -353,6 +356,13 @@ export function AudioMensaje({
           {verTexto ? "Ocultar texto" : "Ver texto"}
         </button>
       )}
+      <button
+        type="button"
+        onClick={() => void descargarAudio(chatId, audio, at).catch((err) => toast.error(err instanceof Error ? err.message : "No se pudo descargar"))}
+        className="inline-flex items-center gap-0.5 font-medium underline-offset-2 hover:underline"
+      >
+        <Download className="h-3 w-3" /> Descargar
+      </button>
       {mio && (
         <span
           className={cn("ml-auto inline-flex items-center gap-0.5", quienes.length && "font-semibold text-sky-300")}

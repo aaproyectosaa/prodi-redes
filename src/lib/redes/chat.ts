@@ -309,6 +309,20 @@ export async function urlAudio(chatId: string, audioId: string): Promise<string>
   return url;
 }
 
+/** Baja un mensaje de voz como archivo (nombre con la fecha del mensaje). */
+export async function descargarAudio(chatId: string, audio: { id: string; mime: string }, at?: string) {
+  const url = await urlAudio(chatId, audio.id);
+  const ext = /ogg/.test(audio.mime) ? "ogg" : /mp4|m4a|aac/.test(audio.mime) ? "m4a" : /mpeg|mp3/.test(audio.mime) ? "mp3" : "webm";
+  const f = at ? new Date(at) : new Date();
+  const dos = (n: number) => String(n).padStart(2, "0");
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `audio-${f.getFullYear()}-${dos(f.getMonth() + 1)}-${dos(f.getDate())}-${dos(f.getHours())}${dos(f.getMinutes())}.${ext}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 export async function marcarLeido(chat: Chat, uid: string) {
   if (enModoVista() || !chat.ultimo) return;
   if ((chat.leido?.[uid] ?? "") >= chat.ultimo.at) return;

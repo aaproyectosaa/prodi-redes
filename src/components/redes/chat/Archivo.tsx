@@ -32,6 +32,29 @@ async function descargar(a: ArchivoChat) {
 // Los formatos que el navegador muestra y el servidor deja ver en línea (sin HEIC ni SVG).
 const IMG_EN_LINEA = /^image\/(png|jpeg|webp|gif|avif)$/;
 
+/** Botón redondo de descarga sobre la foto o el video (siempre a la vista, también en el celular). */
+function BotonBajarEncima({ archivo, className }: { archivo: ArchivoChat; className?: string }) {
+  const [bajando, setBajando] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        setBajando(true);
+        void descargar(archivo)
+          .catch((err) => toast.error(err instanceof Error ? err.message : "No se pudo descargar"))
+          .finally(() => setTimeout(() => setBajando(false), 1500));
+      }}
+      disabled={bajando}
+      className={cn("absolute right-2 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white shadow backdrop-blur-sm transition hover:bg-black/75 active:scale-95", className)}
+      aria-label={`Descargar ${archivo.name}`}
+      title="Descargar"
+    >
+      {bajando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+    </button>
+  );
+}
+
 /** Archivo de un mensaje: foto en línea, video con el reproductor de siempre, el resto como tarjeta para bajar. */
 export function ArchivoMensaje({ archivo, mio }: { archivo: ArchivoChat; mio: boolean }) {
   const mime = archivo.mime_type || "";
@@ -57,7 +80,8 @@ function Imagen({ archivo, mio }: { archivo: ArchivoChat; mio: boolean }) {
   // PNG/WebP/GIF pueden ser transparentes: sobre cuadritos claros se ven tal cual (no sobre el globo oscuro).
   const transparente = /png|webp|gif/i.test(archivo.mime_type);
   return (
-    <>
+    <div className="relative">
+      {url && <BotonBajarEncima archivo={archivo} className="right-0.5 top-1.5" />}
       <button
         type="button"
         onClick={() => url && setGrande(true)}
@@ -78,13 +102,17 @@ function Imagen({ archivo, mio }: { archivo: ArchivoChat; mio: boolean }) {
           {url && <img src={url} alt={archivo.name} className={cn("mx-auto max-h-[80vh] w-auto rounded-md object-contain", transparente && "fondo-transparencia")} />}
           <div className="flex items-center justify-between gap-2 px-1 pt-1 text-xs text-white/80">
             <span className="truncate">{archivo.name}</span>
-            <button type="button" onClick={() => void descargar(archivo).catch(() => toast.error("No se pudo descargar"))} className="inline-flex items-center gap-1 hover:text-white">
-              <Download className="h-3.5 w-3.5" /> Descargar
+            <button
+              type="button"
+              onClick={() => void descargar(archivo).catch(() => toast.error("No se pudo descargar"))}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-sm font-semibold text-black hover:bg-white/90"
+            >
+              <Download className="h-4 w-4" /> Descargar
             </button>
           </div>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }
 
@@ -99,7 +127,7 @@ function VideoChat({ archivo }: { archivo: ArchivoChat }) {
       .finally(() => setTimeout(() => setBajando(false), 1500));
   };
   const botonBajar = (
-    <button type="button" onClick={bajar} disabled={bajando} className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium opacity-80 hover:opacity-100">
+    <button type="button" onClick={bajar} disabled={bajando} className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-black/10 px-3 py-1 text-xs font-semibold hover:bg-black/15 dark:bg-white/15 dark:hover:bg-white/25">
       {bajando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Descargar video
     </button>
   );

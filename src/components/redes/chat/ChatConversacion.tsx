@@ -41,7 +41,9 @@ import {
   PRODI_ID,
   tituloChat,
   fijarMensaje,
+  descargarAudio,
 } from "@/lib/redes/chat";
+import { descargarArchivo } from "@/utils/drive/driveMediaUrl";
 import {
   BuscarEnChat,
   CrearEncuesta,
@@ -1254,6 +1256,7 @@ export function ChatConversacion({
                           transcripcion={m.transcripcion ?? null}
                           escuchado={m.escuchado ?? null}
                           nombreDe={(id) => perfilDe(id)?.nombre ?? ""}
+                          at={m.at}
                         />
                       ) : (
                         // Chats de Software: ```código``` con colores y "Copiar" (Redes, como siempre).
@@ -1924,6 +1927,16 @@ export function ChatConversacion({
             ? () => {
                 setReenviarMsg(infoMsg);
                 setInfoMsg(null);
+              }
+            : undefined
+        }
+        onDescargar={
+          infoMsg && ((infoMsg.tipo === "archivo" && infoMsg.archivo) || (infoMsg.tipo === "audio" && infoMsg.audio))
+            ? () => {
+                const m = infoMsg;
+                setInfoMsg(null);
+                const bajar = m.audio ? descargarAudio(chat.id, m.audio, m.at) : descargarArchivo(m.archivo!.drive_file_id, m.archivo!.name);
+                void bajar.catch((err) => toast.error(err instanceof Error ? err.message : "No se pudo descargar"));
               }
             : undefined
         }

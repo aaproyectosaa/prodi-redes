@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { CheckCheck, ChevronDown, Clock, Copy, CornerUpRight, ListTodo, Loader2, Pencil, Pin, Reply, Star, Clapperboard } from "lucide-react";
+import { CheckCheck, ChevronDown, Clock, Copy, CornerUpRight, Download, ListTodo, Loader2, Pencil, Pin, Reply, Star, Clapperboard } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -84,6 +84,7 @@ export function InfoMensaje({
   onTarea,
   onFijar,
   onReenviar,
+  onDescargar,
   fijado,
   onGuardar,
   guardado,
@@ -101,6 +102,8 @@ export function InfoMensaje({
   onTarea?: () => void;
   onFijar?: () => void;
   onReenviar?: () => void;
+  /** Foto, video, archivo o audio: bajarlo. */
+  onDescargar?: () => void;
   fijado?: boolean;
   /** Convertir el mensaje en un pedido de video del cliente (equipo, chat de cliente). */
   onPedidoVideo?: () => void;
@@ -130,6 +133,7 @@ export function InfoMensaje({
   };
   const acciones: { icono: ReactNode; label: string; onClick: () => void }[] = [
     ...(onResponder ? [{ icono: <Reply className="h-5 w-5" />, label: "Responder", onClick: onResponder }] : []),
+    ...(onDescargar ? [{ icono: <Download className="h-5 w-5" />, label: "Descargar", onClick: onDescargar }] : []),
     ...(m?.texto ? [{ icono: <Copy className="h-5 w-5" />, label: "Copiar", onClick: () => void copiar() }] : []),
     ...(onTarea ? [{ icono: <ListTodo className="h-5 w-5" />, label: "Tarea", onClick: onTarea }] : []),
     ...(onPedidoVideo ? [{ icono: <Clapperboard className="h-5 w-5" />, label: "Pedido de video", onClick: onPedidoVideo }] : []),
