@@ -31,6 +31,8 @@ export type UserRole =
 export interface Profile {
   /** Roles además del principal (ej. Producción que también hace Pauta). Los define el super admin en Equipo. */
   roles_extra?: UserRole[];
+  /** Academia: está aprendiendo. Sus videos los aprueba un supervisor antes de llegar al cliente. Lo cambia el admin. */
+  en_capacitacion?: boolean;
   id: string;
   nombre: string;
   email: string;

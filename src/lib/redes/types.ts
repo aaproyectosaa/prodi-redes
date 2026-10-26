@@ -135,6 +135,8 @@ export interface Video {
   tomas?: string[];
   /** Correcciones marcadas en un segundo exacto del video (las ve edición en la línea de tiempo). */
   feedback_marcas?: MarcaCorreccion[] | null;
+  /** Academia: quien está en capacitación pidió que un supervisor lo revise antes de mandarlo al cliente. */
+  revision_supervisor?: { por: string; por_nombre: string; at: string } | null;
   /** Recordatorios automáticos al cliente para que apruebe (cada 48 h, máximo 3). */
   recordatorios_cliente?: number;
   recordatorio_cliente_at?: string | null;

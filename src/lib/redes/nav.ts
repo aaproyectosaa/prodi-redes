@@ -22,7 +22,7 @@ import {
   Store,
   FolderOpen,
   Sparkles,
-  ListTodo, Inbox, Globe, Megaphone, FileText, Contact, Trophy, BookOpen, Handshake } from "lucide-react";
+  ListTodo, Inbox, Globe, Megaphone, FileText, Contact, Trophy, BookOpen, Handshake, GraduationCap } from "lucide-react";
 import { servicioInfo, type IdServicio } from "@/lib/redes/servicios";
 import type { UserRole } from "@/integrations/firebase/types";
 
@@ -155,6 +155,7 @@ export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {
           title: "Gestión",
           items: [
             { label: "Equipo", icon: Users, path: "/equipo" },
+            { label: "Academia", icon: GraduationCap, path: "/academia" },
             { label: "Reportes", icon: BarChart3, path: "/reportes" },
             { label: "Escalabilidad", icon: TrendingUp, path: "/escalabilidad" },
             { label: "Mi tiempo", icon: Timer, path: "/mi-tiempo" },
@@ -174,6 +175,7 @@ export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {
             { label: "Clientes", icon: Building2, path: "/clientes", mobile: true },
             { label: "Reuniones", icon: VideoIcon, path: "/reuniones" },
             { label: "Mis ganancias", icon: HandCoins, path: "/mis-ganancias" },
+            { label: "Academia", icon: GraduationCap, path: "/academia" },
           ],
         },
       ];
@@ -199,6 +201,7 @@ export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {
             { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
             { label: "Reuniones", icon: VideoIcon, path: "/reuniones", mobile: true },
             { label: "Mis ganancias", icon: HandCoins, path: "/mis-ganancias" },
+            { label: "Academia", icon: GraduationCap, path: "/academia" },
           ],
         },
       ];
@@ -211,6 +214,7 @@ export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {
             { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
             { label: "Reuniones", icon: VideoIcon, path: "/reuniones" },
             { label: "Mis ganancias", icon: HandCoins, path: "/mis-ganancias" },
+            { label: "Academia", icon: GraduationCap, path: "/academia" },
           ],
         },
       ];
@@ -222,6 +226,7 @@ export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {
             { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
             { label: "Reuniones", icon: VideoIcon, path: "/reuniones", mobile: true },
             { label: "Mis ganancias", icon: HandCoins, path: "/mis-ganancias" },
+            { label: "Academia", icon: GraduationCap, path: "/academia" },
           ],
         },
       ];

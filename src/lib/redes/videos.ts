@@ -429,9 +429,24 @@ export async function entregarEdicion(video: Video, project: Project | undefined
   });
 }
 
+/** En capacitación: en vez de mandarlo al cliente, le pide al supervisor (admin) que lo revise. */
+export async function pedirRevisionSupervisor(video: Video, project: Project | undefined, by: string, nombre: string, supervisores: string[]) {
+  await actualizarVideo(video.id, { revision_supervisor: { por: by, por_nombre: nombre, at: new Date().toISOString() } }, by, "Pidió revisión al supervisor (en capacitación)");
+  void avisar({
+    destinatarios: supervisores,
+    titulo: `${nombre.split(" ")[0] || "Alguien"} pide que revises un video`,
+    cuerpo: `${project?.nombre ?? "Cliente"} · ${video.titulo} (está en capacitación)`,
+    link: linkPara("/videos", video.id),
+    clave: `revision_supervisor:${video.id}`,
+    proyectoId: video.proyecto_id,
+    videoId: video.id,
+  });
+}
+
 /** Producción aprueba → va al cliente. */
 export async function aprobarInterno(video: Video, project: Project | undefined, by: string) {
   await moverA(video, "revision_cliente", by, "Aprobado por producción, enviado al cliente", {
+    revision_supervisor: null,
     feedback_interno: null,
     feedback_marcas: null,
     // Nueva versión para el cliente: los recordatorios de 48 h arrancan de cero.

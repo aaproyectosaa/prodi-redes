@@ -31,6 +31,7 @@ import {
   TrendingUp,
   Users,
   X,
+  GraduationCap,
 } from "lucide-react";
 import { toast } from "sonner";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
@@ -67,6 +68,7 @@ import {
   actualizarVideo,
   aprobarCliente,
   aprobarInterno,
+  pedirRevisionSupervisor,
   deshacerAprobacionInterna,
   eliminarVideo,
   entregarEdicion,
@@ -231,7 +233,7 @@ function MediaPanel({
 }
 
 function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) {
-  const { role, user, tieneRol } = useUserProfileContext();
+  const { role, user, tieneRol, profile } = useUserProfileContext();
   const { profiles } = useAppData();
   const { clienteById, rodajes, settings } = useRedes();
   const uid = user?.uid ?? "";
@@ -239,6 +241,8 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
   const rodaje = video.rodaje_id ? rodajes.find((r) => r.id === video.rodaje_id) : undefined;
 
   const isAdmin = role === "admin";
+  // Academia: en capacitación, sus videos los aprueba un supervisor antes de que le lleguen al cliente.
+  const enCapacitacion = !isAdmin && !!profile?.en_capacitacion;
   const isProd = isAdmin || tieneRol("productor");
   const isEditor = isAdmin || tieneRol("editor");
   const isPauta = isAdmin || tieneRol("pauta");
@@ -675,16 +679,34 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
             <Button variant="outline" onClick={() => setNotaOpen("interno")}>
               Pedir cambios
             </Button>
-            <Button
-              className={primario}
-              disabled={busy === "aprobar"}
-              onClick={() =>
-                run("aprobar", () => aprobarInterno(video, cliente, uid), "Enviado al cliente para aprobar")
-              }
-            >
-              {busy === "aprobar" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
-              Aprobar y mandar al cliente
-            </Button>
+            {enCapacitacion ? (
+              <Button
+                className={primario}
+                disabled={busy === "aprobar" || !!video.revision_supervisor}
+                onClick={() =>
+                  run(
+                    "aprobar",
+                    () => pedirRevisionSupervisor(video, cliente, uid, profile?.nombre ?? "", profiles.filter((p) => p.role === "admin").map((p) => p.id)),
+                    "Listo: el supervisor lo revisa y lo manda al cliente"
+                  )
+                }
+                title="Estás en capacitación: un supervisor revisa el video antes de que le llegue al cliente"
+              >
+                {busy === "aprobar" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <GraduationCap className="mr-2 h-4 w-4" />}
+                {video.revision_supervisor ? "Esperando al supervisor" : "Pedir revisión al supervisor"}
+              </Button>
+            ) : (
+              <Button
+                className={primario}
+                disabled={busy === "aprobar"}
+                onClick={() =>
+                  run("aprobar", () => aprobarInterno(video, cliente, uid), "Enviado al cliente para aprobar")
+                }
+              >
+                {busy === "aprobar" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                {video.revision_supervisor && isAdmin ? `Aprobar (lo pidió ${video.revision_supervisor.por_nombre.split(" ")[0]}) y mandar al cliente` : "Aprobar y mandar al cliente"}
+              </Button>
+            )}
           </>
         )}
 

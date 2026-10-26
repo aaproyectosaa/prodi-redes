@@ -26,6 +26,12 @@ export interface Contexto {
 }
 
 const TEAM = ["admin", "productor", "editor", "pauta", "diseno"];
+
+/** ¿Está en capacitación (Academia)? Sus videos los aprueba un supervisor antes de llegar al cliente. */
+async function enCapacitacion(c: Contexto): Promise<boolean> {
+  const r = await c.ex.query("select data->>'en_capacitacion' as v from documentos where coleccion = 'profiles' and id = $1", [c.uid]);
+  return r.rows[0]?.v === "true";
+}
 const ACTIVOS = [...TEAM, "administracion", "programador", "cliente"];
 
 /**
@@ -430,6 +436,8 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
     case "crm_galeria": // sus fotos y videos para mandar (las escribe el servidor al subirlas)
     case "crm_ideas": // lo que más preguntan sus contactos (lo escribe el servidor)
       return equipoDe(c, d.proyecto_id) || clienteDe(c, d.proyecto_id);
+    case "academia": // progreso de la Academia: cada uno el suyo (el admin, todos)
+      return esAdmin(c) || c.uid === id;
     case "prodi_pedidos": // pedidos a @prodi (límite por minuto): solo el servidor
     case "whatsapp_verifications": // código de verificación (hasheado): solo lo usa el servidor
     case "notification_queue":
@@ -512,7 +520,7 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       if (crea) return c.uid === id && despues!.role === "pending" && despues!.roles_extra == null;
       return (
         esAdmin(c) ||
-        (c.uid === id && !tocaAlguna(antes, despues, ["role", "roles_extra", "dashboard_access", "project_permissions", "activo", "email", "proyecto_id", "socio"]))
+        (c.uid === id && !tocaAlguna(antes, despues, ["role", "roles_extra", "dashboard_access", "project_permissions", "activo", "email", "proyecto_id", "socio", "en_capacitacion"]))
       );
     case "projects":
       if (crea || borra) return esAdmin(c);
@@ -531,6 +539,8 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       if (crea) return produceEn(c, despues!.proyecto_id);
       if (borra) return produceEn(c, antes!.proyecto_id);
       if (!esAdmin(c) && tocaAlguna(antes, despues, ["proyecto_id", "extra", "created_by", "pedido_cliente"])) return false;
+      // Academia: quien está en capacitación no le manda videos al cliente; lo aprueba un supervisor (el admin).
+      if (!esAdmin(c) && despues?.etapa === "revision_cliente" && antes?.etapa !== "revision_cliente" && (await enCapacitacion(c))) return false;
       return equipoDe(c, antes!.proyecto_id) && equipoDe(c, despues!.proyecto_id);
     case "rodajes":
       if (crea && !esAdmin(c) && (await enPausa(c, despues!.proyecto_id))) return false;
@@ -719,6 +729,10 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       if (antes && despues && antes.proyecto_id !== despues.proyecto_id) return false;
       return equipoDe(c, pid) || clienteDe(c, pid);
     }
+    case "academia":
+      // Cada uno marca sus lecciones (solo eso); el admin puede reiniciarlo.
+      if (esAdmin(c)) return true;
+      return c.uid === id && !borra && soloCambia(antes, despues, ["completadas", "actualizado_at"]);
     case "crm_galeria": // se cargan por /api/drive/crm-archivo; desde la app solo se borran
       return !despues && (equipoDe(c, antes!.proyecto_id) || clienteDe(c, antes!.proyecto_id));
     case "presupuestos": // los arma el admin (o ventas); lo aceptado lo escribe el servidor
