@@ -19,8 +19,8 @@
 // POST /api/web/meta-conectar     (admin) suscribe la página de Prodi y trae los formularios de 30 días
 // POST /api/web/manual    { negocio, nombre?, email?, telefono?, instagram?, ubicacion?, rubro?, fuente?, notas?, estado? } → { id }  (lead cargado a mano)
 // POST /api/web/crm-espera { nombre, negocio, email, telefono?, plan, rubro? } → { ok }  (pública: lista de espera del CRM en somosprodi.com)
-// GET  /api/web/precios   → { planes: [{ id, nombre, neto, iva, comision, monto, … }] }  (pública: desglose para comprar)
-// POST /api/web/comprar   { plan, nombre, negocio, email, email_mp?, telefono, instagram?, cuit?, ref? } → { init_point }
+// GET  /api/web/precios   → { planes: [con factura], sin_factura: [sin IVA] } con { id, nombre, neto, iva, comision, monto, … }
+// POST /api/web/comprar   { plan, factura (true/false), nombre, negocio, email, email_mp?, telefono, instagram?, cuit?, ref? } → { init_point }
 //      (pública: compra de un plan con débito automático; el alta del cliente la hace el webhook, ver api/_lib/alta-web.ts)
 // Socios comerciales (ver api/_lib/socios.ts):
 // POST /api/web/aplicar acepta `ref` (código del socio que guardó la landing): el lead entra con origen "socio".
@@ -322,10 +322,11 @@ const FUENTES = ["Recomendación", "WhatsApp", "Instagram", "Llamada", "Evento",
 // Planes del CRM que se muestran en somosprodi.com (acceso anticipado).
 const PLANES_CRM: Record<string, string> = { inicial: "Inicial · hasta 2 usuarios", equipo: "Equipo · hasta 5 usuarios", empresa: "Empresa · hasta 15 usuarios" };
 
-/** Precios de los planes que se compran en la web: neto + IVA + comisión del débito automático (para el desglose). */
+/** Precios de los planes que se compran en la web, con y sin factura: neto + IVA + comisión del débito automático. */
 async function precios() {
-  const lista = await Promise.all(Object.keys(PLANES_WEB).map((id) => precioPlanWeb(id)));
-  return { planes: lista.filter(Boolean) };
+  const ids = Object.keys(PLANES_WEB);
+  const [con, sin] = await Promise.all([Promise.all(ids.map((id) => precioPlanWeb(id, true))), Promise.all(ids.map((id) => precioPlanWeb(id, false)))]);
+  return { planes: con.filter(Boolean), sin_factura: sin.filter(Boolean) };
 }
 
 /**
@@ -342,7 +343,9 @@ async function comprar(req: VercelRequest) {
   const telefono = texto(b.telefono, 40);
   const cuit = texto(b.cuit, 20).replace(/[^0-9]/g, "");
   const MAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-  const precio = await precioPlanWeb(planId);
+  // Con factura (por defecto) se suma el IVA; sin factura va como boleta, sin IVA.
+  const factura = b.factura !== false;
+  const precio = await precioPlanWeb(planId, factura);
   if (!precio) throw new HttpError(400, "Elegí un plan");
   if (nombre.length < 2 || negocio.length < 2) throw new HttpError(400, "Completá tu nombre y el de tu negocio");
   if (!MAIL.test(email)) throw new HttpError(400, "Revisá el email");
@@ -423,7 +426,8 @@ async function comprar(req: VercelRequest) {
     ...(emailMp ? { email_mp: emailMp } : {}),
     telefono,
     instagram: texto(b.instagram, 120),
-    ...(cuit ? { cuit } : {}),
+    factura,
+    ...(cuit && factura ? { cuit } : {}),
     lead_id: leadId,
     neto: precio.neto,
     iva: precio.iva,

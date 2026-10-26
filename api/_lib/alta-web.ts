@@ -20,20 +20,23 @@ import { hoyAR } from "./fecha";
 /** Planes de Redes que se venden en somosprodi.com (precio neto por mes, sin IVA). Igual que src/data/sitio.js de la web. */
 export const PLANES_WEB: Record<string, { nombre: string; neto: number; videos: number; piezas: number }> = {
   esencial: { nombre: "Esencial", neto: 450000, videos: 4, piezas: 4 },
-  crecimiento: { nombre: "Crecimiento", neto: 600000, videos: 8, piezas: 10 },
-  completa: { nombre: "Campaña completa", neto: 750000, videos: 12, piezas: 20 },
+  crecimiento: { nombre: "Crecimiento", neto: 600000, videos: 8, piezas: 6 },
+  completa: { nombre: "Campaña completa", neto: 750000, videos: 12, piezas: 8 },
 };
 
-/** Lo que paga por mes: plan + IVA + comisión de Mercado Pago del débito automático (mismo cálculo que el abono). */
-export async function precioPlanWeb(planId: string) {
+/**
+ * Lo que paga por mes: plan + IVA (si pide factura; sin factura va como boleta, sin IVA) + comisión de Mercado Pago del
+ * débito automático. Mismo cálculo que el abono (totalMensual + montoDebito).
+ */
+export async function precioPlanWeb(planId: string, factura = true) {
   const plan = PLANES_WEB[planId];
   if (!plan) return null;
   const s = (await adminDb().collection("app_settings").doc("redes").get()).data() ?? {};
   const ivaPct = Number(s.iva_pct ?? 21);
-  const total = totalMensual({ abono: plan.neto, facturacion: { tipo: "factura" } } as Parameters<typeof totalMensual>[0], ivaPct);
+  const total = totalMensual({ abono: plan.neto, facturacion: { tipo: factura ? "factura" : "boleta" } } as Parameters<typeof totalMensual>[0], ivaPct);
   const comision_pct = comisionPct(s.comision_mp_pct);
   const monto = montoDebito(total, comision_pct);
-  return { ...plan, id: planId, iva_pct: ivaPct, iva: Math.round(total - plan.neto), total, comision_pct, comision: Math.round(monto - total), monto };
+  return { ...plan, id: planId, factura, iva_pct: ivaPct, iva: Math.round(total - plan.neto), total, comision_pct, comision: Math.round(monto - total), monto };
 }
 
 const ars = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n || 0);
@@ -102,7 +105,7 @@ export async function completarAlta(altaId: string, s: { id: string; status: str
       plan_redes_override: { precio_mensual: Number(a.neto), ...(plan ? { videos_mes: plan.videos, piezas_mes: plan.piezas } : {}), nombre: plan?.nombre ?? null },
       team_roles: { productor: [], editor: [], pauta: [], diseno: [], cliente: [uid] },
       contacto_emails: [email],
-      facturacion: { tipo: "factura", ...(a.cuit ? { cuit: a.cuit } : {}) },
+      facturacion: { tipo: a.factura === false ? "boleta" : "factura", ...(a.cuit ? { cuit: a.cuit } : {}) },
       alta: hoyAR(),
       origen: "somosprodi.com",
       alta_web_id: altaId,
@@ -155,7 +158,7 @@ export async function completarAlta(altaId: string, s: { id: string; status: str
   // 5. Aviso a los admins para asignarle el equipo.
   await avisar(
     `🎉 Nuevo cliente desde la web: ${a.negocio}`,
-    `Contrató el plan ${plan?.nombre ?? a.plan} (${ars(Number(a.neto))} + IVA) con débito automático. Asignale el equipo para arrancar.`,
+    `Contrató el plan ${plan?.nombre ?? a.plan} (${ars(Number(a.neto))} ${a.factura === false ? "sin factura" : "+ IVA, con factura"}) con débito automático. Asignale el equipo para arrancar.`,
     `/clientes/${pid}`,
     `alta_web:${altaId}`,
     pid
