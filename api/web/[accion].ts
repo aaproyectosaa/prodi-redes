@@ -483,6 +483,15 @@ async function socioCliente(req: VercelRequest) {
   if (socioId && !(await listarSocios()).some((s) => s.uid === socioId)) throw new HttpError(404, "No encontramos ese socio");
   const fecha = /^\d{4}-\d{2}-\d{2}$/.test(String(b.socio_alta ?? "")) ? String(b.socio_alta) : null;
   const d = p.data() ?? {};
+  // La comisión es solo por clientes NUEVOS que trae el socio: no se le asigna un cliente que ya era de Prodi
+  // antes de que fuera socio (dado de alta antes de que se creara su usuario).
+  if (socioId && socioId !== d.socio_id) {
+    const perfil = (await adminDb().collection("profiles").doc(socioId).get()).data() ?? {};
+    const altaCliente = String(d.alta ?? d.created_at ?? "").slice(0, 10);
+    const desdeSocio = String(perfil.created_at ?? "").slice(0, 10);
+    if (altaCliente && desdeSocio && altaCliente < desdeSocio)
+      throw new HttpError(409, `${d.nombre ?? "Este cliente"} ya era cliente de Prodi antes de que ${perfil.nombre ?? "este socio"} fuera socio: la comisión es solo por clientes nuevos.`);
+  }
   await ref.update({
     socio_id: socioId,
     socio_alta: socioId ? fecha ?? d.socio_alta ?? String(d.alta ?? d.created_at ?? "").slice(0, 10) ?? null : null,

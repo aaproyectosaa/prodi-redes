@@ -39,7 +39,7 @@ export function TraidoPorCliente({ cliente }: { cliente: Project }) {
   const actual = socios.find((s) => s.uid === cliente.socio_id);
 
   return (
-    <Section title="Traído por" description="El socio comercial que trajo este cliente: cobra comisión de sus abonos desde el alta.">
+    <Section title="Traído por" description="El socio comercial que trajo este cliente: cobra comisión de sus abonos desde el alta. Solo clientes nuevos (no los que ya eran de Prodi).">
       <div className="space-y-3 rounded-xl border bg-card p-4">
         <div className="flex items-center gap-2">
           <Handshake className="h-4 w-4 shrink-0 text-[#6F40FC]" />
