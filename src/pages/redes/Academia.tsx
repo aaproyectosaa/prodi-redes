@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -59,6 +59,38 @@ function Anillo({ hechas, total, tam = 88, grosor = 9, className }: { hechas: nu
         </defs>
       </svg>
       <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">{Math.round(pct * 100)}%</span>
+    </div>
+  );
+}
+
+/** Video de la lección: entra entero en la pantalla y arranca con un botón grande de play. */
+function VideoLeccion({ src, poster }: { src: string; poster?: string }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const [arranco, setArranco] = useState(false);
+  return (
+    <div className="relative mx-auto aspect-[9/16] h-[clamp(360px,calc(100vh-15rem),676px)] max-w-full overflow-hidden rounded-3xl border bg-black shadow-2xl shadow-primary/10">
+      <video
+        ref={ref}
+        src={src}
+        poster={poster}
+        controls={arranco}
+        playsInline
+        preload="metadata"
+        onPlay={() => setArranco(true)}
+        className="h-full w-full object-contain"
+      />
+      {!arranco && (
+        <button
+          type="button"
+          onClick={() => ref.current?.play()}
+          aria-label="Ver el video"
+          className="group absolute inset-0 flex items-center justify-center bg-black/10"
+        >
+          <span className="flex h-20 w-20 items-center justify-center rounded-full bg-white/95 text-primary shadow-xl transition group-hover:scale-110">
+            <Play className="ml-1 h-9 w-9 fill-current" />
+          </span>
+        </button>
+      )}
     </div>
   );
 }
@@ -165,9 +197,7 @@ function VerLeccion({
         {/* Video */}
         <div className="lg:sticky lg:top-4 lg:self-start">
           {leccion.video ? (
-            <div className="mx-auto w-full max-w-[380px] overflow-hidden rounded-3xl border bg-black shadow-2xl shadow-primary/10">
-              <video key={leccion.video} src={leccion.video} poster={leccion.poster} controls playsInline preload="metadata" className="aspect-[9/16] w-full" />
-            </div>
+            <VideoLeccion key={leccion.video} src={leccion.video} poster={leccion.poster} />
           ) : (
             <div className={cn("mx-auto flex aspect-[9/16] w-full max-w-[380px] flex-col items-center justify-center gap-3 rounded-3xl bg-gradient-to-br p-8 text-center text-white", COLOR[curso.rol])}>
               <Sparkles className="h-10 w-10" />
