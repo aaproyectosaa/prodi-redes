@@ -37,8 +37,36 @@ export interface NumeroPauta {
   bueno: boolean;
 }
 
+/** Antes y después de aplicar un consejo: los 14 días previos contra los días desde que se aplicó. */
+export interface EfectoConsejo {
+  /** Sobre qué se midió: la campaña del consejo o toda la cuenta. */
+  medido: string;
+  dias_despues: number;
+  antes: { gasto: number; resultados: number; costo: number | null };
+  despues: { gasto: number; resultados: number; costo: number | null };
+}
+
+/** Un consejo que el equipo marcó como hecho (queda en el historial aunque la IA vuelva a analizar). */
+export interface ConsejoAplicado {
+  titulo: string;
+  accion: string;
+  tipo: SugerenciaPauta["tipo"];
+  sobre: SugerenciaPauta["sobre"];
+  at: string;
+  por?: string | null;
+  por_nombre: string;
+  efecto?: EfectoConsejo | null;
+  /** Lo que concluyó la IA: si funcionó, si no, o si todavía es pronto. */
+  veredicto?: "funciono" | "no_funciono" | "pronto" | null;
+  conclusion?: string | null;
+}
+
 export interface ConsejosPauta {
   proyecto_id: string;
+  /** Lo que ya se aplicó (con el antes y el después), del más nuevo al más viejo. */
+  aplicados?: ConsejoAplicado[];
+  /** Los "Hecho" de las sugerencias actuales, por índice (lo escribe /api/ia/pauta-hecho). */
+  hechos?: Record<string, { uid: string; nombre: string; at: string } | null>;
   /** Semáforo de cómo viene la cuenta. */
   estado?: "bien" | "regular" | "mal";
   /** Cómo viene la cuenta en una frase corta. */
@@ -55,6 +83,34 @@ export interface ConsejosPauta {
 }
 
 const VIGENCIA = 3 * 86_400_000;
+
+/** Antes y después de un consejo aplicado, con la pauta diaria. Si apunta a una campaña, se mide esa; si no, toda la cuenta. */
+function efectoDe(filas: any[], at: string, sobre: SugerenciaPauta["sobre"], hoy: string): EfectoConsejo {
+  const dia = at.slice(0, 10);
+  const nombre = sobre?.tipo === "campaña" ? sobre.nombre.trim().toLowerCase() : "";
+  const deCampania = nombre ? filas.filter((f) => String(f.campaign_name ?? "").toLowerCase().includes(nombre)) : [];
+  const usar = deCampania.length ? deCampania : filas;
+  const res = (f: any) => Number(f.mensajes || 0) + Number(f.compras || 0) + Number(f.leads || 0);
+  const tramo = (desde: string, hasta: string) => {
+    const t = usar.filter((f) => f.fecha >= desde && f.fecha <= hasta);
+    const gasto = t.reduce((a, f) => a + Number(f.gasto || 0), 0);
+    const resultados = t.reduce((a, f) => a + res(f), 0);
+    return { gasto: r2(gasto), resultados, costo: resultados ? r2(gasto / resultados) : null };
+  };
+  const finDespues = [sumarDias(dia, 13), hoy].sort()[0];
+  return {
+    medido: deCampania.length ? `la campaña "${sobre!.nombre}"` : "toda la cuenta",
+    dias_despues: Math.max(0, Math.round((Date.parse(hoy) - Date.parse(dia)) / 86_400_000) + 1),
+    antes: tramo(sumarDias(dia, -14), sumarDias(dia, -1)),
+    despues: tramo(dia, finDespues),
+  };
+}
+
+const textoEfecto = (e: EfectoConsejo, moneda: string) => {
+  const c = (x: { gasto: number; resultados: number; costo: number | null }) =>
+    `${x.resultados} resultados con ${x.gasto} ${moneda}${x.costo != null ? ` (${x.costo} ${moneda} c/u)` : ""}`;
+  return `medido en ${e.medido}: 14 días antes ${c(e.antes)} · después (${e.dias_despues} días) ${c(e.despues)}`;
+};
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /** La pauta de 90 días resumida para la IA: por campaña, por mes y las últimas semanas. */
@@ -116,6 +172,16 @@ export async function consejosPauta(caller: Caller, pid: string, rehacer: boolea
   ]);
   const p = proj.data() ?? {};
   const filas = snap.docs.map((d) => d.data());
+  // Lo que el equipo ya aplicó: los "Hecho" del análisis anterior pasan al historial (con su antes y después).
+  const nuevosAplicados: ConsejoAplicado[] = (previo?.sugerencias ?? []).flatMap((s, i) => {
+    const h = previo?.hechos?.[String(i)];
+    return h?.at ? [{ titulo: s.titulo, accion: s.accion ?? s.titulo, tipo: s.tipo, sobre: s.sobre ?? null, at: h.at, por: h.uid ?? null, por_nombre: h.nombre ?? "" }] : [];
+  });
+  const aplicados: ConsejoAplicado[] = [...nuevosAplicados, ...(previo?.aplicados ?? [])]
+    .filter((a, i, arr) => a.at >= sumarDias(hoy, -120) && arr.findIndex((x) => x.accion === a.accion && x.at === a.at) === i)
+    .sort((a, b) => b.at.localeCompare(a.at))
+    .slice(0, 15)
+    .map((a) => ({ ...a, efecto: efectoDe(filas, a.at, a.sobre, hoy) }));
   if (!filas.length) throw new HttpError(409, "Todavía no hay pauta de este cliente traída de Meta (cargá su cuenta publicitaria).");
   const memoria = (mem.data() ?? null) as MemoriaIA | null;
   const tope = Number(p.pauta_cliente?.monto ?? p.plan_redes_override?.pauta?.monto ?? 0) || null;
@@ -165,11 +231,21 @@ ${frecuencia.length ? `Frecuencia de los últimos 7 días por campaña: ${frecue
 ${resumenPauta(filas, hoy)}
 
 ${seg?.texto || "(No se pudieron leer los públicos, ubicaciones ni anuncios de esta cuenta.)"}
+${
+  aplicados.length
+    ? `
+Consejos que el equipo YA APLICÓ (no los repitas tal cual). Para cada uno está el antes y el después:
+${aplicados.map((a, i) => `${i + 1}. [${a.at.slice(0, 10)}, ${a.por_nombre || "el equipo"}] "${a.accion}" → ${textoEfecto(a.efecto!, moneda)}`).join("\n")}
+- En "aplicados" evaluá cada uno (por su número): funciono, no_funciono o pronto (si pasaron menos de 5 días o hay muy pocos datos), con una conclusión de una oración con el dato (ej. "Desde que se apagó, el mensaje bajó de 5,6 a 3,9 USD").
+- Si uno funcionó, construí sobre eso; si no funcionó, proponé otra cosa (no lo mismo).
+- Mencioná en el resumen lo más importante de lo aplicado.`
+    : ""
+}
 
 ${bench ? `${benchmarksTexto(bench, p)}
 Compará contra estos benchmarks cuando sirva para decir si un número es bueno o malo.` : ""}`;
 
-  const r = await generarJSON<{ estado?: string; titular?: string; numeros?: any[]; resumen?: string; sugerencias?: any[] }>(
+  const r = await generarJSON<{ estado?: string; titular?: string; numeros?: any[]; resumen?: string; sugerencias?: any[]; aplicados?: { numero?: number; veredicto?: string; conclusion?: string }[] }>(
     prompt,
     {
       type: "OBJECT",
@@ -190,6 +266,18 @@ Compará contra estos benchmarks cuando sirva para decir si un número es bueno 
           },
         },
         resumen: { type: "STRING" },
+        aplicados: {
+          type: "ARRAY",
+          items: {
+            type: "OBJECT",
+            properties: {
+              numero: { type: "INTEGER" },
+              veredicto: { type: "STRING", enum: ["funciono", "no_funciono", "pronto"] },
+              conclusion: { type: "STRING" },
+            },
+            required: ["numero", "veredicto", "conclusion"],
+          },
+        },
         sugerencias: {
           type: "ARRAY",
           items: {
@@ -232,6 +320,13 @@ Compará contra estos benchmarks cuando sirva para decir si un número es bueno 
       .filter((n) => n.etiqueta && n.valor)
       .slice(0, 4),
     resumen: String(r.resumen ?? "").trim().slice(0, 800),
+    // El historial de lo aplicado, con lo que concluyó la IA de cada uno.
+    aplicados: aplicados.map((a, i) => {
+      const v = (r.aplicados ?? []).find((x) => Number(x?.numero) === i + 1);
+      const veredicto = ["funciono", "no_funciono", "pronto"].includes(String(v?.veredicto)) ? (v!.veredicto as ConsejoAplicado["veredicto"]) : null;
+      return { ...a, veredicto, conclusion: v?.conclusion ? String(v.conclusion).trim().slice(0, 240) : null };
+    }),
+    hechos: {},
     sugerencias: (r.sugerencias ?? [])
       .map((s) => ({
         titulo: String(s?.titulo ?? "").trim().slice(0, 120),

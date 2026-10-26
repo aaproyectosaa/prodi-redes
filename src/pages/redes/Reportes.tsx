@@ -125,9 +125,14 @@ function ConsejosAplicados({ perfil, consejos }: { perfil: { id: string }; conse
   const { clientes } = useRedes();
   const suyos = new Set(clientes.filter((c) => (c.team_roles?.pauta ?? []).includes(perfil.id)).map((c) => c.id));
   const docs = consejos.filter((d) => suyos.has(d.proyecto_id));
-  const total = docs.reduce((a, d) => a + (d.sugerencias?.length ?? 0), 0);
+  // Los de ahora y los que ya pasaron al historial (al volver a analizar, los "Hecho" quedan como aplicados).
+  const aplicadosDe = (d: (typeof docs)[number]) => ((d as { aplicados?: { por?: string | null }[] }).aplicados ?? []);
+  const total = docs.reduce((a, d) => a + (d.sugerencias?.length ?? 0) + aplicadosDe(d).length, 0);
   if (!total) return null;
-  const hechos = docs.reduce((a, d) => a + Object.values(d.hechos ?? {}).filter((h) => h?.uid === perfil.id).length, 0);
+  const hechos = docs.reduce(
+    (a, d) => a + Object.values(d.hechos ?? {}).filter((h) => h?.uid === perfil.id).length + aplicadosDe(d).filter((x) => x.por === perfil.id).length,
+    0
+  );
   const pct = Math.round((hechos / total) * 100);
   return (
     <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-2.5 py-1.5 text-[11px]">

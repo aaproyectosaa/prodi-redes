@@ -67,6 +67,22 @@ interface Consejos {
   base?: { campanias: number; conjuntos: number; anuncios: number; gasto: number; moneda: string; leido: string[] };
   generado_at: string;
   hechos?: Hechos;
+  /** Lo que ya se aplicó, con el antes y el después y lo que concluyó la IA. */
+  aplicados?: Aplicado[];
+}
+interface Tramo {
+  gasto: number;
+  resultados: number;
+  costo: number | null;
+}
+interface Aplicado {
+  titulo: string;
+  accion: string;
+  at: string;
+  por_nombre: string;
+  efecto?: { medido: string; dias_despues: number; antes: Tramo; despues: Tramo } | null;
+  veredicto?: "funciono" | "no_funciono" | "pronto" | null;
+  conclusion?: string | null;
 }
 
 /** Ícono y texto de "a qué apunta" cada consejo. */
@@ -370,6 +386,8 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
             )}
           </div>
 
+          {!!datos.aplicados?.length && <LoAplicado aplicados={datos.aplicados} moneda={datos.base?.moneda ?? "ARS"} />}
+
           {/* Qué hacer ahora: agrupado por cuándo hacerlo; lo hecho baja a «Hechas». */}
           <div className="space-y-4">
             <div className="space-y-1.5">
@@ -478,6 +496,66 @@ export function ConsejosPauta({ proyectoId }: { proyectoId: string }) {
           }}
         />
       </div>
+    </div>
+  );
+}
+
+const VEREDICTO: Record<string, { label: string; clase: string }> = {
+  funciono: { label: "Funcionó", clase: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
+  no_funciono: { label: "No funcionó", clase: "bg-red-500/10 text-red-600 dark:text-red-400" },
+  pronto: { label: "Todavía es pronto", clase: "bg-muted text-muted-foreground" },
+};
+
+/** Lo que el equipo ya aplicó: el antes y el después (costo por resultado) y si funcionó, según la IA. */
+function LoAplicado({ aplicados, moneda }: { aplicados: Aplicado[]; moneda: string }) {
+  const [todos, setTodos] = useState(false);
+  const lista = todos ? aplicados : aplicados.slice(0, 3);
+  const costo = (t?: Tramo) => (t?.costo != null ? plata(t.costo, moneda) : t && t.gasto > 0 ? "sin resultados" : "—");
+  return (
+    <div className="space-y-2">
+      <p className="flex items-center gap-2 text-sm font-bold">
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+          <Check className="h-4 w-4" />
+        </span>
+        Lo que ya aplicaron
+      </p>
+      <ul className="space-y-1.5">
+        {lista.map((a, i) => {
+          const v = a.veredicto ? VEREDICTO[a.veredicto] : null;
+          const mejor = a.efecto && a.efecto.antes.costo != null && a.efecto.despues.costo != null ? a.efecto.despues.costo < a.efecto.antes.costo : null;
+          return (
+            <li key={`${a.at}-${i}`} className="rounded-xl border bg-card px-3.5 py-2.5">
+              <div className="flex flex-wrap items-start gap-2">
+                <p className="min-w-0 flex-1 text-sm font-semibold leading-snug">{a.accion || a.titulo}</p>
+                {v && <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold", v.clase)}>{v.label}</span>}
+              </div>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                {a.por_nombre ? `${a.por_nombre.split(" ")[0]} · ` : ""}
+                {new Date(a.at).toLocaleDateString("es-AR", { day: "numeric", month: "short" })}
+              </p>
+              {a.efecto && (
+                <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
+                  <span className="text-muted-foreground">Costo por resultado:</span>
+                  <span className="font-semibold tabular-nums">{costo(a.efecto.antes)}</span>
+                  <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                  <span className={cn("font-semibold tabular-nums", mejor === true && "text-emerald-600 dark:text-emerald-400", mejor === false && "text-red-600 dark:text-red-400")}>
+                    {costo(a.efecto.despues)}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    ({a.efecto.medido}, {a.efecto.dias_despues} {a.efecto.dias_despues === 1 ? "día" : "días"} después)
+                  </span>
+                </p>
+              )}
+              {a.conclusion && <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{a.conclusion}</p>}
+            </li>
+          );
+        })}
+      </ul>
+      {aplicados.length > 3 && (
+        <button type="button" onClick={() => setTodos(!todos)} className="text-xs font-medium text-primary">
+          {todos ? "Ver menos" : `Ver los ${aplicados.length}`}
+        </button>
+      )}
     </div>
   );
 }
