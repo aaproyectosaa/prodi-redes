@@ -320,7 +320,12 @@ async function actividad(req: VercelRequest) {
 const FUENTES = ["Recomendación", "WhatsApp", "Instagram", "Llamada", "Evento", "Cliente actual", "Lista de espera CRM", "Otro"];
 
 // Planes del CRM que se muestran en somosprodi.com (acceso anticipado).
-const PLANES_CRM: Record<string, string> = { inicial: "Inicial · hasta 2 usuarios", equipo: "Equipo · hasta 5 usuarios", empresa: "Empresa · hasta 15 usuarios" };
+const PLANES_CRM: Record<string, string> = {
+  inicial: "Inicial · USD 19 · hasta 2 personas",
+  equipo: "Equipo · USD 39 · hasta 5 personas",
+  empresa: "Empresa · USD 69 · hasta 15 personas",
+  medida: "A medida (integración con su ERP o sistema: armar presupuesto)",
+};
 
 /** Precios de los planes que se compran en la web, con y sin factura: neto + IVA + comisión del débito automático. */
 async function precios() {
