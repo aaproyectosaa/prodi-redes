@@ -32,6 +32,9 @@ const COMO_TRABAJA: Leccion = {
   id: "como-trabaja-prodi",
   titulo: "Cómo trabaja Prodi",
   resumen: "Qué vendemos, cómo es el mes de un cliente y el camino de cada video, de la idea a la publicación.",
+  video: "/academia/como-trabaja-prodi.mp4",
+  poster: "/academia/como-trabaja-prodi.jpg",
+  duracion: "0:20",
   puntos: [
     "Prodi hace videos verticales (Reels) para comercios y los pauta en Meta para que les escriban por WhatsApp y les compren.",
     "Cada cliente tiene un plan: una cantidad de videos por mes. A principio de mes se arma el plan con ideas y el cliente lo aprueba.",
@@ -79,6 +82,9 @@ export const CURSOS: Curso[] = [
         id: "antes-del-rodaje",
         titulo: "Antes del rodaje",
         resumen: "Qué pedirle al cliente y qué llevar para que el día de rodaje rinda.",
+        video: "/academia/antes-del-rodaje.mp4",
+        poster: "/academia/antes-del-rodaje.jpg",
+        duracion: "0:20",
         puntos: [
           "Confirmá el día y la hora con el cliente por el chat del sistema, y que el rodaje esté cargado en «Rodajes».",
           "Pedile que tenga listos los productos, el local ordenado y a la persona que va a hablar (si habla alguien).",
@@ -97,6 +103,9 @@ export const CURSOS: Curso[] = [
         id: "filmar-con-celular",
         titulo: "Filmar con el celular",
         resumen: "Luz, sonido y encuadre: lo básico que hace que un video se vea profesional.",
+        video: "/academia/filmar-con-celular.mp4",
+        poster: "/academia/filmar-con-celular.jpg",
+        duracion: "0:18",
         puntos: [
           "Luz: de frente o de costado, nunca la ventana atrás de la persona. Si es de noche, usá la luz de apoyo.",
           "Sonido: micrófono siempre que alguien hable. Un video con mal sonido se abandona más rápido que uno con mala imagen.",
@@ -114,6 +123,9 @@ export const CURSOS: Curso[] = [
         id: "despues-del-rodaje",
         titulo: "Después del rodaje",
         resumen: "Subir el material, «Ya lo filmé» y mandar a edición con fecha.",
+        video: "/academia/despues-del-rodaje.mp4",
+        poster: "/academia/despues-del-rodaje.jpg",
+        duracion: "0:13",
         puntos: [
           "Subí el material el mismo día, en el video que corresponde. Si filmaste algo que no estaba planificado, usá «Ya lo filmé».",
           "Al mandar a edición elegí para cuándo lo necesitás: la editora lo ve y el sistema le avisa el día antes.",
@@ -132,6 +144,9 @@ export const CURSOS: Curso[] = [
         id: "hablar-con-el-cliente",
         titulo: "Cómo hablarle al cliente",
         resumen: "El tono de Prodi y lo que no se hace.",
+        video: "/academia/hablar-con-el-cliente.mp4",
+        poster: "/academia/hablar-con-el-cliente.jpg",
+        duracion: "0:17",
         puntos: [
           "Cordial, claro y corto. Respondé el mismo día, aunque sea para decir «lo veo y te aviso».",
           "Siempre por el chat del sistema: así todo el equipo sabe qué se habló.",
@@ -157,6 +172,9 @@ export const CURSOS: Curso[] = [
         id: "edicion-que-vende",
         titulo: "Una edición que vende",
         resumen: "Ritmo, gancho y subtítulos.",
+        video: "/academia/edicion-que-vende.mp4",
+        poster: "/academia/edicion-que-vende.jpg",
+        duracion: "0:17",
         puntos: [
           "Los primeros 3 segundos son lo más importante: arrancá con la toma más fuerte, no con el logo.",
           "Ritmo: cortes cada 1 a 3 segundos, sin silencios largos.",
@@ -174,6 +192,9 @@ export const CURSOS: Curso[] = [
         id: "entregas",
         titulo: "Entregas y cambios",
         resumen: "Fecha de entrega, versión final y cómo tomar los cambios.",
+        video: "/academia/entregas.mp4",
+        poster: "/academia/entregas.jpg",
+        duracion: "0:16",
         puntos: [
           "Respetá la fecha de entrega que puso la productora: el sistema te avisa el día antes.",
           "Subí el video final en «Final» y tocá «Entregar para revisión».",
@@ -198,6 +219,9 @@ export const CURSOS: Curso[] = [
         id: "pauta-que-trae-mensajes",
         titulo: "Pauta que trae mensajes",
         resumen: "Objetivo, público y presupuesto.",
+        video: "/academia/pauta-que-trae-mensajes.mp4",
+        poster: "/academia/pauta-que-trae-mensajes.jpg",
+        duracion: "0:16",
         puntos: [
           "El objetivo casi siempre es mensajes por WhatsApp, no alcance ni likes.",
           "Público según la zona del comercio: no gastes en gente que no puede comprar.",
@@ -215,6 +239,9 @@ export const CURSOS: Curso[] = [
         id: "usar-el-sistema-pauta",
         titulo: "El módulo de Pauta",
         resumen: "Alertas, consejos de la IA y qué video vende.",
+        video: "/academia/usar-el-sistema-pauta.mp4",
+        poster: "/academia/usar-el-sistema-pauta.jpg",
+        duracion: "0:15",
         puntos: [
           "En «Pauta» ves cada cliente con su gasto del mes, alertas y consejos de la IA.",
           "Marcá como hechos los consejos que aplicás: el admin ve qué se aplicó.",
@@ -239,6 +266,9 @@ export const CURSOS: Curso[] = [
         id: "pieza-que-vende",
         titulo: "Una pieza que vende",
         resumen: "Una idea por pieza, producto grande y llamado claro.",
+        video: "/academia/pieza-que-vende.mp4",
+        poster: "/academia/pieza-que-vende.jpg",
+        duracion: "0:15",
         puntos: [
           "Una sola idea por pieza: si querés decir todo, no se entiende nada.",
           "Producto o precio grande; el texto, poco y legible en el celular.",
@@ -256,6 +286,9 @@ export const CURSOS: Curso[] = [
         id: "circuito-piezas",
         titulo: "El circuito de las piezas",
         resumen: "Igual que los videos: diseño → revisión de la productora → cliente.",
+        video: "/academia/circuito-piezas.mp4",
+        poster: "/academia/circuito-piezas.jpg",
+        duracion: "0:14",
         puntos: [
           "Cuando terminás, la pieza la revisa la productora: la aprueba (y le llega al cliente) o pide cambios.",
           "Los cambios del cliente vuelven a vos con su nota.",
