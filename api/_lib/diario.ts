@@ -1,6 +1,7 @@
 // Tareas diarias (cron): aviso al cliente el día antes del rodaje (o el mismo día si se agendó tarde),
 // y recordatorios al cliente que no aprobó un video o no respondió el plan del mes en 48 h.
 
+import { revisoresSinAdmin, supervisoresRevision } from "./revisores";
 import { FieldValue, type Data } from "./db";
 import { adminDb } from "./db";
 import { enviarAviso } from "./notify";
@@ -338,7 +339,7 @@ export async function recordatoriosEdicion(base: string): Promise<number> {
 
 /** Desde cuánto tiempo en revisión interna se empieza a avisar, y cada cuánto. */
 const INTERNO_CADA_MS = 2 * 3600_000;
-/** Al tercer aviso sin respuesta, también se enteran los admins. */
+/** Al tercer aviso sin respuesta, también se entera quien supervisa la revisión (no el admin). */
 const INTERNO_ESCALAR = 3;
 
 function horaAR(): number {
@@ -361,7 +362,7 @@ export async function recordatoriosRevisionInterna(base: string, o: { todoElDia?
   };
   const snap = await db.collection("videos").where("etapa", "==", "revision_interna").get();
   const proyectos = new Map<string, Data>();
-  let admins: string[] | null = null;
+  let supervisores: string[] | null = null;
   let enviados = 0;
   for (const d of snap.docs) {
     if (!vence(d.data())) continue;
@@ -379,7 +380,7 @@ export async function recordatoriosRevisionInterna(base: string, o: { todoElDia?
     const p = proyectos.get(pid)!;
     if (p.enabled === false) continue;
     const team = (p.team_roles ?? {}) as Record<string, string[]>;
-    const productores = v.productor_id ? [String(v.productor_id)] : (team.productor ?? []);
+    const productores = await revisoresSinAdmin(v.productor_id ? [String(v.productor_id)] : (team.productor ?? []));
     const horas = Math.max(2, Math.round((Date.now() - new Date(String(v.etapa_desde)).getTime()) / 3600_000));
     const cliente = String(p.nombre ?? "Cliente");
     await enviarAviso(
@@ -397,8 +398,8 @@ export async function recordatoriosRevisionInterna(base: string, o: { todoElDia?
       base
     );
     if (v.n >= INTERNO_ESCALAR) {
-      admins ??= (await db.collection("profiles").where("role", "==", "admin").get()).docs.filter((x) => x.data().activo !== false).map((x) => x.id);
-      const avisar = admins.filter((a) => !productores.includes(a));
+      supervisores ??= await supervisoresRevision();
+      const avisar = supervisores.filter((a) => !productores.includes(a));
       if (avisar.length)
         await enviarAviso(
           {
@@ -440,7 +441,7 @@ export async function recordatoriosRevisionInterna(base: string, o: { todoElDia?
     if (!proyectos.has(pid)) proyectos.set(pid, (await db.collection("projects").doc(pid).get()).data() ?? {});
     const p = proyectos.get(pid)!;
     if (p.enabled === false) continue;
-    const productores = ((p.team_roles ?? {}) as Record<string, string[]>).productor ?? [];
+    const productores = await revisoresSinAdmin(((p.team_roles ?? {}) as Record<string, string[]>).productor ?? []);
     const horas = Math.max(2, Math.round((Date.now() - new Date(String(v.revision_desde)).getTime()) / 3600_000));
     const cliente = String(p.nombre ?? "Cliente");
     const que = String(v.producto || v.pedido || "pieza").slice(0, 80);
@@ -457,8 +458,8 @@ export async function recordatoriosRevisionInterna(base: string, o: { todoElDia?
       base
     );
     if (v.n >= INTERNO_ESCALAR) {
-      admins ??= (await db.collection("profiles").where("role", "==", "admin").get()).docs.filter((x) => x.data().activo !== false).map((x) => x.id);
-      const avisar = admins.filter((a) => !productores.includes(a));
+      supervisores ??= await supervisoresRevision();
+      const avisar = supervisores.filter((a) => !productores.includes(a));
       if (avisar.length)
         await enviarAviso(
           {

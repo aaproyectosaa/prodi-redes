@@ -417,9 +417,8 @@ export async function entregarEdicion(video: Video, project: Project | undefined
     reentrega ? "Corrección entregada" : "Edición entregada"
   );
   void avisar({
-    destinatarios: video.productor_id
-      ? [video.productor_id]
-      : equipoDe(project, "productor"),
+    // Si el cliente no tiene productora, igual le llega a quien supervisa la revisión (lo resuelve el servidor).
+    destinatarios: video.productor_id ? [video.productor_id, "rol:revision"] : [...equipoDe(project, "productor"), "rol:revision"],
     titulo: reentrega ? "Corrección lista para revisar" : "Video listo para revisar",
     cuerpo: `${project?.nombre ?? "Cliente"} · ${video.titulo}`,
     link: linkPara("/videos", video.id),
@@ -429,8 +428,9 @@ export async function entregarEdicion(video: Video, project: Project | undefined
   });
 }
 
-/** En capacitación: en vez de mandarlo al cliente, le pide al supervisor (admin) que lo revise. */
+/** En capacitación: en vez de mandarlo al cliente, le pide a quien supervisa la revisión (marcado en Equipo) que lo revise. */
 export async function pedirRevisionSupervisor(video: Video, project: Project | undefined, by: string, nombre: string, supervisores: string[]) {
+  supervisores = [...supervisores, "rol:revision"];
   await actualizarVideo(video.id, { revision_supervisor: { por: by, por_nombre: nombre, at: new Date().toISOString() } }, by, "Pidió revisión al supervisor (en capacitación)");
   void avisar({
     destinatarios: supervisores,

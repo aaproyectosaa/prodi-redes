@@ -686,7 +686,7 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
                 onClick={() =>
                   run(
                     "aprobar",
-                    () => pedirRevisionSupervisor(video, cliente, uid, profile?.nombre ?? "", profiles.filter((p) => p.role === "admin").map((p) => p.id)),
+                    () => pedirRevisionSupervisor(video, cliente, uid, profile?.nombre ?? "", profiles.filter((p) => p.supervisa_revision && p.activo !== false).map((p) => p.id)),
                     "Listo: el supervisor lo revisa y lo manda al cliente"
                   )
                 }

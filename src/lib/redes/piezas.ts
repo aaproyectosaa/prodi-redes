@@ -279,7 +279,8 @@ export async function mandarARevision(pieza: PiezaIA, versionId: string | string
     historial: arrayUnion(evento(by, varias ? `Enviadas a revisión interna (${ids.length})` : reentrega ? "Corrección enviada a revisión interna" : "Enviada a revisión interna")),
   });
   void avisar({
-    destinatarios: equipoDe(project, "productor").filter((id) => id !== by),
+    // Si el cliente no tiene productora, igual le llega a quien supervisa la revisión (lo resuelve el servidor).
+    destinatarios: [...equipoDe(project, "productor").filter((id) => id !== by), "rol:revision"],
     titulo: reentrega ? "Corrección de pieza lista para revisar" : "Pieza lista para revisar",
     cuerpo: `${project?.nombre ?? "Cliente"} · ${formatoInfo(pieza.formato).label}: ${(pieza.producto || pieza.pedido).slice(0, 80)}`,
     link: `/piezas?pieza=${pieza.id}`,

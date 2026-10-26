@@ -71,6 +71,8 @@ export interface Profile {
   /** Cuándo el cliente vio (o cerró) la guía de bienvenida. */
   /** Socio comercial: su código de referido y la comisión que cargó el admin (sin % o sin meses no se calcula). */
   socio?: { codigo: string; comision_pct: number | null; meses: number | null } | null;
+  /** Supervisa la revisión interna: le llegan los videos y piezas para aprobar sin otra productora, lo atrasado y "pedir revisión". */
+  supervisa_revision?: boolean;
   guia_cliente_at?: string | null;
   /** Recorrido por la pantalla del cliente (dónde está cada cosa): cuándo lo terminó o salteó. */
   tour_cliente_at?: string | null;

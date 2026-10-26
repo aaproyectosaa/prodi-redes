@@ -101,7 +101,7 @@ async function crear(req: VercelRequest) {
 }
 
 async function editar(req: VercelRequest, adminUid: string) {
-  const b = body<{ uid?: string; nombre?: string; email?: string; rol?: string; roles_extra?: string[]; clientes?: string[]; socio?: unknown }>(req);
+  const b = body<{ uid?: string; nombre?: string; email?: string; rol?: string; roles_extra?: string[]; clientes?: string[]; socio?: unknown; supervisa_revision?: boolean }>(req);
   if (!b.uid) throw new HttpError(400, "Falta uid");
   if (b.uid === adminUid && b.rol && b.rol !== "admin") throw new HttpError(409, "No te podés sacar el rol de super admin a vos mismo");
   const ref = adminDb().collection("profiles").doc(b.uid);
@@ -123,6 +123,8 @@ async function editar(req: VercelRequest, adminUid: string) {
   // Roles adicionales: los que vienen (o los que tenía), siempre válidos para el rol principal.
   const extras = extrasValidos(rolFinal, b.roles_extra !== undefined ? b.roles_extra : prev.roles_extra);
   if (b.roles_extra !== undefined || patch.role) patch.roles_extra = extras;
+  // Supervisa la revisión interna (videos y piezas antes del cliente): solo producción, nunca el super admin.
+  if (b.supervisa_revision !== undefined) patch.supervisa_revision = !!b.supervisa_revision && rolFinal !== "admin" && [rolFinal, ...extras].includes("productor");
   // Socio comercial: su código y comisión (si deja de ser socio, la configuración queda guardada por si vuelve).
   if ((rolFinal === "socio" || extras.includes("socio")) && b.socio !== undefined) {
     patch.socio = await configValida(b.socio, b.uid);

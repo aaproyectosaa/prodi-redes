@@ -448,11 +448,14 @@ function UsuarioDialog({
   const [roles, setRoles] = useState<string[]>(["productor"]);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
+  /** Supervisa la revisión interna (solo producción). */
+  const [supervisa, setSupervisa] = useState(false);
   /** Socio comercial: su código de referido y la comisión (sin % o sin meses no se calcula). */
   const [socio, setSocio] = useState({ codigo: "", comision_pct: "", meses: "" });
 
   useEffect(() => {
     if (!persona) return;
+    setSupervisa(!!p?.supervisa_revision);
     setSocio({
       codigo: p?.socio?.codigo ?? "",
       comision_pct: p?.socio?.comision_pct != null ? String(p.socio.comision_pct) : "",
@@ -494,7 +497,16 @@ function UsuarioDialog({
         onClose();
         onCreado(`Entrá a ${window.location.origin}\nMail: ${email}\nContraseña: ${r.password}`);
       } else if (p) {
-        await callApi("/api/usuarios/editar", { uid: p.id, nombre, email, rol, roles_extra: extrasValidos, clientes: Array.from(sel), ...(esSocio ? { socio } : {}) });
+        await callApi("/api/usuarios/editar", {
+          uid: p.id,
+          nombre,
+          email,
+          rol,
+          roles_extra: extrasValidos,
+          clientes: Array.from(sel),
+          ...(esSocio ? { socio } : {}),
+          supervisa_revision: esProduccion && supervisa,
+        });
         toast.success("Usuario actualizado");
         onClose();
       }
@@ -519,6 +531,7 @@ function UsuarioDialog({
   const extrasValidos = ["admin", ...ROLES_ADICIONALES].includes(rol as never) ? ROLES_ADICIONALES.filter((r) => r !== rol && roles.includes(r)) : [];
   const usaClientes = ["productor", "editor", "pauta", "diseno", "cliente"].includes(rol) || extrasValidos.some((r) => r !== "administracion" && r !== "socio");
   const esSocio = rol === "socio" || extrasValidos.includes("socio");
+  const esProduccion = rol === "productor" || extrasValidos.includes("productor");
   const codigoOk = /^[a-z0-9][a-z0-9-]{2,29}$/.test(socio.codigo);
 
   return (
@@ -601,6 +614,17 @@ function UsuarioDialog({
               Usa solo Prodi Chat: no ve clientes, videos ni nada del sistema. Entra únicamente a los grupos donde lo sumes
               (en el chat: abrí el grupo → Sumar) y puede escribirle por privado a la gente de esos grupos.
             </p>
+          )}
+          {esProduccion && !nuevo && (
+            <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-muted/60 p-3.5">
+              <Checkbox checked={supervisa} onCheckedChange={(v) => setSupervisa(!!v)} className="mt-0.5" />
+              <span>
+                <span className="block text-sm font-semibold">Supervisa la revisión interna</span>
+                <span className="block text-[11px] leading-relaxed text-muted-foreground">
+                  Le llegan los videos y piezas para aprobar de los clientes sin otra productora, los que se atrasan y los pedidos de revisión de quien está en capacitación. El super admin nunca recibe estos avisos.
+                </span>
+              </span>
+            </label>
           )}
           {esSocio && (
             <div className="space-y-3 rounded-2xl bg-primary/5 p-3.5 ring-1 ring-inset ring-primary/20">

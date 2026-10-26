@@ -7,6 +7,7 @@ import { adminDb } from "./_lib/db";
 import { appUrl, body, HttpError, requireCaller, sendError, trabajaEn, type Caller } from "./_lib/http";
 import { disenadorasDe, enviarAviso, type AvisoServer } from "./_lib/notify";
 import { crearTokenAprobacion } from "./_lib/aprobacion";
+import { esAvisoDeRevision, revisoresSinAdmin, supervisoresRevision } from "./_lib/revisores";
 
 export const config = { maxDuration: 30 };
 
@@ -185,6 +186,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       globales.docs.forEach((d) => miembros.add(d.id));
       (await disenadorasDe(b.proyectoId)).forEach((id) => miembros.add(id));
       permitidos = destinatarios.filter((d) => miembros.has(d));
+    }
+    // Revisión interna (video o pieza para aprobar, o "pedir revisión" en capacitación): de producción, nunca del admin.
+    // En capacitación va a quien supervisa la revisión; si no hay nadie marcado, a la producción del cliente.
+    if (esAvisoDeRevision(clave)) {
+      if (clave.startsWith("revision_supervisor:")) {
+        const sup = await supervisoresRevision();
+        const p = b.proyectoId ? (await adminDb().collection("projects").doc(b.proyectoId).get()).data() : null;
+        permitidos = await revisoresSinAdmin(sup.length ? sup : ((p?.team_roles?.productor ?? []) as string[]));
+      } else permitidos = await revisoresSinAdmin(permitidos.length ? permitidos : destinatarios);
+      permitidos = permitidos.filter((id) => id !== caller.uid);
     }
     if (!permitidos.length) {
       res.status(200).json({ ok: true, enviados: 0 });
