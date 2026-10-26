@@ -40,7 +40,7 @@ export function PagosSocios({ mes }: { mes: string }) {
   };
 
   return (
-    <Section title="Socios comerciales" className="mt-10" description={`Comisión sobre lo cobrado en ${mesLabel(mes).split(" ")[0].toLowerCase()} de los clientes que trajeron (abono neto, sin IVA, pauta ni reintegros).`}>
+    <Section title="Vendedores" className="mt-10" description={`Comisión sobre lo cobrado en ${mesLabel(mes).split(" ")[0].toLowerCase()} de los clientes que trajeron (abono neto, sin IVA, pauta ni reintegros).`}>
       <ul className="divide-y overflow-hidden rounded-2xl border bg-card">
         {lista.map((s) => {
           const p = pagoDe(s.uid);
@@ -54,9 +54,9 @@ export function PagosSocios({ mes }: { mes: string }) {
                 <span className="block truncate font-semibold">{s.nombre}</span>
                 <span className="block truncate text-xs text-muted-foreground">
                   {s.sin_config ? (
-                    <b className="text-amber-600 dark:text-amber-400">Sin comisión cargada: no se calcula (Equipo)</b>
+                    <b className="text-amber-600 dark:text-amber-400">Sin comisión cargada: cargá la estándar en CRM → Vendedores</b>
                   ) : (
-                    `${s.config!.comision_pct}% de ${formatARS(s.base)} · ${s.lineas.length} abono${s.lineas.length === 1 ? "" : "s"}`
+                    `${s.vigente!.comision_pct}% de ${formatARS(s.base)} · ${s.lineas.length} abono${s.lineas.length === 1 ? "" : "s"}`
                   )}
                 </span>
               </span>

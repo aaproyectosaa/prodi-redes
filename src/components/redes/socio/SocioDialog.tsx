@@ -90,12 +90,12 @@ export function SocioDialog({ socio, open, onOpenChange, onListo }: { socio: Soc
           await callApi("/api/usuarios/editar", { uid: persona.id, roles_extra: extras, socio: config });
         } else await callApi("/api/usuarios/editar", { uid: persona.id, socio: config });
         setMensaje(
-          `¡Hola ${(persona.nombre ?? "").split(" ")[0]}! Ahora también sos socio comercial de Prodi 🤝\n\nEntrás con tu usuario de siempre. En el menú vas a ver «Mis empresarios»: ahí está tu link para compartir (somosprodi.com/?ref=${codigo}), el QR y un botón para cargar a los empresarios que entrevistes.`
+          `¡Hola ${(persona.nombre ?? "").split(" ")[0]}! Ahora también vendés para Prodi 🤝\n\nEntrás con tu usuario de siempre. En el menú vas a ver «Mis clientes»: tocás «Pasame un cliente», ponés nombre, empresa y teléfono, y nosotros lo llamamos. Si se hace cliente, ganás tu comisión.`
         );
       } else if (nuevo) {
         const r = await callApi<{ password: string }>("/api/usuarios/crear", { nombre: nombre.trim(), email: email.trim().toLowerCase(), rol: "socio", roles_extra: [], clientes: [], socio: config });
         setMensaje(
-          `¡Hola ${nombre.trim().split(" ")[0]}! Ya sos socio comercial de Prodi 🤝\n\nEntrá acá: ${window.location.origin}\nMail: ${email.trim().toLowerCase()}\nContraseña: ${r.password}\n\nAdentro tenés tu link para compartir (somosprodi.com/?ref=${codigo}), el QR y un botón para cargar a los empresarios que entrevistes.`
+          `¡Hola ${nombre.trim().split(" ")[0]}! Ya vendés para Prodi 🤝\n\nEntrá acá: ${window.location.origin}\nMail: ${email.trim().toLowerCase()}\nContraseña: ${r.password}\n\nAdentro tocás «Pasame un cliente», ponés nombre, empresa y teléfono, y nosotros lo llamamos. Si se hace cliente, ganás tu comisión.`
         );
       } else {
         await callApi("/api/usuarios/editar", { uid: socio!.uid, socio: config });
@@ -117,7 +117,7 @@ export function SocioDialog({ socio, open, onOpenChange, onListo }: { socio: Soc
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#6F40FC]/12 text-[#6F40FC]">
             <Handshake className="h-5 w-5" />
           </span>
-          <DialogTitle className="text-xl">{mensaje ? "¡Listo! Pasale sus datos" : nuevo ? "Nuevo socio comercial" : `Editar a ${socio?.nombre}`}</DialogTitle>
+          <DialogTitle className="text-xl">{mensaje ? "¡Listo! Pasale sus datos" : nuevo ? "Nuevo vendedor" : `Editar a ${socio?.nombre}`}</DialogTitle>
           {!mensaje && <DialogDescription>{nuevo ? "Se crea su cuenta: ve solo sus empresarios, su link y lo que gana." : "Su código y su comisión."}</DialogDescription>}
         </DialogHeader>
 
@@ -189,7 +189,7 @@ export function SocioDialog({ socio, open, onOpenChange, onListo }: { socio: Soc
                     ))}
                   {!candidatos.length && <li className="px-2.5 py-2 text-xs text-muted-foreground">No hay nadie del equipo para sumar.</li>}
                 </ul>
-                <p className="text-[11px] text-muted-foreground">Sigue entrando con su usuario de siempre: se le suma «Socio comercial» a lo que ya hace.</p>
+                <p className="text-[11px] text-muted-foreground">Sigue entrando con su usuario de siempre: se le suma «Vendedor» a lo que ya hace.</p>
               </div>
             )}
             {nuevo && modo === "nueva" && (
@@ -221,7 +221,7 @@ export function SocioDialog({ socio, open, onOpenChange, onListo }: { socio: Soc
                           Sumarle el rol
                         </Button>
                       ) : (
-                        <span className="shrink-0 font-semibold">{yaExiste.role === "socio" || (yaExiste.roles_extra ?? []).includes("socio") ? "Ya es socio" : "No se puede"}</span>
+                        <span className="shrink-0 font-semibold">{yaExiste.role === "socio" || (yaExiste.roles_extra ?? []).includes("socio") ? "Ya es vendedor" : "No se puede"}</span>
                       )}
                     </div>
                   )}
@@ -249,16 +249,16 @@ export function SocioDialog({ socio, open, onOpenChange, onListo }: { socio: Soc
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="sd-pct" className="text-xs font-semibold">Comisión (%)</Label>
-                <Input id="sd-pct" type="number" inputMode="decimal" min={0} max={100} value={pct} onChange={(e) => setPct(e.target.value)} placeholder="Ej: 10" className="h-11 rounded-xl" />
+                <Input id="sd-pct" type="number" inputMode="decimal" min={0} max={100} value={pct} onChange={(e) => setPct(e.target.value)} placeholder="Estándar" className="h-11 rounded-xl" />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="sd-meses" className="text-xs font-semibold">Durante (meses)</Label>
-                <Input id="sd-meses" type="number" inputMode="numeric" min={1} max={120} value={meses} onChange={(e) => setMeses(e.target.value)} placeholder="Ej: 12" className="h-11 rounded-xl" />
+                <Input id="sd-meses" type="number" inputMode="numeric" min={1} max={120} value={meses} onChange={(e) => setMeses(e.target.value)} placeholder="Estándar" className="h-11 rounded-xl" />
               </div>
             </div>
             <p className="text-[11px] leading-relaxed text-muted-foreground">
               Solo por clientes nuevos que traiga: sobre el abono neto cobrado (sin IVA, sin pauta ni reintegros), desde el alta de cada uno.
-              {(!pct || !meses) && <b className="text-amber-600 dark:text-amber-400"> Sin porcentaje y meses no se le calcula comisión.</b>}
+              {(!pct || !meses) && <b> Vacío = la comisión estándar.</b>}
             </p>
           </div>
         )}
@@ -267,7 +267,7 @@ export function SocioDialog({ socio, open, onOpenChange, onListo }: { socio: Soc
           <DialogFooter>
             <Button onClick={() => void guardar()} disabled={!ok || guardando} className="h-12 w-full rounded-2xl bg-[#6F40FC] font-semibold text-white hover:bg-[#5d32e6]">
               {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {!nuevo ? "Guardar" : modo === "existente" ? "Sumar como socio" : "Crear socio"}
+              {!nuevo ? "Guardar" : modo === "existente" ? "Sumar como vendedor" : "Crear vendedor"}
             </Button>
           </DialogFooter>
         )}

@@ -25,6 +25,7 @@ import {
   ListTodo, Inbox, Globe, Megaphone, FileText, Contact, Trophy, BookOpen, Handshake } from "lucide-react";
 import { servicioInfo, type IdServicio } from "@/lib/redes/servicios";
 import type { UserRole } from "@/integrations/firebase/types";
+import { getRoleInfo } from "@/lib/roles";
 
 export interface NavItem {
   label: string;
@@ -81,23 +82,27 @@ export function navSoftware(roles: UserRole[]): NavSection[] {
   ];
 }
 
-/** Menú del rol principal + lo que suman los roles adicionales (en una sección aparte, sin repetir). En Software, el suyo. */
+/** Menú del rol principal + un módulo por cada rol adicional (con su nombre, sin repetir lo que ya está). En Software, el suyo. */
 export function navForRoles(role: UserRole | undefined, roles: UserRole[] = [], empresa: "redes" | "software" = "redes", opciones: OpcionesNav = {}): NavSection[] {
   if (empresa === "software") return navSoftware(roles.length ? roles : role ? [role] : []);
   const base = navForRole(role, opciones);
   const ya = new Set(base.flatMap((s) => s.items.map((i) => i.path)));
-  const extra: NavItem[] = [];
+  const modulos: NavSection[] = [];
   for (const r of roles) {
     if (r === role) continue;
+    const items: NavItem[] = [];
     for (const s of navForRole(r))
       for (const i of s.items)
         if (!ya.has(i.path)) {
           ya.add(i.path);
           // En el celular la barra de abajo queda la del rol principal.
-          extra.push({ ...i, mobile: false });
+          items.push({ ...i, mobile: false });
         }
+    if (items.length) modulos.push({ title: getRoleInfo(r).label, items });
   }
-  return extra.length ? [...base, { title: "También", items: extra }] : base;
+  // Con más de un rol, lo del rol principal también va como módulo con su nombre (si no tenía título).
+  const conNombre = modulos.length && role ? base.map((sec, i) => (i === 0 && !sec.title ? { ...sec, title: getRoleInfo(role).label } : sec)) : base;
+  return [...conNombre, ...modulos];
 }
 
 export interface OpcionesNav {
@@ -128,7 +133,7 @@ export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {
           items: [
             { label: "Leads", icon: Globe, path: "/web" },
             { label: "Presupuestos", icon: FileText, path: "/presupuestos" },
-            { label: "Socios", icon: Handshake, path: "/socios" },
+            { label: "Vendedores", icon: Handshake, path: "/socios" },
           ],
         },
         {
@@ -241,7 +246,7 @@ export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {
       return [
         {
           items: [
-            { label: "Mis empresarios", icon: Handshake, path: "/socio", mobile: true },
+            { label: "Mis clientes", icon: Handshake, path: "/socio", mobile: true },
             { label: "Mis ganancias", icon: HandCoins, path: "/mis-ganancias", mobile: true },
           ],
         },

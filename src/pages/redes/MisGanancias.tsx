@@ -68,7 +68,7 @@ export default function MisGanancias() {
       <MisGananciasEquipo />
       {roles.includes("socio") && (
         <div className="mx-auto w-full max-w-5xl px-4 pb-24 md:px-8">
-          <Section title="Como socio comercial" description="Tu comisión por los clientes que trajiste.">
+          <Section title="Como vendedor" description="Tu comisión por los clientes que trajiste.">
             <GananciasSocio uid={user?.uid ?? ""} />
           </Section>
         </div>

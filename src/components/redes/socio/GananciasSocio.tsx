@@ -13,6 +13,7 @@ interface MesComision {
   mes: string;
   sin_config: boolean;
   config: { comision_pct: number | null; meses: number | null } | null;
+  vigente: { comision_pct: number; meses: number } | null;
   base: number;
   total: number;
   lineas: { factura_id: string; cliente: string; periodo: string; base: number; comision: number }[];
@@ -69,7 +70,7 @@ export function GananciasSocio({ uid }: { uid: string }) {
       {sinConfig && (
         <div className="rounded-2xl border border-dashed p-5 text-center">
           <HandCoins className="mx-auto h-7 w-7 text-muted-foreground" />
-          <p className="mt-2 font-semibold">Todavía falta cargar tu comisión</p>
+          <p className="mt-2 font-semibold">Todavía falta acordar tu comisión</p>
           <p className="text-sm text-muted-foreground">Cuando Prodi la cargue, acá vas a ver lo que ganás por cada cliente que traigas.</p>
         </div>
       )}
@@ -80,7 +81,7 @@ export function GananciasSocio({ uid }: { uid: string }) {
           </p>
           <p className="mt-1 text-4xl font-bold tabular-nums tracking-tight">{formatARS(pago(vencido)?.total_pagado ?? actual?.total ?? 0)}</p>
           <p className={cn("mt-1 text-xs", pago(vencido) ? "text-muted-foreground" : "text-white/60")}>
-            {actual?.config?.comision_pct}% de {formatARS(actual?.base ?? 0)} cobrados de tus clientes · {pago(vencido) ? `pagado el ${fechaCorta(pago(vencido)!.pagado_at ?? "")}` : `se paga en ${nombreMes(mesActual())}`}
+            {actual?.vigente?.comision_pct ?? meses[0]?.vigente?.comision_pct}% de {formatARS(actual?.base ?? 0)} cobrados de tus clientes · {pago(vencido) ? `pagado el ${fechaCorta(pago(vencido)!.pagado_at ?? "")}` : `se paga en ${nombreMes(mesActual())}`}
           </p>
         </div>
       )}

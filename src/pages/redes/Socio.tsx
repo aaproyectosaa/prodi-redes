@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import QRCode from "qrcode";
-import { CalendarCheck, Check, Copy, FileText, HandCoins, Loader2, MonitorPlay, Plus, Share2, Sparkles, Trophy, UserRoundPlus, XCircle } from "lucide-react";
+import { CalendarCheck, Check, ChevronDown, Copy, FileText, Loader2, MonitorPlay, Plus, QrCode, Share2, Sparkles, Trophy, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -10,13 +10,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { callApi } from "@/lib/redes/api";
+import { formatARS } from "@/lib/redes/format";
 import { enModoVista } from "@/lib/redes/vistaComo";
 import { cn } from "@/lib/utils";
 import { DemoPortalCliente } from "@/components/redes/socio/DemoPortalCliente";
 import { usePoppins } from "@/components/redes/socio/usePoppins";
 
-// Panel del socio comercial: su link (con QR) para compartir, cargar un empresario que entrevistó, cómo vienen sus
-// empresarios y una demo del portal del cliente para mostrarles. No ve nada más del sistema.
+// Panel del vendedor (socio comercial). Simple: una línea con cómo le va, un botón grande para pasar un cliente,
+// la demo para mostrar y sus clientes. El link con QR queda abajo, para el que lo quiera usar.
 
 interface LeadSocio {
   id: string;
@@ -32,15 +33,17 @@ interface Panel {
   codigo: string | null;
   link: string | null;
   leads: LeadSocio[];
+  ganado: number;
+  comision: { comision_pct: number; meses: number } | null;
 }
 
 const ESTADOS: Record<string, { label: string; icono: React.ElementType; clase: string }> = {
-  calificado: { label: "Calificado", icono: Sparkles, clase: "bg-[#6F40FC]/12 text-[#6F40FC] dark:text-[#a98bff]" },
-  no_califica: { label: "No califica", icono: XCircle, clase: "bg-muted text-muted-foreground" },
+  calificado: { label: "Lo estamos llamando", icono: Sparkles, clase: "bg-[#6F40FC]/12 text-[#6F40FC] dark:text-[#a98bff]" },
+  no_califica: { label: "No encaja", icono: XCircle, clase: "bg-muted text-muted-foreground" },
   reunion_agendada: { label: "Reunión", icono: CalendarCheck, clase: "bg-sky-500/12 text-sky-700 dark:text-sky-300" },
-  propuesta: { label: "Propuesta", icono: FileText, clase: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
-  ganado: { label: "Ganado", icono: Trophy, clase: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
-  perdido: { label: "Perdido", icono: XCircle, clase: "bg-red-500/10 text-red-600 dark:text-red-400" },
+  propuesta: { label: "Le mandamos propuesta", icono: FileText, clase: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
+  ganado: { label: "¡Es cliente!", icono: Trophy, clase: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
+  perdido: { label: "No se dio", icono: XCircle, clase: "bg-red-500/10 text-red-600 dark:text-red-400" },
 };
 const fecha = (iso: string) => (iso ? new Date(iso).toLocaleDateString("es-AR", { day: "numeric", month: "short" }) : "");
 
@@ -49,7 +52,7 @@ export default function Socio() {
   const { profile } = useUserProfileContext();
   const [panel, setPanel] = useState<Panel | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [cargar, setCargar] = useState(false);
+  const [pasar, setPasar] = useState(false);
   const [demo, setDemo] = useState(false);
 
   const traer = () =>
@@ -65,54 +68,65 @@ export default function Socio() {
 
   const nombre = (profile?.nombre ?? "").split(" ")[0];
   const leads = panel?.leads ?? [];
-  const ganados = leads.filter((l) => l.estado === "ganado").length;
-  const enCurso = leads.filter((l) => ["calificado", "reunion_agendada", "propuesta"].includes(l.estado)).length;
+  const clientes = leads.filter((l) => l.estado === "ganado").length;
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-5 px-4 pb-28 pt-5 font-[Poppins,Inter,sans-serif] md:pb-10">
-      <header className="space-y-1">
-        <p className="text-sm font-medium text-[#6F40FC] dark:text-[#a98bff]">Socio comercial · Prodi</p>
+    <div className="mx-auto w-full max-w-xl space-y-5 px-4 pb-28 pt-5 font-[Poppins,Inter,sans-serif] md:pb-10">
+      <header>
         <h1 className="text-[28px] font-bold leading-tight tracking-tight">Hola{nombre ? `, ${nombre}` : ""} 👋</h1>
-        <p className="text-sm text-muted-foreground">Compartí tu link o cargá a los empresarios que entrevistás.</p>
+        {/* Cómo le va, en una línea. */}
+        {panel ? (
+          <p className="mt-1 text-[15px] text-muted-foreground">
+            Me pasaste <b className="text-foreground">{leads.length}</b> · <b className="text-foreground">{clientes}</b> {clientes === 1 ? "ya es cliente" : "ya son clientes"} ·{" "}
+            <Link to="/mis-ganancias" className="font-semibold text-[#6F40FC] underline-offset-2 hover:underline dark:text-[#a98bff]">
+              ganaste {formatARS(panel.ganado)}
+            </Link>
+          </p>
+        ) : (
+          !error && <Loader2 className="mt-2 h-4 w-4 animate-spin text-muted-foreground" />
+        )}
       </header>
 
       {error && <p className="rounded-2xl bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
 
-      {/* Números. */}
-      <div className="grid grid-cols-3 gap-2.5">
-        <Numero valor={leads.length} label="Empresarios" />
-        <Numero valor={enCurso} label="En curso" />
-        <Numero valor={ganados} label="Clientes" destacado />
-      </div>
+      {/* Lo principal: pasar un cliente. */}
+      <button
+        type="button"
+        onClick={() => setPasar(true)}
+        className="flex w-full items-center gap-4 rounded-3xl bg-[#6F40FC] p-5 text-left text-white shadow-xl shadow-[#6F40FC]/30 transition-transform active:scale-[0.98]"
+      >
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/20">
+          <Plus className="h-7 w-7" />
+        </span>
+        <span>
+          <span className="block text-xl font-bold">Pasame un cliente</span>
+          <span className="block text-sm text-white/80">
+            Nombre, empresa y teléfono. {panel?.comision ? `Si se hace cliente, ganás el ${panel.comision.comision_pct}%.` : "Nosotros lo llamamos."}
+          </span>
+        </span>
+      </button>
 
-      <TuLink link={panel?.link ?? null} cargando={!panel && !error} />
+      <button
+        type="button"
+        onClick={() => setDemo(true)}
+        className="flex w-full items-center gap-3 rounded-2xl border bg-card p-4 text-left transition-colors hover:border-[#6F40FC]/40"
+      >
+        <MonitorPlay className="h-5 w-5 shrink-0 text-[#6F40FC]" />
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold">Mostrar la demo</span>
+          <span className="block text-xs text-muted-foreground">Cómo el cliente aprueba sus videos y ve sus resultados</span>
+        </span>
+      </button>
 
-      <div className="grid grid-cols-2 gap-2.5">
-        <Button onClick={() => setCargar(true)} className="h-auto flex-col gap-1.5 rounded-2xl bg-[#6F40FC] py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#6F40FC]/30 hover:bg-[#5d32e6]">
-          <UserRoundPlus className="h-5 w-5" /> Cargar empresario
-        </Button>
-        <Button variant="outline" onClick={() => setDemo(true)} className="h-auto flex-col gap-1.5 rounded-2xl py-3.5 text-sm font-semibold">
-          <MonitorPlay className="h-5 w-5" /> Mostrar demo
-        </Button>
-      </div>
-
-      {/* Sus empresarios. */}
+      {/* Sus clientes. */}
       <section className="space-y-2.5">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-lg font-bold">Tus empresarios</h2>
-          <Link to="/mis-ganancias" className="inline-flex items-center gap-1 text-sm font-medium text-[#6F40FC] dark:text-[#a98bff]">
-            <HandCoins className="h-4 w-4" /> Mis ganancias
-          </Link>
-        </div>
+        <h2 className="text-lg font-bold">Los que me pasaste</h2>
         {!panel && !error ? (
-          <div className="flex justify-center py-10">
+          <div className="flex justify-center py-8">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : leads.length === 0 ? (
-          <div className="rounded-3xl border border-dashed p-8 text-center">
-            <p className="font-semibold">Todavía no trajiste a nadie</p>
-            <p className="mt-1 text-sm text-muted-foreground">Compartí tu link o cargá al primero que entrevistes.</p>
-          </div>
+          <p className="rounded-3xl border border-dashed p-6 text-center text-sm text-muted-foreground">Todavía ninguno. Tocá «Pasame un cliente» y arrancamos.</p>
         ) : (
           <ul className="overflow-hidden rounded-3xl border bg-card">
             {leads.map((l) => {
@@ -122,7 +136,7 @@ export default function Socio() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold">{l.negocio}</p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {[l.nombre, l.rubro].filter(Boolean).join(" · ") || "—"} · {l.por_link ? "por tu link" : "cargado"} el {fecha(l.created_at)}
+                      {l.nombre || "—"} · {fecha(l.created_at)}
                     </p>
                   </div>
                   <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold", e.clase)}>
@@ -135,31 +149,26 @@ export default function Socio() {
         )}
       </section>
 
-      <CargarEmpresario open={cargar} onOpenChange={setCargar} onListo={() => void traer()} />
+      {/* El link con QR: para el que lo quiera usar (queda abajo, plegado). */}
+      <TuLink link={panel?.link ?? null} />
+
+      <PasarCliente open={pasar} onOpenChange={setPasar} onListo={() => void traer()} />
       <DemoPortalCliente open={demo} onOpenChange={setDemo} />
     </div>
   );
 }
 
-function Numero({ valor, label, destacado }: { valor: number; label: string; destacado?: boolean }) {
-  return (
-    <div className={cn("rounded-2xl border p-3 text-center", destacado ? "border-[#6F40FC]/30 bg-[#6F40FC]/8" : "bg-card")}>
-      <p className={cn("text-2xl font-bold tabular-nums", destacado && "text-[#6F40FC] dark:text-[#a98bff]")}>{valor}</p>
-      <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
-    </div>
-  );
-}
-
-/** Su link para compartir: copiar, compartir (WhatsApp, etc.) y el QR para mostrar en la entrevista. */
-function TuLink({ link, cargando }: { link: string | null; cargando: boolean }) {
+/** Su link para compartir (copiar, compartir y QR), plegado al final. */
+function TuLink({ link }: { link: string | null }) {
+  const [abierto, setAbierto] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
   useEffect(() => {
-    if (!link) return setQr(null);
+    if (!link || !abierto) return;
     void QRCode.toDataURL(link, { margin: 1, width: 360, color: { dark: "#0a0a0a", light: "#ffffff" } }).then(setQr, () => setQr(null));
-  }, [link]);
+  }, [link, abierto]);
+  if (!link) return null;
   const copiar = async () => {
-    if (!link) return;
     try {
       await navigator.clipboard.writeText(link);
       setCopiado(true);
@@ -169,48 +178,51 @@ function TuLink({ link, cargando }: { link: string | null; cargando: boolean }) 
     }
   };
   const compartir = async () => {
-    if (!link) return;
     const texto = `Conocé cómo Prodi te arma los videos y la publicidad de tu empresa: ${link}`;
     if (navigator.share) await navigator.share({ title: "Prodi", text: texto, url: link }).catch(() => undefined);
     else window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank", "noopener");
   };
   return (
-    <section className="relative overflow-hidden rounded-3xl bg-[#0a0a0a] p-5 text-white shadow-xl">
-      <span className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#6F40FC]/50 blur-3xl" aria-hidden />
-      <div className="relative space-y-4">
-        <div className="flex items-start gap-4">
-        <div className="min-w-0 flex-1 space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-white/60">Tu link</p>
-          {cargando ? (
-            <Loader2 className="h-5 w-5 animate-spin text-white/60" />
-          ) : link ? (
-            <p className="break-all text-[15px] font-semibold leading-snug">{link.replace(/^https?:\/\//, "")}</p>
-          ) : (
-            <p className="text-sm text-white/70">Todavía no tenés código. Pedíselo a Prodi.</p>
-          )}
+    <section className="overflow-hidden rounded-2xl border bg-card">
+      <button type="button" onClick={() => setAbierto(!abierto)} className="flex w-full items-center gap-3 p-4 text-left">
+        <QrCode className="h-5 w-5 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold">Mi link y QR</span>
+          <span className="block text-xs text-muted-foreground">Si alguien entra por acá y deja sus datos, queda como tuyo</span>
+        </span>
+        <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", abierto && "rotate-180")} />
+      </button>
+      {abierto && (
+        <div className="space-y-3 border-t p-4">
+          <div className="flex items-center gap-4">
+            <p className="min-w-0 flex-1 break-all text-sm font-semibold">{link.replace(/^https?:\/\//, "")}</p>
+            {qr && <img src={qr} alt="QR de tu link" className="h-24 w-24 shrink-0 rounded-xl border bg-white p-1" />}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="outline" onClick={() => void copiar()} className="h-11 rounded-full">
+              {copiado ? <Check className="mr-1.5 h-4 w-4" /> : <Copy className="mr-1.5 h-4 w-4" />} {copiado ? "Copiado" : "Copiar"}
+            </Button>
+            <Button onClick={() => void compartir()} className="h-11 rounded-full bg-[#6F40FC] text-white hover:bg-[#5d32e6]">
+              <Share2 className="mr-1.5 h-4 w-4" /> Compartir
+            </Button>
+          </div>
         </div>
-        {qr && <img src={qr} alt="QR de tu link" className="h-24 w-24 shrink-0 rounded-2xl bg-white p-1.5 sm:h-28 sm:w-28" />}
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Button onClick={() => void copiar()} disabled={!link} className="h-11 rounded-full bg-white text-[#0a0a0a] hover:bg-white/90">
-            {copiado ? <Check className="mr-1.5 h-4 w-4" /> : <Copy className="mr-1.5 h-4 w-4" />} {copiado ? "Copiado" : "Copiar"}
-          </Button>
-          <Button onClick={() => void compartir()} disabled={!link} className="h-11 rounded-full bg-[#6F40FC] text-white hover:bg-[#5d32e6]">
-            <Share2 className="mr-1.5 h-4 w-4" /> Compartir
-          </Button>
-        </div>
-      </div>
+      )}
     </section>
   );
 }
 
-/** Cargar a mano un empresario que entrevistó: entra al CRM de Prodi marcado como suyo. */
-function CargarEmpresario({ open, onOpenChange, onListo }: { open: boolean; onOpenChange: (v: boolean) => void; onListo: () => void }) {
-  const vacio = { nombre: "", negocio: "", rubro: "", telefono: "", nota: "" };
+/** Pasar un cliente: nombre, empresa y teléfono (la nota es opcional). Entra al CRM de Prodi como suyo. */
+function PasarCliente({ open, onOpenChange, onListo }: { open: boolean; onOpenChange: (v: boolean) => void; onListo: () => void }) {
+  const vacio = { nombre: "", negocio: "", telefono: "", nota: "" };
   const [d, setD] = useState(vacio);
+  const [conNota, setConNota] = useState(false);
   const [guardando, setGuardando] = useState(false);
   useEffect(() => {
-    if (open) setD(vacio);
+    if (open) {
+      setD(vacio);
+      setConNota(false);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   const ok = d.nombre.trim().length >= 2 && d.negocio.trim().length >= 2 && d.telefono.replace(/\D/g, "").length >= 8;
@@ -219,8 +231,8 @@ function CargarEmpresario({ open, onOpenChange, onListo }: { open: boolean; onOp
     setGuardando(true);
     try {
       const r = await callApi<{ id?: string; repetido?: boolean; tuyo?: boolean }>("/api/web/socio-cargar", d);
-      if (r.repetido) toast.info(r.tuyo ? "Ese empresario ya lo tenías cargado." : "Ese empresario ya estaba en Prodi: queda para quien lo trajo primero.");
-      else toast.success("¡Listo! Ya está en Prodi. Te avisamos cómo avanza.");
+      if (r.repetido) toast.info(r.tuyo ? "Ese ya me lo habías pasado." : "Ese ya estaba en Prodi: queda para quien lo pasó primero.");
+      else toast.success("¡Gracias! Lo llamamos y te vamos contando.");
       onOpenChange(false);
       onListo();
     } catch (e) {
@@ -231,39 +243,35 @@ function CargarEmpresario({ open, onOpenChange, onListo }: { open: boolean; onOp
   };
   const campo = (k: keyof typeof vacio, label: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
     <div className="space-y-1.5">
-      <Label htmlFor={`ce-${k}`} className="text-xs font-semibold">{label}</Label>
-      <Input id={`ce-${k}`} value={d[k]} onChange={(e) => setD((x) => ({ ...x, [k]: e.target.value }))} className="h-12 rounded-2xl text-[15px]" {...props} />
+      <Label htmlFor={`pc-${k}`} className="text-xs font-semibold">{label}</Label>
+      <Input id={`pc-${k}`} value={d[k]} onChange={(e) => setD((x) => ({ ...x, [k]: e.target.value }))} className="h-12 rounded-2xl text-[15px]" {...props} />
     </div>
   );
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md rounded-3xl font-[Poppins,Inter,sans-serif]">
         <DialogHeader className="text-left">
-          <DialogTitle className="text-xl">Cargar empresario</DialogTitle>
-          <DialogDescription>Entra a Prodi como tuyo. Te avisamos cuando avance.</DialogDescription>
+          <DialogTitle className="text-xl">Pasame un cliente</DialogTitle>
+          <DialogDescription>Nosotros lo llamamos y te avisamos cómo avanza.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           {campo("nombre", "Nombre", { placeholder: "Ej: Carlos Gómez", autoFocus: true })}
           {campo("negocio", "Empresa", { placeholder: "Ej: Gómez Materiales" })}
-          <div className="grid grid-cols-2 gap-3">
-            {campo("rubro", "Rubro", { placeholder: "Ej: Corralón" })}
-            {campo("telefono", "Teléfono", { placeholder: "3482 123456", inputMode: "tel", type: "tel" })}
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="ce-nota" className="text-xs font-semibold">Nota de la entrevista</Label>
-            <Textarea id="ce-nota" rows={3} value={d.nota} onChange={(e) => setD((x) => ({ ...x, nota: e.target.value }))} placeholder="Qué le interesa, cuándo llamarlo…" className="rounded-2xl text-[15px]" />
-          </div>
+          {campo("telefono", "Teléfono", { placeholder: "3482 123456", inputMode: "tel", type: "tel" })}
+          {conNota ? (
+            <Textarea rows={3} value={d.nota} onChange={(e) => setD((x) => ({ ...x, nota: e.target.value }))} placeholder="Qué le interesa, cuándo llamarlo…" className="rounded-2xl text-[15px]" autoFocus />
+          ) : (
+            <button type="button" onClick={() => setConNota(true)} className="text-sm font-medium text-[#6F40FC] dark:text-[#a98bff]">
+              + Agregar una nota
+            </button>
+          )}
         </div>
         <DialogFooter>
           <Button onClick={() => void guardar()} disabled={!ok || guardando} className="h-12 w-full rounded-2xl bg-[#6F40FC] text-[15px] font-semibold text-white hover:bg-[#5d32e6]">
-            {guardando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />} Cargar
+            {guardando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Pasarlo
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
-
-/** Para otras pantallas: el estado de un lead del socio con su color. */
-export const estadoSocio = (e: string) => ESTADOS[e] ?? ESTADOS.calificado;
-export const useEstadosSocio = () => useMemo(() => ESTADOS, []);

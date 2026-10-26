@@ -306,10 +306,9 @@ export function bienvenidaDe(role: string | undefined, enChat: boolean): Diaposi
       ];
     case "socio":
       return [
-        { titulo: "Tu link para compartir", texto: "En tu panel está tu link y su QR. El empresario que entra por ahí y completa el formulario queda como tuyo.", anim: "chat-reenviar" },
-        { titulo: "Cargá a quien entrevistás", texto: "Tocá «Cargar empresario», poné sus datos y una nota. Entra a Prodi como tuyo.", anim: "pedir-video" },
-        { titulo: "Mostrales la demo", texto: "Con «Mostrar demo» les enseñás cómo aprueban sus videos por link y ven sus resultados.", anim: "aprobar" },
-        { titulo: "Tu comisión", texto: "Cuando uno de tus empresarios se hace cliente, ganás un porcentaje de lo que paga. Lo ves en «Mis ganancias».", anim: "pagos" },
+        { titulo: "Pasame un cliente", texto: "Tocá el botón violeta, poné nombre, empresa y teléfono. Nosotros lo llamamos.", anim: "pedir-video" },
+        { titulo: "Mostrales la demo", texto: "Con «Mostrar la demo» les enseñás cómo aprueban sus videos y ven sus resultados.", anim: "aprobar" },
+        { titulo: "Ganás cuando paga", texto: "Si se hace cliente, ganás un porcentaje de lo que paga. Lo ves en «Mis ganancias».", anim: "pagos" },
         avisos,
       ];
     case "administracion":

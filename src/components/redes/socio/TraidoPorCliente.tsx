@@ -39,7 +39,7 @@ export function TraidoPorCliente({ cliente }: { cliente: Project }) {
   const actual = socios.find((s) => s.uid === cliente.socio_id);
 
   return (
-    <Section title="Traído por" description="El socio comercial que trajo este cliente: cobra comisión de sus abonos desde el alta. Solo clientes nuevos (no los que ya eran de Prodi).">
+    <Section title="Traído por" description="El vendedor que trajo este cliente: cobra comisión de sus abonos desde el alta. Solo clientes nuevos (no los que ya eran de Prodi).">
       <div className="space-y-3 rounded-xl border bg-card p-4">
         <div className="flex items-center gap-2">
           <Handshake className="h-4 w-4 shrink-0 text-[#6F40FC]" />
@@ -48,10 +48,10 @@ export function TraidoPorCliente({ cliente }: { cliente: Project }) {
             onChange={(e) => void guardar({ socio_id: e.target.value || null })}
             disabled={guardando}
             className="h-10 min-w-0 flex-1 rounded-xl border bg-background px-3 text-sm"
-            aria-label="Socio comercial"
+            aria-label="Vendedor"
           >
             <option value="">Nadie (lo trajo Prodi)</option>
-            {cliente.socio_id && !actual && <option value={cliente.socio_id}>Socio (ya no está)</option>}
+            {cliente.socio_id && !actual && <option value={cliente.socio_id}>Vendedor (ya no está)</option>}
             {socios.map((s) => (
               <option key={s.uid} value={s.uid}>
                 {s.nombre}
