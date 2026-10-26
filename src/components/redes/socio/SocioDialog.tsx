@@ -18,7 +18,7 @@ import { callApi } from "@/lib/redes/api";
 export interface SocioEditable {
   uid: string;
   nombre: string;
-  config: { codigo: string; comision_pct: number | null; meses: number | null } | null;
+  config: { codigo: string; comision_pct: number | null; meses: number | null; modo?: "mensual" | "entrada" } | null;
 }
 
 const sugerirCodigo = (nombre: string) =>
@@ -45,6 +45,8 @@ export function SocioDialog({ socio, open, onOpenChange, onListo }: { socio: Soc
   const [codigo, setCodigo] = useState("");
   const [codigoTocado, setCodigoTocado] = useState(false);
   const [pct, setPct] = useState("");
+  /** Cada mes (un % de cada abono, los meses acordados) o premio de entrada (un % del primer abono, una vez). */
+  const [modoCom, setModoCom] = useState<"mensual" | "entrada">("mensual");
   const [meses, setMeses] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
@@ -57,6 +59,7 @@ export function SocioDialog({ socio, open, onOpenChange, onListo }: { socio: Soc
     setCodigo(socio?.config?.codigo ?? "");
     setCodigoTocado(!!socio);
     setPct(socio?.config?.comision_pct != null ? String(socio.config.comision_pct) : "");
+    setModoCom(socio?.config?.modo === "entrada" ? "entrada" : "mensual");
     setMeses(socio?.config?.meses != null ? String(socio.config.meses) : "");
     setMensaje(null);
     setCopiado(false);
@@ -77,11 +80,11 @@ export function SocioDialog({ socio, open, onOpenChange, onListo }: { socio: Soc
 
   const codigoOk = /^[a-z0-9][a-z0-9-]{2,29}$/.test(codigo);
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
-  const ok = codigoOk && (!nuevo || (modo === "existente" ? !!persona : nombre.trim().length >= 2 && emailOk && !yaExiste));
+  const ok = codigoOk && (modoCom === "mensual" || Number(pct) > 0) && (!nuevo || (modo === "existente" ? !!persona : nombre.trim().length >= 2 && emailOk && !yaExiste));
 
   const guardar = async () => {
     setGuardando(true);
-    const config = { codigo, comision_pct: pct, meses };
+    const config = { codigo, comision_pct: pct, meses: modoCom === "entrada" ? "" : meses, modo: modoCom };
     try {
       if (nuevo && modo === "existente" && persona) {
         // Ya tiene usuario: se le suma "Socio comercial" a sus roles (no se crea otra cuenta).
@@ -246,19 +249,47 @@ export function SocioDialog({ socio, open, onOpenChange, onListo }: { socio: Soc
                 {codigo && !codigoOk && <span className="text-destructive"> · mínimo 3 letras o números</span>}
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="sd-pct" className="text-xs font-semibold">Comisión (%)</Label>
-                <Input id="sd-pct" type="number" inputMode="decimal" min={0} max={100} value={pct} onChange={(e) => setPct(e.target.value)} placeholder="Estándar" className="h-11 rounded-xl" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="sd-meses" className="text-xs font-semibold">Durante (meses)</Label>
-                <Input id="sd-meses" type="number" inputMode="numeric" min={1} max={120} value={meses} onChange={(e) => setMeses(e.target.value)} placeholder="Estándar" className="h-11 rounded-xl" />
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Cómo cobra</Label>
+              <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted/60 p-1">
+                {(
+                  [
+                    { k: "mensual", label: "Cada mes", ayuda: "Ej: 10% × 12 meses" },
+                    { k: "entrada", label: "Premio de entrada", ayuda: "Ej: 50% del 1er mes" },
+                  ] as const
+                ).map((x) => (
+                  <button
+                    key={x.k}
+                    type="button"
+                    onClick={() => setModoCom(x.k)}
+                    className={cn("rounded-lg px-2 py-1.5 text-center transition-colors", modoCom === x.k ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}
+                  >
+                    <span className="block text-xs font-semibold">{x.label}</span>
+                    <span className="block text-[10px] text-muted-foreground">{x.ayuda}</span>
+                  </button>
+                ))}
               </div>
             </div>
+            {modoCom === "mensual" ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="sd-pct" className="text-xs font-semibold">Comisión (%)</Label>
+                  <Input id="sd-pct" type="number" inputMode="decimal" min={0} max={100} value={pct} onChange={(e) => setPct(e.target.value)} placeholder="Estándar" className="h-11 rounded-xl" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="sd-meses" className="text-xs font-semibold">Durante (meses)</Label>
+                  <Input id="sd-meses" type="number" inputMode="numeric" min={1} max={120} value={meses} onChange={(e) => setMeses(e.target.value)} placeholder="Estándar" className="h-11 rounded-xl" />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label htmlFor="sd-pct" className="text-xs font-semibold">% del primer abono</Label>
+                <Input id="sd-pct" type="number" inputMode="decimal" min={0} max={100} value={pct} onChange={(e) => setPct(e.target.value)} placeholder="Ej: 50" className="h-11 rounded-xl" />
+              </div>
+            )}
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Solo por clientes nuevos que traiga: sobre el abono neto cobrado (sin IVA, sin pauta ni reintegros), desde el alta de cada uno.
-              {(!pct || !meses) && <b> Vacío = la comisión estándar.</b>}
+              Solo por clientes nuevos que traiga, sobre el abono neto cobrado (sin IVA, sin pauta ni reintegros).
+              {modoCom === "mensual" ? (!pct || !meses) && <b> Vacío = la comisión estándar.</b> : " Se paga una vez, cuando el cliente paga su primer mes."}
             </p>
           </div>
         )}

@@ -56,7 +56,7 @@ export function PagosSocios({ mes }: { mes: string }) {
                   {s.sin_config ? (
                     <b className="text-amber-600 dark:text-amber-400">Sin comisión cargada: cargá la estándar en CRM → Vendedores</b>
                   ) : (
-                    `${s.vigente!.comision_pct}% de ${formatARS(s.base)} · ${s.lineas.length} abono${s.lineas.length === 1 ? "" : "s"}`
+                    `${s.vigente!.comision_pct}%${s.vigente!.modo === "entrada" ? " del primer abono" : ""} de ${formatARS(s.base)} · ${s.lineas.length} abono${s.lineas.length === 1 ? "" : "s"}`
                   )}
                 </span>
               </span>
