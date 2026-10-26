@@ -26,7 +26,7 @@ export async function urlArchivo(fileId: string): Promise<string> {
 
 /** Baja el archivo por el servidor de Prodi: le anda a todos los del chat (clientes y contactos incluidos). */
 async function descargar(a: ArchivoChat) {
-  await descargarArchivo(a.drive_file_id, a.name);
+  await descargarArchivo(a.drive_file_id, a.name, a.size);
 }
 
 // Los formatos que el navegador muestra y el servidor deja ver en línea (sin HEIC ni SVG).

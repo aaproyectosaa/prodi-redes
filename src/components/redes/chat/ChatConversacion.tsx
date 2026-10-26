@@ -1935,7 +1935,7 @@ export function ChatConversacion({
             ? () => {
                 const m = infoMsg;
                 setInfoMsg(null);
-                const bajar = m.audio ? descargarAudio(chat.id, m.audio, m.at) : descargarArchivo(m.archivo!.drive_file_id, m.archivo!.name);
+                const bajar = m.audio ? descargarAudio(chat.id, m.audio, m.at) : descargarArchivo(m.archivo!.drive_file_id, m.archivo!.name, m.archivo!.size);
                 void bajar.catch((err) => toast.error(err instanceof Error ? err.message : "No se pudo descargar"));
               }
             : undefined

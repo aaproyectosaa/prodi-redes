@@ -1,3 +1,4 @@
+import { guardarArchivo } from "@/lib/compartirArchivo";
 import { useEffect, useState } from "react";
 import {
   addDoc,
@@ -315,12 +316,8 @@ export async function descargarAudio(chatId: string, audio: { id: string; mime: 
   const ext = /ogg/.test(audio.mime) ? "ogg" : /mp4|m4a|aac/.test(audio.mime) ? "m4a" : /mpeg|mp3/.test(audio.mime) ? "mp3" : "webm";
   const f = at ? new Date(at) : new Date();
   const dos = (n: number) => String(n).padStart(2, "0");
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `audio-${f.getFullYear()}-${dos(f.getMonth() + 1)}-${dos(f.getDate())}-${dos(f.getHours())}${dos(f.getMinutes())}.${ext}`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  const blob = await (await fetch(url)).blob();
+  await guardarArchivo(blob, `audio-${f.getFullYear()}-${dos(f.getMonth() + 1)}-${dos(f.getDate())}-${dos(f.getHours())}${dos(f.getMinutes())}.${ext}`);
 }
 
 export async function marcarLeido(chat: Chat, uid: string) {

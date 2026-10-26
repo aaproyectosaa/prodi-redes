@@ -306,7 +306,7 @@ export function GaleriaChat({ chat, open, onOpenChange, onIr }: { chat: Chat; op
                       size="icon"
                       variant="ghost"
                       className="h-9 w-9 shrink-0 rounded-full"
-                      onClick={() => void descargarArchivo(m.archivo!.drive_file_id, m.archivo!.name).catch(() => toast.error("No se pudo bajar"))}
+                      onClick={() => void descargarArchivo(m.archivo!.drive_file_id, m.archivo!.name, m.archivo!.size).catch(() => toast.error("No se pudo bajar"))}
                       aria-label="Descargar"
                     >
                       <Download className="h-4 w-4" />

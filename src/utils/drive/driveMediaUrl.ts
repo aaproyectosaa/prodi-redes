@@ -4,6 +4,7 @@
 
 import { auth } from "@/integrations/firebase/client";
 import { logVideo } from "@/utils/drive/videoDebug";
+import { ES_IOS, guardarArchivo, MAX_COMPARTIR } from "@/lib/compartirArchivo";
 
 export async function getDriveMediaPlayUrl(fileId: string): Promise<string> {
   const user = auth.currentUser;
@@ -56,8 +57,13 @@ export function urlDescargaDrive(fileId: string): string {
  * (antes, con un archivo no compartido, les aparecía la pantalla de Google). Navega a la descarga en la misma
  * ventana: el navegador la baja sin salir de la página (en el iPhone, se abre para guardar o compartir).
  */
-export async function descargarArchivo(fileId: string, nombre: string): Promise<void> {
+export async function descargarArchivo(fileId: string, nombre: string, peso?: number): Promise<void> {
   const url = await getDriveMediaPlayUrl(fileId);
+  // iPhone: la descarga común se va callada a Archivos. Si no es muy pesado, menú de compartir (Guardar en Fotos/Archivos).
+  if (ES_IOS && peso && peso <= MAX_COMPARTIR) {
+    const res = await fetch(url);
+    if (res.ok) return guardarArchivo(await res.blob(), nombre || "archivo");
+  }
   const sep = url.includes("?") ? "&" : "?";
   window.location.assign(`${url}${sep}descarga=1&nombre=${encodeURIComponent(nombre || "archivo")}`);
 }
