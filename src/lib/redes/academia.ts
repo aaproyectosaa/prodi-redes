@@ -11,8 +11,11 @@ export interface Leccion {
   id: string;
   titulo: string;
   resumen: string;
-  /** Video de la lección (en public/academia). Sin video: se lee el texto. */
+  /** Video animado de la lección (en public/academia) y su miniatura. Sin video: se lee el texto. */
   video?: string;
+  poster?: string;
+  /** Lo que dura (para mostrar en la tarjeta). */
+  duracion?: string;
   puntos: string[];
   pasos?: string[];
   pregunta: { texto: string; opciones: string[]; correcta: number; porque: string };
@@ -56,6 +59,8 @@ export const CURSOS: Curso[] = [
         titulo: "Qué tiene un Reel que vende",
         resumen: "Las tres partes que no pueden faltar: gancho, producto y llamado.",
         video: "/academia/productora-l2.mp4",
+        poster: "/academia/productora-l2.jpg",
+        duracion: "0:22",
         puntos: [
           "El gancho: en los primeros 3 segundos tiene que pasar algo que haga frenar el dedo (una pregunta, un movimiento, algo inesperado).",
           "El producto: bien de cerca, que se vea y que se entienda qué gana el cliente (no solo qué es).",
