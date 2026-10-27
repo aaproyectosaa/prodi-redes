@@ -300,7 +300,7 @@ export function textoCobro(f: Factura, cobro: DatosCobro): string {
 export function htmlBoletas(lista: Factura[], cobro: DatosCobro, logoUrl: string, imprimir = true): string {
   const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
   const f0 = lista[0];
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${lista.length === 1 ? `${f0.tipo === "factura" ? "Factura" : "Boleta"} ${esc(f0.cliente)}` : `${lista.length} boletas`} · ${nombrePeriodo(f0)}</title>
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${lista.length === 1 ? `${f0.tipo === "factura" ? "Factura" : "Boleta"} ${esc(f0.cliente)}` : `${lista.length} ${lista.every((x) => x.tipo === "factura") ? "facturas" : lista.some((x) => x.tipo === "factura") ? "boletas y facturas" : "boletas"}`} · ${nombrePeriodo(f0)}</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#fff;color:#1a1724;font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 .pag{max-width:760px;margin:0 auto;padding:40px 44px}

@@ -7,7 +7,9 @@ import {
   Check,
   ChevronDown,
   Clock,
+  Download,
   Eye,
+  Link2,
   FileSpreadsheet,
   Loader2,
   Mail,
@@ -38,6 +40,7 @@ import { ClienteTag } from "@/components/redes/ClienteTag";
 import { BoletaDialog } from "@/components/redes/admin/BoletaDialog";
 import { DatosFacturacionDialog, EditarFacturaDialog, MesNav } from "@/components/redes/admin/FacturaPartes";
 import { PagoParcialDialog } from "@/components/redes/admin/PagoParcialDialog";
+import { EmitirPrevia, UnirComprobanteDialog, nombreDoc, nombreDocs, type FilaEmitir } from "@/components/redes/admin/EmitirPrevia";
 import { Morosos, useMorosos } from "@/components/redes/admin/Morosos";
 import { ComoFunciona, FilaKpis, Kpi, Pestanias, Vacio as VacioAdmin, type Pestania } from "@/components/redes/admin/AdminUI";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
@@ -50,6 +53,7 @@ import { planDe } from "@/lib/redes/planes";
 import {
   DIA_VENCIMIENTO,
   MEDIOS,
+  abrirBoleta,
   anularFactura,
   nombrePeriodo,
   periodoDe,
@@ -223,7 +227,7 @@ export default function Cobros() {
   return (
     <PageShell
       title="Cobros"
-      subtitle={`Boletas de ${periodo}: emitilas, marcá lo que entra y seguí a los que deben.`}
+      subtitle={`Boletas y facturas de ${periodo}: emitilas, marcá lo que entra y seguí a los que deben.`}
       actions={
         <>
           {vivas.length > 0 && (
@@ -232,7 +236,7 @@ export default function Cobros() {
             </Button>
           )}
           {/* Se navega por el mes en que se emiten (el del 27), pero se muestra el período que cubren. */}
-          <MesNav mes={mes} setMes={setMes} max={sumarMeses(mesActual(), 1)} etiqueta={(m) => `Boletas de ${mesLabel(periodoDe(m)).toLowerCase()}`} />
+          <MesNav mes={mes} setMes={setMes} max={sumarMeses(mesActual(), 1)} etiqueta={(m) => `Cobros de ${mesLabel(periodoDe(m)).toLowerCase()}`} />
         </>
       }
     >
@@ -253,7 +257,7 @@ export default function Cobros() {
               tono="verde"
               onClick={() => ir("cobradas")}
             />
-            <Kpi icono={Clock} label="Falta cobrar" valor={formatARS(Math.max(0, total - cobrado))} sub={`${pendientes.length} boleta${pendientes.length === 1 ? "" : "s"}`} tono="ambar" onClick={() => ir("cobrar")} />
+            <Kpi icono={Clock} label="Falta cobrar" valor={formatARS(Math.max(0, total - cobrado))} sub={pendientes.length === 1 ? `1 ${nombreDoc(pendientes[0].tipo)}` : `${pendientes.length} ${nombreDocs(pendientes)}`} tono="ambar" onClick={() => ir("cobrar")} />
             <Kpi
               icono={AlertTriangle}
               label="Atrasado (con interés)"
@@ -299,7 +303,7 @@ export default function Cobros() {
                 onEmitidas={() => ir("cobrar")}
               />
             )}
-            {paso === "cobrar" && <PasoCobrar lista={pendientesV} hoy={hoy} cobro={cobro} onVer={abrir} />}
+            {paso === "cobrar" && <PasoCobrar lista={pendientesV} delMes={vivas} hoy={hoy} cobro={cobro} onVer={abrir} />}
             {paso === "cobradas" &&
               (cobradasV.length ? (
                 <div className="divide-y rounded-2xl border bg-card px-4">
@@ -313,8 +317,11 @@ export default function Cobros() {
                       {formatARS(f.bruto)}
                       {f.interes_cobrado ? <span className="ml-1 text-xs text-muted-foreground">+ {formatARS(f.interes_cobrado)} interés</span> : null}
                     </span>
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setVerId(f.id)} aria-label="Ver boleta">
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setVerId(f.id)} aria-label={`Ver ${nombreDoc(f.tipo)}`}>
                       <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => abrirBoleta(f, cobro)} aria-label={`Descargar ${nombreDoc(f.tipo)}`} title="Descargar (PDF)">
+                      <Download className="h-4 w-4" />
                     </Button>
                     {f.medio !== "mercadopago" && f.medio !== "adelantado" &&
                       (f.emitida_por ? (
@@ -344,16 +351,16 @@ export default function Cobros() {
                 ))}
               </div>
               ) : (
-                <VacioAdmin icono={Wallet} titulo="Todavía no se cobró nada este mes" texto="Cuando marques una boleta como cobrada (o pague por Mercado Pago) aparece acá." />
+                <VacioAdmin icono={Wallet} titulo="Todavía no se cobró nada este mes" texto="Cuando marques una boleta o factura como cobrada (o pague por Mercado Pago) aparece acá." />
               ))}
             {paso === "extras" && <CobrosExtras mes={periodoDe(mes)} filtro={coincide} />}
             {paso === "morosos" &&
-              (morosos.filas.length ? <Morosos facturas={delAnioV} embebido /> : <VacioAdmin icono={Check} titulo="Nadie está atrasado" texto="Todos los clientes están al día con sus boletas." />)}
+              (morosos.filas.length ? <Morosos facturas={delAnioV} embebido /> : <VacioAdmin icono={Check} titulo="Nadie está atrasado" texto="Todos los clientes están al día con sus pagos." />)}
           </div>
 
           <ComoFunciona>
             <p>
-              <b>Mes vencido</b>: el 27 de cada mes se arman solas las boletas de ese mes. Las revisás y las <b>emitís</b>: al cliente le llega a su panel con un aviso
+              <b>Mes vencido</b>: el 27 de cada mes se arman solas las boletas y facturas de ese mes. Las revisás y las <b>emitís</b>: al cliente le llega a su panel con un aviso
               y una copia por mail. Se pagan del 1 al {settings.dia_vencimiento ?? DIA_VENCIMIENTO} del mes siguiente (salvo los clientes con otro plazo). A los de
               <b> mes adelantado</b> se les factura el mes que viene.
             </p>
@@ -379,13 +386,8 @@ export default function Cobros() {
 
 // ---------------------------------------------------------------------------
 
-interface PorEmitir {
-  pid: string;
-  /** La boleta tal como va a salir (la armada o una vista previa). */
-  f: Factura;
-  /** Ya armada (el 27 o con "Editar"). */
-  doc?: FacturaDoc;
-}
+/** La boleta o factura tal como va a salir (la armada o una vista previa) y, si ya está armada, su documento. */
+type PorEmitir = FilaEmitir;
 
 function PasoEmitir({
   mes,
@@ -427,7 +429,7 @@ function PasoEmitir({
     await prepararFacturacion(mes, [r.pid]);
     const id = facturaId(r.pid, mes);
     const snap = await getDoc(doc(db, "facturas", id));
-    if (!snap.exists()) throw new Error("No se pudo armar la boleta");
+    if (!snap.exists()) throw new Error("No se pudo armar el comprobante");
     return { ...(snap.data() as Factura), id } as FacturaDoc;
   };
   const yaPago = async (r: PorEmitir, medio: MedioCobro) => {
@@ -443,11 +445,13 @@ function PasoEmitir({
     }
   };
 
-  const emitir = async (filas: PorEmitir[], clave: string) => {
+  // Antes de emitir, siempre la vista previa (y ahí se pueden unir empresas del mismo dueño).
+  const [previa, setPrevia] = useState<PorEmitir[] | null>(null);
+  const emitir = async (pids: string[], clave: string) => {
     setBusy(clave);
     try {
-      const r = await emitirAClientes(mes, filas.map((x) => x.pid));
-      const cobradas = filas.length - r.emitidas;
+      const r = await emitirAClientes(mes, pids);
+      const cobradas = pids.length - r.emitidas;
       toast.success(
         `${r.emitidas === 1 ? "Emitida" : `Emitidas ${r.emitidas}`}: ya la tienen en su panel${r.mails ? ` y les llegó por mail (${r.mails})` : ""}.${
           r.sin_mail.length ? ` Sin mail cargado: ${r.sin_mail.join(", ")}.` : ""
@@ -456,7 +460,7 @@ function PasoEmitir({
         { duration: 7000 }
       );
       setSel(new Set());
-      if (filas.length === lista.length) onEmitidas();
+      if (pids.length === lista.length) onEmitidas();
     } catch (e) {
       err(e);
     } finally {
@@ -471,7 +475,7 @@ function PasoEmitir({
       ) : (
         <>
           <Ayuda>
-            Tildá y tocá <b>Emitir</b>: le llega al panel y por mail. Con <b>Ver</b> la mirás antes.
+            Tildá y tocá <b>Emitir</b>: antes de mandarla ves cómo le llega. Después le llega al panel y por mail.
           </Ayuda>
           <div className="flex flex-wrap items-center justify-between gap-2 px-1">
             <label className="flex cursor-pointer items-center gap-2.5 text-xs text-muted-foreground">
@@ -522,7 +526,7 @@ function PasoEmitir({
                       <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => onEditar(r)} disabled={editando === r.pid}>
                         {editando === r.pid ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Pencil className="mr-1 h-3.5 w-3.5" />} Editar
                       </Button>
-                      <Button size="sm" className="h-8" onClick={() => void emitir([r], r.pid)} disabled={!!busy || r.f.items.length === 0}>
+                      <Button size="sm" className="h-8" onClick={() => setPrevia([r])} disabled={!!busy || r.f.items.length === 0}>
                         {busy === r.pid ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Send className="mr-1.5 h-3.5 w-3.5" />} Emitir
                       </Button>
                       <DropdownMenu>
@@ -570,7 +574,7 @@ function PasoEmitir({
           <div className="sticky bottom-[calc(var(--alto-barra)+0.75rem)] z-10 md:bottom-4">
             <Button
               className="h-12 w-full text-base shadow-lg"
-              onClick={() => void emitir(elegidas, "varias")}
+              onClick={() => setPrevia(elegidas)}
               disabled={!elegidas.length || !!busy}
             >
               {busy === "varias" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
@@ -579,6 +583,7 @@ function PasoEmitir({
           </div>
         </>
       )}
+      <EmitirPrevia filas={previa} mes={mes} onClose={() => setPrevia(null)} onVer={onVer} onEmitir={(pids) => emitir(pids, pids.length > 1 ? "varias" : pids[0])} />
       <PagoParcialDialog
         f={parcial ? parcial.doc ?? parcial.f : null}
         onClose={() => setParcial(null)}
@@ -611,9 +616,22 @@ function PasoEmitir({
   );
 }
 
-function PasoCobrar({ lista, hoy, cobro, onVer }: { lista: FacturaDoc[]; hoy: string; cobro: typeof DATOS_COBRO_DEFAULT; onVer: (f: FacturaDoc) => void }) {
+function PasoCobrar({
+  lista,
+  delMes,
+  hoy,
+  cobro,
+  onVer,
+}: {
+  lista: FacturaDoc[];
+  delMes: FacturaDoc[];
+  hoy: string;
+  cobro: typeof DATOS_COBRO_DEFAULT;
+  onVer: (f: FacturaDoc) => void;
+}) {
   const { user } = useUserProfileContext();
   const [parcial, setParcial] = useState<FacturaDoc | null>(null);
+  const [unir, setUnir] = useState<FacturaDoc | null>(null);
   const [sel, setSel] = useState<Set<string>>(new Set());
   useEffect(() => setSel((prev) => new Set([...prev].filter((id) => lista.some((f) => f.id === id)))), [lista]);
   const elegidas = lista.filter((f) => sel.has(f.id));
@@ -646,10 +664,16 @@ function PasoCobrar({ lista, hoy, cobro, onVer }: { lista: FacturaDoc[]; hoy: st
   return (
     <div className="space-y-3">
       {dialogoParcial}
+      <UnirComprobanteDialog f={unir} delMes={delMes} onClose={() => setUnir(null)} />
       <Ayuda>
         Cuando te paguen, tocá <b>Cobrada</b>. Las vencidas van primero, con el interés a hoy.
       </Ayuda>
       <Seleccion lista={lista} sel={sel} setSel={setSel}>
+        {elegidas.length > 0 && (
+          <Button size="sm" variant="outline" className="h-8" onClick={() => abrirBoleta(elegidas, cobro)}>
+            <Download className="mr-1.5 h-3.5 w-3.5" /> Descargar ({elegidas.length})
+          </Button>
+        )}
         {elegidas.length > 0 && <MenuCobrar label={`Cobradas (${elegidas.length})`} onElegir={(m) => void cobrar(elegidas, m)} />}
       </Seleccion>
       {lista.map((f, i) => {
@@ -684,6 +708,9 @@ function PasoCobrar({ lista, hoy, cobro, onVer }: { lista: FacturaDoc[]; hoy: st
             <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => onVer(f)}>
               <Eye className="mr-1 h-3.5 w-3.5" /> Ver
             </Button>
+            <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => abrirBoleta(f, cobro)} title="Descargar (PDF)">
+              <Download className="mr-1 h-3.5 w-3.5" /> Descargar
+            </Button>
             <Button
               size="sm"
               variant="ghost"
@@ -708,6 +735,11 @@ function PasoCobrar({ lista, hoy, cobro, onVer }: { lista: FacturaDoc[]; hoy: st
                 {!f.emitida_por && (
                   <DropdownMenuItem onClick={() => void volverASinEmitir(f).then(() => toast.success(`${f.cliente}: vuelve a «Emitir»`)).catch(err)}>
                     <Undo2 className="mr-2 h-4 w-4" /> Volver a «Emitir» (no se la mandé)
+                  </DropdownMenuItem>
+                )}
+                {!f.arca?.cae && !f.pagos?.length && !Number(f.debitado ?? 0) && (
+                  <DropdownMenuItem onClick={() => setUnir(f)}>
+                    <Link2 className="mr-2 h-4 w-4" /> Unir con otra empresa…
                   </DropdownMenuItem>
                 )}
                 {!f.arca?.cae && (
