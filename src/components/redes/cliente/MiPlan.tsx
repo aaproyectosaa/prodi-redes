@@ -49,7 +49,7 @@ export function MiPlan({
   onPedirSoloEdicion?: () => void;
   onPedirPieza: () => void;
 }) {
-  const { planes, videos, piezas, cobros, settings } = useRedes();
+  const { planes, videos, piezas, cobros, settings, clientes } = useRedes();
   const [pautaOpen, setPautaOpen] = useState(false);
   const pautaCliente = pautaDelCliente(cliente);
   const mes = mesActual();
@@ -57,7 +57,10 @@ export function MiPlan({
   const plan = planDe(cliente, planes);
   const uso = usoPlan(cliente, planes, videos, mes);
   const cupoP = cupoPiezas(cliente, planes, piezas, mes);
-  const facturas = useFacturasCliente(cliente.id);
+  // Empresas del mismo dueño con una sola factura: la otra la ve y la paga desde su panel también.
+  const facturaCon = cliente.facturacion?.factura_con ? clientes.find((c) => c.id === cliente.facturacion!.factura_con && c.enabled !== false) : undefined;
+  const incluidas = clientes.filter((c) => c.id !== cliente.id && c.enabled !== false && c.facturacion?.factura_con === cliente.id);
+  const facturas = useFacturasCliente(facturaCon?.id ?? cliente.id);
   const cobro = { ...DATOS_COBRO_DEFAULT, ...(settings.cobro ?? {}) };
   const debito = cliente.suscripcion?.estado === "activa";
   const pagoHasta = diaPago(cliente.facturacion?.pago_hasta) ?? settings.dia_vencimiento ?? DIA_VENCIMIENTO;
@@ -95,6 +98,16 @@ export function MiPlan({
       () => toast.error("No se pudo copiar")
     );
 
+  const juntas = facturaCon ? [facturaCon, cliente, ...clientes.filter((c) => c.id !== cliente.id && c.id !== facturaCon.id && c.facturacion?.factura_con === facturaCon.id)] : [cliente, ...incluidas];
+  const avisoJuntas =
+    juntas.length > 1 ? (
+      <p className="mb-3 rounded-xl bg-primary/10 px-3 py-2 text-xs leading-relaxed text-foreground">
+        <b>Una sola factura para {juntas.length === 2 ? "las dos empresas" : `las ${juntas.length} empresas`}</b>: {juntas.map((c) => c.nombre).join(" y ")}
+        {facturaCon ? `, a nombre de ${facturaCon.facturacion?.razon_social || facturaCon.nombre}` : ""}. Es la misma en el panel de cada una: la pagás una sola vez,
+        desde cualquiera de los dos.
+      </p>
+    ) : null;
+
   return (
     <div className="space-y-6">
       {/* 1. Estado de cuenta */}
@@ -104,6 +117,7 @@ export function MiPlan({
             <AlertTriangle className={cn("h-4 w-4", vencidas.length ? "text-destructive" : "text-amber-500")} />
             {vencidas.length ? "Tenés un pago vencido" : "Tenés un pago pendiente"}
           </p>
+          {avisoJuntas && <div className="mt-3">{avisoJuntas}</div>}
           <p className="mt-1 text-3xl font-bold tabular-nums tracking-tight">{formatARS(totalDebe)}</p>
           <div className="mt-3 space-y-1.5">
             {debe.map((f) => (
@@ -154,9 +168,10 @@ export function MiPlan({
         <div className="flex items-start gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.06] p-5">
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
           <div>
+            {avisoJuntas}
             <p className="font-semibold">Estás al día</p>
             <p className="text-sm text-muted-foreground">
-              {debito ? "Tu abono se cobra solo cada mes con el débito automático." : `La boleta de cada mes te llega el 27 y la pagás en el mes siguiente: la de ${nombreMes(mes)}, del ${pagoDesde} al ${pagoHasta} de ${nombreMes(sumarMeses(mes, 1))}. Después corre un interés del 0,5% por día.`}
+              {debito ? "Tu abono se cobra solo cada mes con el débito automático." : `La ${(facturaCon ?? cliente).facturacion?.tipo === "boleta" ? "boleta" : "factura"} de cada mes te llega el 27 y la pagás en el mes siguiente: la de ${nombreMes(mes)}, del ${pagoDesde} al ${pagoHasta} de ${nombreMes(sumarMeses(mes, 1))}. Después corre un interés del 0,5% por día.`}
               {pagadoAnio > 0 ? ` En ${anio} llevás pagado ${formatARS(pagadoAnio)}.` : ""}
             </p>
           </div>
