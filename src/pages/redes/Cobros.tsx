@@ -105,9 +105,11 @@ export default function Cobros() {
   const vivas = facturas.filter((f) => f.estado !== "anulada");
   const borradores = vivas.filter((f) => f.estado === "borrador");
   // Las armadas que no se emitieron siguen los datos de facturación del cliente (boleta / factura, razón social, CUIT).
+  // Las emitidas sin pagos también siguen el precio del cliente.
+  const aSincronizar = vivas.filter((f) => f.estado === "borrador" || (f.estado === "pendiente" && !f.pagos?.length && !f.debitado));
   const sincronizadas = useRef(new Set<string>());
   useEffect(() => {
-    for (const f of borradores) {
+    for (const f of aSincronizar) {
       const c = clientes.find((x) => x.id === f.proyecto_id);
       const abono = c ? planDe(c, planes).precioMensual : 0;
       // Empresas del mismo dueño que van en esta misma boleta.
@@ -117,7 +119,7 @@ export default function Cobros() {
       sincronizadas.current.add(clave);
       void sincronizarBorrador(f, c, abono, settings.iva_pct ?? 21, agrupadas).catch((e) => console.warn("[cobros] sincronizar", f.id, e));
     }
-  }, [borradores, clientes, planes, settings.iva_pct]);
+  }, [aSincronizar, clientes, planes, settings.iva_pct]);
   const pendientes = vivas
     .filter((f) => f.estado === "pendiente")
     .sort((a, b) => Number(b.vencimiento < hoy) - Number(a.vencimiento < hoy) || a.vencimiento.localeCompare(b.vencimiento));

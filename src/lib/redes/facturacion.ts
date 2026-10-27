@@ -143,11 +143,15 @@ export const vaEnOtraBoleta = (c: Project, clientes: Project[]) =>
   !!c.facturacion?.factura_con && c.facturacion.factura_con !== c.id && clientes.some((x) => x.id === c.facturacion!.factura_con && x.enabled !== false);
 
 export async function sincronizarBorrador(f: FacturaDoc, c: Project, abono: number, ivaPct: number, agrupadas: EmpresaAgrupada[] = []): Promise<boolean> {
-  if (f.estado !== "borrador" || f.arca?.cae) return false;
+  if (f.arca?.cae) return false;
+  // Emitida y sin pagos ni débito: sigue el precio del cliente (si le cambiaste el abono después de emitirla).
+  // El tipo y los datos fiscales ya no se tocan: el cliente la recibió así.
+  const emitida = f.estado === "pendiente";
+  if (emitida ? pagadoDe(f) > 0 || Number(f.debitado ?? 0) > 0 : f.estado !== "borrador") return false;
   const fa = c.facturacion ?? {};
-  const tipo: Factura["tipo"] = fa.tipo === "boleta" ? "boleta" : "factura";
-  const razon = fa.razon_social?.trim() || null;
-  const cuit = fa.cuit?.trim() || null;
+  const tipo: Factura["tipo"] = emitida ? f.tipo : fa.tipo === "boleta" ? "boleta" : "factura";
+  const razon = emitida ? (f.razon_social ?? null) : fa.razon_social?.trim() || null;
+  const cuit = emitida ? (f.cuit ?? null) : fa.cuit?.trim() || null;
   // El abono y los extras fijos siguen los del cliente, salvo que la hayas editado a mano; lo agregado a mano queda.
   const auto = (id: string) => id === "abono" || /^fijo\d+$/.test(id) || /^grupo\d+(fijo\d+)?$/.test(id);
   // Sin abono en el plan (cliente sin plan): los ítems se cargan a mano, no se tocan.
