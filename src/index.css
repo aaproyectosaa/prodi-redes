@@ -278,12 +278,16 @@ html.modo-chat {
   bottom: 0;
 }
 /* iPad (pantalla de compu): la barra de estado se ve encima de la app, así que se deja su franja arriba. La app
-   instalada además a veces cree que la pantalla es más baja que la real (deja una franja vacía abajo):
-   --falta-abajo es esa diferencia (la mide useAltoVisible). */
+   instalada además queda más baja que la pantalla (una franja vacía abajo): a pantalla completa toma el alto real
+   de la pantalla (--alto-pantalla, lo pone useAltoVisible) y deja libre la rayita de inicio. */
 @media (min-width: 768px) {
   .alto-app.app-principal {
     padding-top: env(safe-area-inset-top, 0px);
-    bottom: calc(0px - var(--falta-abajo, 0px));
+  }
+  html.pantalla-ipad .alto-app.app-principal {
+    bottom: auto;
+    height: var(--alto-pantalla);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
 html.teclado-ios .alto-app {

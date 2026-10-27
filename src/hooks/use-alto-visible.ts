@@ -28,13 +28,19 @@ export function useAltoVisible() {
 
     const aplicar = () => {
       raf = 0;
-      // iPad con la app instalada: el alto de la ventana a veces queda corto (unos 20-40 px menos que la pantalla).
-      // Con la app en pantalla dividida la diferencia es mucho mayor y no se toca.
+      // iPad con la app instalada a pantalla completa: la caja de la app quedaba más baja que la pantalla (franja vacía
+      // abajo). Se le da el alto real de la pantalla. En pantalla dividida (ancho distinto al de la pantalla) no se toca.
       const instalada = window.matchMedia?.("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone;
-      const altoPantalla = window.innerWidth > window.innerHeight ? Math.min(screen.width, screen.height) : Math.max(screen.width, screen.height);
-      const falta = altoPantalla - window.innerHeight;
-      if (instalada && window.innerWidth >= 768 && falta > 0 && falta <= 40) raiz.style.setProperty("--falta-abajo", `${falta}px`);
-      else raiz.style.removeProperty("--falta-abajo");
+      const apaisada = window.innerWidth > window.innerHeight;
+      const anchoPantalla = apaisada ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
+      const altoPantalla = apaisada ? Math.min(screen.width, screen.height) : Math.max(screen.width, screen.height);
+      if (instalada && window.innerWidth >= 768 && Math.abs(window.innerWidth - anchoPantalla) < 4) {
+        raiz.style.setProperty("--alto-pantalla", `${altoPantalla}px`);
+        raiz.classList.add("pantalla-ipad");
+      } else {
+        raiz.style.removeProperty("--alto-pantalla");
+        raiz.classList.remove("pantalla-ipad");
+      }
       // Alto completo: el del layout viewport (no cambia con el teclado en iOS).
       const lleno = Math.max(window.innerHeight, raiz.clientHeight);
       // Con zoom de pellizco el alto visible también baja: eso no es el teclado.
@@ -86,8 +92,8 @@ export function useAltoVisible() {
       document.removeEventListener("focusout", alFoco);
       raiz.style.removeProperty("--alto-app");
       raiz.style.removeProperty("--arriba-app");
-      raiz.style.removeProperty("--falta-abajo");
-      raiz.classList.remove("teclado-ios", "vista-fija");
+      raiz.style.removeProperty("--alto-pantalla");
+      raiz.classList.remove("teclado-ios", "vista-fija", "pantalla-ipad");
     };
   }, []);
 }
