@@ -61,6 +61,8 @@ export async function completarAlta(altaId: string, s: { id: string; status: str
   const a = (await altaRef.get()).data();
   if (!a) return null;
   if (a.proyecto_id) return String(a.proyecto_id);
+  // Ya quedó para revisar (Mercado Pago avisa más de una vez: suscripción y cobro): no se avisa de nuevo.
+  if (a.estado === "revisar") return null;
   const ahora = new Date().toISOString();
   const pid = `alta_${altaId}`;
   const plan = PLANES_WEB[String(a.plan)] ?? null;
@@ -68,6 +70,21 @@ export async function completarAlta(altaId: string, s: { id: string; status: str
     destinatariosDe(proyectoId ?? "", [], true)
       .then((d) => enviarAviso({ destinatarios: d, titulo, cuerpo, link, clave, proyectoId }, base))
       .catch(() => undefined);
+  // Hay que darlo de alta a mano: queda anotado en la compra y en el lead, y el aviso abre ese lead en Leads.
+  const revisar = async (motivo: string, texto: string) => {
+    await altaRef.update({ estado: "revisar", motivo, mp_preapproval_id: s.id, updated_at: ahora });
+    let link = "/web";
+    if (a.lead_id) {
+      const lRef = db.collection("leads_web").doc(String(a.lead_id));
+      const l = (await lRef.get()).data();
+      if (l) {
+        link = `/web?lead=${encodeURIComponent(String(a.lead_id))}`;
+        const historial = [...(Array.isArray(l.historial) ? l.historial : []), { at: ahora, tipo: "nota", texto: `Pagó el plan ${plan?.nombre ?? a.plan} en la web. ${texto}`, por: null, por_nombre: "Web" }].slice(-100);
+        await lRef.update({ historial, updated_at: ahora }).catch((e) => console.warn("[alta] lead revisar", e));
+      }
+    }
+    await avisar("Revisar compra de la web", `${a.negocio} pagó el plan ${plan?.nombre ?? a.plan}. ${texto}`, link, `alta_revisar:${altaId}`, null);
+  };
 
   // 1. Usuario: si ya es cliente de Prodi se le suma esta empresa; si el mail es de alguien del equipo, se revisa a mano.
   const email = String(a.email);
@@ -76,8 +93,7 @@ export async function completarAlta(altaId: string, s: { id: string; status: str
   let nuevoUsuario = false;
   if (previo) {
     if (previo.data().role !== "cliente") {
-      await altaRef.update({ estado: "revisar", motivo: "El mail ya es de un usuario que no es cliente", mp_preapproval_id: s.id, updated_at: ahora });
-      await avisar("Revisar compra de la web", `${a.negocio} pagó el plan ${plan?.nombre ?? a.plan} pero su mail (${email}) ya es de un usuario del equipo. Dalo de alta a mano.`, "/web", `alta_revisar:${altaId}`, null);
+      await revisar("El mail ya es de un usuario que no es cliente", `Su mail (${email}) ya es de un usuario del equipo: dalo de alta a mano.`);
       return null;
     }
     uid = previo.id;
@@ -86,8 +102,7 @@ export async function completarAlta(altaId: string, s: { id: string; status: str
       uid = (await crearUsuario({ email, displayName: String(a.nombre) })).uid;
       nuevoUsuario = true;
     } catch {
-      await altaRef.update({ estado: "revisar", motivo: "No se pudo crear el usuario", mp_preapproval_id: s.id, updated_at: ahora });
-      await avisar("Revisar compra de la web", `${a.negocio} pagó el plan ${plan?.nombre ?? a.plan} pero no se pudo crear su usuario (${email}). Dalo de alta a mano.`, "/web", `alta_revisar:${altaId}`, null);
+      await revisar("No se pudo crear el usuario", `No se pudo crear su usuario (${email}): dalo de alta a mano.`);
       return null;
     }
     await db.collection("profiles").doc(uid).set({ nombre: a.nombre, email, role: "cliente", roles_extra: [], activo: true, telefono: a.telefono || null, created_at: ahora });
