@@ -147,7 +147,7 @@ function motivos(r: { Errors?: { Err?: { Code?: number; Msg?: string }[] }; FeDe
 
 /** Pide el CAE para una boleta y lo guarda en ella. Si ya tenía, devuelve el que tiene. */
 export async function autorizarFactura(facturaId: string, uid: string, opts: { reintentar?: boolean } = {}): Promise<DatosArca> {
-  const { arca, puntoVenta, condicion, produccion } = cliente();
+  const { arca, puntoVenta, condicion, produccion, cuit } = cliente();
   const db = adminDb();
   const ref = db.collection("facturas").doc(facturaId);
   // Se marca antes de llamar a ARCA: dos clics seguidos no pueden sacar dos comprobantes.
@@ -198,6 +198,12 @@ export async function autorizarFactura(facturaId: string, uid: string, opts: { r
     homologacion: !produccion,
     autorizada_at: new Date().toISOString(),
     autorizada_por: uid,
+    emisor_cuit: cuit,
+    emisor_condicion: condicion,
+    receptor_condicion: receptor,
+    doc_tipo: datos.DocTipo,
+    doc_nro: datos.DocNro,
+    importe: datos.ImpTotal,
   };
   await ref.update({ arca: datosArca, arca_en_curso_at: null, arca_error: null });
   return datosArca;

@@ -461,6 +461,10 @@ export interface DatosCobro {
   cbu: string;
   /** Mail para mandar comprobantes (opcional: sale en la boleta). */
   email?: string;
+  /** Datos del emisor impresos en la factura legal. */
+  domicilio?: string;
+  iibb?: string;
+  inicio_actividades?: string;
 }
 
 export interface RedesSettings {

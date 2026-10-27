@@ -29,7 +29,7 @@ import {
   type Factura,
   type FacturaDoc,
 } from "@/lib/redes/facturacion";
-import type { Project } from "@/integrations/firebase/types";
+import { CONDICIONES_IVA, type CondicionIva, type Project } from "@/integrations/firebase/types";
 import { cn } from "@/lib/utils";
 
 /** "boleta" o "factura" (no son lo mismo). */
@@ -147,6 +147,20 @@ export function EmitirPrevia({
       return { r, f: { ...f, items, neto, iva, bruto: neto + iva }, unidas };
     });
   const total = salen.reduce((a, s) => a + s.f.bruto, 0);
+  // ARCA pide la condición frente al IVA de quien tiene CUIT (sin CUIT va como consumidor final).
+  const [condiciones, setCondiciones] = useState<Record<string, CondicionIva>>({});
+  const condicionDe = (pid: string) => condiciones[pid] ?? clienteById(pid)?.facturacion?.condicion_iva ?? null;
+  const faltaCondicion = (s: (typeof salen)[number]) => s.f.tipo === "factura" && soloDigitos(s.f.cuit).length === 11 && !condicionDe(s.r.pid);
+  const ponerCondicion = async (pid: string, v: CondicionIva) => {
+    setCondiciones((x) => ({ ...x, [pid]: v }));
+    const c = clienteById(pid);
+    try {
+      await guardarDatosFacturacion(pid, { ...(c?.facturacion ?? {}), condicion_iva: v });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar");
+    }
+  };
+  const hayFacturas = salen.some((s) => s.f.tipo === "factura");
   const editadaAMano = (g: (typeof grupos)[number]) => !!lista.find((r) => r.pid === principal[g.clave])?.doc?.editada_a_mano;
 
   const confirmar = async () => {
@@ -181,7 +195,7 @@ export function EmitirPrevia({
         <DialogHeader className="text-left">
           <DialogTitle>Revisá antes de emitir</DialogTitle>
           <DialogDescription>
-            Así le llega a cada cliente: a su panel y por mail. {salen.length === 1 ? `Sale 1 ${nombreDoc(salen[0]?.f.tipo ?? "factura")}` : `Salen ${salen.length} ${nombreDocs(salen.map((s) => s.f))}`}.
+            Así le llega a cada cliente: a su panel y por mail.{hayFacturas ? " Las facturas se autorizan en ARCA y le llega la factura legal, con CAE." : ""} {salen.length === 1 ? `Sale 1 ${nombreDoc(salen[0]?.f.tipo ?? "factura")}` : `Salen ${salen.length} ${nombreDocs(salen.map((s) => s.f))}`}.
           </DialogDescription>
         </DialogHeader>
 
@@ -245,6 +259,26 @@ export function EmitirPrevia({
                   </li>
                 )}
               </ul>
+              {faltaCondicion({ r, f, unidas }) && (
+                <div className="mt-2 space-y-1 rounded-lg bg-amber-500/10 p-2">
+                  <p className="text-[11px] font-medium text-amber-800 dark:text-amber-300">Para la factura, ARCA pide la condición frente al IVA de {f.razon_social || f.cliente}:</p>
+                  <Select onValueChange={(v) => void ponerCondicion(r.pid, v as CondicionIva)}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Elegí la condición" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(["responsable_inscripto", "monotributo", "exento"] as CondicionIva[]).map((k) => (
+                        <SelectItem key={k} value={k}>
+                          {CONDICIONES_IVA[k]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {f.tipo === "factura" && condicionDe(r.pid) && (
+                <p className="mt-1 text-[11px] text-muted-foreground">Condición frente al IVA: {CONDICIONES_IVA[condicionDe(r.pid)!]}</p>
+              )}
               {r.doc && pagadoDe(r.doc) > 0 && <p className="mt-1 text-[11px] text-emerald-700 dark:text-emerald-400">Ya pagó {formatARS(pagadoDe(r.doc))} a cuenta</p>}
               <div className="mt-2 flex justify-end">
                 <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => onVer(f)}>
@@ -259,7 +293,7 @@ export function EmitirPrevia({
           <Button variant="ghost" onClick={onClose} disabled={busy}>
             Volver
           </Button>
-          <Button onClick={() => void confirmar()} disabled={busy || !salen.length}>
+          <Button onClick={() => void confirmar()} disabled={busy || !salen.length || salen.some(faltaCondicion)}>
             {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
             Emitir {salen.length === 1 ? `la ${nombreDoc(salen[0].f.tipo)}` : `${salen.length} ${nombreDocs(salen.map((s) => s.f))}`} · {formatARS(total)}
           </Button>

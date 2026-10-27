@@ -50,6 +50,13 @@ export interface DatosArca {
   homologacion: boolean;
   autorizada_at: string;
   autorizada_por: string;
+  /** Para imprimir la factura legal y el QR de ARCA (las autorizadas antes no lo tienen). */
+  emisor_cuit?: number;
+  emisor_condicion?: "responsable_inscripto" | "monotributo";
+  receptor_condicion?: "responsable_inscripto" | "monotributo" | "exento" | "consumidor_final";
+  doc_tipo?: number;
+  doc_nro?: number;
+  importe?: number;
 }
 
 export interface Factura {
@@ -437,6 +444,11 @@ export function mailFacturaHtml(f: Factura, link: string, baseUrl: string, aviso
   <div style="font-size:13px;color:#6B6880;">${escF(f.razon_social || f.cliente)}</div>
   <div style="font-size:22px;font-weight:700;color:#111018;margin:4px 0 2px;">Tu ${doc} de ${nombrePeriodo(f)}</div>
   <div style="font-size:14px;color:#6B6880;">${escF(bajada)}</div>
+  ${
+    f.arca?.cae
+      ? `<div style="margin-top:10px;font-size:13px;color:#111018;">Factura ${f.arca.tipo} ${String(f.arca.punto_venta).padStart(5, "0")}-${String(f.arca.numero).padStart(8, "0")} · CAE ${escF(f.arca.cae)}</div>`
+      : ""
+  }
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:20px;">${filas}
     ${f.iva ? `<tr><td style="padding:8px 0;color:#6B6880;font-size:13px;">IVA ${f.iva_pct}%</td><td style="padding:8px 0;color:#6B6880;font-size:13px;text-align:right;">${arsF(f.iva)}</td></tr>` : ""}
   </table>

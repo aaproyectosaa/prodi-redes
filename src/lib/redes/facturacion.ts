@@ -8,6 +8,7 @@ import { avisar, equipoDe } from "./avisos";
 import type { Project } from "@/integrations/firebase/types";
 import { toast } from "sonner";
 import { asset } from "@/lib/asset";
+import QRCode from "qrcode";
 import { fechaAR, hoyAR, mesAR } from "@/lib/fecha";
 import type { DatosCobro, PiezaIA, Video } from "./types";
 import {
@@ -16,6 +17,7 @@ import {
   saldoDe,
   leyendaInteres,
   nombrePeriodo,
+  periodoFactura,
   planillaCSV,
   textoMora,
   totales,
@@ -115,7 +117,7 @@ export function useFacturasCliente(proyectoId: string | undefined): FacturaDoc[]
 export const prepararFacturacion = (mes: string, proyectoIds?: string[]) =>
   callApi<{ ok: true; creadas: number; existentes: number }>("/api/pagos/facturar", { mes, proyecto_ids: proyectoIds ?? null });
 
-type ResultadoEmitir = { ok: true; emitidas: number; mails: number; sin_mail: string[]; falla_mail?: string[] };
+type ResultadoEmitir = { ok: true; emitidas: number; mails: number; sin_mail: string[]; falla_mail?: string[]; arca_fallas?: { cliente: string; error: string }[] };
 
 /** Emite a los clientes elegidos: arma la boleta si todavía no estaba y se la manda (panel + mail). */
 export const emitirAClientes = (mes: string, proyectoIds: string[]) =>
@@ -318,11 +320,13 @@ td{padding:10px 12px;border-bottom:1px solid #d3d0dc}.r{text-align:right;white-s
 .sello{display:inline-block;border:2px solid #16a34a;color:#16a34a;border-radius:8px;padding:2px 10px;font-weight:700;font-size:12px;margin-left:8px;vertical-align:middle}
 @media print{.pag{padding:18px}}
 .pag+.pag{page-break-before:always;border-top:1px dashed #d3d0dc}
+${CSS_LEGAL}
 </style></head><body>${lista.map((f) => {
+  if (f.tipo === "factura" && f.arca?.cae) return htmlFacturaLegal(f, cobro, logoUrl, esc);
   const filas = f.items.map((i) => `<tr><td>${esc(i.concepto)}</td><td class="r">${ars(i.neto)}</td></tr>`).join("");
   return `<div class="pag">
 <header><img src="${logoUrl}" alt="PRODI"><div class="emp"><b>PRODI – Progreso Digital</b><br>Área administrativa · División Redes<br>Reconquista, Santa Fe</div></header>
-<h1>${f.tipo === "factura" ? "Detalle de factura" : "Boleta de pago"}${f.estado === "cobrada" ? '<span class="sello">PAGADA</span>' : ""}</h1>
+<h1>${f.tipo === "factura" ? "Detalle de cobro" : "Boleta de pago"}${f.estado === "cobrada" ? '<span class="sello">PAGADA</span>' : ""}</h1>
 <p class="sub">Período ${nombrePeriodo(f)}</p>
 <div class="sec"><span>01</span> Cliente</div>
 <div class="panel"><div><small>Cliente</small>${esc(f.razon_social || f.cliente)}</div><div><small>CUIT</small>${esc(f.cuit || "—")}</div>
@@ -346,11 +350,108 @@ ${
         : ""
       : `<p class="obs">${esc(leyendaInteres(f.vencimiento, f.pago_desde))}</p>${textoMora(f, hoyAR()) ? `<p class="obs"><b>${esc(textoMora(f, hoyAR()))}</b></p>` : ""}`
   }
-${f.tipo === "boleta" ? '<p class="obs">Este documento es una boleta de pago y no reemplaza la factura correspondiente.</p>' : ""}
+${f.tipo === "boleta" ? '<p class="obs">Este documento es una boleta de pago y no reemplaza la factura correspondiente.</p>' : '<p class="obs">Este detalle no es la factura: la factura electrónica (con CAE de ARCA) se emite al autorizarla.</p>'}
 ${f.nota && !(f.debito && f.nota.startsWith("Se cobra solo")) ? `<p class="obs">${esc(f.nota)}</p>` : ""}
 <footer><span>Progreso Digital para tu negocio</span><span>${cobro.email ? `Comprobantes: ${esc(cobro.email)}` : ""}</span></footer>
 </div>`;
 }).join("")}${imprimir ? "<script>window.onload=()=>setTimeout(()=>window.print(),300)</script>" : ""}</body></html>`;
+}
+
+// ---------------------------------------------------------------------------
+// Factura legal (con CAE): letra y código, número, emisor y receptor, CAE con su vencimiento y el QR de ARCA.
+// ---------------------------------------------------------------------------
+
+const CSS_LEGAL = `.fl{border:1.5px solid #1a1724;font-size:12.5px}.fl .cab{display:grid;grid-template-columns:1fr 84px 1fr;border-bottom:1.5px solid #1a1724}
+.fl .cab>div{padding:14px 16px}.fl .letra{border-left:1.5px solid #1a1724;border-right:1.5px solid #1a1724;text-align:center;padding:8px 4px!important}
+.fl .letra b{display:block;font-size:40px;line-height:1}.fl .letra small{font-size:10px}.fl h2{margin:0 0 6px;font-size:20px;letter-spacing:.04em}
+.fl .fila{padding:10px 16px;border-bottom:1.5px solid #1a1724;display:grid;grid-template-columns:1fr 1fr;gap:4px 24px}.fl small{color:#706d80}
+.fl table td,.fl table th{font-size:12.5px}.fl .pie{display:flex;gap:18px;align-items:center;padding:14px 16px}.fl .pie svg{width:104px;height:104px;flex:none}
+.prueba{border:2px dashed #dc2626;color:#dc2626;font-weight:700;text-align:center;padding:6px;margin-bottom:10px}`;
+
+const COND_TXT: Record<string, string> = {
+  responsable_inscripto: "IVA Responsable Inscripto",
+  monotributo: "Responsable Monotributo",
+  exento: "IVA Sujeto Exento",
+  consumidor_final: "Consumidor Final",
+};
+const COD_LETRA: Record<string, string> = { A: "01", B: "06", C: "11" };
+const pesos = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
+
+/** El QR de ARCA (RG 4892) como SVG. */
+function qrArca(f: Factura, cuitEmisor: number): string {
+  const a = f.arca!;
+  const datos = {
+    ver: 1,
+    fecha: a.fecha,
+    cuit: cuitEmisor,
+    ptoVta: a.punto_venta,
+    tipoCmp: a.cbte_tipo,
+    nroCmp: a.numero,
+    importe: a.importe ?? f.bruto,
+    moneda: "PES",
+    ctz: 1,
+    tipoDocRec: a.doc_tipo ?? (String(f.cuit ?? "").replace(/\D/g, "").length === 11 ? 80 : 99),
+    nroDocRec: a.doc_nro ?? (Number(String(f.cuit ?? "").replace(/\D/g, "")) || 0),
+    tipoCodAut: "E",
+    codAut: Number(a.cae),
+  };
+  const url = `https://www.afip.gob.ar/fe/qr/?p=${btoa(JSON.stringify(datos))}`;
+  try {
+    const m = QRCode.create(url, { errorCorrectionLevel: "M" }).modules;
+    let d = "";
+    for (let y = 0; y < m.size; y++) for (let x = 0; x < m.size; x++) if (m.data[y * m.size + x]) d += `M${x} ${y}h1v1h-1z`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 ${m.size + 4} ${m.size + 4}" shape-rendering="crispEdges"><rect x="-2" y="-2" width="${m.size + 4}" height="${m.size + 4}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+  } catch {
+    return "";
+  }
+}
+
+function htmlFacturaLegal(f: Factura, cobro: DatosCobro, logoUrl: string, esc: (s: string) => string): string {
+  const a = f.arca!;
+  const cuitEmisor = a.emisor_cuit ?? Number(String(cobro.cuit ?? "").replace(/\D/g, ""));
+  const cuitFmt = (n: string | number) => {
+    const d = String(n).replace(/\D/g, "");
+    return d.length === 11 ? `${d.slice(0, 2)}-${d.slice(2, 10)}-${d.slice(10)}` : d || "—";
+  };
+  const periodo = periodoFactura(f);
+  const [y, m] = periodo.split("-").map(Number);
+  const hasta = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  const pct = f.iva_pct || 0;
+  // B: precios con IVA incluido y el IVA contenido (Ley 27.743). A: neto e IVA discriminado. C: sin IVA.
+  const conIva = a.tipo === "B";
+  const filas = f.items
+    .map((i) => `<tr><td>${esc(i.concepto)}</td><td class="r">${pesos(conIva ? Math.round(i.neto * (1 + pct / 100) * 100) / 100 : i.neto)}</td></tr>`)
+    .join("");
+  const totales =
+    a.tipo === "A"
+      ? `<tr><td class="r">Importe neto gravado</td><td class="r">${pesos(f.neto)}</td></tr><tr><td class="r">IVA ${pct}%</td><td class="r">${pesos(f.iva)}</td></tr>`
+      : "";
+  return `<div class="pag">
+${a.homologacion ? '<div class="prueba">COMPROBANTE DE PRUEBA (homologación de ARCA) · SIN VALIDEZ FISCAL</div>' : ""}
+<div class="fl">
+<div class="cab">
+<div><img src="${logoUrl}" alt="PRODI" style="height:30px;margin-bottom:8px"><br><b>${esc(cobro.titular || "PRODI")}</b><br>${esc(cobro.domicilio || "Reconquista, Santa Fe")}<br>${esc(COND_TXT[a.emisor_condicion ?? ""] ?? "")}</div>
+<div class="letra"><b>${a.tipo}</b><small>COD. ${COD_LETRA[a.tipo]}</small></div>
+<div><h2>FACTURA</h2>Punto de venta: <b>${String(a.punto_venta).padStart(5, "0")}</b> &nbsp; Comp. Nro: <b>${String(a.numero).padStart(8, "0")}</b><br>Fecha de emisión: <b>${fecha(a.fecha)}</b><br>CUIT: ${cuitFmt(cuitEmisor)}<br>Ingresos Brutos: ${esc(cobro.iibb || cuitFmt(cuitEmisor))}<br>Inicio de actividades: ${esc(cobro.inicio_actividades || "—")}</div>
+</div>
+<div class="fila"><div><small>Período facturado</small><br>${fecha(`${periodo}-01`)} al ${fecha(hasta)}</div><div><small>Vencimiento del pago</small><br>${fecha(f.vencimiento)}</div></div>
+<div class="fila"><div><small>Cliente</small><br><b>${esc(f.razon_social || f.cliente)}</b></div><div><small>${a.doc_tipo === 99 ? "Documento" : "CUIT"}</small><br>${a.doc_tipo === 99 ? "—" : cuitFmt(f.cuit ?? a.doc_nro ?? "")}</div>
+<div><small>Condición frente al IVA</small><br>${esc(COND_TXT[a.receptor_condicion ?? ""] ?? "—")}</div><div><small>Condición de venta</small><br>${f.debito ? "Débito automático" : "Transferencia / contado"}</div></div>
+<table><thead><tr><th>Concepto</th><th class="r">${a.tipo === "A" ? "Importe neto" : "Importe"}</th></tr></thead><tbody>${filas}</tbody>
+<tbody class="tot">${totales}</tbody></table>
+<div class="total" style="border-radius:0;margin:0"><span>Importe total</span><span>${pesos(f.bruto)}</span></div>
+${conIva && f.iva ? `<p class="obs" style="padding:0 16px">Régimen de Transparencia Fiscal al Consumidor (Ley 27.743) · IVA contenido: ${pesos(f.iva)}</p>` : ""}
+<div class="pie">${qrArca(f, cuitEmisor)}<div><b>CAE N°: ${esc(a.cae)}</b><br>Fecha de vto. de CAE: ${fecha(a.cae_vto)}<br><small>Comprobante autorizado por ARCA. Esta factura electrónica tiene validez fiscal.</small></div></div>
+</div>
+${
+  f.debito || f.estado === "cobrada"
+    ? f.estado === "cobrada"
+      ? '<p class="obs"><span class="sello">PAGADA</span></p>'
+      : ""
+    : `<div class="sec"><span>$</span> Cómo pagar</div><div class="panel"><div><small>Titular</small>${esc(cobro.titular)}</div><div><small>CUIT</small>${esc(cobro.cuit)}</div>
+<div><small>Banco</small>${esc(cobro.banco)}</div><div><small>Alias</small><b>${esc(cobro.alias)}</b></div><div style="grid-column:1/-1"><small>CBU</small>${esc(cobro.cbu)}</div></div>`
+}
+</div>`;
 }
 
 export function htmlBoleta(f: Factura, cobro: DatosCobro, logoUrl: string): string {

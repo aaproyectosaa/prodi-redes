@@ -451,14 +451,16 @@ function PasoEmitir({
     setBusy(clave);
     try {
       const r = await emitirAClientes(mes, pids);
-      const cobradas = pids.length - r.emitidas;
-      toast.success(
+      const cobradas = pids.length - r.emitidas - (r.arca_fallas?.length ?? 0);
+      if (r.emitidas > 0 || cobradas > 0) toast.success(
         `${r.emitidas === 1 ? "Emitida" : `Emitidas ${r.emitidas}`}: ya la tienen en su panel${r.mails ? ` y les llegó por mail (${r.mails})` : ""}.${
           r.sin_mail.length ? ` Sin mail cargado: ${r.sin_mail.join(", ")}.` : ""
         }${r.falla_mail?.length ? ` No salió el mail a ${r.falla_mail.join(", ")} (revisá la configuración de correo).` : ""
-        }${cobradas > 0 ? ` ${cobradas} ya estaban pagas (adelantado o débito).` : ""}`,
+        }${cobradas > 0 && !r.arca_fallas?.length ? ` ${cobradas} ya estaban pagas (adelantado o débito).` : ""}`,
         { duration: 7000 }
       );
+      // Facturas que ARCA no autorizó: no se le mandaron al cliente y siguen en «Emitir».
+      for (const x of r.arca_fallas ?? []) toast.error(`${x.cliente}: no se emitió, ARCA no la autorizó. ${x.error}`, { duration: 15000 });
       setSel(new Set());
       if (pids.length === lista.length) onEmitidas();
     } catch (e) {

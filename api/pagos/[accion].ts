@@ -761,6 +761,8 @@ async function emitir(req: VercelRequest) {
   let mails = 0;
   const sinMail: string[] = [];
   const fallaMail: string[] = [];
+  /** Facturas que ARCA no autorizó: no se mandaron y vuelven a «Emitir». */
+  const arcaFallas: { cliente: string; error: string }[] = [];
   for (const id of lista) {
     const ref = db.collection("facturas").doc(id);
     const f = await db.runTransaction(async (tx) => {
@@ -770,6 +772,20 @@ async function emitir(req: VercelRequest) {
       return x;
     });
     if (!f) continue;
+    // La factura es el documento legal: se le manda recién con el CAE de ARCA. La boleta no pasa por ARCA.
+    if (f.tipo === "factura" && !f.arca?.cae) {
+      try {
+        // En la app publicada nunca se le manda al cliente un comprobante de prueba (homologación).
+        if (process.env.VERCEL_ENV === "production" && process.env.ARCA_PRODUCCION !== "true") {
+          throw new Error("ARCA está en modo prueba (falta ARCA_PRODUCCION=true en Vercel)");
+        }
+        f.arca = await autorizarFactura(id, caller.uid);
+      } catch (err) {
+        await ref.update({ estado: "borrador", emitida_at: null, emitida_por: null });
+        arcaFallas.push({ cliente: f.cliente, error: err instanceof Error ? err.message : String(err) });
+        continue;
+      }
+    }
     emitidas++;
     const p = (await db.collection("projects").doc(f.proyecto_id).get()).data() ?? {};
     const team = (p.team_roles ?? {}) as Record<string, string[]>;
@@ -814,7 +830,7 @@ async function emitir(req: VercelRequest) {
       fallaMail.push(f.cliente);
     }
   }
-  return { ok: true, emitidas, mails, sin_mail: sinMail, falla_mail: fallaMail };
+  return { ok: true, emitidas, mails, sin_mail: sinMail, falla_mail: fallaMail, arca_fallas: arcaFallas };
 }
 
 async function arcaAutorizar(req: VercelRequest) {

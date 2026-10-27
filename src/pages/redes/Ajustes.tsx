@@ -290,6 +290,9 @@ export default function Ajustes() {
                   ["alias", "Alias"],
                   ["cbu", "CBU"],
                   ["email", "Mail para comprobantes (opcional)"],
+                  ["domicilio", "Domicilio comercial (sale en la factura)"],
+                  ["iibb", "Ingresos Brutos (sale en la factura)"],
+                  ["inicio_actividades", "Inicio de actividades (sale en la factura, ej. 01/03/2021)"],
                 ] as [keyof DatosCobro, string][]
               ).map(([k, l]) => (
                 <div key={k} className="space-y-1">
