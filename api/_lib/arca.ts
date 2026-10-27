@@ -187,13 +187,14 @@ export async function autorizarFactura(facturaId: string, uid: string, opts: { r
     // Si ARCA contestó con un rechazo, no hay comprobante: se puede volver a intentar.
     const msg = err instanceof Error ? err.message : String(err);
     await ref.update({ arca_en_curso_at: null, arca_error: msg.slice(0, 500) });
-    throw new HttpError(502, `ARCA no autorizó: ${msg}`);
+    throw new HttpError(502, `ARCA no autorizó: ${msg} (CUIT ${cuit}, punto de venta ${puntoVenta}, ${produccion ? "producción" : "homologación"})`);
   }
   const det = res.response.FeDetResp?.FECAEDetResponse?.[0];
   if (!res.cae || det?.Resultado !== "A") {
     const msg = motivos(res.response) || "sin detalle";
     await ref.update({ arca_en_curso_at: null, arca_error: msg.slice(0, 500) });
-    throw new HttpError(502, `ARCA rechazó la factura: ${msg}`);
+    // Con qué CUIT, punto de venta y ambiente se pidió: así se ve si la configuración de Vercel es la que corresponde.
+    throw new HttpError(502, `ARCA rechazó la factura: ${msg} (CUIT ${cuit}, punto de venta ${puntoVenta}, ${produccion ? "producción" : "homologación"})`);
   }
   const datosArca: DatosArca = {
     cae: res.cae,
