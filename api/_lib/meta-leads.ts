@@ -289,6 +289,16 @@ export async function importarMensajes(base: string, forzar = false, todo = fals
   // Qué se encontró en cada red (para saber dónde se corta si no entra nada).
   const detalle: string[] = [ig ? `Instagram @${ig.username ?? ig.id}` : "La página no tiene Instagram vinculado"];
   let nuevos = 0;
+  // Leads que se unieron con otro: su conversación sigue en el que quedó (así no vuelve a aparecer como lead nuevo).
+  let unidosEn: Map<string, string> | null = null;
+  const leadQueLoUnio = async (id: string) => {
+    if (!unidosEn) {
+      unidosEn = new Map();
+      for (const d of (await adminDb().collection(COL).get()).docs)
+        for (const u of Array.isArray(d.data().unidos) ? d.data().unidos : []) unidosEn.set(String(u), d.id);
+    }
+    return unidosEn.get(id) ?? null;
+  };
 
   for (const plataforma of ["messenger", "instagram"] as const) {
     if (plataforma === "instagram" && !ig) continue;
@@ -315,8 +325,15 @@ export async function importarMensajes(base: string, forzar = false, todo = fals
     for (const resumen of lista) {
       if ((Date.parse(resumen.updated_time) || 0) <= visto) continue;
       if (Date.parse(resumen.updated_time) < desde) continue;
-      const id = idDeLead(`conversacion:${resumen.id}`);
-      const existente = await leerDoc(pool, COL, id);
+      let id = idDeLead(`conversacion:${resumen.id}`);
+      let existente = await leerDoc(pool, COL, id);
+      if (!existente) {
+        const unido = await leadQueLoUnio(id);
+        if (unido) {
+          id = unido;
+          existente = await leerDoc(pool, COL, id);
+        }
+      }
       const c = await graph(resumen.id, { fields: "id,participants,messages.limit(20){message,from,created_time}" }, token).catch(() => null);
       if (!c) continue;
       if (existente) {

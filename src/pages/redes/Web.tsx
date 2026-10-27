@@ -921,7 +921,8 @@ function LeadDetalle({ lead, todos, onClose }: { lead: LeadWeb | null; todos: Le
   };
   const o = ORIGENES[origenDe(lead)];
   const IconoOrigen = o.icono;
-  const conChat = lead.origen === "meta:mensaje" && !!lead.meta?.conversacion_id;
+  // También el que entró por la web y se unió con el de Instagram: la conversación viene con la unión.
+  const conChat = !!lead.meta?.conversacion_id;
   const cambioNotas = notas !== (lead.notas ?? "");
 
   const datos = (
