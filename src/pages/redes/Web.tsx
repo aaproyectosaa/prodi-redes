@@ -40,7 +40,7 @@ import { callApi } from "@/lib/redes/api";
 import { fechaHora, hace, hoyISO } from "@/lib/redes/format";
 import { cn } from "@/lib/utils";
 import { BuscadorMapa, linkMapa, mapaEmbebido, MapaMovible } from "@/components/redes/BuscadorMapa";
-import { ProximoPasoChip, SeguimientoLead, type EventoLead } from "@/components/redes/crm/SeguimientoLead";
+import { MensajesWhatsApp, ProximoPasoChip, registrarActividad, SeguimientoLead, type EventoLead } from "@/components/redes/crm/SeguimientoLead";
 import { ChatLead } from "@/components/redes/crm/ChatLead";
 import { ConectarWhatsApp } from "@/components/redes/crm/ConectarWhatsApp";
 import { ConfigCatalogo } from "@/components/redes/crm/CatalogoProductos";
@@ -596,9 +596,11 @@ function DatosLead({ lead }: { lead: LeadWeb }) {
   const [valor, setValor] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [verDatos, setVerDatos] = useState(false);
+  const [verMensajes, setVerMensajes] = useState(false);
   useEffect(() => {
     setEditando(null);
     setVerDatos(false);
+    setVerMensajes(false);
   }, [lead.id]);
   const abrir = (k: CampoLead) => {
     setEditando(k);
@@ -630,8 +632,8 @@ function DatosLead({ lead }: { lead: LeadWeb }) {
   const ig = linkDe(lead.instagram);
   // Lo que se puede hacer con un toque (solo con los datos que hay).
   const acciones = [
-    tel && { label: "WhatsApp", icono: MessageCircle, href: `https://wa.me/${tel.replace(/^0/, "54")}`, clase: "bg-emerald-500 text-white shadow-sm shadow-emerald-500/30 group-hover/acc:bg-emerald-600" },
-    tel && { label: "Llamar", icono: Phone, href: `tel:${tel}`, clase: "bg-sky-500/15 text-sky-600 group-hover/acc:bg-sky-500 group-hover/acc:text-white dark:text-sky-300" },
+    tel && { label: "WhatsApp", icono: MessageCircle, onClick: () => setVerMensajes((v) => !v), clase: "bg-emerald-500 text-white shadow-sm shadow-emerald-500/30 group-hover/acc:bg-emerald-600" },
+    tel && { label: "Llamar", icono: Phone, href: `tel:${tel}`, onClick: () => void registrarActividad(lead.id, "llamada", "Lo llamaste").catch(() => {}), clase: "bg-sky-500/15 text-sky-600 group-hover/acc:bg-sky-500 group-hover/acc:text-white dark:text-sky-300" },
     lead.email && { label: "Mail", icono: Mail, onClick: () => copiarEmail(lead.email), clase: "bg-amber-500/15 text-amber-600 group-hover/acc:bg-amber-500 group-hover/acc:text-white dark:text-amber-300" },
     ig && {
       label: ig.includes("instagram.com") ? "Instagram" : "Web",
@@ -736,7 +738,7 @@ function DatosLead({ lead }: { lead: LeadWeb }) {
                 );
                 const clase = "group/acc flex w-12 flex-col items-center gap-1";
                 return a.href ? (
-                  <a key={a.label} href={a.href} target={a.href.startsWith("tel:") ? undefined : "_blank"} rel="noopener noreferrer" className={clase}>
+                  <a key={a.label} href={a.href} onClick={a.onClick} target={a.href.startsWith("tel:") ? undefined : "_blank"} rel="noopener noreferrer" className={clase}>
                     {contenido}
                   </a>
                 ) : (
@@ -747,6 +749,7 @@ function DatosLead({ lead }: { lead: LeadWeb }) {
               })}
             </div>
           )}
+          {verMensajes && tel && <MensajesWhatsApp lead={lead} onListo={() => setVerMensajes(false)} />}
         </div>
 
         {/* Cada dato en su renglón: se toca el lápiz para corregirlo. */}

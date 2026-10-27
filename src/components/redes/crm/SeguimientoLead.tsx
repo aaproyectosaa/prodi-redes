@@ -189,6 +189,33 @@ const fechaLinda = (f: string | null) => {
 async function registrar(id: string, tipo: string, texto: string, cumplido = false) {
   await callApi("/api/web/actividad", { id, tipo, texto, cumplido });
 }
+export const registrarActividad = registrar;
+
+/** WhatsApp desde los datos del lead: elegir un mensaje armado (queda anotado en la actividad). */
+export function MensajesWhatsApp({ lead, onListo }: { lead: LeadSeguimiento; onListo: () => void }) {
+  const { profile } = useUserProfileContext();
+  const yo = profile?.nombre?.split(" ")[0] ?? "";
+  const mandar = (texto: string, label: string) => {
+    if (!lead.telefono) return;
+    window.open(linkWhatsApp(lead.telefono, texto), "_blank", "noopener");
+    void registrar(lead.id, "whatsapp", `Le escribiste por WhatsApp: ${label}`).catch(() => {});
+    onListo();
+  };
+  return (
+    <div className="space-y-1 rounded-xl border border-emerald-500/30 bg-emerald-500/[0.04] p-1.5">
+      <p className="px-2 pt-1 text-[11px] text-muted-foreground">Elegí el mensaje (lo podés cambiar en WhatsApp antes de mandarlo)</p>
+      {mensajesPara(lead, yo).map((m) => (
+        <button key={m.label} type="button" onClick={() => mandar(m.texto, m.label)} className="block w-full rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-background">
+          <span className="block text-xs font-semibold">{m.label}</span>
+          <span className="line-clamp-2 block text-[11px] text-muted-foreground">{m.texto}</span>
+        </button>
+      ))}
+      <button type="button" onClick={() => mandar("", "sin mensaje armado")} className="px-2.5 py-1 text-[11px] font-medium text-emerald-700 hover:underline dark:text-emerald-300">
+        Abrir el chat sin mensaje
+      </button>
+    </div>
+  );
+}
 
 /**
  * Al marcar el próximo paso como hecho: cómo le fue. Queda anotado en la actividad, propone el paso siguiente
@@ -303,10 +330,9 @@ export function SeguimientoLead({ lead }: { lead: LeadSeguimiento }) {
   const [paso, setPaso] = useState(lead.proximo_paso?.texto ?? "");
   const [fecha, setFecha] = useState<string | null>(lead.proximo_paso?.fecha ?? sumarDias(1));
   const [guardandoPaso, setGuardandoPaso] = useState(false);
-  const [registro, setRegistro] = useState<null | "llamada" | "nota" | "reunion" | "email">(null);
+  const [tipoRegistro, setTipoRegistro] = useState<"llamada" | "nota" | "reunion" | "email">("nota");
   const [textoRegistro, setTextoRegistro] = useState("");
   const [busy, setBusy] = useState(false);
-  const [verMensajes, setVerMensajes] = useState(false);
   const [editandoPaso, setEditandoPaso] = useState(false);
   const [verTodo, setVerTodo] = useState(false);
   const [cerrando, setCerrando] = useState(false);
@@ -334,25 +360,18 @@ export function SeguimientoLead({ lead }: { lead: LeadSeguimiento }) {
   };
 
   const guardarRegistro = async () => {
-    if (!registro) return;
+    if (!textoRegistro.trim()) return;
     setBusy(true);
     try {
-      await registrar(lead.id, registro, textoRegistro.trim());
-      toast.success("Anotado en la línea de tiempo");
-      setRegistro(null);
+      await registrar(lead.id, tipoRegistro, textoRegistro.trim());
+      toast.success("Anotado en la actividad");
+      setTipoRegistro("nota");
       setTextoRegistro("");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo anotar");
     } finally {
       setBusy(false);
     }
-  };
-
-  const mandarWhatsApp = (texto: string, label: string) => {
-    if (!lead.telefono) return;
-    window.open(linkWhatsApp(lead.telefono, texto), "_blank", "noopener");
-    void registrar(lead.id, "whatsapp", `Le escribiste por WhatsApp: ${label}`).catch(() => {});
-    setVerMensajes(false);
   };
 
   const rapidas: { label: string; f: string }[] = [
@@ -368,10 +387,10 @@ export function SeguimientoLead({ lead }: { lead: LeadSeguimiento }) {
   const pasoHoy = lead.proximo_paso?.fecha === hoyISO();
   const mostrarFormPaso = !lead.proximo_paso || editandoPaso;
   const registros = [
-    { t: "llamada" as const, label: "Llamé" },
+    { t: "nota" as const, label: "Nota" },
+    { t: "llamada" as const, label: "Llamada" },
     { t: "reunion" as const, label: "Reunión" },
     { t: "email" as const, label: "Mail" },
-    { t: "nota" as const, label: "Nota" },
   ];
   const visibles = verTodo ? historial : historial.slice(0, 5);
 
@@ -475,83 +494,40 @@ export function SeguimientoLead({ lead }: { lead: LeadSeguimiento }) {
         )}
       </section>
 
-      {/* Registrar lo que pasó */}
+      {/* Anotar lo que pasó (lo que se hizo por fuera: una llamada desde el celular, la reunión, un mail, una nota) */}
       <section className="space-y-2">
         <Titulo>Anotar algo que pasó</Titulo>
-        <div className="grid grid-cols-5 gap-1.5">
-          <button
-            type="button"
-            onClick={() => lead.telefono && setVerMensajes(!verMensajes)}
-            disabled={!lead.telefono}
-            title={lead.telefono ? "Escribirle por WhatsApp con un mensaje armado" : "Cargale el WhatsApp en Datos para escribirle desde acá"}
-            className={cn(
-              "flex flex-col items-center gap-1 rounded-xl border py-2 text-[11px] font-medium transition-colors",
-              lead.telefono
-                ? verMensajes
-                  ? "border-emerald-500 bg-emerald-500 text-white"
-                  : "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
-                : "cursor-not-allowed opacity-40"
-            )}
-          >
-            <span className={cn("flex h-7 w-7 items-center justify-center rounded-full", verMensajes ? "bg-white/20" : "bg-emerald-500 text-white")}>
-              <MessageCircle className="h-4 w-4" />
-            </span>
-            WhatsApp
-          </button>
-          {registros.map(({ t, label }) => {
-            const Icono = ICONO_TIPO[t];
-            return (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setRegistro(registro === t ? null : t)}
-                className={cn(
-                  "flex flex-col items-center gap-1 rounded-xl border py-2 text-[11px] font-medium transition-colors",
-                  registro === t ? "border-primary bg-primary text-primary-foreground" : "bg-card text-foreground hover:border-primary/40"
-                )}
-              >
-                <span className={cn("flex h-7 w-7 items-center justify-center rounded-full", registro === t ? "bg-white/20" : COLOR_TIPO[t])}>
-                  <Icono className="h-4 w-4" />
-                </span>
-                {label}
-              </button>
-            );
-          })}
+        <div className="space-y-2 rounded-2xl border bg-card p-2">
+          <Textarea
+            rows={2}
+            value={textoRegistro}
+            onChange={(e) => setTextoRegistro(e.target.value)}
+            placeholder={tipoRegistro === "llamada" ? "¿Qué hablaron?" : tipoRegistro === "reunion" ? "¿Cómo fue la reunión?" : tipoRegistro === "email" ? "¿Qué le mandaste?" : "Escribí lo que pasó"}
+            className="min-h-[52px] resize-none border-0 bg-muted/40 text-sm focus-visible:ring-1"
+          />
+          <div className="flex flex-wrap items-center gap-1">
+            {registros.map(({ t: tipo, label }) => {
+              const Icono = ICONO_TIPO[tipo];
+              const activo = tipoRegistro === tipo;
+              return (
+                <button
+                  key={tipo}
+                  type="button"
+                  onClick={() => setTipoRegistro(tipo)}
+                  className={cn(
+                    "flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium transition-colors",
+                    activo ? COLOR_TIPO[tipo] : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <Icono className="h-3.5 w-3.5" /> {label}
+                </button>
+              );
+            })}
+            <Button size="sm" className="ml-auto h-7 rounded-full px-3 text-[11px]" onClick={() => void guardarRegistro()} disabled={busy || !textoRegistro.trim()}>
+              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Anotar"}
+            </Button>
+          </div>
         </div>
-        {verMensajes && lead.telefono && (
-          <div className="space-y-1 rounded-xl border bg-card p-1.5">
-            <p className="px-2 pt-1 text-[11px] text-muted-foreground">Elegí el mensaje (lo podés cambiar en WhatsApp antes de mandarlo)</p>
-            {mensajesPara(lead, yo).map((m) => (
-              <button key={m.label} type="button" onClick={() => mandarWhatsApp(m.texto, m.label)} className="block w-full rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted">
-                <span className="block text-xs font-semibold">{m.label}</span>
-                <span className="line-clamp-2 block text-[11px] text-muted-foreground">{m.texto}</span>
-              </button>
-            ))}
-            <button type="button" onClick={() => mandarWhatsApp("", "sin mensaje armado")} className="px-2.5 py-1 text-[11px] font-medium text-primary hover:underline">
-              Abrir el chat sin mensaje
-            </button>
-          </div>
-        )}
-        {registro && (
-          <div className="flex items-end gap-2 rounded-xl border bg-card p-2">
-            <Textarea
-              autoFocus
-              rows={2}
-              value={textoRegistro}
-              onChange={(e) => setTextoRegistro(e.target.value)}
-              placeholder={registro === "llamada" ? "¿Qué hablaron?" : registro === "reunion" ? "¿Cómo fue la reunión?" : registro === "email" ? "¿Qué le mandaste?" : "Escribí la nota"}
-              className="min-h-[56px] resize-none border-0 bg-muted/50 text-sm focus-visible:ring-1"
-            />
-            <div className="flex flex-col gap-1">
-              <Button size="sm" className="h-8 rounded-full px-3 text-xs" onClick={() => void guardarRegistro()} disabled={busy || (registro === "nota" && !textoRegistro.trim())}>
-                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Anotar"}
-              </Button>
-              <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setRegistro(null)}>
-                Cancelar
-              </Button>
-            </div>
-          </div>
-        )}
       </section>
 
       {/* Presupuesto conectado */}
