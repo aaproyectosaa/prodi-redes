@@ -426,15 +426,20 @@ export function SeguimientoLead({ lead }: { lead: LeadSeguimiento }) {
             </button>
           </div>
         ) : (
-          <div className="space-y-2 rounded-xl border bg-card p-2.5">
-            <Input
-              value={paso}
+          <div className="space-y-2 rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/[0.07] to-sky-500/[0.04] p-2.5">
+            <div className="flex items-center gap-2">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm shadow-primary/30">
+                <CalendarClock className="h-4 w-4" />
+              </span>
+              <Input
+                value={paso}
               onChange={(e) => setPaso(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && paso.trim().length >= 3 && void guardarPaso()}
-              placeholder="¿Qué sigue? Ej.: llamarlo para agendar la reunión"
-              maxLength={200}
-              className="h-9 border-0 bg-muted/50 focus-visible:ring-1"
-            />
+                placeholder="¿Qué sigue? Ej.: llamarlo para agendar la reunión"
+                maxLength={200}
+                className="h-9 border-0 bg-background/80 focus-visible:ring-1"
+              />
+            </div>
             <div className="flex flex-wrap items-center gap-1">
               {rapidas.map((r) => (
                 <button
@@ -443,7 +448,7 @@ export function SeguimientoLead({ lead }: { lead: LeadSeguimiento }) {
                   onClick={() => setFecha(r.f)}
                   className={cn(
                     "h-7 rounded-full px-2.5 text-[11px] font-medium transition-colors",
-                    fecha === r.f ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    fecha === r.f ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-background hover:text-foreground"
                   )}
                 >
                   {r.label}
@@ -488,7 +493,10 @@ export function SeguimientoLead({ lead }: { lead: LeadSeguimiento }) {
                 : "cursor-not-allowed opacity-40"
             )}
           >
-            <MessageCircle className="h-4 w-4" /> WhatsApp
+            <span className={cn("flex h-7 w-7 items-center justify-center rounded-full", verMensajes ? "bg-white/20" : "bg-emerald-500 text-white")}>
+              <MessageCircle className="h-4 w-4" />
+            </span>
+            WhatsApp
           </button>
           {registros.map(({ t, label }) => {
             const Icono = ICONO_TIPO[t];
@@ -499,10 +507,13 @@ export function SeguimientoLead({ lead }: { lead: LeadSeguimiento }) {
                 onClick={() => setRegistro(registro === t ? null : t)}
                 className={cn(
                   "flex flex-col items-center gap-1 rounded-xl border py-2 text-[11px] font-medium transition-colors",
-                  registro === t ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  registro === t ? "border-primary bg-primary text-primary-foreground" : "bg-card text-foreground hover:border-primary/40"
                 )}
               >
-                <Icono className="h-4 w-4" /> {label}
+                <span className={cn("flex h-7 w-7 items-center justify-center rounded-full", registro === t ? "bg-white/20" : COLOR_TIPO[t])}>
+                  <Icono className="h-4 w-4" />
+                </span>
+                {label}
               </button>
             );
           })}

@@ -26,6 +26,7 @@ import {
   UserPlus,
   X,
   XCircle,
+  Quote,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -629,11 +630,16 @@ function DatosLead({ lead }: { lead: LeadWeb }) {
   const ig = linkDe(lead.instagram);
   // Lo que se puede hacer con un toque (solo con los datos que hay).
   const acciones = [
-    tel && { label: "WhatsApp", icono: MessageCircle, href: `https://wa.me/${tel.replace(/^0/, "54")}`, clase: "bg-emerald-500 text-white hover:bg-emerald-600" },
-    tel && { label: "Llamar", icono: Phone, href: `tel:${tel}`, clase: "" },
-    lead.email && { label: "Mail", icono: Mail, onClick: () => copiarEmail(lead.email), clase: "" },
-    ig && { label: ig.includes("instagram.com") ? "Instagram" : "Web", icono: ig.includes("instagram.com") ? Instagram : ExternalLink, href: ig, clase: "" },
-    lead.ubicacion && { label: "Llegar", icono: MapPin, href: linkMapa(lead.ubicacion), clase: "" },
+    tel && { label: "WhatsApp", icono: MessageCircle, href: `https://wa.me/${tel.replace(/^0/, "54")}`, clase: "bg-emerald-500 text-white shadow-sm shadow-emerald-500/30 group-hover/acc:bg-emerald-600" },
+    tel && { label: "Llamar", icono: Phone, href: `tel:${tel}`, clase: "bg-sky-500/15 text-sky-600 group-hover/acc:bg-sky-500 group-hover/acc:text-white dark:text-sky-300" },
+    lead.email && { label: "Mail", icono: Mail, onClick: () => copiarEmail(lead.email), clase: "bg-amber-500/15 text-amber-600 group-hover/acc:bg-amber-500 group-hover/acc:text-white dark:text-amber-300" },
+    ig && {
+      label: ig.includes("instagram.com") ? "Instagram" : "Web",
+      icono: ig.includes("instagram.com") ? Instagram : ExternalLink,
+      href: ig,
+      clase: "bg-pink-500/15 text-pink-600 group-hover/acc:bg-gradient-to-br group-hover/acc:from-fuchsia-500 group-hover/acc:to-orange-400 group-hover/acc:text-white dark:text-pink-300",
+    },
+    lead.ubicacion && { label: "Llegar", icono: MapPin, href: linkMapa(lead.ubicacion), clase: "bg-rose-500/15 text-rose-600 group-hover/acc:bg-rose-500 group-hover/acc:text-white dark:text-rose-300" },
   ].filter(Boolean) as { label: string; icono: React.ElementType; href?: string; onClick?: () => void; clase: string }[];
 
   const editor = (k: CampoLead, placeholder: string) => (
@@ -703,7 +709,7 @@ function DatosLead({ lead }: { lead: LeadWeb }) {
             editor("nombre", CAMPOS_LEAD[0].placeholder)
           ) : (
             <div className="group flex items-center gap-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">{iniciales}</span>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#6F40FC] to-fuchsia-500 text-sm font-bold text-white shadow-sm">{iniciales}</span>
               <div className="min-w-0 flex-1">
                 <p className={cn("truncate font-semibold", !nombre && "text-muted-foreground")}>{nombre || "Sin nombre"}</p>
                 <p className="text-[11px] text-muted-foreground">Contacto</p>
@@ -763,7 +769,9 @@ function DatosLead({ lead }: { lead: LeadWeb }) {
               return (
                 <div key={k} className="group px-3 py-2">
                   <div className="flex items-center gap-3">
-                    <Icono className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted/70">
+                      <Icono className="h-4 w-4 text-muted-foreground" />
+                    </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-[11px] text-muted-foreground">{label}</p>
                       <p className="truncate text-sm font-medium" title={v}>
@@ -816,10 +824,12 @@ function DatosLead({ lead }: { lead: LeadWeb }) {
 
 /** Etapa del lead: botones con su color (en vez de un desplegable). */
 function SelectorEtapa({ lead }: { lead: LeadWeb }) {
+  const avance = ["calificado", "reunion_agendada", "propuesta", "ganado"].indexOf(lead.estado);
   return (
-    <div className="grid grid-cols-5 gap-1 rounded-xl bg-muted/70 p-1">
-      {COLUMNAS.map((c) => {
+    <div className="grid grid-cols-5 gap-1 rounded-2xl border bg-card p-1">
+      {COLUMNAS.map((c, i) => {
         const activa = lead.estado === c.id;
+        const pasada = !activa && c.id !== "perdido" && i < avance;
         return (
           <button
             key={c.id}
@@ -828,10 +838,10 @@ function SelectorEtapa({ lead }: { lead: LeadWeb }) {
             title={c.ayuda}
             className={cn(
               "flex min-w-0 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-[11px] font-medium transition-[background-color,box-shadow,color] duration-100 active:scale-95",
-              activa ? "bg-background text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground"
+              activa ? cn(c.dot, "font-semibold text-white shadow-sm") : pasada ? "text-foreground hover:bg-muted" : "text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
           >
-            <span className={cn("h-1.5 w-6 rounded-full", activa ? c.dot : "bg-muted-foreground/25")} />
+            <span className={cn("h-1.5 w-6 rounded-full", activa ? "bg-white/80" : pasada ? c.dot : "bg-muted-foreground/20")} />
             <span className="truncate">{c.titulo}</span>
           </button>
         );
@@ -1169,9 +1179,14 @@ function LoQuePidio({ lead, conChat }: { lead: LeadWeb; conChat: boolean }) {
           </div>
         </div>
       ) : (
-        <div className="rounded-2xl bg-muted/50 px-3 py-2.5 text-sm">
-          {visible ? <p className="whitespace-pre-wrap break-words">{visible}</p> : <p className="text-muted-foreground">Escribió por mensaje.</p>}
-          {visible !== completo && <p className="mt-1 text-[11px] text-muted-foreground">Sus mensajes están en el chat.</p>}
+        <div className="flex gap-3 rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.08] to-fuchsia-500/[0.04] px-3 py-2.5 text-sm">
+          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-300">
+            <Quote className="h-3.5 w-3.5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            {visible ? <p className="whitespace-pre-wrap break-words">{visible}</p> : <p className="text-muted-foreground">Escribió por mensaje.</p>}
+            {visible !== completo && <p className="mt-1 text-[11px] text-violet-700/70 dark:text-violet-300/70">Sus mensajes están en el chat.</p>}
+          </div>
         </div>
       )}
     </Bloque>
