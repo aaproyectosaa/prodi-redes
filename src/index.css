@@ -290,9 +290,11 @@ html.modo-chat {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
-html.teclado-ios .alto-app {
+html.teclado-ios .alto-app,
+html.teclado-ios.pantalla-ipad .alto-app.app-principal {
   bottom: auto;
   height: var(--alto-app);
+  padding-bottom: 0;
 }
 /* Ventanas a pantalla completa en el celular (Pedir un video): con el teclado del iPhone siguen a la parte visible,
    así la barra de botones de abajo queda arriba del teclado. */

@@ -7,7 +7,7 @@ export const esCampoDeTexto = (el: Element | null) =>
     (el.tagName === "INPUT" && !["checkbox", "radio", "range", "color", "file", "button", "submit"].includes((el as HTMLInputElement).type)));
 
 /**
- * iPhone (Safari y app instalada): el teclado no achica la pantalla (100dvh sigue igual, `interactive-widget` no se
+ * iPhone y iPad (Safari y app instalada): el teclado no achica la pantalla (100dvh sigue igual, `interactive-widget` no se
  * respeta). Safari además corre la parte visible (visualViewport.offsetTop) para mostrar el campo, así que una caja
  * pegada arriba con el alto visible queda corrida: se veía solo la caja de escribir flotando y un hueco negro.
  *
@@ -45,7 +45,7 @@ export function useAltoVisible() {
       const lleno = Math.max(window.innerHeight, raiz.clientHeight);
       // Con zoom de pellizco el alto visible también baja: eso no es el teclado.
       const teclado =
-        window.innerWidth < 768 && vv.scale < 1.05 && esCampoDeTexto(document.activeElement) && vv.height < lleno * 0.85;
+        vv.scale < 1.05 && esCampoDeTexto(document.activeElement) && vv.height < lleno * 0.85;
       if (teclado) {
         raiz.style.setProperty("--alto-app", `${Math.round(vv.height)}px`);
         raiz.style.setProperty("--arriba-app", `${Math.max(0, Math.round(vv.offsetTop))}px`);
