@@ -54,7 +54,7 @@ const LayoutInner = () => {
   return (
     <RedesDataProvider>
       <BadgeApp />
-      <div className="alto-app seguro-costados flex overflow-hidden bg-background">
+      <div className="alto-app app-principal seguro-costados flex overflow-hidden bg-background">
         <AppSidebar profile={profile} role={role}>
           {extras}
         </AppSidebar>

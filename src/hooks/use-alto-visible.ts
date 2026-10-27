@@ -28,6 +28,13 @@ export function useAltoVisible() {
 
     const aplicar = () => {
       raf = 0;
+      // iPad con la app instalada: el alto de la ventana a veces queda corto (unos 20-40 px menos que la pantalla).
+      // Con la app en pantalla dividida la diferencia es mucho mayor y no se toca.
+      const instalada = window.matchMedia?.("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone;
+      const altoPantalla = window.innerWidth > window.innerHeight ? Math.min(screen.width, screen.height) : Math.max(screen.width, screen.height);
+      const falta = altoPantalla - window.innerHeight;
+      if (instalada && window.innerWidth >= 768 && falta > 0 && falta <= 40) raiz.style.setProperty("--falta-abajo", `${falta}px`);
+      else raiz.style.removeProperty("--falta-abajo");
       // Alto completo: el del layout viewport (no cambia con el teclado en iOS).
       const lleno = Math.max(window.innerHeight, raiz.clientHeight);
       // Con zoom de pellizco el alto visible también baja: eso no es el teclado.
@@ -79,6 +86,7 @@ export function useAltoVisible() {
       document.removeEventListener("focusout", alFoco);
       raiz.style.removeProperty("--alto-app");
       raiz.style.removeProperty("--arriba-app");
+      raiz.style.removeProperty("--falta-abajo");
       raiz.classList.remove("teclado-ios", "vista-fija");
     };
   }, []);
