@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
-import { agendarRodaje, actualizarRodaje, crearVideos } from "@/lib/redes/videos";
+import { agendarRodaje, actualizarRodaje, cancelarRodaje, crearVideos } from "@/lib/redes/videos";
 import { quienFilma } from "@/lib/redes/etapas";
 import { hoyISO, mesActual, mesLabel } from "@/lib/redes/format";
 import { sumarDias } from "@/lib/fecha";
@@ -318,6 +318,32 @@ export function RodajeDialog({
             placeholder="¿Para qué cliente?"
             className="h-14 rounded-2xl border-white/10 bg-muted/40 px-4 text-base font-medium"
           />
+          {/* Editando: el cliente no se cambia (los videos son suyos). Para otro cliente, se cancela y se agenda de nuevo. */}
+          {rodaje && rodaje.estado === "agendado" && (
+            <div className="-mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-muted-foreground">
+              <span>Para cambiar el cliente, cancelá este rodaje y agendá uno nuevo.</span>
+              <button
+                type="button"
+                disabled={saving}
+                className="font-semibold text-destructive hover:underline"
+                onClick={async () => {
+                  if (!window.confirm("¿Cancelar este rodaje? Sus videos vuelven a planificados.")) return;
+                  setSaving(true);
+                  try {
+                    await cancelarRodaje(rodaje, videos, user?.uid ?? "");
+                    toast.success("Rodaje cancelado: los videos vuelven a planificados");
+                    onOpenChange(false);
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "No se pudo cancelar");
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+              >
+                Cancelar rodaje
+              </button>
+            </div>
+          )}
 
           {/* Día */}
           <section className="space-y-2.5">

@@ -15,7 +15,7 @@ import { appUrl, body, HttpError, requireCaller, sendError } from "../_lib/http"
 import { construirInforme, enviarMail, mesAnteriorAR } from "../_lib/informe";
 import { sincronizarTodoMeta, sincronizarVideoMeta } from "../_lib/meta";
 import { avisarPresupuesto, sincronizarAuto, sincronizarCuentasTodos } from "../_lib/meta-cuenta";
-import { facturacionDel27, recordatoriosCobro, vencimientosObligaciones, recordatoriosAprobacion, recordatoriosEdicion, recordatoriosPlan, recordatoriosRodaje } from "../_lib/diario";
+import { alertasPublicacion, facturacionDel27, recordatoriosCobro, vencimientosObligaciones, recordatoriosAprobacion, recordatoriosEdicion, recordatoriosPlan, recordatoriosRodaje } from "../_lib/diario";
 import { assertProjectAccess } from "../_lib/http";
 import { aprenderDeChats } from "../_lib/chat-memoria";
 import { recordatoriosTareas } from "../_lib/tareas";
@@ -94,7 +94,7 @@ async function meta(req: VercelRequest) {
 async function diario(req: VercelRequest) {
   assertCron(req);
   const base = appUrl(req);
-  const [metaRes, rodajes, aprobar, planes, facturacion, vencimientos, cobros, chats, tareas, edicion] = await Promise.all([
+  const [metaRes, rodajes, aprobar, planes, facturacion, vencimientos, cobros, chats, tareas, edicion, publicacion] = await Promise.all([
     sincronizarTodoMeta().catch((err) => ({ error: String(err) })),
     recordatoriosRodaje(base).catch((err) => `error: ${err}`),
     recordatoriosAprobacion(base).catch((err) => `error: ${err}`),
@@ -106,6 +106,8 @@ async function diario(req: VercelRequest) {
     aprenderDeChats().catch((err) => `error: ${err}`),
     recordatoriosTareas(base).catch((err) => `error: ${err}`),
     recordatoriosEdicion(base).catch((err) => `error: ${err}`),
+    // Cumplir el mes: lo que falta publicar la última semana y los clientes que no publican hace 5 días.
+    alertasPublicacion(base).catch((err) => `error: ${err}`),
   ]);
   // Instagram y Facebook de los clientes: la foto del día (seguidores, alcance).
   const redesMeta = await fotoRedesTodos().catch((err) => `error: ${err}`);
@@ -121,7 +123,7 @@ async function diario(req: VercelRequest) {
   const manana = await enviarRetenidos(base).catch((err) => `error: ${err}`);
   // Lo borrado se anota unos días para que las pantallas abiertas se enteren; después se limpia.
   await getPool().query("delete from borrados where borrado < now() - interval '7 days'").catch(() => undefined);
-  return { ok: true, catalogos, mensajes_leads: mensajesLeads, meta: metaRes, recordatorios_rodaje: rodajes, recordatorios_aprobar: aprobar, recordatorios_plan: planes, facturacion, vencimientos, recordatorios_cobro: cobros, mora, redes_meta: redesMeta, cuentas_meta: cuentasMeta, aprendizaje_chats: chats, tareas, entregas_edicion: edicion, resumen_manana: manana };
+  return { ok: true, catalogos, mensajes_leads: mensajesLeads, meta: metaRes, recordatorios_rodaje: rodajes, recordatorios_aprobar: aprobar, recordatorios_plan: planes, facturacion, vencimientos, recordatorios_cobro: cobros, mora, redes_meta: redesMeta, cuentas_meta: cuentasMeta, aprendizaje_chats: chats, tareas, entregas_edicion: edicion, publicacion, resumen_manana: manana };
 }
 
 async function cron(req: VercelRequest) {

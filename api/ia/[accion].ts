@@ -1281,7 +1281,10 @@ async function planMes(req: VercelRequest) {
   const proj = (await db.collection("projects").doc(pid).get()).data() ?? {};
   const ref = db.collection("planes_mes").doc(planId(pid, mes));
   const plan = (await ref.get()).data();
-  if (plan && plan.estado !== "borrador") throw new HttpError(409, "Este plan ya se mandó al cliente");
+  // Plan ya cerrado (el cliente respondió y se crearon los videos) pero con videos libres: se arma otra tanda. Lo
+  // anterior queda guardado en "rondas" y las ideas nuevas van a un borrador para mandar como siempre.
+  const nuevaRonda = !!plan && plan.estado === "cerrado" && !b.idea_id;
+  if (plan && plan.estado !== "borrador" && !nuevaRonda) throw new HttpError(409, "Este plan ya se mandó al cliente");
   const memoria = ((await db.collection("ia_memoria").doc(pid).get()).data() ?? null) as MemoriaIA | null;
   const { libres, videos, delMes } = await lugaresDelMes(pid, mes, proj);
   const historial = videos
@@ -1358,7 +1361,7 @@ En "recordar" escribí, en 1 a 4 frases, lo que conviene guardar para siempre de
 
   if (libres <= 0) throw new HttpError(409, `El plan de ${nombreMes(mes)} ya tiene todos sus videos cargados`);
   // Solo algunos videos: se suman a las ideas que ya hay en el borrador (no se rehace todo).
-  const yaHay = ((plan?.ideas ?? []) as IdeaPlan[]);
+  const yaHay = nuevaRonda ? [] : ((plan?.ideas ?? []) as IdeaPlan[]);
   const sumar = typeof b.cantidad === "number" && b.cantidad >= 1;
   const cantidad = sumar ? Math.min(Math.floor(b.cantidad as number), Math.max(libres - yaHay.length, 0)) : libres;
   if (cantidad <= 0) throw new HttpError(409, "El borrador ya tiene ideas para todos los videos libres. Rehacé alguna o borrala primero.");
@@ -1371,13 +1374,15 @@ En "recordar" escribí, en 1 a 4 frases, lo que conviene guardar para siempre de
   const ideas = ideasDesdeIA(r, cantidad);
   if (!ideas.length) throw new HttpError(502, "La IA no devolvió ideas. Probá de nuevo.");
   await guardarContexto(r?.recordar);
-  if (sumar && plan) {
+  if (sumar && plan && !nuevaRonda) {
     await ref.update({ ideas: [...yaHay, ...ideas], ideas_ia: [...(plan.ideas_ia ?? []), ...ideas], updated_at: now });
     return { ok: true, ideas };
   }
   // Si rehace todo, las ideas anteriores de la IA cuentan como descartadas.
-  const antes = ((plan?.ideas ?? []) as IdeaPlan[]).filter((i) => i.origen === "ia").map((i) => i.titulo);
+  const antes = nuevaRonda ? [] : ((plan?.ideas ?? []) as IdeaPlan[]).filter((i) => i.origen === "ia").map((i) => i.titulo);
+  const { rondas: rondasPrevias, ...anterior } = (plan ?? {}) as Record<string, any>;
   await ref.set({
+    rondas: nuevaRonda ? [...((rondasPrevias as unknown[]) ?? []), anterior] : (rondasPrevias ?? null),
     proyecto_id: pid,
     mes,
     estado: "borrador",

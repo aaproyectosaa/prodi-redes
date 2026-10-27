@@ -201,7 +201,9 @@ export function PlanMesDialog({
               </Button>
             </div>
             {cliente && !loading && modo === "mes" && !compacto && (
-              <span className="rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-primary shadow-sm">{ESTADO_PLAN[plan?.estado ?? "nada"].label}</span>
+              <span className="rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-primary shadow-sm">
+                {plan?.estado === "cerrado" && libres > 0 ? `Faltan ${libres} video${libres === 1 ? "" : "s"}` : ESTADO_PLAN[plan?.estado ?? "nada"].label}
+              </span>
             )}
           </div>
         </DialogHeader>
@@ -228,6 +230,12 @@ export function PlanMesDialog({
             <SinPlan proyectoId={cliente.id} nombre={cliente.nombre} mes={mes} libres={libres} onCampania={() => setModo("campania")} />
           ) : plan.estado === "borrador" ? (
             <Borrador key={plan.id} plan={plan} nombre={cliente.nombre} />
+          ) : plan.estado === "cerrado" && libres > 0 ? (
+            // Listo, pero quedan videos libres en el mes: se arma otra tanda (lo aprobado queda abajo).
+            <div className="space-y-4">
+              <SinPlan proyectoId={cliente.id} nombre={cliente.nombre} mes={mes} libres={libres} onCampania={() => setModo("campania")} />
+              <Enviado plan={plan} onCerrar={() => onOpenChange(false)} />
+            </div>
           ) : (
             <Enviado plan={plan} onCerrar={() => onOpenChange(false)} />
           )}

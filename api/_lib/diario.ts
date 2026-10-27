@@ -478,3 +478,98 @@ export async function recordatoriosRevisionInterna(base: string, o: { todoElDia?
   }
   return enviados;
 }
+
+// ---------------------------------------------------------------------------
+// Cumplir el mes: a la productora y al de pauta de cada cliente (nunca al admin), un aviso por día con sus clientes.
+// - La última semana del mes, los clientes que todavía no publicaron todos los videos del plan.
+// - Los clientes que hace 5 días o más no publican nada (videos o piezas marcados como publicados).
+// ---------------------------------------------------------------------------
+
+/** Desde cuántos días antes de fin de mes se avisa lo que falta publicar. */
+const AVISO_FIN_DE_MES = 7;
+/** Cuántos días sin publicar nada para avisar. */
+const DIAS_SIN_PUBLICAR = 5;
+
+export async function alertasPublicacion(base: string): Promise<{ fin_de_mes: number; sin_publicar: number }> {
+  const db = adminDb();
+  const hoy = hoyAR();
+  const mes = hoy.slice(0, 7);
+  const finMes = sumarDias(`${sumarMeses(mes, 1)}-01`, -1);
+  const quedan = Math.round((Date.parse(finMes) - Date.parse(hoy)) / 86_400_000) + 1;
+  const ultimaSemana = quedan <= AVISO_FIN_DE_MES;
+  const [proys, planes, admins, videosMes, publicados, piezas] = await Promise.all([
+    db.collection("projects").get(),
+    db.collection("planes_redes").get(),
+    db.collection("profiles").where("role", "==", "admin").get(),
+    db.collection("videos").where("mes", "==", mes).get(),
+    db.collection("videos").where("etapa", "==", "publicado").get(),
+    db.collection("piezas_ia").get(),
+  ]);
+  const sinAdmin = new Set(admins.docs.map((d) => d.id));
+  const videosDePlan = new Map(planes.docs.map((d) => [d.id, Number(d.data().videos_mes ?? 0)]));
+  // La última publicación de cada cliente (videos y piezas).
+  const ultima = new Map<string, string>();
+  const anotar = (pid: unknown, at: unknown) => {
+    const f = String(at ?? "").slice(0, 10);
+    if (!pid || !/^\d{4}-\d{2}-\d{2}$/.test(f)) return;
+    if (f > (ultima.get(String(pid)) ?? "")) ultima.set(String(pid), f);
+  };
+  for (const d of publicados.docs) anotar(d.data().proyecto_id, d.data().publicacion?.publicado_at ?? d.data().etapa_desde);
+  for (const d of piezas.docs) anotar(d.data().proyecto_id, d.data().publicada_at);
+
+  // Por persona: qué clientes le faltan este mes y cuáles no publican hace días.
+  const falta = new Map<string, string[]>();
+  const quietos = new Map<string, string[]>();
+  const sumar = (m: Map<string, string[]>, uids: string[], linea: string) =>
+    uids.forEach((u) => m.set(u, [...(m.get(u) ?? []), linea]));
+  for (const d of proys.docs) {
+    const p = d.data();
+    if (p.enabled === false || p.demo_ejemplo) continue;
+    const cupo = Number(p.plan_redes_override?.videos_mes ?? videosDePlan.get(String(p.plan_redes_id ?? "")) ?? 0) + Number(p.creditos_extra?.[mes] ?? 0);
+    if (cupo <= 0) continue; // sin videos en el plan (solo pauta, software…)
+    const team = (p.team_roles ?? {}) as Record<string, string[]>;
+    const quienes = [...new Set([...(team.productor ?? []), ...(team.pauta ?? [])])].filter((u) => !sinAdmin.has(u));
+    if (!quienes.length) continue;
+    const nombre = String(p.nombre ?? "Cliente");
+    if (ultimaSemana) {
+      const hechos = videosMes.docs.filter((v) => v.data().proyecto_id === d.id && v.data().etapa === "publicado").length;
+      if (hechos < cupo) sumar(falta, quienes, `${nombre}: faltan ${cupo - hechos} de ${cupo}`);
+    }
+    // Sin ninguna publicación registrada no se avisa (todavía no marcan lo publicado en la app).
+    const u = ultima.get(d.id);
+    const dias = u ? Math.round((Date.parse(hoy) - Date.parse(u)) / 86_400_000) : 0;
+    if (u && dias >= DIAS_SIN_PUBLICAR) sumar(quietos, quienes, `${nombre}: hace ${dias} días`);
+  }
+
+  const mesTxt = new Date(`${mes}-15T12:00:00Z`).toLocaleDateString("es-AR", { month: "long", timeZone: "UTC" });
+  const cuerpo = (l: string[]) => (l.length > 4 ? `${l.slice(0, 4).join(" · ")} · y ${l.length - 4} más` : l.join(" · "));
+  await Promise.all([
+    ...[...falta].map(([uid, l]) =>
+      enviarAviso(
+        {
+          destinatarios: [uid],
+          titulo: `${quedan === 1 ? "Hoy cierra" : `Quedan ${quedan} días para cerrar`} ${mesTxt}: ${l.length === 1 ? "1 cliente con videos sin publicar" : `${l.length} clientes con videos sin publicar`}`,
+          cuerpo: cuerpo(l),
+          link: "/videos",
+          clave: `fin_de_mes:${hoy}`,
+          mail: false,
+        },
+        base
+      ).catch((e) => console.warn("[fin de mes]", uid, e))
+    ),
+    ...[...quietos].map(([uid, l]) =>
+      enviarAviso(
+        {
+          destinatarios: [uid],
+          titulo: l.length === 1 ? "Un cliente sin publicar hace días" : `${l.length} clientes sin publicar hace días`,
+          cuerpo: cuerpo(l),
+          link: "/videos",
+          clave: `sin_publicar:${hoy}`,
+          mail: false,
+        },
+        base
+      ).catch((e) => console.warn("[sin publicar]", uid, e))
+    ),
+  ]);
+  return { fin_de_mes: falta.size, sin_publicar: quietos.size };
+}
