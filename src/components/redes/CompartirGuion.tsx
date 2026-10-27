@@ -1,8 +1,9 @@
 // Mandar el guion de uno o varios videos por chat: al grupo del cliente, a una persona del cliente
 // (si no hay chat privado con ella, se abre) o a cualquier otro chat. Llega como mensaje con la tarjeta del video.
+// También por WhatsApp (el texto listo; a quién se elige en WhatsApp).
 
 import { useEffect, useMemo, useState } from "react";
-import { FileText, Loader2, Search, Send, UserRound, Users } from "lucide-react";
+import { FileText, Loader2, MessageCircle, Search, Send, UserRound, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -171,6 +172,17 @@ export function CompartirGuion({
         <Button onClick={() => void mandar()} disabled={!destino || enviando} className="w-full">
           {enviando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
           Mandar
+        </Button>
+        {/* Fuera de Prodi Chat: abre WhatsApp con el texto listo y se elige ahí a quién. */}
+        <Button
+          variant="outline"
+          className="w-full border-emerald-500/40 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400"
+          onClick={() => {
+            const texto = [nota.trim(), ...videos.map(textoGuion)].filter(Boolean).join("\n\n———\n\n");
+            window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank");
+          }}
+        >
+          <MessageCircle className="mr-2 h-4 w-4" /> Mandar por WhatsApp
         </Button>
       </DialogContent>
     </Dialog>
