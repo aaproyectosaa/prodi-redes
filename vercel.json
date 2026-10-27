@@ -40,7 +40,8 @@
       "memory": 1024
     },
     "api/pagos/[accion].ts": {
-      "memory": 1024
+      "memory": 1024,
+      "maxDuration": 300
     },
     "api/publico/[accion].ts": {
       "memory": 1024

@@ -165,13 +165,12 @@ export async function autorizarFactura(facturaId: string, uid: string, opts: { r
     if (x.arca?.cae) return x;
     if (x.tipo !== "factura") throw new HttpError(400, "Solo las facturas (con IVA) se autorizan en ARCA; las boletas no");
     if (x.estado === "borrador") throw new HttpError(400, "Primero emití la factura");
-    if (x.arca_en_curso_at && !opts.reintentar) {
-      throw new HttpError(409, "Ya se pidió el CAE de esta boleta y no se sabe si salió. Revisá en ARCA antes de reintentar.");
-    }
-    tx.update(ref, { arca_en_curso_at: new Date().toISOString() });
+    // Si un pedido anterior quedó sin respuesta, se mantiene la marca: antes de pedir otro se le pregunta a ARCA.
+    if (!x.arca_en_curso_at) tx.update(ref, { arca_en_curso_at: new Date().toISOString() });
     return x;
   });
   if (f.arca?.cae) return f.arca;
+  const enDuda = !!f.arca_en_curso_at && !opts.reintentar;
 
   const p = (await db.collection("projects").doc(f.proyecto_id).get()).data() ?? {};
   const receptor = (p.facturacion?.condicion_iva as CondicionReceptor | undefined) ?? (digitos(f.cuit).length === 11 ? undefined : "consumidor_final");
@@ -180,13 +179,55 @@ export async function autorizarFactura(facturaId: string, uid: string, opts: { r
     throw new HttpError(400, "Falta la condición frente al IVA del cliente (en la ficha del cliente → facturación)");
   }
   const { letra, datos } = comprobanteDe(f, receptor, condicion, puntoVenta);
+  const guardar = async (numero: number, cae: string, caeVto: string, fecha: string) => {
+    const datosArca: DatosArca = {
+      cae,
+      cae_vto: `${caeVto.slice(0, 4)}-${caeVto.slice(4, 6)}-${caeVto.slice(6, 8)}`,
+      tipo: letra,
+      cbte_tipo: datos.CbteTipo,
+      punto_venta: puntoVenta,
+      numero,
+      fecha,
+      homologacion: !produccion,
+      autorizada_at: new Date().toISOString(),
+      autorizada_por: uid,
+      emisor_cuit: cuit,
+      emisor_condicion: condicion,
+      receptor_condicion: receptor,
+      doc_tipo: datos.DocTipo,
+      doc_nro: datos.DocNro,
+      importe: datos.ImpTotal,
+    };
+    await ref.update({ arca: datosArca, arca_en_curso_at: null, arca_error: null });
+    return datosArca;
+  };
+  // Un pedido anterior quedó sin respuesta: ¿ARCA la llegó a autorizar? Se buscan los últimos comprobantes de este
+  // punto de venta con el mismo receptor e importe. Si está, se toma ese CAE; si no, se pide de nuevo (no se duplica).
+  if (enDuda) {
+    try {
+      const svc = arca.electronicBillingService;
+      const ultimo = Number((await svc.getLastVoucher(puntoVenta, datos.CbteTipo)).cbteNro) || 0;
+      const desde = String(f.arca_en_curso_at).slice(0, 10).replace(/-/g, "");
+      for (let n = ultimo; n > Math.max(0, ultimo - 15); n--) {
+        const v = await svc.getVoucherInfo(n, puntoVenta, datos.CbteTipo);
+        if (!v?.codAutorizacion) continue;
+        if (String(v.cbteFch ?? "") < sumarDias(`${desde.slice(0, 4)}-${desde.slice(4, 6)}-${desde.slice(6, 8)}`, -1).replace(/-/g, "")) break;
+        if (Number(v.docNro) === Number(datos.DocNro) && Math.abs(Number(v.impTotal) - datos.ImpTotal) < 0.01) {
+          const f8 = String(v.cbteFch);
+          return guardar(n, String(v.codAutorizacion), String(v.fchVto ?? ""), `${f8.slice(0, 4)}-${f8.slice(4, 6)}-${f8.slice(6, 8)}`);
+        }
+      }
+    } catch (err) {
+      throw new HttpError(502, `No se pudo consultar en ARCA si la factura ya había salido: ${err instanceof Error ? err.message : err}. Probá de nuevo en un rato.`);
+    }
+  }
   let res;
   try {
     res = await arca.electronicBillingService.createNextVoucher(datos);
   } catch (err) {
-    // Si ARCA contestó con un rechazo, no hay comprobante: se puede volver a intentar.
+    // Se cortó (red, tiempo): no se sabe si ARCA la autorizó. Queda la marca: el próximo intento lo verifica en ARCA.
     const msg = err instanceof Error ? err.message : String(err);
-    await ref.update({ arca_en_curso_at: null, arca_error: msg.slice(0, 500) });
+    await ref.update({ arca_error: msg.slice(0, 500) });
     throw new HttpError(502, `ARCA no autorizó: ${msg} (CUIT ${cuit}, punto de venta ${puntoVenta}, ${produccion ? "producción" : "homologación"})`);
   }
   const det = res.response.FeDetResp?.FECAEDetResponse?.[0];
@@ -196,26 +237,7 @@ export async function autorizarFactura(facturaId: string, uid: string, opts: { r
     // Con qué CUIT, punto de venta y ambiente se pidió: así se ve si la configuración de Vercel es la que corresponde.
     throw new HttpError(502, `ARCA rechazó la factura: ${msg} (CUIT ${cuit}, punto de venta ${puntoVenta}, ${produccion ? "producción" : "homologación"})`);
   }
-  const datosArca: DatosArca = {
-    cae: res.cae,
-    cae_vto: `${res.caeFchVto.slice(0, 4)}-${res.caeFchVto.slice(4, 6)}-${res.caeFchVto.slice(6, 8)}`,
-    tipo: letra,
-    cbte_tipo: datos.CbteTipo,
-    punto_venta: puntoVenta,
-    numero: Number(det.CbteDesde),
-    fecha: hoyAR(),
-    homologacion: !produccion,
-    autorizada_at: new Date().toISOString(),
-    autorizada_por: uid,
-    emisor_cuit: cuit,
-    emisor_condicion: condicion,
-    receptor_condicion: receptor,
-    doc_tipo: datos.DocTipo,
-    doc_nro: datos.DocNro,
-    importe: datos.ImpTotal,
-  };
-  await ref.update({ arca: datosArca, arca_en_curso_at: null, arca_error: null });
-  return datosArca;
+  return guardar(Number(det.CbteDesde), res.cae, res.caeFchVto, hoyAR());
 }
 
 /** Para probar la conexión: estado de los servidores de ARCA, puntos de venta y último número. */
