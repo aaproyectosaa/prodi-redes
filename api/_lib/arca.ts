@@ -78,7 +78,15 @@ class TicketsEnBase implements ITicketStoragePort {
 
 function cliente() {
   const c = config();
-  const arca = new Arca({ cuit: c.cuit, cert: c.cert, key: c.key, production: c.produccion, ticketStorage: new TicketsEnBase(c.produccion ? "prod" : "homo") });
+  // useHttpsAgent: los servidores de ARCA usan una clave DH chica que Node rechaza por defecto ("dh key too small").
+  const arca = new Arca({
+    cuit: c.cuit,
+    cert: c.cert,
+    key: c.key,
+    production: c.produccion,
+    useHttpsAgent: true,
+    ticketStorage: new TicketsEnBase(c.produccion ? "prod" : "homo"),
+  });
   return { arca, ...c };
 }
 
