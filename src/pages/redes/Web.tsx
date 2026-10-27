@@ -964,28 +964,13 @@ function AvisoMismaPersona({ lead, otros }: { lead: LeadWeb; otros: LeadWeb[] })
 }
 
 function LeadDetalle({ lead, todos, onClose }: { lead: LeadWeb | null; todos: LeadWeb[]; onClose: () => void }) {
-  const [notas, setNotas] = useState("");
   const [pestana, setPestana] = useState<"chat" | "ficha">("chat");
   useEffect(() => setPestana("chat"), [lead?.id]);
-  const [guardando, setGuardando] = useState(false);
-  useEffect(() => setNotas(lead?.notas ?? ""), [lead?.id, lead?.notas]);
   if (!lead) return null;
-  const guardar = async () => {
-    setGuardando(true);
-    try {
-      await callApi("/api/web/notas", { id: lead.id, notas });
-      toast.success("Notas guardadas");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudieron guardar");
-    } finally {
-      setGuardando(false);
-    }
-  };
   const o = ORIGENES[origenDe(lead)];
   const IconoOrigen = o.icono;
   // También el que entró por la web y se unió con el de Instagram: la conversación viene con la unión.
   const conChat = !!lead.meta?.conversacion_id;
-  const cambioNotas = notas !== (lead.notas ?? "");
 
   const datos = (
     <div className="space-y-4">
@@ -998,29 +983,13 @@ function LeadDetalle({ lead, todos, onClose }: { lead: LeadWeb | null; todos: Le
       <Bloque titulo="Etapa">
         <SelectorEtapa lead={lead} />
       </Bloque>
+      <AltaCliente lead={lead} />
+      <LoQuePidio lead={lead} conChat={conChat} />
       <Bloque titulo="Datos">
         <DatosLead lead={lead} />
       </Bloque>
-      <TraidoPor lead={lead} />
-      <Bloque
-        titulo="Notas"
-        accion={
-          cambioNotas && (
-            <Button onClick={() => void guardar()} disabled={guardando} size="sm" className="h-7 rounded-full px-3 text-xs">
-              {guardando ? "Guardando…" : "Guardar"}
-            </Button>
-          )
-        }
-      >
-        <Textarea
-          rows={2}
-          value={notas}
-          onChange={(e) => setNotas(e.target.value)}
-          placeholder={conChat ? "Lo que no está en el chat: qué necesita, presupuesto, cómo siguió…" : "Cómo fue la reunión, qué propuesta le mandaste…"}
-          className="min-h-[64px] rounded-xl"
-        />
-      </Bloque>
       <SeguimientoLead lead={lead} />
+      <TraidoPor lead={lead} />
     </div>
   );
 
@@ -1092,10 +1061,9 @@ function useSociosLista() {
 
 /** "Traído por": el socio comercial del lead (se asigna o cambia a mano) y, si se ganó, darlo de alta como cliente. */
 function TraidoPor({ lead }: { lead: LeadWeb }) {
-  const navigate = useNavigate();
   const socios = useSociosLista();
   const [guardando, setGuardando] = useState(false);
-  if (!socios.length && !lead.socio_id && lead.estado !== "ganado") return null;
+  if (!socios.length && !lead.socio_id) return null;
   const cambiar = async (uid: string) => {
     setGuardando(true);
     try {
@@ -1108,39 +1076,104 @@ function TraidoPor({ lead }: { lead: LeadWeb }) {
     }
   };
   return (
-    <Bloque titulo="Traído por">
-      <div className="space-y-2.5">
-        <div className="flex items-center gap-2">
-          <Handshake className="h-4 w-4 shrink-0 text-[#6F40FC]" />
-          <select
-            value={lead.socio_id ?? ""}
-            onChange={(e) => void cambiar(e.target.value)}
-            disabled={guardando}
-            className="h-10 min-w-0 flex-1 rounded-xl border bg-background px-3 text-sm"
-            aria-label="Vendedor que lo trajo"
-          >
-            <option value="">Nadie (lo trajo Prodi)</option>
-            {lead.socio_id && !socios.some((s) => s.uid === lead.socio_id) && <option value={lead.socio_id}>{lead.socio_nombre || "Socio"}</option>}
-            {socios.map((s) => (
-              <option key={s.uid} value={s.uid}>
-                {s.nombre}
-                {!s.activo ? " (desactivado)" : ""}
-              </option>
-            ))}
-          </select>
-        </div>
-        {lead.estado === "ganado" &&
-          (lead.cliente_id ? (
-            <Button variant="outline" size="sm" className="h-9 rounded-full" onClick={() => navigate(`/clientes/${lead.cliente_id}`)}>
-              Ver el cliente
-            </Button>
-          ) : (
-            <Button size="sm" className="h-9 rounded-full" onClick={() => navigate(`/clientes?lead=${lead.id}`)}>
-              <UserPlus className="mr-1.5 h-4 w-4" /> Dar de alta el cliente
-            </Button>
+    <div className="space-y-1 border-t pt-3">
+      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Handshake className="h-3.5 w-3.5 shrink-0 text-[#6F40FC]" />
+        <span className="shrink-0">Lo trajo</span>
+        <select
+          value={lead.socio_id ?? ""}
+          onChange={(e) => void cambiar(e.target.value)}
+          disabled={guardando}
+          className="h-8 min-w-0 flex-1 cursor-pointer rounded-lg border-0 bg-transparent px-1 text-xs font-semibold text-foreground hover:bg-muted"
+          aria-label="Vendedor que lo trajo"
+        >
+          <option value="">Prodi (sin socio)</option>
+          {lead.socio_id && !socios.some((s) => s.uid === lead.socio_id) && <option value={lead.socio_id}>{lead.socio_nombre || "Socio"}</option>}
+          {socios.map((s) => (
+            <option key={s.uid} value={s.uid}>
+              {s.nombre}
+              {!s.activo ? " (desactivado)" : ""}
+            </option>
           ))}
-        {lead.socio_id && <p className="text-[11px] text-muted-foreground">Al darlo de alta, el cliente queda con este socio y cobra comisión de lo que pague.</p>}
-      </div>
+        </select>
+      </label>
+      {lead.socio_id && <p className="pl-5 text-[11px] text-muted-foreground">Al darlo de alta, el cliente queda con este socio y cobra comisión de lo que pague.</p>}
+    </div>
+  );
+}
+
+/** Ganado: el botón para darlo de alta como cliente (o ir al cliente que ya salió de este lead). */
+function AltaCliente({ lead }: { lead: LeadWeb }) {
+  const navigate = useNavigate();
+  if (lead.estado !== "ganado") return null;
+  return lead.cliente_id ? (
+    <Button variant="outline" size="sm" className="h-9 rounded-full" onClick={() => navigate(`/clientes/${lead.cliente_id}`)}>
+      Ver el cliente
+    </Button>
+  ) : (
+    <Button size="sm" className="h-9 rounded-full" onClick={() => navigate(`/clientes?lead=${lead.id}`)}>
+      <UserPlus className="mr-1.5 h-4 w-4" /> Dar de alta el cliente
+    </Button>
+  );
+}
+
+/**
+ * Lo que pidió al llegar (lo que escribió el sistema: el plan de la web, el formulario…), aparte de lo que va pasando.
+ * Lo que se anota después va a la Actividad, con fecha y quién lo escribió. Los mensajes de Instagram o WhatsApp ya
+ * están en el chat: no se repiten acá.
+ */
+function LoQuePidio({ lead, conChat }: { lead: LeadWeb; conChat: boolean }) {
+  const [editando, setEditando] = useState(false);
+  const [notas, setNotas] = useState(lead.notas ?? "");
+  const [guardando, setGuardando] = useState(false);
+  useEffect(() => {
+    setNotas(lead.notas ?? "");
+    setEditando(false);
+  }, [lead.id, lead.notas]);
+  const completo = (lead.notas ?? "").trim();
+  const visible = (conChat ? completo.replace(/\s*Escribió por mensaje de [\s\S]*$/i, "") : completo).trim();
+  if (!completo && !editando) return null;
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      await callApi("/api/web/notas", { id: lead.id, notas });
+      toast.success("Guardado");
+      setEditando(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo guardar");
+    } finally {
+      setGuardando(false);
+    }
+  };
+  return (
+    <Bloque
+      titulo="Lo que pidió"
+      accion={
+        !editando && (
+          <button type="button" onClick={() => setEditando(true)} className="text-[11px] font-medium text-muted-foreground hover:text-foreground">
+            Corregir
+          </button>
+        )
+      }
+    >
+      {editando ? (
+        <div className="space-y-2">
+          <Textarea rows={3} value={notas} onChange={(e) => setNotas(e.target.value)} className="min-h-[72px] rounded-xl" autoFocus />
+          <div className="flex justify-end gap-1">
+            <Button size="sm" variant="ghost" className="h-8 rounded-full text-xs" onClick={() => setEditando(false)}>
+              Cancelar
+            </Button>
+            <Button size="sm" className="h-8 rounded-full px-3 text-xs" onClick={() => void guardar()} disabled={guardando}>
+              {guardando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Guardar"}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-2xl bg-muted/50 px-3 py-2.5 text-sm">
+          {visible ? <p className="whitespace-pre-wrap break-words">{visible}</p> : <p className="text-muted-foreground">Escribió por mensaje.</p>}
+          {visible !== completo && <p className="mt-1 text-[11px] text-muted-foreground">Sus mensajes están en el chat.</p>}
+        </div>
+      )}
     </Bloque>
   );
 }

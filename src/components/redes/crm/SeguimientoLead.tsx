@@ -190,6 +190,111 @@ async function registrar(id: string, tipo: string, texto: string, cumplido = fal
   await callApi("/api/web/actividad", { id, tipo, texto, cumplido });
 }
 
+/**
+ * Al marcar el próximo paso como hecho: cómo le fue. Queda anotado en la actividad, propone el paso siguiente
+ * y, si corresponde, mueve la etapa (reunión agendada → Reunión; no va → Perdido).
+ */
+const RESULTADOS: { id: string; label: string; tipo: string; paso: string | null; dias: number | null; estado?: string; desde?: string[] }[] = [
+  { id: "no_contesto", label: "No contestó", tipo: "llamada", paso: "Volver a intentar", dias: 2 },
+  { id: "interesa", label: "Le interesa", tipo: "nota", paso: "Agendar la reunión", dias: 1 },
+  { id: "reunion", label: "Reunión agendada", tipo: "reunion", paso: "Reunión", dias: 2, estado: "reunion_agendada", desde: ["calificado"] },
+  { id: "presupuesto", label: "Pidió presupuesto", tipo: "nota", paso: "Mandarle el presupuesto", dias: 0 },
+  { id: "pensando", label: "Lo está pensando", tipo: "nota", paso: "Preguntarle si lo pensó", dias: 3 },
+  { id: "no_va", label: "No va", tipo: "nota", paso: null, dias: null, estado: "perdido" },
+];
+
+/** El "¿Cómo te fue?" que aparece al tocar «Lo hice». */
+function ComoTeFue({ lead, onListo }: { lead: LeadSeguimiento; onListo: () => void }) {
+  const [elegido, setElegido] = useState<(typeof RESULTADOS)[number] | null>(null);
+  const [comentario, setComentario] = useState("");
+  const [paso, setPaso] = useState("");
+  const [fecha, setFecha] = useState<string | null>(sumarDias(1));
+  const [busy, setBusy] = useState(false);
+  const elegir = (r: (typeof RESULTADOS)[number]) => {
+    setElegido(r);
+    setPaso(r.paso ?? "");
+    setFecha(r.dias == null ? null : sumarDias(r.dias));
+  };
+  const guardar = async () => {
+    setBusy(true);
+    try {
+      const hecho = lead.proximo_paso?.texto ?? "";
+      const texto = [elegido ? elegido.label : "Hecho", comentario.trim()].filter(Boolean).join(": ");
+      await registrar(lead.id, elegido?.tipo ?? "nota", hecho ? `${texto} (${hecho})` : texto, true);
+      if (elegido?.estado && elegido.estado !== lead.estado && (!elegido.desde || elegido.desde.includes(lead.estado)))
+        await callApi("/api/web/estado", { id: lead.id, estado: elegido.estado });
+      if (paso.trim().length >= 3) await callApi("/api/web/seguimiento", { id: lead.id, texto: paso.trim(), fecha });
+      toast.success(paso.trim() ? "Anotado. Próximo paso listo" : "Anotado");
+      onListo();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="space-y-3 rounded-xl border border-emerald-500/40 bg-emerald-500/[0.04] p-3">
+      <p className="text-sm font-semibold">¿Cómo te fue?</p>
+      <div className="flex flex-wrap gap-1.5">
+        {RESULTADOS.map((r) => (
+          <button
+            key={r.id}
+            type="button"
+            onClick={() => elegir(r)}
+            className={cn(
+              "h-8 rounded-full border px-3 text-xs font-medium transition-colors",
+              elegido?.id === r.id
+                ? r.id === "no_va"
+                  ? "border-red-500 bg-red-500 text-white"
+                  : "border-primary bg-primary text-primary-foreground"
+                : "bg-background text-foreground hover:border-primary/40"
+            )}
+          >
+            {r.label}
+          </button>
+        ))}
+      </div>
+      <Input value={comentario} onChange={(e) => setComentario(e.target.value)} placeholder="Algo para acordarte (opcional)" maxLength={300} className="h-9 bg-background" />
+      {elegido && elegido.paso !== null && (
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Lo que sigue</p>
+          <Input value={paso} onChange={(e) => setPaso(e.target.value)} maxLength={200} className="h-9 bg-background" />
+          <div className="flex flex-wrap items-center gap-1">
+            {[
+              { label: "Hoy", f: sumarDias(0) },
+              { label: "Mañana", f: sumarDias(1) },
+              { label: "En 3 días", f: sumarDias(3) },
+              { label: "En una semana", f: sumarDias(7) },
+            ].map((r) => (
+              <button
+                key={r.label}
+                type="button"
+                onClick={() => setFecha(r.f)}
+                className={cn(
+                  "h-7 rounded-full px-2.5 text-[11px] font-medium transition-colors",
+                  fecha === r.f ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                {r.label}
+              </button>
+            ))}
+            <input type="date" value={fecha ?? ""} onChange={(e) => setFecha(e.target.value || null)} className="h-7 rounded-full border bg-background px-2 text-[11px]" aria-label="Otra fecha" />
+          </div>
+        </div>
+      )}
+      {elegido?.id === "no_va" && <p className="text-xs text-muted-foreground">Pasa a Perdidos. Si querés, contá por qué arriba: sirve para ver qué falla.</p>}
+      <div className="flex justify-end gap-1">
+        <Button size="sm" variant="ghost" className="h-8 rounded-full text-xs" onClick={onListo}>
+          Cancelar
+        </Button>
+        <Button size="sm" className="h-8 rounded-full px-4 text-xs" onClick={() => void guardar()} disabled={busy}>
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Guardar"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /** El panel de seguimiento en la ficha del lead. */
 export function SeguimientoLead({ lead }: { lead: LeadSeguimiento }) {
   const navigate = useNavigate();
@@ -204,6 +309,8 @@ export function SeguimientoLead({ lead }: { lead: LeadSeguimiento }) {
   const [verMensajes, setVerMensajes] = useState(false);
   const [editandoPaso, setEditandoPaso] = useState(false);
   const [verTodo, setVerTodo] = useState(false);
+  const [cerrando, setCerrando] = useState(false);
+  useEffect(() => setCerrando(false), [lead.id]);
   const presupuestos = usePresupuestos(true);
   const suyos = (presupuestos ?? []).filter((p) => (p as { lead_id?: string }).lead_id === lead.id);
 
@@ -285,7 +392,9 @@ export function SeguimientoLead({ lead }: { lead: LeadSeguimiento }) {
       {/* Próximo paso */}
       <section className="space-y-2">
         <Titulo>Próximo paso</Titulo>
-        {!mostrarFormPaso && lead.proximo_paso ? (
+        {cerrando && lead.proximo_paso ? (
+          <ComoTeFue lead={lead} onListo={() => setCerrando(false)} />
+        ) : !mostrarFormPaso && lead.proximo_paso ? (
           <div
             className={cn(
               "flex items-center gap-3 rounded-xl border p-3",
@@ -307,10 +416,10 @@ export function SeguimientoLead({ lead }: { lead: LeadSeguimiento }) {
             <Button
               size="sm"
               className="h-8 rounded-full bg-emerald-500 px-3 text-xs text-white hover:bg-emerald-600"
-              onClick={() => void registrar(lead.id, "nota", `Hecho: ${lead.proximo_paso!.texto}`, true).then(() => toast.success("¡Listo! Poné el siguiente paso"))}
-              title="Marcar como hecho"
+              onClick={() => setCerrando(true)}
+              title="Ya lo hice: contá cómo te fue"
             >
-              <Check className="mr-1 h-3.5 w-3.5" /> Hecho
+              <Check className="mr-1 h-3.5 w-3.5" /> Lo hice
             </Button>
             <button type="button" onClick={() => setEditandoPaso(true)} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" title="Cambiar" aria-label="Cambiar">
               <Pencil className="h-3.5 w-3.5" />
@@ -363,7 +472,7 @@ export function SeguimientoLead({ lead }: { lead: LeadSeguimiento }) {
 
       {/* Registrar lo que pasó */}
       <section className="space-y-2">
-        <Titulo>Registrar</Titulo>
+        <Titulo>Anotar algo que pasó</Titulo>
         <div className="grid grid-cols-5 gap-1.5">
           <button
             type="button"
