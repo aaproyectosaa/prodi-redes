@@ -24,6 +24,29 @@ async function porToken(token: string) {
   return d;
 }
 
+/** El cliente bajó el PDF desde el link: se anota y se avisa a quien lo armó. */
+export async function pdfPresupuesto(token: string) {
+  const d = await porToken(token);
+  const p = d.data();
+  const ahora = new Date().toISOString();
+  const veces = Number(p.pdf_descargas ?? 0) + 1;
+  await d.ref.update({ pdf_descargas: veces, pdf_at: ahora });
+  await anotarEnLead(p.lead_id, { at: ahora, tipo: "presupuesto", texto: "Bajó el presupuesto en PDF", por: null, por_nombre: p.empresa ?? "Cliente" }).catch(() => {});
+  if (p.created_by)
+    await enviarAviso(
+      {
+        destinatarios: [String(p.created_by)],
+        titulo: `${p.empresa ?? "El cliente"} bajó tu propuesta en PDF`,
+        cuerpo: "Seguramente la está pasando a alguien más para decidir. Buen momento para escribirle.",
+        link: "/presupuestos",
+        clave: `presupuesto_pdf:${d.ref.id}:${ahora.slice(0, 13)}`,
+        proyectoId: null,
+      },
+      process.env.APP_URL || ""
+    ).catch(() => {});
+  return { ok: true };
+}
+
 /** Lo que ve el cliente en el link (sin datos internos). La primera vez anota que lo vio. */
 /** Al lead del CRM (si el presupuesto salió de uno): una entrada en su línea de tiempo y, si se dice, otro estado. */
 async function anotarEnLead(leadId: unknown, entrada: Record<string, unknown>, cambios: Record<string, unknown> = {}) {
@@ -41,7 +64,14 @@ export async function verPresupuesto(token: string, equipo = false) {
   const d = await porToken(token);
   const p = d.data();
   // Lo abrió el cliente (no alguien de Prodi mirándolo): se cuenta y se avisa, a lo sumo cada 30 minutos.
-  if (!equipo && p.estado !== "borrador") {
+  // Cuenta aunque siga en borrador: si lo abrió es que se lo mandaron (por PDF, copiando el link de otro lado…).
+  if (!equipo && p.estado === "borrador") {
+    const ahora = new Date().toISOString();
+    await d.ref.update({ estado: "visto", enviado_at: p.enviado_at ?? ahora, visto_at: ahora });
+    p.estado = "visto";
+    p.visto_at = ahora;
+  }
+  if (!equipo) {
     const ahora = new Date();
     const ultima = p.ultima_apertura ? new Date(String(p.ultima_apertura)).getTime() : 0;
     if (ahora.getTime() - ultima > 30 * 60_000) {

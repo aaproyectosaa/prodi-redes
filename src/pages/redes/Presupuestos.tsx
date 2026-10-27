@@ -26,6 +26,7 @@ import {
   type Presupuesto,
 } from "@/lib/redes/presupuestos";
 import { cn } from "@/lib/utils";
+import { hace } from "@/lib/redes/format";
 import { PropuestaEditor, type DatosPropuesta } from "@/components/redes/PropuestaEditor";
 import { plantillaPropuesta, preciosFaltantes } from "../../../api/_lib/propuesta";
 
@@ -239,6 +240,29 @@ function ResumenPropuesta({ p }: { p: Presupuesto }) {
   );
 }
 
+/** Qué hizo el cliente con la propuesta: si se mandó, si la abrió (cuántas veces y cuándo), si bajó el PDF. */
+function Seguimiento({ p }: { p: Presupuesto }) {
+  const aperturas = p.aperturas ?? (p.visto_at ? 1 : 0);
+  const ultima = [p.ultima_apertura, p.pdf_at, p.visto_at].filter(Boolean).sort().pop() ?? null;
+  const quieto = ultima ?? p.enviado_at ?? null;
+  const dias = quieto ? Math.floor((Date.now() - Date.parse(quieto)) / 86_400_000) : 0;
+  const partes = [
+    p.enviado_at ? `Mandado el ${dia(p.enviado_at)}` : null,
+    aperturas ? `Lo abrió ${aperturas === 1 ? "1 vez" : `${aperturas} veces`} (la última ${hace(p.ultima_apertura ?? p.visto_at)})` : p.estado === "borrador" ? "Nadie lo abrió todavía" : "Todavía no lo abrió",
+    p.pdf_descargas ? `Bajó el PDF${p.pdf_descargas > 1 ? ` ${p.pdf_descargas} veces` : ""} (${hace(p.pdf_at)})` : null,
+  ].filter(Boolean);
+  return (
+    <p className="mt-1 text-xs">
+      <span className="text-foreground/80">{partes.join(" · ")}</span>
+      {p.estado !== "borrador" && p.estado !== "rechazado" && dias >= 3 && (
+        <span className="ml-1.5 inline-flex items-center gap-0.5 font-semibold text-amber-600 dark:text-amber-400">
+          <AlertTriangle className="h-3 w-3" /> {dias} días sin movimiento: escribile
+        </span>
+      )}
+    </p>
+  );
+}
+
 function Fila({ p, onEditar, onDuplicar }: { p: Presupuesto; onEditar: () => void; onDuplicar: () => void }) {
   const navigate = useNavigate();
   const { settings } = useRedes();
@@ -271,9 +295,9 @@ function Fila({ p, onEditar, onDuplicar }: { p: Presupuesto; onEditar: () => voi
           {tot.mensual && tot.unico ? " + " : ""}
           {tot.unico ? `${plata(tot.unico_final, p.moneda)} una vez` : ""}
           {` · vale hasta el ${dia(p.validez)}`}
-          {p.visto_at && est !== "aceptado" ? ` · lo vio el ${dia(p.visto_at)}` : ""}
           {p.aceptado ? ` · aceptó ${p.aceptado.nombre} el ${dia(p.aceptado.at)}` : ""}
         </p>
+        {!p.aceptado && <Seguimiento p={p} />}
       </div>
       <div className="flex flex-wrap gap-1">
         {p.aceptado ? (

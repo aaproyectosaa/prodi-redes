@@ -169,7 +169,14 @@ export default function PresupuestoPublico() {
         <PropuestaVista p={p.propuesta} validez={p.validez} className="mx-auto max-w-[860px]" />
         <div className="mx-auto max-w-[860px] space-y-3 px-6 pb-16 sm:px-12 print:hidden">
           {aceptar_}
-          <button type="button" onClick={() => window.print()} className="mx-auto flex items-center gap-1.5 text-sm text-[color:var(--p-suave)] hover:text-[color:var(--p-fuerte)]">
+          <button
+            type="button"
+            onClick={() => {
+              // Que el equipo sepa que lo bajó (no cuenta si lo mira alguien de Prodi).
+              if (new URLSearchParams(window.location.search).get("equipo") !== "1") void pedir("presupuesto-pdf", { t: token }).catch(() => undefined);
+              window.print();
+            }}
+            className="mx-auto flex items-center gap-1.5 text-sm text-[color:var(--p-suave)] hover:text-[color:var(--p-fuerte)]">
             <Download className="h-4 w-4" /> Descargar en PDF
           </button>
         </div>

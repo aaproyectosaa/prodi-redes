@@ -490,6 +490,37 @@ const AVISO_FIN_DE_MES = 7;
 /** Cuántos días sin publicar nada para avisar. */
 const DIAS_SIN_PUBLICAR = 5;
 
+/** Presupuestos mandados que hace 3 días nadie mira ni responde: aviso a quien lo armó para que lo llame. */
+const DIAS_PRESUPUESTO_QUIETO = 3;
+export async function presupuestosQuietos(base: string): Promise<number> {
+  const hoy = hoyAR();
+  const snap = await adminDb().collection("presupuestos").get();
+  let n = 0;
+  for (const d of snap.docs) {
+    const p = d.data();
+    if (!["enviado", "visto"].includes(String(p.estado)) || !p.created_by) continue;
+    if (p.validez && String(p.validez) < hoy) continue;
+    const ultima = [p.ultima_apertura, p.pdf_at, p.visto_at, p.enviado_at].map((x) => String(x ?? "")).sort().pop() ?? "";
+    if (!ultima) continue;
+    const dias = Math.floor((Date.now() - Date.parse(ultima)) / 86_400_000);
+    if (dias < DIAS_PRESUPUESTO_QUIETO) continue;
+    n++;
+    await enviarAviso(
+      {
+        destinatarios: [String(p.created_by)],
+        titulo: `${p.empresa ?? "Un cliente"}: ${dias} días sin respuesta a la propuesta`,
+        cuerpo: p.aperturas ? `La abrió ${p.aperturas === 1 ? "1 vez" : `${p.aperturas} veces`}, la última hace ${dias} días. Escribile o llamalo.` : "Todavía no la abrió. Fijate si le llegó el link.",
+        link: "/presupuestos",
+        // Un aviso por cada vez que se queda quieto (si vuelve a abrirla y se enfría de nuevo, otro).
+        clave: `presupuesto_quieto:${d.id}:${ultima.slice(0, 16)}`,
+        mail: false,
+      },
+      base
+    ).catch((e) => console.warn("[presupuesto quieto]", d.id, e));
+  }
+  return n;
+}
+
 export async function alertasPublicacion(base: string): Promise<{ fin_de_mes: number; sin_publicar: number }> {
   const db = adminDb();
   const hoy = hoyAR();

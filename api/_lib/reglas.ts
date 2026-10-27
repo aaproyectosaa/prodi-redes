@@ -37,6 +37,8 @@ async function enCapacitacion(c: Contexto): Promise<boolean> {
   );
   return r.rows[0]?.v === "true" && r.rows[0]?.sup !== "true";
 }
+/** De quién es un lead de Prodi: a quien se lo asignó el admin o, si no, quien lo cargó a mano. */
+export const duenoLead = (d: Data) => String(d.vendedor_id || d.creado_por || "");
 const ACTIVOS = [...TEAM, "administracion", "programador", "cliente"];
 
 /**
@@ -396,11 +398,13 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
     // Reservas de la landing (módulo Web): solo el super admin. Se escriben solo por /api/web.
     // El socio comercial ve sus leads por /api/web/socio-panel (sin notas internas ni datos de Meta), no desde acá.
     case "leads_web":
+      // Ventas trabaja el CRM de Prodi, pero solo sus leads: los que le asignaron o cargó él (el resto es del admin).
+      return esAdmin(c) || (tiene(c, "ventas") && duenoLead(d) === c.uid);
     case "web_config":
-      // Ventas trabaja el CRM de Prodi (leads), igual que el admin.
       return esAdmin(c) || tiene(c, "ventas");
     case "presupuestos":
-      return esAdmin(c) || tiene(c, "ventas");
+      // Ventas ve solo las propuestas que armó él.
+      return esAdmin(c) || (tiene(c, "ventas") && d.created_by === c.uid);
     case "planes_redes":
     case "app_settings":
       // whatsapp_bot: configuración del bot de WhatsApp (eliminado), ya no se expone.
@@ -740,8 +744,9 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
       return c.uid === id && !borra && soloCambia(antes, despues, ["completadas", "actualizado_at"]);
     case "crm_galeria": // se cargan por /api/drive/crm-archivo; desde la app solo se borran
       return !despues && (equipoDe(c, antes!.proyecto_id) || clienteDe(c, antes!.proyecto_id));
-    case "presupuestos": // los arma el admin (o ventas); lo aceptado lo escribe el servidor
-      return (esAdmin(c) || tiene(c, "ventas")) && (crea || antes!.estado !== "aceptado" || borra);
+    case "presupuestos": // los arma el admin (o ventas, solo los suyos); lo aceptado lo escribe el servidor
+      if (!esAdmin(c) && !(tiene(c, "ventas") && (crea ? despues!.created_by === c.uid : antes!.created_by === c.uid && (!despues || despues.created_by === c.uid)))) return false;
+      return crea || antes!.estado !== "aceptado" || borra;
     case "in_app_notifications":
       if (crea) return false;
       if (borra) return antes!.recipient_user_id === c.uid;

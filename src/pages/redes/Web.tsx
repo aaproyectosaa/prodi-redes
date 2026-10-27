@@ -46,6 +46,7 @@ import { ConectarWhatsApp } from "@/components/redes/crm/ConectarWhatsApp";
 import { ConfigCatalogo } from "@/components/redes/crm/CatalogoProductos";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
+import { useAppData } from "@/contexts/app-data-context";
 import { Handshake } from "lucide-react";
 
 // Reservas de la landing de la campaña «No empezamos de cero» (somosprodi.com).
@@ -88,6 +89,10 @@ interface LeadWeb {
   /** Socio comercial que lo trajo (por su link o cargado desde su panel). */
   socio_id?: string | null;
   socio_nombre?: string | null;
+  /** Quién de ventas lo atiende (lo asigna el admin). */
+  vendedor_id?: string | null;
+  /** Quién lo cargó a mano. */
+  creado_por?: string | null;
   /** Cliente que salió de este lead (al darlo de alta). */
   cliente_id?: string | null;
 }
@@ -1003,6 +1008,7 @@ function LeadDetalle({ lead, todos, onClose }: { lead: LeadWeb | null; todos: Le
       </Bloque>
       <SeguimientoLead lead={lead} />
       <TraidoPor lead={lead} />
+      <LoAtiende lead={lead} />
     </div>
   );
 
@@ -1111,6 +1117,49 @@ function TraidoPor({ lead }: { lead: LeadWeb }) {
         </select>
       </label>
       {lead.socio_id && <p className="pl-5 text-[11px] text-muted-foreground">Al darlo de alta, el cliente queda con este socio y cobra comisión de lo que pague.</p>}
+    </div>
+  );
+}
+
+/** Quién de ventas atiende el lead (solo el admin lo elige): esa persona lo ve y lo trabaja; sin nadie, solo el admin. */
+function LoAtiende({ lead }: { lead: LeadWeb }) {
+  const { role } = useUserProfileContext();
+  const { profiles } = useAppData();
+  const [guardando, setGuardando] = useState(false);
+  const vendedores = profiles.filter((p) => p.role !== "admin" && p.activo !== false && (p.role === "ventas" || (p.roles_extra ?? []).includes("ventas")));
+  if (role !== "admin" || (!vendedores.length && !lead.vendedor_id)) return null;
+  const cambiar = async (uid: string) => {
+    setGuardando(true);
+    try {
+      await callApi("/api/web/vendedor", { id: lead.id, vendedor_id: uid || null });
+      toast.success(uid ? "Asignado" : "Lo atendés vos");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo guardar");
+    } finally {
+      setGuardando(false);
+    }
+  };
+  return (
+    <div className="space-y-1 border-t pt-3">
+      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Handshake className="h-3.5 w-3.5 shrink-0 text-[#6F40FC]" />
+        <span className="shrink-0">Lo atiende</span>
+        <select
+          value={lead.vendedor_id ?? ""}
+          onChange={(e) => void cambiar(e.target.value)}
+          disabled={guardando}
+          className="h-8 min-w-0 flex-1 cursor-pointer rounded-lg border-0 bg-transparent px-1 text-xs font-semibold text-foreground hover:bg-muted"
+          aria-label="Quién de ventas atiende el lead"
+        >
+          <option value="">Vos (solo lo ves vos)</option>
+          {vendedores.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.nombre}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="pl-5 text-[11px] text-muted-foreground">Ventas solo ve los leads que le asignás o que cargó él.</p>
     </div>
   );
 }

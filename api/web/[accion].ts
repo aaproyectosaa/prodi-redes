@@ -36,7 +36,8 @@
 import { createHmac, randomUUID } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { enTransaccion, getPool, guardarDoc, leerDoc } from "../_lib/db";
-import { appUrl, body, HttpError, requireCaller, sendError, type Caller } from "../_lib/http";
+import { appUrl, body, HttpError, requireCaller, sendError, tieneRol, type Caller } from "../_lib/http";
+import { duenoLead } from "../_lib/reglas";
 import { adminDb } from "../_lib/db";
 import { avisarAdmin, avisarEstadoAlSocio, comisionEstandar, comisionesDelMes, guardarEstandar, listarSocios, resumenSocios, socioPorCodigo, sumarMeses } from "../_lib/socios";
 import { claveTelefono } from "../_lib/leads-unir";
@@ -500,6 +501,31 @@ async function crmEspera(req: VercelRequest) {
   return { ok: true };
 }
 
+const LEAD_DE_VENTAS = ["estado", "notas", "seguimiento", "actividad", "datos", "meta-productos", "unir", "foto", "meta-sugerir", "meta-conversacion", "meta-responder"];
+
+/** Si quien llama es de ventas (y no admin), el lead (y el otro, al unir) tiene que ser suyo. */
+async function soloSuLead(req: VercelRequest) {
+  const caller = await requireCaller(req, VENTAS);
+  if (tieneRol(caller, "admin")) return;
+  const b = body<{ id?: string; otro?: string }>(req);
+  for (const id of [b.id, b.otro].filter(Boolean).map((x) => texto(x, 40))) {
+    const d = ID_OK.test(id) ? await leerDoc(getPool(), COL, id) : null;
+    if (!d || duenoLead(d) !== caller.uid) throw new HttpError(403, "Ese lead no es tuyo");
+  }
+}
+
+/** Quién atiende el lead (admin): esa persona de ventas lo ve y lo trabaja; sin nadie, solo el admin. */
+async function asignarVendedor(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin"]);
+  const b = body<{ id?: string; vendedor_id?: string | null }>(req);
+  const vendedor = b.vendedor_id ? texto(b.vendedor_id, 128) : null;
+  const at = new Date().toISOString();
+  return conLead(texto(b.id, 40), (d) => ({
+    vendedor_id: vendedor,
+    historial: conHistorial(d, { at, tipo: "nota", texto: vendedor ? "Se lo asignó a ventas" : "Lo atiende Prodi (sin vendedor)", por: caller.uid, por_nombre: caller.nombre || caller.email || "" }),
+  }));
+}
+
 /** Lead cargado a mano desde el panel (no pasó por el formulario de la web): entra al mismo tablero. */
 async function manual(req: VercelRequest) {
   const caller = await requireCaller(req, VENTAS);
@@ -775,7 +801,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       else res.status(404).json({ error: "Acción desconocida" });
       return;
     }
-    if (accion === "aplicar") res.status(200).json(await aplicar(req));
+    // Ventas (no admin) solo toca sus leads: los que le asignaron o cargó él.
+    if (LEAD_DE_VENTAS.includes(accion)) await soloSuLead(req);
+    if (accion === "vendedor") res.status(200).json(await asignarVendedor(req));
+    else if (accion === "aplicar") res.status(200).json(await aplicar(req));
     else if (accion === "crm-espera") res.status(200).json(await crmEspera(req));
     else if (accion === "comprar") res.status(200).json(await comprar(req));
     else if (accion === "reunion") res.status(200).json(await reunion(req));

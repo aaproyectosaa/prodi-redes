@@ -31,6 +31,12 @@ export interface Presupuesto {
   created_by: string;
   enviado_at?: string | null;
   visto_at?: string | null;
+  /** Veces que el cliente lo abrió (sesiones separadas por 30 min) y la última. */
+  aperturas?: number;
+  ultima_apertura?: string | null;
+  /** Veces que el cliente lo bajó en PDF y la última. */
+  pdf_descargas?: number;
+  pdf_at?: string | null;
   aceptado?: { at: string; nombre: string; email: string; uid: string; proyecto_id: string } | null;
 }
 
