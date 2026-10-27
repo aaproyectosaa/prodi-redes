@@ -18,10 +18,13 @@ import { avisarEstadoAlSocio } from "./socios";
 import { hoyAR } from "./fecha";
 
 /** Planes de Redes que se venden en somosprodi.com (precio neto por mes, sin IVA). Igual que src/data/sitio.js de la web. */
-export const PLANES_WEB: Record<string, { nombre: string; neto: number; videos: number; piezas: number }> = {
+export const PLANES_WEB: Record<string, { nombre: string; neto: number; videos: number; piezas: number; oculto?: boolean }> = {
   esencial: { nombre: "Esencial", neto: 450000, videos: 4, piezas: 4 },
   crecimiento: { nombre: "Crecimiento", neto: 600000, videos: 8, piezas: 6 },
   completa: { nombre: "Campaña completa", neto: 750000, videos: 12, piezas: 8 },
+  // Plan de prueba ($100) para probar la compra de punta a punta con un pago real. No figura en /precios ni en la web;
+  // se entra con somosprodi.com/comprar?plan=prueba. Sacarlo cuando termine la prueba.
+  prueba: { nombre: "Prueba", neto: 100, videos: 0, piezas: 0, oculto: true },
 };
 
 /**

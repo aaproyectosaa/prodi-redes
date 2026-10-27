@@ -329,7 +329,7 @@ const PLANES_CRM: Record<string, string> = {
 
 /** Precios de los planes que se compran en la web, con y sin factura: neto + IVA + comisión del débito automático. */
 async function precios() {
-  const ids = Object.keys(PLANES_WEB);
+  const ids = Object.keys(PLANES_WEB).filter((id) => !PLANES_WEB[id].oculto);
   const [con, sin] = await Promise.all([Promise.all(ids.map((id) => precioPlanWeb(id, true))), Promise.all(ids.map((id) => precioPlanWeb(id, false)))]);
   return { planes: con.filter(Boolean), sin_factura: sin.filter(Boolean) };
 }
