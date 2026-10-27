@@ -62,10 +62,11 @@ export function DriveVideoPlayer({
   const [playbackError, setPlaybackError] = useState(false);
   const [debugDetail, setDebugDetail] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
-  // Si el navegador no sabe reproducir el formato (.MOV de iPhone en Chrome) o falló la carga, se ve con el
-  // reproductor de Drive (convierte el video).
-  const saltear = !fileId.startsWith("demo/") && formatoNoSoportado(mimeType);
-  const conDrive = saltear || (!fileId.startsWith("demo/") && playbackError);
+  // Primero se intenta reproducirlo acá (muchos .MOV de iPhone son H.264 y Chrome los pasa aunque diga que no):
+  // se ve al instante, sin esperar a que Drive lo convierta. Si no se puede (error, o solo audio sin imagen,
+  // como un HEVC en Chrome), se ve con el reproductor de Drive.
+  const saltear = false;
+  const conDrive = !fileId.startsWith("demo/") && playbackError;
 
   useEffect(() => {
     if (saltear) {
@@ -244,6 +245,12 @@ export function DriveVideoPlayer({
       )}
       onError={handleVideoError}
       onLoadedMetadata={() => {
+        // Cargó pero sin imagen (códec que el navegador no lee, ej. HEVC): lo muestra Drive.
+        if (videoRef.current && videoRef.current.videoWidth === 0 && formatoNoSoportado(mimeType)) {
+          logVideo("element:sin-imagen", { fileId, mimeType });
+          setPlaybackError(true);
+          return;
+        }
         logVideo("element:metadata", {
           fileId,
           duration: videoRef.current?.duration,
