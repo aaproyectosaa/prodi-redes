@@ -123,6 +123,9 @@ type ResultadoEmitir = { ok: true; emitidas: number; mails: number; sin_mail: st
 export const emitirAClientes = (mes: string, proyectoIds: string[]) =>
   callApi<ResultadoEmitir>("/api/pagos/emitir", { mes, proyecto_ids: proyectoIds });
 
+/** Vuelve a mandar por mail una boleta o factura ya emitida. */
+export const reenviarMail = (f: { id: string }) => callApi<{ ok: true; destinos: string[] }>("/api/pagos/reenviar-mail", { factura_id: f.id });
+
 /** Datos de facturación del cliente (los usa la boleta del 27). */
 export async function guardarDatosFacturacion(proyectoId: string, facturacion: NonNullable<Project["facturacion"]>) {
   assertEditable();

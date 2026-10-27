@@ -12,6 +12,7 @@
 //        Si lo filma el cliente ("Yo mando el material", o la ficha dice que filma él) arranca esperando su material.
 // POST /api/pagos/arca-autorizar { factura_id, reintentar? }  (admin/administración) → CAE de ARCA para una boleta emitida
 // POST /api/pagos/arca-estado    (admin) → prueba la conexión con ARCA
+// POST /api/pagos/reenviar-mail  { factura_id } (admin/administración) → vuelve a mandar por mail una boleta o factura emitida
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { FieldValue } from "../_lib/db";
@@ -813,10 +814,7 @@ async function emitir(req: VercelRequest) {
       base
     );
     // Duplicado por correo: los mails de contacto del cliente y los de sus usuarios.
-    const perfiles = await Promise.all((team.cliente ?? []).slice(0, 10).map((u) => db.collection("profiles").doc(u).get()));
-    const destinos = Array.from(
-      new Set([...((p.contacto_emails ?? []) as string[]), ...perfiles.map((x) => String(x.data()?.email ?? ""))].map((e) => e.trim().toLowerCase()).filter((e) => /.+@.+\..+/.test(e)))
-    );
+    const destinos = await destinosDe(p);
     if (!destinos.length || p.demo_ejemplo) {
       sinMail.push(f.cliente);
       continue;
@@ -827,10 +825,42 @@ async function emitir(req: VercelRequest) {
       mails++;
     } catch (err) {
       console.warn("[emitir] mail", id, err);
-      fallaMail.push(f.cliente);
+      // Con el motivo (lo que contestó el servicio de correo): así se sabe qué arreglar.
+      fallaMail.push(`${f.cliente} (${err instanceof Error ? err.message : "error"})`);
     }
   }
   return { ok: true, emitidas, mails, sin_mail: sinMail, falla_mail: fallaMail, arca_fallas: arcaFallas };
+}
+
+/** Mails del cliente para el duplicado: los de contacto y los de sus usuarios. */
+async function destinosDe(p: Record<string, any>): Promise<string[]> {
+  const team = (p.team_roles ?? {}) as Record<string, string[]>;
+  const perfiles = await Promise.all((team.cliente ?? []).slice(0, 10).map((u) => adminDb().collection("profiles").doc(u).get()));
+  return Array.from(
+    new Set([...((p.contacto_emails ?? []) as string[]), ...perfiles.map((x) => String(x.data()?.email ?? ""))].map((e) => e.trim().toLowerCase()).filter((e) => /.+@.+\..+/.test(e)))
+  );
+}
+
+/** Vuelve a mandar por mail una boleta o factura ya emitida (si el mail no salió o el cliente no lo encuentra). */
+async function reenviarMail(req: VercelRequest) {
+  await requireCaller(req, ["admin", "administracion"]);
+  const { factura_id } = body<{ factura_id?: string }>(req);
+  if (!factura_id || !/^[^/\s]{1,200}$/.test(factura_id)) throw new HttpError(400, "Falta la boleta o factura");
+  const db = adminDb();
+  const ref = db.collection("facturas").doc(factura_id);
+  const f = (await ref.get()).data() as Factura | undefined;
+  if (!f || f.estado === "borrador" || f.estado === "anulada") throw new HttpError(400, "Primero hay que emitirla");
+  const p = (await db.collection("projects").doc(f.proyecto_id).get()).data() ?? {};
+  const destinos = await destinosDe(p);
+  if (!destinos.length) throw new HttpError(400, `${f.cliente} no tiene mail cargado (ficha del cliente → contacto)`);
+  const base = appUrl(req);
+  try {
+    await enviarMail(destinos, asuntoFactura(f), mailFacturaHtml(f, `${base}/cliente?tab=plan&factura=${factura_id}`, base));
+  } catch (err) {
+    throw new HttpError(502, err instanceof Error ? err.message : "No se pudo enviar el mail");
+  }
+  await ref.update({ mail_enviado_at: new Date().toISOString(), mail_destinos: destinos });
+  return { ok: true, destinos };
 }
 
 async function arcaAutorizar(req: VercelRequest) {
@@ -1253,6 +1283,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "facturar") res.status(200).json(await facturar(req));
     else if (accion === "emitir") res.status(200).json(await emitir(req));
     else if (accion === "arca-autorizar") res.status(200).json(await arcaAutorizar(req));
+    else if (accion === "reenviar-mail") res.status(200).json(await reenviarMail(req));
     else if (accion === "arca-estado") res.status(200).json(await arcaEstado(req));
     else if (accion === "mp-detalle") res.status(200).json(await mpDetalle(req));
     else if (accion === "pieza-idea") res.status(200).json(await piezaIdea(req));

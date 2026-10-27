@@ -70,6 +70,7 @@ import {
   registrarPago,
   saldoDe,
   reactivarFactura,
+  reenviarMail,
   textoCobro,
   useFacturas,
   volverAPendiente,
@@ -455,7 +456,7 @@ function PasoEmitir({
       if (r.emitidas > 0 || cobradas > 0) toast.success(
         `${r.emitidas === 1 ? "Emitida" : `Emitidas ${r.emitidas}`}: ya la tienen en su panel${r.mails ? ` y les llegó por mail (${r.mails})` : ""}.${
           r.sin_mail.length ? ` Sin mail cargado: ${r.sin_mail.join(", ")}.` : ""
-        }${r.falla_mail?.length ? ` No salió el mail a ${r.falla_mail.join(", ")} (revisá la configuración de correo).` : ""
+        }${r.falla_mail?.length ? ` No salió el mail a ${r.falla_mail.join(", ")}. Se puede volver a mandar desde «Por cobrar» (⋯).` : ""
         }${cobradas > 0 && !r.arca_fallas?.length ? ` ${cobradas} ya estaban pagas (adelantado o débito).` : ""}`,
         { duration: 7000 }
       );
@@ -732,6 +733,15 @@ function PasoCobrar({
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => setParcial(f)}>
                   <Banknote className="mr-2 h-4 w-4" /> Pagó una parte…
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() =>
+                    void reenviarMail(f)
+                      .then((r) => toast.success(`Mandada por mail a ${r.destinos.join(", ")}`))
+                      .catch((e) => toast.error(e instanceof Error ? e.message : "No se pudo mandar", { duration: 12000 }))
+                  }
+                >
+                  <Mail className="mr-2 h-4 w-4" /> Mandar por mail de nuevo
                 </DropdownMenuItem>
                 {/* Nunca se le mandó (p. ej. se registró un pago en el mes equivocado y se deshizo): vuelve a Emitir. */}
                 {!f.emitida_por && (
