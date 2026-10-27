@@ -242,8 +242,8 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
 
   const isAdmin = role === "admin";
   // Academia: en capacitación, sus videos los aprueba un supervisor antes de que le lleguen al cliente.
-  // Quien supervisa la revisión interna aprueba siempre (aunque siga marcada en capacitación).
-  const enCapacitacion = !isAdmin && !!profile?.en_capacitacion && !profile?.supervisa_revision;
+  // La productora y quien supervisa la revisión interna aprueban siempre (aunque sigan marcadas en capacitación).
+  const enCapacitacion = !isAdmin && !!profile?.en_capacitacion && !profile?.supervisa_revision && !tieneRol("productor");
   const isProd = isAdmin || tieneRol("productor");
   const isEditor = isAdmin || tieneRol("editor");
   const isPauta = isAdmin || tieneRol("pauta");

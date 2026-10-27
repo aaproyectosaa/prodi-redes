@@ -29,7 +29,8 @@ const TEAM = ["admin", "productor", "editor", "pauta", "diseno"];
 
 /** ¿Está en capacitación (Academia)? Sus videos los aprueba un supervisor antes de llegar al cliente. */
 async function enCapacitacion(c: Contexto): Promise<boolean> {
-  // Quien supervisa la revisión interna aprueba siempre (aunque siga marcada en capacitación).
+  // La productora y quien supervisa la revisión interna aprueban siempre (aunque sigan marcadas en capacitación).
+  if (tiene(c, "productor")) return false;
   const r = await c.ex.query(
     "select data->>'en_capacitacion' as v, data->>'supervisa_revision' as sup from documentos where coleccion = 'profiles' and id = $1",
     [c.uid]
