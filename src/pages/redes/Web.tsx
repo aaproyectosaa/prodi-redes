@@ -627,9 +627,9 @@ function DatosLead({ lead }: { lead: LeadWeb }) {
   const acciones = [
     tel && { label: "WhatsApp", icono: MessageCircle, href: `https://wa.me/${tel.replace(/^0/, "54")}`, clase: "bg-emerald-500 text-white hover:bg-emerald-600" },
     tel && { label: "Llamar", icono: Phone, href: `tel:${tel}`, clase: "" },
-    lead.email && { label: "Copiar mail", icono: Mail, onClick: () => copiarEmail(lead.email), clase: "" },
+    lead.email && { label: "Mail", icono: Mail, onClick: () => copiarEmail(lead.email), clase: "" },
     ig && { label: ig.includes("instagram.com") ? "Instagram" : "Web", icono: ig.includes("instagram.com") ? Instagram : ExternalLink, href: ig, clase: "" },
-    lead.ubicacion && { label: "Cómo llegar", icono: MapPin, href: linkMapa(lead.ubicacion), clase: "" },
+    lead.ubicacion && { label: "Llegar", icono: MapPin, href: linkMapa(lead.ubicacion), clase: "" },
   ].filter(Boolean) as { label: string; icono: React.ElementType; href?: string; onClick?: () => void; clase: string }[];
 
   const editor = (k: CampoLead, placeholder: string) => (
@@ -667,55 +667,100 @@ function DatosLead({ lead }: { lead: LeadWeb }) {
     </div>
   );
 
+  const nombre = String(lead.nombre ?? "").trim();
+  const iniciales =
+    nombre
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((w) => w[0])
+      .join("")
+      .toUpperCase() || "?";
+  const filas = presentes.filter((c) => c.k !== "nombre");
+  const lapiz = (k: CampoLead, label: string) => (
+    <button
+      type="button"
+      onClick={() => abrir(k)}
+      className="shrink-0 rounded-full p-1.5 text-muted-foreground/70 transition-opacity hover:bg-muted hover:text-foreground md:opacity-0 [@media(hover:none)]:md:opacity-100 md:group-hover:opacity-100"
+      aria-label={`Cambiar ${label}`}
+      title={`Cambiar ${label.toLowerCase()}`}
+    >
+      <Pencil className="h-3.5 w-3.5" />
+    </button>
+  );
+
   return (
     <div className="space-y-3">
-      {acciones.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {acciones.map((a) => {
-            const clase = cn(
-              "flex h-9 items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition-colors",
-              a.clase || "bg-card text-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
-            );
-            const Icono = a.icono;
-            return a.href ? (
-              <a key={a.label} href={a.href} target={a.href.startsWith("tel:") ? undefined : "_blank"} rel="noopener noreferrer" className={clase}>
-                <Icono className="h-3.5 w-3.5" /> {a.label}
-              </a>
-            ) : (
-              <button key={a.label} type="button" onClick={a.onClick} className={clase}>
-                <Icono className="h-3.5 w-3.5" /> {a.label}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-2">
-        {presentes.map(({ k, label, icono: Icono, placeholder }) => {
-          if (editando === k) return <div key={k} className="col-span-2">{editor(k, placeholder)}</div>;
-          const v = String(lead[k] ?? "");
-          const ancho = k === "ubicacion" || k === "email" || v.length > 22;
-          return (
-            <div key={k} className={cn("group relative min-w-0 rounded-xl border bg-card px-3 py-2", ancho && "col-span-2")}>
-              <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                <Icono className="h-3 w-3" /> {label}
-              </p>
-              <p className="mt-0.5 truncate pr-6 text-sm font-medium" title={v}>
-                {k === "ubicacion" && /^https?:/i.test(v) ? "Link de Google Maps" : v}
-              </p>
-              <button
-                type="button"
-                onClick={() => abrir(k)}
-                className="absolute right-1.5 top-1.5 rounded-md p-1 text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground md:opacity-0 [@media(hover:none)]:md:opacity-100 md:group-hover:opacity-100"
-                aria-label={`Cambiar ${label}`}
-                title={`Cambiar ${label.toLowerCase()}`}
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-              {k === "ubicacion" && mapaEmbebido(v) && <MapaMovible ubicacion={v} className="mt-2 h-36 overflow-hidden rounded-lg" />}
+      <div className="overflow-hidden rounded-2xl border bg-card">
+        {/* Quién es y lo que se puede hacer con un toque. */}
+        <div className="space-y-3 p-3">
+          {editando === "nombre" ? (
+            editor("nombre", CAMPOS_LEAD[0].placeholder)
+          ) : (
+            <div className="group flex items-center gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">{iniciales}</span>
+              <div className="min-w-0 flex-1">
+                <p className={cn("truncate font-semibold", !nombre && "text-muted-foreground")}>{nombre || "Sin nombre"}</p>
+                <p className="text-[11px] text-muted-foreground">Contacto</p>
+              </div>
+              {lapiz("nombre", "Contacto")}
             </div>
-          );
-        })}
+          )}
+          {acciones.length > 0 && (
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              {acciones.map((a) => {
+                const Icono = a.icono;
+                const contenido = (
+                  <>
+                    <span
+                      className={cn(
+                        "flex h-10 w-10 items-center justify-center rounded-full transition-colors",
+                        a.clase || "bg-muted text-foreground group-hover/acc:bg-primary/10 group-hover/acc:text-primary"
+                      )}
+                    >
+                      <Icono className="h-4 w-4" />
+                    </span>
+                    <span className="text-[11px] font-medium text-muted-foreground group-hover/acc:text-foreground">{a.label}</span>
+                  </>
+                );
+                const clase = "group/acc flex w-12 flex-col items-center gap-1";
+                return a.href ? (
+                  <a key={a.label} href={a.href} target={a.href.startsWith("tel:") ? undefined : "_blank"} rel="noopener noreferrer" className={clase}>
+                    {contenido}
+                  </a>
+                ) : (
+                  <button key={a.label} type="button" onClick={a.onClick} className={clase}>
+                    {contenido}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Cada dato en su renglón: se toca el lápiz para corregirlo. */}
+        {filas.length > 0 && (
+          <div className="divide-y border-t">
+            {filas.map(({ k, label, icono: Icono, placeholder }) => {
+              if (editando === k) return <div key={k} className="p-2">{editor(k, placeholder)}</div>;
+              const v = String(lead[k] ?? "");
+              return (
+                <div key={k} className="group px-3 py-2">
+                  <div className="flex items-center gap-3">
+                    <Icono className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] text-muted-foreground">{label}</p>
+                      <p className="truncate text-sm font-medium" title={v}>
+                        {k === "ubicacion" && /^https?:/i.test(v) ? "Link de Google Maps" : v}
+                      </p>
+                    </div>
+                    {lapiz(k, label)}
+                  </div>
+                  {k === "ubicacion" && mapaEmbebido(v) && <MapaMovible ubicacion={v} className="mt-2 h-36 overflow-hidden rounded-lg" />}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {faltan.length > 0 && (
