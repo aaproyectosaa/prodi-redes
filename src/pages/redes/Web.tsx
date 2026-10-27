@@ -594,7 +594,11 @@ function DatosLead({ lead }: { lead: LeadWeb }) {
   const [editando, setEditando] = useState<CampoLead | null>(null);
   const [valor, setValor] = useState("");
   const [guardando, setGuardando] = useState(false);
-  useEffect(() => setEditando(null), [lead.id]);
+  const [verDatos, setVerDatos] = useState(false);
+  useEffect(() => {
+    setEditando(null);
+    setVerDatos(false);
+  }, [lead.id]);
   const abrir = (k: CampoLead) => {
     setEditando(k);
     setValor(String(lead[k] ?? ""));
@@ -676,6 +680,8 @@ function DatosLead({ lead }: { lead: LeadWeb }) {
       .join("")
       .toUpperCase() || "?";
   const filas = presentes.filter((c) => c.k !== "nombre");
+  // Los renglones se despliegan a pedido; si se está corrigiendo uno, quedan abiertos.
+  const abiertos = verDatos || (editando !== null && editando !== "nombre");
   const lapiz = (k: CampoLead, label: string) => (
     <button
       type="button"
@@ -739,6 +745,17 @@ function DatosLead({ lead }: { lead: LeadWeb }) {
 
         {/* Cada dato en su renglón: se toca el lápiz para corregirlo. */}
         {filas.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setVerDatos((v) => !v)}
+            aria-expanded={abiertos}
+            className="flex w-full items-center justify-between border-t px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+          >
+            {abiertos ? "Ocultar datos" : `Ver datos (${filas.length})`}
+            <ChevronDown className={cn("h-4 w-4 transition-transform", abiertos && "rotate-180")} />
+          </button>
+        )}
+        {abiertos && filas.length > 0 && (
           <div className="divide-y border-t">
             {filas.map(({ k, label, icono: Icono, placeholder }) => {
               if (editando === k) return <div key={k} className="p-2">{editor(k, placeholder)}</div>;
