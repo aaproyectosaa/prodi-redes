@@ -777,6 +777,15 @@ export async function contexto(ex: Pick<PoolClient, "query">, uid: string, role:
       [uid]
     );
     r.rows.forEach((x: { id: string }) => misProyectos.add(x.id));
+    // Quien supervisa la revisión interna recibe los videos y piezas de los clientes sin otra productora: es del
+    // equipo de todos los clientes (si no, le llegaba el aviso y no podía aprobar).
+    if (roles.includes("productor")) {
+      const sup = await ex.query("select 1 from documentos where coleccion = 'profiles' and id = $1 and data->>'supervisa_revision' = 'true'", [uid]);
+      if (sup.rows.length) {
+        const todos = await ex.query("select id from documentos where coleccion = 'projects'");
+        todos.rows.forEach((x: { id: string }) => misProyectos.add(x.id));
+      }
+    }
   }
   return { uid, role, roles, misClientes, misProyectos, chats: new Map(), ex };
 }

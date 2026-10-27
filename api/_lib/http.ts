@@ -81,7 +81,10 @@ export async function assertProjectAccess(caller: Caller, proyectoId: string) {
   if (tieneRol(caller, "admin") || tieneRol(caller, "administracion")) return;
   const snap = await adminDb().collection("projects").doc(proyectoId).get();
   if (!snap.exists) throw new HttpError(404, "Cliente no encontrado");
-  if (!trabajaEn(caller.roles ?? caller.role, caller.uid, snap.data()?.team_roles)) throw new HttpError(403, "No tenés acceso a este cliente");
+  if (trabajaEn(caller.roles ?? caller.role, caller.uid, snap.data()?.team_roles)) return;
+  // Quien supervisa la revisión interna (producción) trabaja en todos los clientes (ver api/_lib/reglas.ts).
+  if (tieneRol(caller, "productor") && (await adminDb().collection("profiles").doc(caller.uid).get()).data()?.supervisa_revision === true) return;
+  throw new HttpError(403, "No tenés acceso a este cliente");
 }
 
 export function sendError(res: VercelResponse, err: unknown) {
