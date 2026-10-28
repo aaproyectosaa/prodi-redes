@@ -3,6 +3,8 @@ import {
   AlertTriangle,
   AtSign,
   Camera,
+  CheckCheck,
+  Clock,
   ChevronDown,
   ExternalLink,
   FileText,
@@ -27,6 +29,7 @@ import {
   X,
   XCircle,
   Quote,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -85,7 +88,18 @@ interface LeadWeb {
   /** Dirección del local o link de Google Maps. */
   ubicacion?: string;
   /** Los que llegaron por Meta: la conversación (mensajes) o el formulario. */
-  meta?: { conversacion_id?: string; plataforma?: string; ultimo_texto?: string; foto?: string | null; foto_manual?: string | null; wa_id?: string; chat?: { mensajes?: unknown[]; at?: string } | null } | null;
+  meta?: {
+    conversacion_id?: string;
+    plataforma?: string;
+    ultimo_texto?: string;
+    ultimo_mensaje_at?: string;
+    foto?: string | null;
+    foto_manual?: string | null;
+    wa_id?: string;
+    chat?: { mensajes?: MensajeChat[]; at?: string } | null;
+  } | null;
+  /** Cuándo alguien del equipo abrió el lead por última vez (para "sin leer"). */
+  leido_at?: string | null;
   /** Socio comercial que lo trajo (por su link o cargado desde su panel). */
   socio_id?: string | null;
   socio_nombre?: string | null;
@@ -132,6 +146,62 @@ function origenDe(l: LeadWeb): Origen {
   if (l.origen === "meta:leadgen") return "formulario";
   if (l.manual) return "mano";
   return "web";
+}
+
+/** Copia de un mensaje del chat guardada en el lead (api/_lib/meta-leads.ts → aMensaje). */
+interface MensajeChat {
+  id?: string;
+  texto?: string;
+  tipo?: string;
+  at?: string;
+  mio?: boolean;
+}
+
+const TEXTO_SIN_TEXTO: Record<string, string> = { historia: "Respondió tu historia", publicacion: "Mandó una publicación", sticker: "Mandó un sticker", archivo: "Mandó un archivo" };
+
+/**
+ * Cómo está la charla: el último mensaje (de quién y qué dijo), si está esperando respuesta y si nadie lo leyó.
+ * Lo suyo sale del chat guardado o de lo que avisó Meta (WhatsApp no guarda chat); lo nuestro, del chat o del último contacto.
+ */
+function charlaDe(l: LeadWeb) {
+  const chat = (l.meta?.chat?.mensajes ?? []).filter((m) => m?.at);
+  const suyoChat = [...chat].reverse().find((m) => !m.mio);
+  const mioChat = [...chat].reverse().find((m) => m.mio);
+  // Meta manda "2026-10-27T12:00:00+0000": se pasa todo a ISO para poder comparar.
+  const iso = (v?: string | null) => (v && !Number.isNaN(Date.parse(v)) ? new Date(v).toISOString() : null);
+  const max = (...v: (string | null | undefined)[]) => v.map(iso).filter(Boolean).sort().pop() ?? null;
+  const suyoAt = max(suyoChat?.at, l.meta?.ultimo_mensaje_at);
+  const nuestroAt = max(mioChat?.at, l.ultimo_contacto_at);
+  const textoDe = (m?: MensajeChat) => (m ? (m.texto ?? "").trim() || TEXTO_SIN_TEXTO[m.tipo ?? ""] || "" : "");
+  const suyoTexto = suyoChat && iso(suyoChat.at) === suyoAt ? textoDe(suyoChat) : l.meta?.ultimo_texto || textoDe(suyoChat);
+  const esperando = !!suyoAt && (!nuestroAt || suyoAt > nuestroAt) && l.estado !== "ganado" && l.estado !== "perdido";
+  const ms = suyoAt ? Date.now() - Date.parse(suyoAt) : 0;
+  // Sin leer: escribió después de la última vez que alguien lo abrió (lo de hace más de 3 días ya no se marca).
+  const sinLeer = esperando && ms < 3 * 86400000 && (!l.leido_at || suyoAt! > (iso(l.leido_at) ?? ""));
+  const ultimoMio = !!nuestroAt && (!suyoAt || nuestroAt > suyoAt);
+  return {
+    suyoAt,
+    suyoTexto,
+    esperando,
+    sinLeer,
+    horas: Math.floor(ms / 3600000),
+    ultimo: ultimoMio ? { mio: true, texto: textoDe(mioChat), at: nuestroAt } : suyoAt ? { mio: false, texto: suyoTexto, at: suyoAt } : null,
+  };
+}
+
+/** "5 h sin responder" con color según cuánto hace: ámbar, y rojo pasado el día. */
+function EsperaChip({ horas }: { horas: number }) {
+  const txt = horas < 1 ? "Recién escribió" : horas < 48 ? `${horas} h sin responder` : `${Math.floor(horas / 24)} días sin responder`;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums",
+        horas < 1 ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" : horas < 24 ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" : "bg-red-500/12 text-red-600 dark:text-red-400"
+      )}
+    >
+      <Clock className="h-3 w-3" /> {txt}
+    </span>
+  );
 }
 
 const NOMBRE_ESTADO: Record<Estado, string> = {
@@ -262,6 +332,10 @@ export default function Web() {
   const [sobre, setSobre] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<Origen | "todos">("todos");
+  const [soloSinLeer, setSoloSinLeer] = useState(false);
+  // Quién lo atiende: "todos", "" (sin asignar: el admin) o el uid de alguien de ventas.
+  const [atiende, setAtiende] = useState<string>("todos");
+  const { profiles } = useAppData();
 
   const deTemporada = useMemo(() => (leads ?? []).filter((l) => l.temporada === config.temporada), [leads, config.temporada]);
   const porOrigen = useMemo(() => {
@@ -275,9 +349,17 @@ export default function Web() {
     return deTemporada.filter(
       (l) =>
         (filtro === "todos" || origenDe(l) === filtro) &&
+        (!soloSinLeer || charlaDe(l).sinLeer) &&
+        (atiende === "todos" || (l.vendedor_id ?? "") === atiende) &&
         (!q || [l.negocio, l.nombre, l.email, l.telefono, l.instagram, l.rubro].some((v) => String(v ?? "").toLowerCase().includes(q)))
     );
-  }, [deTemporada, busca, filtro]);
+  }, [deTemporada, busca, filtro, soloSinLeer, atiende]);
+  const sinLeer = useMemo(() => deTemporada.filter((l) => charlaDe(l).sinLeer).length, [deTemporada]);
+  // Para filtrar por quién lo atiende (solo el admin: ventas ya ve solo los suyos).
+  const atienden = useMemo(() => {
+    const ids = new Set(deTemporada.map((l) => l.vendedor_id).filter(Boolean) as string[]);
+    return [...ids].map((id) => ({ id, nombre: profiles.find((p) => p.id === id)?.nombre ?? "Ventas", n: deTemporada.filter((l) => l.vendedor_id === id).length }));
+  }, [deTemporada, profiles]);
   const noCalifican = deTemporada.filter((l) => l.estado === "no_califica").sort((a, b) => b.created_at.localeCompare(a.created_at));
   const ganados = deTemporada.filter((l) => l.estado === "ganado").length;
   const lead = (leads ?? []).find((l) => l.id === abierto) ?? null;
@@ -390,6 +472,43 @@ export default function Web() {
               );
             })}
           </div>
+          {(sinLeer > 0 || soloSinLeer) && (
+            <button
+              type="button"
+              onClick={() => setSoloSinLeer((v) => !v)}
+              className={cn(
+                "flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-all",
+                soloSinLeer
+                  ? "border-transparent bg-gradient-to-r from-primary to-fuchsia-500 text-white shadow-md shadow-primary/25"
+                  : "border-primary/40 bg-primary/[0.06] text-primary hover:bg-primary/10"
+              )}
+            >
+              <span className={cn("h-2 w-2 rounded-full", soloSinLeer ? "bg-white" : "bg-gradient-to-br from-primary to-fuchsia-500")} />
+              Sin leer
+              <span className="tabular-nums opacity-80">{sinLeer}</span>
+            </button>
+          )}
+          {esAdminCrm && atienden.length > 0 && (
+            <label
+              className={cn(
+                "relative flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors",
+                atiende !== "todos" ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
+              )}
+            >
+              <User className="h-3.5 w-3.5" />
+              {atiende === "todos" ? "Lo atiende: todos" : atiende === "" ? "Lo atendés vos" : `Lo atiende ${atienden.find((a) => a.id === atiende)?.nombre ?? ""}`}
+              <ChevronDown className="h-3 w-3 opacity-70" />
+              <select value={atiende} onChange={(e) => setAtiende(e.target.value)} aria-label="Quién lo atiende" className="absolute inset-0 cursor-pointer opacity-0">
+                <option value="todos">Todos</option>
+                <option value="">Vos (sin asignar)</option>
+                {atienden.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.nombre} ({a.n})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
       )}
 
@@ -403,7 +522,10 @@ export default function Web() {
         <div className="-mx-4 snap-x snap-mandatory scroll-px-4 overflow-x-auto px-4 pb-4 md:-mx-8 md:snap-none md:px-8">
           <div className="flex min-w-max gap-3 xl:grid xl:min-w-0 xl:grid-cols-5">
             {COLUMNAS.map((col) => {
-              const items = visibles.filter((l) => l.estado === col.id).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+              // Los sin leer arriba; después, lo que se movió último.
+              const items = visibles
+                .filter((l) => l.estado === col.id)
+                .sort((a, b) => Number(charlaDe(b).sinLeer) - Number(charlaDe(a).sinLeer) || b.updated_at.localeCompare(a.updated_at));
               return (
                 <div
                   key={col.id}
@@ -451,7 +573,7 @@ export default function Web() {
                     ))}
                     {items.length === 0 && (
                       <p className={cn("m-1 rounded-xl border border-dashed py-8 text-center text-xs text-muted-foreground/70", arrastrando && "border-primary/50 text-primary")}>
-                        {arrastrando ? "Soltalo acá" : busca || filtro !== "todos" ? "Nada con ese filtro" : col.ayuda}
+                        {arrastrando ? "Soltalo acá" : busca || filtro !== "todos" || soloSinLeer || atiende !== "todos" ? "Nada con ese filtro" : col.ayuda}
                       </p>
                     )}
                   </div>
@@ -521,15 +643,32 @@ function LeadCard({ lead: l, onAbrir }: { lead: LeadWeb; onAbrir: () => void }) 
   const IconoOrigen = o.icono;
   // Un dato clave en vez de la lista entera (el resto está en la ficha).
   const dato = l.inversion_label ? `Invierte ${l.inversion_label}` : l.rubro || (origenDe(l) === "mano" ? l.fuente : "") || "";
-  const nota = (l.meta?.ultimo_texto || (l.notas ?? "").replace(/^Escribió por mensaje de \w+:\s*/i, "")).replace(/\s+/g, " ").trim();
+  const ch = charlaDe(l);
+  // El último mensaje de la charla (suyo o nuestro); si no hay chat, lo que dejó en el formulario o las notas.
+  const mio = !!(ch.ultimo?.mio && ch.ultimo.texto);
+  const nota = (mio ? ch.ultimo!.texto : ch.suyoTexto || (l.notas ?? "").replace(/^Escribió por mensaje de \w+:\s*/i, "")).replace(/\s+/g, " ").trim();
   return (
-    <div className={cn("group rounded-xl border bg-card p-3 text-sm shadow-sm transition-all hover:-translate-y-px hover:border-primary/40 hover:shadow-md", l.dudoso && "border-orange-500/60")}>
+    <div
+      className={cn(
+        "group relative rounded-xl border bg-card p-3 text-sm shadow-sm transition-all hover:-translate-y-px hover:border-primary/40 hover:shadow-md",
+        l.dudoso && "border-orange-500/60",
+        ch.sinLeer && "border-primary/50 bg-gradient-to-br from-primary/[0.07] to-fuchsia-500/[0.04] shadow-primary/10"
+      )}
+    >
       <button type="button" onClick={onAbrir} className="block w-full min-w-0 text-left">
         <span className="flex items-center justify-between gap-2">
           <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold", o.clase)}>
             <IconoOrigen className="h-3 w-3" /> {o.label}
           </span>
-          <span className="shrink-0 text-[10px] text-muted-foreground">{hace(l.created_at)}</span>
+          <span className={cn("flex shrink-0 items-center gap-1.5 text-[10px]", ch.sinLeer ? "font-semibold text-primary" : "text-muted-foreground")}>
+            {hace(ch.ultimo?.at ?? l.created_at)}
+            {ch.sinLeer && (
+              <span className="relative flex h-2 w-2" title="Sin leer">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-gradient-to-br from-primary to-fuchsia-500" />
+              </span>
+            )}
+          </span>
         </span>
         {l.dudoso && (
           <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">
@@ -539,12 +678,23 @@ function LeadCard({ lead: l, onAbrir }: { lead: LeadWeb; onAbrir: () => void }) 
         <span className="mt-2 flex items-center gap-2">
           <AvatarLead lead={l} className="h-8 w-8 rounded-full text-[11px]" />
           <span className="min-w-0">
-            <span className="block truncate text-[15px] font-semibold leading-tight">{l.negocio}</span>
+            <span className={cn("block truncate text-[15px] leading-tight", ch.sinLeer ? "font-bold" : "font-semibold")}>{l.negocio}</span>
             {l.nombre && l.nombre !== l.negocio.replace(/^@/, "") && <span className="block truncate text-xs text-muted-foreground">{l.nombre}</span>}
           </span>
         </span>
         {dato && <span className="mt-1.5 inline-block max-w-full truncate rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{dato}</span>}
-        {nota && <span className="mt-1.5 line-clamp-2 block text-xs leading-snug text-foreground/80">“{nota}”</span>}
+        {nota && (
+          <span className={cn("mt-1.5 line-clamp-2 block text-xs leading-snug", ch.sinLeer ? "font-medium text-foreground" : "text-foreground/75")}>
+            {mio && <CheckCheck className="-mt-0.5 mr-1 inline h-3.5 w-3.5 text-sky-500" aria-label="Le respondiste" />}
+            {mio && <span className="text-muted-foreground">Vos: </span>}
+            {nota}
+          </span>
+        )}
+        {ch.esperando && ch.horas < 24 * 14 && (
+          <span className="mt-1.5 flex">
+            <EsperaChip horas={ch.horas} />
+          </span>
+        )}
         <ProximoPasoChip lead={l} />
       </button>
       <div className="mt-2 flex items-center gap-0.5 border-t pt-2">
@@ -984,6 +1134,12 @@ function AvisoMismaPersona({ lead, otros }: { lead: LeadWeb; otros: LeadWeb[] })
 function LeadDetalle({ lead, todos, onClose }: { lead: LeadWeb | null; todos: LeadWeb[]; onClose: () => void }) {
   const [pestana, setPestana] = useState<"chat" | "ficha">("chat");
   useEffect(() => setPestana("chat"), [lead?.id]);
+  // Abrirlo lo marca como leído (para todo el equipo).
+  const sinLeer = !!lead && charlaDe(lead).sinLeer;
+  useEffect(() => {
+    if (lead && sinLeer) void callApi("/api/web/visto", { id: lead.id }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead?.id, sinLeer]);
   if (!lead) return null;
   const o = ORIGENES[origenDe(lead)];
   const IconoOrigen = o.icono;
@@ -1009,6 +1165,7 @@ function LeadDetalle({ lead, todos, onClose }: { lead: LeadWeb | null; todos: Le
       <SeguimientoLead lead={lead} />
       <TraidoPor lead={lead} />
       <LoAtiende lead={lead} />
+      <BorrarLead lead={lead} onBorrado={onClose} />
     </div>
   );
 
@@ -1160,6 +1317,37 @@ function LoAtiende({ lead }: { lead: LeadWeb }) {
         </select>
       </label>
       <p className="pl-5 text-[11px] text-muted-foreground">Ventas solo ve los leads que le asignás o que cargó él.</p>
+    </div>
+  );
+}
+
+/** Solo el admin: borrar el lead (duplicados, pruebas). Los vendedores no lo ven (y el servidor tampoco los deja). */
+function BorrarLead({ lead, onBorrado }: { lead: LeadWeb; onBorrado: () => void }) {
+  const { role, viewingAs } = useUserProfileContext();
+  const [borrando, setBorrando] = useState(false);
+  if (role !== "admin" || viewingAs || lead.cliente_id) return null;
+  const borrar = async () => {
+    if (!window.confirm(`¿Borrar el lead «${lead.negocio}»? No se puede deshacer.`)) return;
+    setBorrando(true);
+    try {
+      await callApi("/api/web/borrar", { id: lead.id });
+      toast.success("Lead borrado");
+      onBorrado();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo borrar");
+      setBorrando(false);
+    }
+  };
+  return (
+    <div className="flex justify-center pt-1">
+      <button
+        type="button"
+        onClick={() => void borrar()}
+        disabled={borrando}
+        className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/10 disabled:opacity-50 dark:text-red-400"
+      >
+        {borrando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Borrar lead
+      </button>
     </div>
   );
 }

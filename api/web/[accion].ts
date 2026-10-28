@@ -35,7 +35,7 @@
 
 import { createHmac, randomUUID } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { enTransaccion, getPool, guardarDoc, leerDoc } from "../_lib/db";
+import { borrarDoc, enTransaccion, getPool, guardarDoc, leerDoc } from "../_lib/db";
 import { appUrl, body, HttpError, requireCaller, sendError, tieneRol, type Caller } from "../_lib/http";
 import { duenoLead } from "../_lib/reglas";
 import { adminDb } from "../_lib/db";
@@ -289,6 +289,25 @@ async function conLead(id: string, cambio: (d: Record<string, unknown>) => Recor
 }
 const conHistorial = (d: Record<string, unknown>, e: Record<string, unknown>) => [...(Array.isArray(d.historial) ? d.historial : []), e].slice(-100);
 
+/**
+ * Borrar un lead (solo admin: duplicados, pruebas). Queda una marca en leads_web_borrados para que los de Meta
+ * (formularios y mensajes) no vuelvan a entrar solos con la próxima revisión; si la persona escribe de nuevo, sí.
+ * El que ya es cliente no se borra.
+ */
+async function borrarLead(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin"]);
+  const id = texto(body<{ id?: string }>(req).id, 40);
+  if (!ID_OK.test(id)) throw new HttpError(400, "Falta el id");
+  return enTransaccion(async (cli) => {
+    const d = await leerDoc(cli, COL, id, true);
+    if (!d) throw new HttpError(404, "No encontramos ese lead");
+    if (d.cliente_id) throw new HttpError(400, "Este lead ya es cliente: no se puede borrar");
+    await guardarDoc(cli, "leads_web_borrados", id, { borrado_at: new Date().toISOString(), negocio: d.negocio ?? "", por: caller.uid });
+    await borrarDoc(cli, COL, id);
+    return { ok: true };
+  });
+}
+
 /** Próximo paso: qué hay que hacer y para cuándo (sin fecha = sin recordatorio). */
 async function seguimiento(req: VercelRequest) {
   const caller = await requireCaller(req, VENTAS);
@@ -315,6 +334,19 @@ async function actividad(req: VercelRequest) {
     ...(b.cumplido ? { proximo_paso: null } : {}),
     historial: conHistorial(d, { at, tipo, texto: String(b.texto ?? "").trim().slice(0, 1000), por: caller.uid, por_nombre: caller.nombre || caller.email || "" }),
   }));
+}
+
+/** Alguien del equipo abrió el lead: deja de figurar "sin leer". No toca updated_at (no cambia el orden del tablero). */
+async function visto(req: VercelRequest) {
+  await requireCaller(req, VENTAS);
+  const id = texto(body<{ id?: string }>(req).id, 40);
+  if (!ID_OK.test(id)) throw new HttpError(400, "Falta el id");
+  return enTransaccion(async (cli) => {
+    const d = await leerDoc(cli, COL, id, true);
+    if (!d) throw new HttpError(404, "No encontramos ese lead");
+    await guardarDoc(cli, COL, id, { ...d, leido_at: new Date().toISOString() });
+    return { ok: true };
+  });
 }
 
 /** De dónde vino un lead cargado a mano. */
@@ -814,7 +846,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "manual") res.status(200).json(await manual(req));
     else if (accion === "seguimiento") res.status(200).json(await seguimiento(req));
     else if (accion === "actividad") res.status(200).json(await actividad(req));
+    else if (accion === "borrar") res.status(200).json(await borrarLead(req));
     else if (accion === "datos") res.status(200).json(await datos(req));
+    else if (accion === "visto") res.status(200).json(await visto(req));
     else if (accion === "meta-productos") {
       const caller = await requireCaller(req, VENTAS);
       const b = body<{ id?: string; ids?: string[] }>(req);

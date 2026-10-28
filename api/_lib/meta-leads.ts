@@ -77,6 +77,8 @@ async function guardarLead(lead: any, temporada: string, base: string): Promise<
   const id = idDeLead(String(lead.id));
   const pool = getPool();
   if (await leerDoc(pool, COL, id)) return false;
+  // Lo borraron a mano desde el panel: no vuelve a entrar.
+  if (await leerDoc(pool, "leads_web_borrados", id)) return false;
   const r = respuestas(Array.isArray(lead.field_data) ? lead.field_data : []);
   const at = lead.created_time ? new Date(lead.created_time).toISOString() : new Date().toISOString();
   const plataforma = String(lead.platform ?? "").toLowerCase() === "ig" ? "Instagram" : "Facebook";
@@ -346,7 +348,9 @@ export async function importarMensajes(base: string, forzar = false, todo = fals
       // Del más viejo al más nuevo; lo que escribió la persona en los últimos 30 días (no las respuestas de Prodi).
       // Cuenta también quien vuelve a escribir en un chat viejo.
       const mensajes = [...(c.messages?.data ?? [])].reverse();
-      const recientes = mensajes.filter((m: any) => m?.from && !propios.has(String(m.from.id)) && Date.parse(m.created_time) >= desde);
+      // Si el lead se borró a mano, vuelve solo si escribe algo después de borrarlo.
+      const borrado = Date.parse(String((await leerDoc(pool, "leads_web_borrados", id))?.borrado_at ?? "")) || 0;
+      const recientes = mensajes.filter((m: any) => m?.from && !propios.has(String(m.from.id)) && Date.parse(m.created_time) >= Math.max(desde, borrado + 1));
       if (!recientes.length) continue;
       const primero = recientes[0];
       const suyos = recientes.filter((m: any) => m.message).slice(-3);
