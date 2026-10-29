@@ -34,7 +34,9 @@ export function useAltoVisible() {
       const apaisada = window.innerWidth > window.innerHeight;
       const anchoPantalla = apaisada ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
       const altoPantalla = apaisada ? Math.min(screen.width, screen.height) : Math.max(screen.width, screen.height);
-      if (instalada && window.innerWidth >= 768 && Math.abs(window.innerWidth - anchoPantalla) < 4) {
+      // Solo iPad: en la PC con la app instalada el ancho también coincide, pero la pantalla incluye la barra de tareas.
+      const ipad = /iPad/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      if (ipad && instalada && window.innerWidth >= 768 && Math.abs(window.innerWidth - anchoPantalla) < 4) {
         raiz.style.setProperty("--alto-pantalla", `${altoPantalla}px`);
         raiz.classList.add("pantalla-ipad");
       } else {
