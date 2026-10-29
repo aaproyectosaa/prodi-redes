@@ -3,6 +3,8 @@
 //
 // - Texto (copys, guiones, plan del mes, @prodi en el chat, memoria de los chats, minutas escritas): Claude
 //   (ANTHROPIC_API_KEY; modelo en ANTHROPIC_MODEL, por defecto Claude Opus 5.5). Sin esa clave, Gemini.
+// - Tareas simples de fondo (memoria de los chats, resumen de la marca, colores del logo): Claude Sonnet
+//   (ANTHROPIC_MODEL_SIMPLE), más barato y alcanza. Lo creativo sigue con Opus.
 // - Imágenes de las piezas, minutas desde el audio de una reunión y mensajes de voz del chat: Gemini
 //   (GEMINI_API_KEY). Claude no hace imágenes ni escucha audio. ChatGPT no se usa.
 //
@@ -21,6 +23,7 @@ export type Adjunto = { data: Buffer; mime: Imagen["mime"] | "application/pdf" }
 type Ratio = "1:1" | "4:5" | "9:16" | "16:9" | "2:3" | "3:4" | "21:9";
 
 const MODELO = () => process.env.ANTHROPIC_MODEL || "claude-opus-5-5";
+const MODELO_SIMPLE = () => process.env.ANTHROPIC_MODEL_SIMPLE || "claude-sonnet-5-5";
 const hayClaude = () => !!(process.env.ANTHROPIC_API_KEY ?? "").replace(/[\s"']/g, "");
 const hayGemini = () => !!process.env.GEMINI_API_KEY?.trim();
 
@@ -66,11 +69,11 @@ function errorClaude(err: unknown): Error {
 }
 
 /** Una respuesta JSON de Claude con el esquema pedido. */
-async function jsonClaude<T>(prompt: string, schema: unknown, esfuerzo: Esfuerzo, imagenes: Adjunto[] = []): Promise<T> {
+async function jsonClaude<T>(prompt: string, schema: unknown, esfuerzo: Esfuerzo, imagenes: Adjunto[] = [], modelo = MODELO()): Promise<T> {
   let r: Anthropic.Beta.BetaMessage;
   try {
     r = await claude().beta.messages.create({
-      model: MODELO(),
+      model: modelo,
       max_tokens: 16000,
       // Si el modelo declina un pedido, el servidor lo reintenta solo con otro modelo.
       betas: ["server-side-fallback-2026-07-01"],
@@ -115,6 +118,16 @@ function sinTexto(): never {
  */
 export async function generarJSON<T>(prompt: string, schema: unknown, temperature = 0.6, imagenes: Adjunto[] = [], esfuerzo?: Esfuerzo): Promise<T> {
   if (hayClaude()) return jsonClaude<T>(prompt, schema, esfuerzo ?? (temperature <= 0.3 ? "low" : "medium"), imagenes);
+  if (hayGemini()) return gemini.generarJSON<T>(prompt, schema, temperature, imagenes);
+  sinTexto();
+}
+
+/**
+ * Como generarJSON, pero con el modelo de tareas simples (Sonnet): para lo que corre de fondo o extrae datos
+ * (memoria de los chats, resumen de la marca, colores del logo). Mismo esquema y mismo resultado para quien lo usa.
+ */
+export async function generarJSONSimple<T>(prompt: string, schema: unknown, temperature = 0.3, imagenes: Adjunto[] = []): Promise<T> {
+  if (hayClaude()) return jsonClaude<T>(prompt, schema, "low", imagenes, MODELO_SIMPLE());
   if (hayGemini()) return gemini.generarJSON<T>(prompt, schema, temperature, imagenes);
   sinTexto();
 }

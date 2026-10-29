@@ -45,7 +45,7 @@ import { adminDb, getPool } from "../_lib/db";
 import { appUrl, assertProjectAccess, body, HttpError, requireCaller, sendError } from "../_lib/http";
 import { sincronizarCalendario } from "../_lib/calendario";
 import { armarMinutaDeLlamada, asegurarTablaTextos as asegurarTablaTextosLlamada } from "../_lib/minuta-llamada";
-import { type Adjunto, generarImagen, generarJSON, generarJSONBarato, generarMinutaIA, generarTextos, transcribir, vozNatural } from "../_lib/ia";
+import { type Adjunto, generarImagen, generarJSON, generarJSONBarato, generarJSONSimple, generarMinutaIA, generarTextos, transcribir, vozNatural } from "../_lib/ia";
 import { clienteSoftware, clientesSoftware, esChatSoftware } from "../_lib/software/chat-software";
 import { descargarDrive } from "../_lib/drive-stream";
 import { getAppDriveAccessToken } from "../_lib/drive-connection";
@@ -1170,7 +1170,7 @@ async function marcaDetectarColores(req: VercelRequest) {
     m.tono ? `Tono: ${m.tono}` : "",
   ].filter(Boolean).join("\n");
   if (!adjuntos.length && !m.colores) throw new HttpError(422, "Cargá primero el logo (o el manual de marca) para que la IA vea los colores");
-  const r = await generarJSON<{ colores?: { hex?: string; nombre?: string; uso?: string }[] }>(
+  const r = await generarJSONSimple<{ colores?: { hex?: string; nombre?: string; uso?: string }[] }>(
     `Sos diseñador. Detectá la paleta de colores de esta marca para usarla en sus piezas y videos.
 ${datos}
 ${cuales.length ? `Archivos adjuntos, en orden:\n${cuales.join("\n")}` : "No hay archivos: usá solo lo que anotaron."}
@@ -1251,7 +1251,7 @@ async function aprender(pid: string, proj: Record<string, any>, ejemplo: Ejemplo
   let resumen = m.resumen ?? "";
   if (resumir) {
     try {
-      const r = await generarJSON<{ resumen?: string }>(promptResumen(marcaTexto(proj), { ...m, ejemplos }), ESQUEMA_RESUMEN, 0.3);
+      const r = await generarJSONSimple<{ resumen?: string }>(promptResumen(marcaTexto(proj), { ...m, ejemplos }), ESQUEMA_RESUMEN, 0.3);
       resumen = String(r.resumen ?? "").trim().slice(0, 1500) || resumen;
     } catch (err) {
       console.warn("[plan] no se pudo actualizar el resumen", err);

@@ -7,7 +7,7 @@
 // El plan del mes, el copy y el guion lo leen (memoriaTexto / contextoComercial).
 
 import { adminDb, type Data } from "./db";
-import { generarJSON } from "./ia";
+import { generarJSONSimple } from "./ia";
 import { fechaAR } from "./fecha";
 import { notasChatTexto, type MemoriaIA, type NotaChat } from "./plan-mes";
 
@@ -128,7 +128,7 @@ Reglas:
 ${notasChatTexto(mem.chat_notas, 40) ? `Ya sabemos:\n${notasChatTexto(mem.chat_notas, 40)}\n` : ""}
 Mensajes (del más viejo al más nuevo):
 ${texto}`;
-      const r = await generarJSON<{ hechos?: unknown[] }>(prompt, ESQUEMA, 0.2);
+      const r = await generarJSONSimple<{ hechos?: unknown[] }>(prompt, ESQUEMA, 0.2);
       datos += await guardarNotasChat(pid, c.id, (r.hechos ?? []).slice(0, 6).map(String), null, nuevoCursor);
     } catch (err) {
       console.warn("[chat-memoria]", c.id, err);
