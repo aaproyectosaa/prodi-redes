@@ -32,7 +32,8 @@
 // POST /api/web/socio-cliente { proyecto_id, socio_id|null }  (admin) → "Traído por" de un cliente
 // POST /api/web/socio-resumen { mes }        (admin) → por socio: leads, ganados, clientes, facturado y comisión
 // Postulantes de somosprodi.com/sumate (colección `postulantes_web`, aparte de los leads):
-// POST /api/web/sumate { tipo: "trabajo" | "creador" | "franquicia", nombre, telefono, email, ciudad, … } → { ok }  (pública)
+// POST /api/web/sumate { tipo: "trabajo" | "creador" | "franquicia", nombre, telefono, email, ciudad, …, cv_pdf? } → { ok }  (pública)
+//      cv_pdf: { nombre, data (base64) } hasta 3 MB → Drive de Prodi, Progreso/Postulantes, sin compartir.
 // POST /api/web/postulante-estado { id, estado?, notas? }  (admin) → nuevo, contactado, aceptado o descartado
 // Los leads se guardan en la colección `leads_web`; la configuración en `web_config/general`.
 
@@ -46,6 +47,7 @@ import { avisarAdmin, avisarEstadoAlSocio, comisionEstandar, comisionesDelMes, g
 import { claveTelefono } from "../_lib/leads-unir";
 import { PLANES_WEB, precioPlanWeb } from "../_lib/alta-web";
 import { crearSuscripcion } from "../_lib/mercadopago";
+import { uploadBufferToDrive } from "../_lib/drive-server";
 
 /** Trabajan los leads de Prodi: el admin y quien tenga el rol Ventas. */
 const VENTAS = ["admin", "ventas"];
@@ -574,6 +576,20 @@ async function sumate(req: VercelRequest) {
 
   const id = randomUUID();
   const at = new Date(ahora).toISOString();
+  // CV en PDF (solo «trabajo»): al Drive de Prodi, sin compartir. Si falla, la postulación entra igual y queda anotado.
+  let cv_archivo: { link: string; nombre: string } | { error: string } | null = null;
+  const pdf = tipo === "trabajo" && b.cv_pdf && typeof b.cv_pdf === "object" ? (b.cv_pdf as { nombre?: unknown; data?: unknown }) : null;
+  if (pdf) {
+    const data = Buffer.from(String(pdf.data ?? ""), "base64");
+    if (data.length > 3 * 1024 * 1024) throw new HttpError(400, "El PDF pesa más de 3 MB. Probá con uno más liviano o pegá un link.");
+    if (data.subarray(0, 4).toString() !== "%PDF") throw new HttpError(400, "El CV tiene que ser un PDF");
+    try {
+      const up = await uploadBufferToDrive({ path: ["Postulantes"], name: `CV ${nombre} ${at.slice(0, 10)}.pdf`, mime: "application/pdf", data, privado: true });
+      cv_archivo = { link: up.web_view_link, nombre: texto(pdf.nombre, 120) || "cv.pdf" };
+    } catch {
+      cv_archivo = { error: "No se pudo guardar el PDF en Drive" };
+    }
+  }
   const datosTipo =
     tipo === "trabajo"
       ? {
@@ -606,6 +622,7 @@ async function sumate(req: VercelRequest) {
     telefono,
     ciudad,
     ...datosTipo,
+    ...(cv_archivo ? { cv_archivo } : {}),
     estado: "nuevo",
     notas: "",
     ip_hash,

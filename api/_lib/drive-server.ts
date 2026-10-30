@@ -33,12 +33,13 @@ export interface ServerUploadResult {
   thumbnail_link?: string | null;
 }
 
-/** Sube un buffer a Progreso/<cliente>/<subcarpeta> y lo comparte por link. */
+/** Sube un buffer a Progreso/<cliente>/<subcarpeta> y lo comparte por link (salvo `privado`: datos personales, como un CV). */
 export async function uploadBufferToDrive(params: {
   path: string[];
   name: string;
   mime: string;
   data: Buffer;
+  privado?: boolean;
 }): Promise<ServerUploadResult> {
   const { accessToken: token } = await getAppDriveAccessToken();
   let parent = "root";
@@ -68,11 +69,12 @@ export async function uploadBufferToDrive(params: {
   if (!up.ok) throw new Error(`Drive: no se pudo subir el archivo (${up.status})`);
   const file = (await up.json()) as { id: string; name: string; mimeType: string; webViewLink?: string; thumbnailLink?: string };
 
-  await fetch(`${DRIVE_API}/files/${file.id}/permissions?fields=id`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ role: "reader", type: "anyone" }),
-  }).catch(() => undefined);
+  if (!params.privado)
+    await fetch(`${DRIVE_API}/files/${file.id}/permissions?fields=id`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "reader", type: "anyone" }),
+    }).catch(() => undefined);
 
   return {
     drive_file_id: file.id,

@@ -36,6 +36,7 @@ interface Postulante {
   dedicacion?: string;
   portfolio?: string;
   cv?: string;
+  cv_archivo?: { link?: string; nombre?: string; error?: string };
   instagram?: string;
   tiktok?: string;
   linkedin?: string;
@@ -266,6 +267,7 @@ function Detalle({ postulante: p, onClose }: { postulante: Postulante | null; on
               <Dato label="Dedicación" valor={p.dedicacion} />
               <Dato label="Puede empezar" valor={p.inicio} />
               <Dato label="Pretensión" valor={p.pretension} />
+              <Dato label="CV (PDF)" valor={p.cv_archivo?.link ?? p.cv_archivo?.error} />
               <Dato label="CV" valor={p.cv} />
               <Dato label="Portfolio" valor={p.portfolio} />
               <Dato label="Instagram" valor={p.instagram} />
