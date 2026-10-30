@@ -1,6 +1,6 @@
 // Módulo Web: reservas de la landing de la campaña «No empezamos de cero» (somosprodi.com).
 // Públicos (los llama la landing, con CORS solo para somosprodi.com):
-// POST /api/web/aplicar   { nombre, negocio, email, instagram, rubro, facturacion, …, inversion, …, plan?, ref? } → { id, califica }
+// POST /api/web/aplicar   { nombre, negocio, email, telefono, instagram, rubro, facturacion, …, inversion, …, plan?, ref? } → { id, califica }
 // POST /api/web/reunion   { id }                                → pasa de "calificado" a "reunion_agendada"
 // GET  /api/web/cupos                                           → { temporada, total, ocupados }
 // Desde el panel (solo el super admin):
@@ -119,6 +119,7 @@ async function aplicar(req: VercelRequest) {
   const negocio = texto(b.negocio, 80);
   const email = texto(b.email, 120).toLowerCase();
   const instagram = texto(b.instagram, 120);
+  const telefono = texto(b.telefono, 40);
   const rubro = texto(b.rubro, 60);
   const facturacion = texto(b.facturacion, 20);
   const ya_pauto = texto(b.ya_pauto, 60);
@@ -126,6 +127,7 @@ async function aplicar(req: VercelRequest) {
   const inversion = texto(b.inversion, 20);
   if (nombre.length < 2 || negocio.length < 2) throw new HttpError(400, "Completá tu nombre y el de tu empresa");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new HttpError(400, "Revisá el email");
+  if (telefono.replace(/\D/g, "").length < 8) throw new HttpError(400, "Revisá tu WhatsApp (con característica)");
   if (!RUBROS.includes(rubro) || !FACTURACION.includes(facturacion) || !YA_PAUTO.includes(ya_pauto) || !CUANDO.includes(cuando) || !INVERSION.includes(inversion)) {
     throw new HttpError(400, "Faltan respuestas");
   }
@@ -177,6 +179,7 @@ async function aplicar(req: VercelRequest) {
     nombre,
     negocio,
     email,
+    telefono,
     instagram,
     rubro,
     facturacion,
