@@ -584,7 +584,14 @@ async function sumate(req: VercelRequest) {
           movilidad: texto(b.movilidad, 60),
           dedicacion: texto(b.dedicacion, 40),
           portfolio: texto(b.portfolio, 300),
+          cv: texto(b.cv, 300),
           instagram: texto(b.instagram, 120),
+          tiktok: texto(b.tiktok, 200),
+          linkedin: texto(b.linkedin, 300),
+          edad: texto(b.edad, 10),
+          estudios: texto(b.estudios, 60),
+          inicio: texto(b.inicio, 40),
+          pretension: texto(b.pretension, 120),
           porque: texto(b.porque, 1500),
         }
       : tipo === "creador"

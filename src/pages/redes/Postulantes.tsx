@@ -35,7 +35,14 @@ interface Postulante {
   movilidad?: string;
   dedicacion?: string;
   portfolio?: string;
+  cv?: string;
   instagram?: string;
+  tiktok?: string;
+  linkedin?: string;
+  edad?: string;
+  estudios?: string;
+  inicio?: string;
+  pretension?: string;
   porque?: string;
   // Creador
   redes?: string;
@@ -249,14 +256,21 @@ function Detalle({ postulante: p, onClose }: { postulante: Postulante | null; on
             </div>
 
             <div className="grid gap-3 rounded-2xl border bg-muted/30 p-4">
+              <Dato label="Edad" valor={p.edad} />
+              <Dato label="Estudios" valor={p.estudios} />
               <Dato label="Qué hace" valor={p.rol} />
               <Dato label="Experiencia" valor={p.experiencia} />
               <Dato label="Herramientas" valor={p.herramientas} />
               <Dato label="Equipo propio" valor={p.equipo} />
               <Dato label="Movilidad" valor={p.movilidad} />
               <Dato label="Dedicación" valor={p.dedicacion} />
+              <Dato label="Puede empezar" valor={p.inicio} />
+              <Dato label="Pretensión" valor={p.pretension} />
+              <Dato label="CV" valor={p.cv} />
               <Dato label="Portfolio" valor={p.portfolio} />
               <Dato label="Instagram" valor={p.instagram} />
+              <Dato label="TikTok o YouTube" valor={p.tiktok} />
+              <Dato label="LinkedIn" valor={p.linkedin} />
               <Dato label="Redes" valor={p.redes} />
               <Dato label="Seguidores" valor={p.seguidores} />
               <Dato label="De qué habla" valor={p.tema} />
