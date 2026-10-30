@@ -31,6 +31,9 @@
 // POST /api/web/socio-alta { lead_id, proyecto_id }  (admin) → el cliente nuevo queda con el socio del lead y la fecha
 // POST /api/web/socio-cliente { proyecto_id, socio_id|null }  (admin) → "Traído por" de un cliente
 // POST /api/web/socio-resumen { mes }        (admin) → por socio: leads, ganados, clientes, facturado y comisión
+// Postulantes de somosprodi.com/sumate (colección `postulantes_web`, aparte de los leads):
+// POST /api/web/sumate { tipo: "trabajo" | "creador" | "franquicia", nombre, telefono, email, ciudad, … } → { ok }  (pública)
+// POST /api/web/postulante-estado { id, estado?, notas? }  (admin) → nuevo, contactado, aceptado o descartado
 // Los leads se guardan en la colección `leads_web`; la configuración en `web_config/general`.
 
 import { createHmac, randomUUID } from "node:crypto";
@@ -536,6 +539,93 @@ async function crmEspera(req: VercelRequest) {
   return { ok: true };
 }
 
+/** Quien se postula desde somosprodi.com/sumate: trabajar con Prodi, ser creador con referidos o llevar Prodi a su ciudad.
+ *  Va a `postulantes_web` (no al tablero de leads) y avisa al admin. */
+const POSTULANTES = "postulantes_web";
+const TIPOS_POSTULANTE: Record<string, string> = { trabajo: "Trabajar con Prodi", creador: "Creador con referidos", franquicia: "Llevar Prodi a su ciudad" };
+const ESTADOS_POSTULANTE = ["nuevo", "contactado", "aceptado", "descartado"];
+const lista = (v: unknown, max: number) => (Array.isArray(v) ? v.map((x) => texto(x, 40)).filter(Boolean).slice(0, max) : []);
+
+async function sumate(req: VercelRequest) {
+  const b = body<Record<string, unknown>>(req);
+  const tipo = texto(b.tipo, 20);
+  const nombre = texto(b.nombre, 80);
+  const email = texto(b.email, 120).toLowerCase();
+  const telefono = texto(b.telefono, 40);
+  const ciudad = texto(b.ciudad, 80);
+  if (!TIPOS_POSTULANTE[tipo]) throw new HttpError(400, "Elegí cómo querés sumarte");
+  if (nombre.length < 2) throw new HttpError(400, "Completá tu nombre");
+  if (telefono.replace(/\D/g, "").length < 8) throw new HttpError(400, "Revisá tu WhatsApp (con característica)");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new HttpError(400, "Revisá el email");
+  if (ciudad.length < 2) throw new HttpError(400, "Contanos en qué ciudad estás");
+
+  const ip_hash = huellaIp(req);
+  const ahora = Date.now();
+  const pool = getPool();
+  const spam = await pool.query(
+    `select
+       count(*) filter (where data->>'ip_hash' = $2 and data->>'created_at' > $3)::int as por_ip,
+       count(*) filter (where data->>'email' = $4 and data->>'created_at' > $5)::int as por_email
+     from documentos where coleccion = $1 and data->>'created_at' > $3`,
+    [POSTULANTES, ip_hash, new Date(ahora - 3_600_000).toISOString(), email, new Date(ahora - 600_000).toISOString()]
+  );
+  if ((spam.rows[0]?.por_ip ?? 0) >= 5) throw new HttpError(429, "Recibimos muchos envíos desde tu conexión. Probá en un rato.");
+  if ((spam.rows[0]?.por_email ?? 0) > 0) return { ok: true };
+
+  const id = randomUUID();
+  const at = new Date(ahora).toISOString();
+  const datosTipo =
+    tipo === "trabajo"
+      ? {
+          rol: texto(b.rol, 40),
+          experiencia: texto(b.experiencia, 40),
+          herramientas: lista(b.herramientas, 20),
+          equipo: lista(b.equipo, 10),
+          movilidad: texto(b.movilidad, 60),
+          dedicacion: texto(b.dedicacion, 40),
+          portfolio: texto(b.portfolio, 300),
+          instagram: texto(b.instagram, 120),
+          porque: texto(b.porque, 1500),
+        }
+      : tipo === "creador"
+        ? { redes: texto(b.redes, 200), seguidores: texto(b.seguidores, 40), tema: texto(b.tema, 120), porque: texto(b.porque, 1500) }
+        : { mensaje: texto(b.mensaje, 1500) };
+  await guardarDoc(pool, POSTULANTES, id, {
+    created_at: at,
+    updated_at: at,
+    tipo,
+    nombre,
+    email,
+    telefono,
+    ciudad,
+    ...datosTipo,
+    estado: "nuevo",
+    notas: "",
+    ip_hash,
+  });
+  await avisarAdmin(`${TIPOS_POSTULANTE[tipo]}: ${nombre}`, `${nombre}, de ${ciudad}, se postuló desde somosprodi.com/sumate.`, `/postulantes?id=${id}`, `sumate:${id}`, appUrl(req)).catch(() => undefined);
+  return { ok: true };
+}
+
+async function postulanteEstado(req: VercelRequest) {
+  await requireCaller(req, ["admin"]);
+  const b = body<{ id?: string; estado?: string; notas?: string }>(req);
+  const id = texto(b.id, 40);
+  if (!ID_OK.test(id)) throw new HttpError(400, "Falta el id");
+  return enTransaccion(async (cli) => {
+    const d = await leerDoc(cli, POSTULANTES, id, true);
+    if (!d) throw new HttpError(404, "No encontramos esa postulación");
+    const cambios: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (b.estado !== undefined) {
+      if (!ESTADOS_POSTULANTE.includes(String(b.estado))) throw new HttpError(400, "Estado inválido");
+      cambios.estado = b.estado;
+    }
+    if (b.notas !== undefined) cambios.notas = texto(b.notas, 3000);
+    await guardarDoc(cli, POSTULANTES, id, { ...d, ...cambios });
+    return { ok: true };
+  });
+}
+
 const LEAD_DE_VENTAS = ["estado", "notas", "seguimiento", "actividad", "datos", "meta-productos", "unir", "foto", "meta-sugerir", "meta-conversacion", "meta-responder"];
 
 /** Si quien llama es de ventas (y no admin), el lead (y el otro, al unir) tiene que ser suyo. */
@@ -786,7 +876,7 @@ async function config(req: VercelRequest) {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const accion = String(req.query.accion ?? "");
   res.setHeader("Cache-Control", "no-store");
-  const publica = ["aplicar", "reunion", "cupos", "crm-espera", "precios", "comprar"].includes(accion);
+  const publica = ["aplicar", "reunion", "cupos", "crm-espera", "precios", "comprar", "sumate"].includes(accion);
   if (publica) cors(req, res);
   try {
     if (req.method === "OPTIONS" && publica) {
@@ -841,6 +931,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (accion === "vendedor") res.status(200).json(await asignarVendedor(req));
     else if (accion === "aplicar") res.status(200).json(await aplicar(req));
     else if (accion === "crm-espera") res.status(200).json(await crmEspera(req));
+    else if (accion === "sumate") res.status(200).json(await sumate(req));
+    else if (accion === "postulante-estado") res.status(200).json(await postulanteEstado(req));
     else if (accion === "comprar") res.status(200).json(await comprar(req));
     else if (accion === "reunion") res.status(200).json(await reunion(req));
     else if (accion === "estado") res.status(200).json(await cambiar(req, "estado"));

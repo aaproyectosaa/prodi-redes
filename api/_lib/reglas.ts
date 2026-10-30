@@ -402,6 +402,9 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
       return esAdmin(c) || (tiene(c, "ventas") && duenoLead(d) === c.uid);
     case "web_config":
       return esAdmin(c) || tiene(c, "ventas");
+    // Postulantes de somosprodi.com/sumate (CV, creadores, franquicia): solo el super admin. Los escribe /api/web/sumate.
+    case "postulantes_web":
+      return esAdmin(c);
     case "presupuestos":
       // Ventas ve solo las propuestas que armó él.
       return esAdmin(c) || (tiene(c, "ventas") && d.created_by === c.uid);

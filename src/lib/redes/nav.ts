@@ -134,6 +134,7 @@ export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {
             { label: "Leads", icon: Globe, path: "/web" },
             { label: "Presupuestos", icon: FileText, path: "/presupuestos" },
             { label: "Vendedores", icon: Handshake, path: "/socios" },
+            { label: "Postulantes", icon: Contact, path: "/postulantes" },
           ],
         },
         {

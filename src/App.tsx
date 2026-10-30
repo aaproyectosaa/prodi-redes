@@ -30,6 +30,7 @@ const MisGanancias = lazy(() => import("./pages/redes/MisGanancias"));
 const Academia = lazy(() => import("./pages/redes/Academia"));
 const Socio = lazy(() => import("./pages/redes/Socio"));
 const Socios = lazy(() => import("./pages/redes/Socios"));
+const Postulantes = lazy(() => import("./pages/redes/Postulantes"));
 const Deudas = lazy(() => import("./pages/redes/Deudas"));
 const Administracion = lazy(() => import("./pages/redes/Administracion"));
 const Circuito = lazy(() => import("./pages/redes/Circuito"));
@@ -137,6 +138,7 @@ const App = () => (
                 <Route path="/academia" element={<RequireRole roles={["admin", "productor", "editor", "pauta", "diseno"]}><Academia /></RequireRole>} />
                 <Route path="/socio" element={<RequireRole roles={["socio"]}><Socio /></RequireRole>} />
                 <Route path="/socios" element={<RequireRole roles={["admin"]}><Socios /></RequireRole>} />
+                <Route path="/postulantes" element={<RequireRole roles={["admin"]}><Postulantes /></RequireRole>} />
                 <Route path="/deudas" element={<RequireRole roles={["admin", "administracion"]}><Deudas /></RequireRole>} />
                 <Route path="/equipo" element={<RequireRole roles={["admin"]}><Equipo /></RequireRole>} />
                 <Route path="/ajustes" element={<RequireRole roles={["admin"]}><Ajustes /></RequireRole>} />
