@@ -8,8 +8,11 @@ import {
   CalendarClock,
   CheckCircle2,
   ExternalLink,
+  AudioLines,
   FileText,
   Loader2,
+  MapPin,
+  Mic,
   Pencil,
   Plus,
   Send,
@@ -43,6 +46,7 @@ import {
 import { PageShell } from "@/components/redes/PageShell";
 import { ClienteTag } from "@/components/redes/ClienteTag";
 import { Grabador } from "@/components/redes/Grabador";
+import { grabarReunion } from "@/lib/redes/grabarReunion";
 import UserAvatar from "@/components/UserAvatar";
 import { useRedes } from "@/contexts/redes-data-context";
 import { useAppData } from "@/contexts/app-data-context";
@@ -67,12 +71,14 @@ export default function Reuniones() {
   const abierta = reuniones.find((r) => r.id === params.get("r")) ?? null;
   const [tab, setTab] = useState<"proximas" | "pasadas">("proximas");
   const [nueva, setNueva] = useState(false);
+  const [presencial, setPresencial] = useState(false);
   const esEquipo = role !== "cliente";
   const corte = Date.now() - 2 * 3600_000;
 
-  const lista = reuniones
-    .filter((r) => (tab === "proximas" ? new Date(r.fecha).getTime() >= corte && r.estado !== "realizada" : new Date(r.fecha).getTime() < corte || r.estado === "realizada"))
-    .sort((a, b) => (tab === "proximas" ? a.fecha.localeCompare(b.fecha) : b.fecha.localeCompare(a.fecha)));
+  const esPasada = (r: Reunion) => new Date(r.fecha).getTime() < corte || r.estado === "realizada";
+  const proximas = reuniones.filter((r) => !esPasada(r)).sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const pasadas = reuniones.filter(esPasada).sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const lista = tab === "proximas" ? proximas : pasadas;
 
   const abrir = (id: string | null) => {
     const next = new URLSearchParams(params);
@@ -86,38 +92,70 @@ export default function Reuniones() {
   return (
     <PageShell
       title={<span className="text-[26px] font-bold tracking-tight">Reuniones</span>}
-      subtitle="Videollamadas gratis y minutas armadas con IA a partir de la grabación."
-      actions={
-        esEquipo && (
-          <Button onClick={() => setNueva(true)} className="h-11 rounded-2xl px-5 font-semibold shadow-lg shadow-primary/25">
-            <Plus className="mr-2 h-4 w-4" /> Nueva reunión
-          </Button>
-        )
-      }
+      subtitle="Videollamadas y reuniones en persona, con la minuta armada por IA desde la grabación."
     >
+      {esEquipo && (
+        <div className="mb-6 grid gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => setPresencial(true)}
+            className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-violet-600 to-fuchsia-600 p-5 text-left text-white shadow-xl shadow-primary/25 transition-transform hover:-translate-y-0.5"
+          >
+            <span className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/15 blur-2xl transition-transform duration-500 group-hover:scale-125" />
+            <span className="relative flex items-start gap-4">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/20 backdrop-blur">
+                <Mic className="h-6 w-6" />
+              </span>
+              <span className="min-w-0 flex-1 space-y-1">
+                <span className="block text-lg font-bold leading-tight">Grabar reunión presencial</span>
+                <span className="block text-sm text-white/80">Dejá el celu sobre la mesa: sigue grabando con la pantalla bloqueada y la IA arma la minuta.</span>
+              </span>
+              <AudioLines className="h-6 w-6 shrink-0 text-white/60" />
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setNueva(true)}
+            className="group relative overflow-hidden rounded-3xl border bg-card p-5 text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-lg"
+          >
+            <span className="relative flex items-start gap-4">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                <Video className="h-6 w-6" />
+              </span>
+              <span className="min-w-0 flex-1 space-y-1">
+                <span className="block text-lg font-bold leading-tight">Videollamada</span>
+                <span className="block text-sm text-muted-foreground">Empezala ahora o agendala. Gratis, sin instalar nada, y les avisamos a todos.</span>
+              </span>
+              <Plus className="h-6 w-6 shrink-0 text-muted-foreground" />
+            </span>
+          </button>
+        </div>
+      )}
+
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="mb-5">
         <TabsList className="h-11 rounded-2xl bg-muted/60 p-1">
-          <TabsTrigger value="proximas" className="rounded-xl px-4 font-semibold data-[state=active]:shadow-sm">
+          <TabsTrigger value="proximas" className="gap-2 rounded-xl px-4 font-semibold data-[state=active]:shadow-sm">
             Próximas
+            {proximas.length > 0 && <span className="rounded-full bg-primary/15 px-1.5 text-[11px] font-bold text-primary">{proximas.length}</span>}
           </TabsTrigger>
-          <TabsTrigger value="pasadas" className="rounded-xl px-4 font-semibold data-[state=active]:shadow-sm">
+          <TabsTrigger value="pasadas" className="gap-2 rounded-xl px-4 font-semibold data-[state=active]:shadow-sm">
             Realizadas
+            {pasadas.length > 0 && <span className="rounded-full bg-muted-foreground/15 px-1.5 text-[11px] font-bold text-muted-foreground">{pasadas.length}</span>}
           </TabsTrigger>
         </TabsList>
       </Tabs>
 
       {lista.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl bg-muted/60 px-6 py-14 text-center">
-          <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-background text-primary shadow-sm">
-            <Video className="h-7 w-7" />
+        <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed px-6 py-14 text-center">
+          <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            {tab === "proximas" ? <CalendarClock className="h-7 w-7" /> : <FileText className="h-7 w-7" />}
           </span>
           <p className="text-base font-semibold">{tab === "proximas" ? "No hay reuniones agendadas" : "Todavía no hay reuniones realizadas"}</p>
-          <p className="mt-1 max-w-sm text-sm text-muted-foreground">También podés arrancar una videollamada desde cualquier chat.</p>
-          {esEquipo && tab === "proximas" && (
-            <Button onClick={() => setNueva(true)} className="mt-5 h-11 rounded-2xl px-5 font-semibold shadow-lg shadow-primary/25">
-              <Plus className="mr-2 h-4 w-4" /> Nueva reunión
-            </Button>
-          )}
+          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+            {tab === "proximas"
+              ? "Agendá una videollamada o grabá una reunión en persona. También podés arrancar una llamada desde cualquier chat."
+              : "Acá quedan las reuniones que ya pasaron, con su minuta."}
+          </p>
         </div>
       ) : tab === "proximas" ? (
         <div className="space-y-6">
@@ -134,16 +172,86 @@ export default function Reuniones() {
           )}
         </div>
       ) : (
-        <div className="divide-y overflow-hidden rounded-2xl border bg-card">
+        <div className="grid gap-2.5 md:grid-cols-2">
           {lista.map((r) => (
-            <FilaReunion key={r.id} reunion={r} onAbrir={() => abrir(r.id)} compacta />
+            <FilaReunion key={r.id} reunion={r} onAbrir={() => abrir(r.id)} conResumen />
           ))}
         </div>
       )}
 
       <NuevaReunionDialog open={nueva} onOpenChange={setNueva} onCreada={(id) => abrir(id)} />
+      <PresencialDialog open={presencial} onOpenChange={setPresencial} onCreada={(id) => abrir(id)} />
       <ReunionSheet reunion={abierta} onClose={() => abrir(null)} />
     </PageShell>
+  );
+}
+
+/** Reunión en persona: se crea y se empieza a grabar en un toque (sin videollamada ni invitaciones). */
+function PresencialDialog({ open, onOpenChange, onCreada }: { open: boolean; onOpenChange: (v: boolean) => void; onCreada: (id: string) => void }) {
+  const { clientes } = useRedes();
+  const { user, profile } = useUserProfileContext();
+  const [titulo, setTitulo] = useState("");
+  const [clienteId, setClienteId] = useState("interna");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setTitulo("");
+    setClienteId("interna");
+  }, [open]);
+
+  const cliente = clientes.find((c) => c.id === clienteId);
+
+  const empezar = async () => {
+    if (!user) return;
+    setSaving(true);
+    try {
+      const fecha = new Date().toISOString();
+      const t = titulo.trim() || (cliente ? `Reunión con ${cliente.nombre}` : "Reunión de equipo");
+      const { id } = await crearReunion({ titulo: t, proyecto: cliente ?? null, fecha, participantes: [], chat: null, presencial: true }, user.uid, profile?.nombre ?? "");
+      onOpenChange(false);
+      onCreada(id);
+      await grabarReunion({ id, titulo: t, fecha }, cliente?.nombre ?? "Interno", "presencial");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo empezar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md gap-0 overflow-hidden p-0 sm:rounded-3xl">
+        <div className="relative overflow-hidden bg-gradient-to-br from-primary via-violet-600 to-fuchsia-600 px-6 pb-6 pt-7 text-white">
+          <span className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-white/15 blur-2xl" />
+          <DialogHeader className="relative space-y-3 text-left">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 backdrop-blur">
+              <Mic className="h-6 w-6" />
+            </span>
+            <div className="space-y-1">
+              <DialogTitle className="text-[22px] font-bold tracking-tight text-white">Grabar reunión presencial</DialogTitle>
+              <DialogDescription className="text-white/80">Dejá el celu cerca de quienes hablan. Al terminar, la IA arma la minuta sola.</DialogDescription>
+            </div>
+          </DialogHeader>
+        </div>
+        <div className="space-y-4 px-6 pt-5">
+          <div className="space-y-2">
+            <Label className={ETIQUETA}>Tema</Label>
+            <Input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ej: Arranque con el cliente" className={cn(SUAVE, "h-12 text-[15px] font-medium")} />
+          </div>
+          <div className="space-y-2">
+            <Label className={ETIQUETA}>Cliente</Label>
+            <ElegirCliente value={clienteId} onChange={setClienteId} clientes={clientes} opciones={[{ value: "interna", label: "Reunión interna" }]} className={cn(SUAVE, "h-12")} />
+          </div>
+        </div>
+        <DialogFooter className="px-6 pb-6 pt-5">
+          <Button onClick={() => void empezar()} disabled={saving} className="h-12 w-full rounded-2xl bg-gradient-to-r from-primary to-fuchsia-600 text-base font-semibold shadow-lg shadow-primary/25">
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <span className="mr-2 h-2.5 w-2.5 rounded-full bg-white" />}
+            Empezar a grabar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -205,28 +313,27 @@ function ProximaHero({ reunion: r, onAbrir }: { reunion: Reunion; onAbrir: () =>
             {cliente ? <ClienteTag cliente={cliente} /> : <span className="text-xs text-muted-foreground">Interna</span>}
             <Avatares ids={r.participantes} max={4} />
           </div>
-          <Button asChild className="h-11 rounded-2xl px-5 font-semibold shadow-lg shadow-primary/25">
-            <a href={hrefSeguro(r.link)} target="_blank" rel="noreferrer">
-              <Video className="mr-2 h-4 w-4" /> Entrar
-            </a>
-          </Button>
+          {!r.presencial && (
+            <Button asChild className="h-11 rounded-2xl px-5 font-semibold shadow-lg shadow-primary/25">
+              <a href={hrefSeguro(r.link)} target="_blank" rel="noreferrer">
+                <Video className="mr-2 h-4 w-4" /> Entrar
+              </a>
+            </Button>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function FilaReunion({ reunion: r, onAbrir, compacta = false }: { reunion: Reunion; onAbrir: () => void; compacta?: boolean }) {
+function FilaReunion({ reunion: r, onAbrir, conResumen = false }: { reunion: Reunion; onAbrir: () => void; conResumen?: boolean }) {
   const { clienteById } = useRedes();
   const cliente = clienteById(r.proyecto_id);
   return (
     <button
       type="button"
       onClick={onAbrir}
-      className={cn(
-        "flex w-full items-center gap-3 text-left transition-colors",
-        compacta ? "px-4 py-3 hover:bg-muted/40" : "rounded-2xl border bg-card p-3 hover:border-primary/50"
-      )}
+      className="flex w-full items-start gap-3 rounded-2xl border bg-card p-3 text-left transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md"
     >
       <BloqueFecha fecha={r.fecha} />
       <span className="min-w-0 flex-1">
@@ -245,9 +352,14 @@ function FilaReunion({ reunion: r, onAbrir, compacta = false }: { reunion: Reuni
             <CalendarClock className="h-3.5 w-3.5" /> {fechaHora(r.fecha)}
           </span>
           {cliente ? <ClienteTag cliente={cliente} /> : <span>Interna</span>}
+          <span className="inline-flex items-center gap-1">
+            {r.presencial ? <MapPin className="h-3.5 w-3.5" /> : <Video className="h-3.5 w-3.5" />}
+            {r.presencial ? "En persona" : "Videollamada"}
+          </span>
         </span>
+        {conResumen && r.minuta?.resumen && <span className="mt-1.5 line-clamp-2 block text-xs leading-relaxed text-muted-foreground">{r.minuta.resumen}</span>}
       </span>
-      <span className="hidden sm:block">
+      <span className="hidden self-center sm:block">
         <Avatares ids={r.participantes} max={3} />
       </span>
     </button>
@@ -587,6 +699,11 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
         </SheetHeader>
 
         <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
+          {reunion.presencial ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+              <MapPin className="h-3.5 w-3.5" /> Reunión en persona
+            </span>
+          ) : (
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild className="h-11 rounded-2xl px-5 font-semibold shadow-lg shadow-primary/25">
               <a href={hrefSeguro(reunion.link)} target="_blank" rel="noreferrer">
@@ -609,6 +726,7 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
               Copiar link
             </Button>
           </div>
+          )}
 
           <div className="flex flex-wrap gap-2">
             {reunion.participantes.map((id) => {
@@ -626,24 +744,28 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
               <h3 className={ETIQUETA}>Grabación</h3>
               <Grabador reunion={reunion} clienteNombre={cliente?.nombre ?? "Interno"} />
               {grabaciones.length > 0 && (
-                <ul className="space-y-1 text-xs">
+                <ul className="divide-y overflow-hidden rounded-2xl bg-muted/60 text-xs">
                   {grabaciones.map((g, i) => (
-                    <li key={i} className="flex items-center gap-2 text-muted-foreground">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-                      <span className="truncate">{g.name}</span>
-                      <span>· {(g.size / 1_048_576).toFixed(1)} MB</span>
+                    <li key={i} className="flex items-center gap-2.5 px-3 py-2.5">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-success/12 text-success">
+                        <AudioLines className="h-3.5 w-3.5" />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate font-medium">{g.name}</span>
+                      <span className="shrink-0 text-muted-foreground">{(g.size / 1_048_576).toFixed(1)} MB</span>
                       {g.web_view_link && g.web_view_link !== "#" && (
-                        <a href={g.web_view_link} target="_blank" rel="noreferrer" className="text-primary">
-                          <ExternalLink className="h-3 w-3" />
+                        <a href={g.web_view_link} target="_blank" rel="noreferrer" className="shrink-0 text-primary" aria-label="Abrir en Drive">
+                          <ExternalLink className="h-3.5 w-3.5" />
                         </a>
                       )}
                     </li>
                   ))}
                 </ul>
               )}
-              <p className="text-[11px] text-muted-foreground">
-                Para grabar una videollamada: entrá a la llamada, volvé acá, tocá «Grabar videollamada» y elegí la pestaña de la llamada con «Compartir audio».
-              </p>
+              {!reunion.presencial && (
+                <p className="text-[11px] text-muted-foreground">
+                  Videollamada: entrá a la llamada, volvé acá, tocá «Grabar videollamada» y elegí la pestaña de la llamada con «Compartir audio».
+                </p>
+              )}
             </section>
           )}
 

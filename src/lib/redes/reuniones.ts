@@ -30,6 +30,8 @@ export interface NuevaReunion {
   participantes: string[];
   chat: Chat | null;
   jitsiBase?: string;
+  /** En persona: no hay videollamada ni invitación, se graba en el momento. */
+  presencial?: boolean;
 }
 
 export async function crearReunion(data: NuevaReunion, by: string, remitente: string): Promise<{ id: string; link: string }> {
@@ -41,6 +43,7 @@ export async function crearReunion(data: NuevaReunion, by: string, remitente: st
     chat_id: data.chat?.id ?? null,
     fecha: data.fecha,
     link,
+    ...(data.presencial ? { presencial: true } : {}),
     participantes: Array.from(new Set([...data.participantes, by])),
     creada_por: by,
     estado: "programada",
@@ -50,6 +53,7 @@ export async function crearReunion(data: NuevaReunion, by: string, remitente: st
     created_at: new Date().toISOString(),
   };
   const ref = await addDoc(collection(db, REUNIONES), r);
+  if (data.presencial) return { id: ref.id, link };
   const ahora = Math.abs(new Date(data.fecha).getTime() - Date.now()) < 10 * 60_000;
   if (data.chat) {
     await enviarMensaje(

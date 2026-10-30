@@ -10,6 +10,7 @@ import { RecorridoAuto } from "@/components/recorrido/Recorrido";
 import { AvisoDescargarChat, InstalarChatHost } from "@/components/InstalarChat";
 import { VideoSheet } from "@/components/redes/VideoSheet";
 import { ChatDock } from "@/components/redes/chat/ChatDock";
+import { GrabacionEnCurso } from "@/components/redes/GrabacionEnCurso";
 import { VerComoBanner } from "@/components/redes/VerComo";
 import { AvisoAcademia } from "@/components/redes/AvisoAcademia";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
@@ -92,6 +93,7 @@ const LayoutInner = () => {
         <DriveUploadStatusBar />
         <VideoSheet />
         <ChatDock />
+        <GrabacionEnCurso />
       </div>
     </RedesDataProvider>
   );

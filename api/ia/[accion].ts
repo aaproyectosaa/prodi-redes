@@ -550,24 +550,37 @@ ${cliente ? `Cliente: ${cliente}` : "Reunión interna del equipo"}
 Participantes: ${nombres || "sin datos"}
 ${r.notas ? `Notas tomadas durante la reunión:\n${r.notas}` : ""}`;
 
-  const grabaciones = (r.attachments_crudo ?? []) as { drive_file_id: string; mime_type: string; size: number }[];
-  let audio: { data: Buffer; mime: string } | undefined;
+  const grabaciones = (r.attachments_crudo ?? []) as { drive_file_id: string; mime_type: string; size: number; name?: string }[];
+  let audio: { data: Buffer; mime: string }[] | undefined;
   if (usar !== "notas" && grabaciones.length) {
-    const g = grabaciones[grabaciones.length - 1];
-    if (g.size > 200 * 1024 * 1024) throw new HttpError(413, "La grabación es muy larga. Subila en partes de menos de 3 horas.");
+    // La última grabación; si se grabó en partes (reunion-…-s<sesion>-p<n>), todas las de esa sesión en orden.
+    const ultima = grabaciones[grabaciones.length - 1];
+    const sesion = /-s([a-z0-9]{4,12})-p\d+\.\w+$/.exec(ultima.name ?? "")?.[1];
+    const parteDe = (g: { name?: string }) => Number(/-p(\d+)\.\w+$/.exec(g.name ?? "")?.[1] ?? 0);
+    const partes = sesion
+      ? grabaciones.filter((g) => (g.name ?? "").includes(`-s${sesion}-p`)).sort((a, b) => parteDe(a) - parteDe(b))
+      : [ultima];
+    const LARGA = "La grabación es muy larga. Subila en partes de menos de 3 horas.";
+    if (partes.reduce((n, g) => n + (g.size || 0), 0) > 200 * 1024 * 1024) throw new HttpError(413, LARGA);
     const { accessToken } = await getAppDriveAccessToken();
-    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(g.drive_file_id)}?alt=media`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    if (!res.ok) throw new HttpError(502, `No se pudo leer la grabación de Drive (${res.status})`);
-    const largo = Number(res.headers.get("content-length") ?? 0);
-    if (largo > 200 * 1024 * 1024) throw new HttpError(413, "La grabación es muy larga. Subila en partes de menos de 3 horas.");
-    audio = { data: Buffer.from(await res.arrayBuffer()), mime: g.mime_type || "audio/webm" };
+    audio = [];
+    for (const g of partes) {
+      const res = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(g.drive_file_id)}?alt=media`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) throw new HttpError(502, `No se pudo leer la grabación de Drive (${res.status})`);
+      audio.push({ data: Buffer.from(await res.arrayBuffer()), mime: g.mime_type || "audio/webm" });
+    }
+    if (audio.reduce((n, a) => n + a.data.length, 0) > 200 * 1024 * 1024) throw new HttpError(413, LARGA);
   } else if (!r.notas) {
     throw new HttpError(409, "No hay grabación ni notas para armar la minuta");
   }
 
-  const m = await generarMinutaIA(prompt, audio);
+  const m = await generarMinutaIA(
+    audio && audio.length > 1 ? `${prompt}
+La grabación viene en ${audio.length} partes, en orden (se cortó y siguió): tomalas como una sola reunión.` : prompt,
+    audio
+  );
   await ref.update({
     minuta: { ...m, generado_at: new Date().toISOString(), fuente: audio ? "audio" : "notas" },
     estado: "realizada",

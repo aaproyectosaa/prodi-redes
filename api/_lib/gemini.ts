@@ -222,14 +222,17 @@ export interface MinutaIA {
 }
 
 /** Arma la minuta a partir de un audio (o de texto si no hay audio). */
-export async function generarMinutaIA(prompt: string, audio?: { data: Buffer; mime: string }): Promise<MinutaIA> {
+/** Minuta de una reunión. Con varias partes de audio (se cortó la grabación), van todas en orden. */
+export async function generarMinutaIA(prompt: string, audio?: { data: Buffer; mime: string } | { data: Buffer; mime: string }[]): Promise<MinutaIA> {
   const parts: any[] = [{ text: prompt }];
-  if (audio) {
-    const mime = comoVideo((audio.mime.split(";")[0] || "audio/webm").toLowerCase());
-    if (audio.data.length <= 14 * 1024 * 1024) {
-      parts.push({ inline_data: { mime_type: mime, data: audio.data.toString("base64") } });
+  const audios = audio ? (Array.isArray(audio) ? audio : [audio]) : [];
+  const total = audios.reduce((n, a) => n + a.data.length, 0);
+  for (const a of audios) {
+    const mime = comoVideo((a.mime.split(";")[0] || "audio/webm").toLowerCase());
+    if (total <= 14 * 1024 * 1024) {
+      parts.push({ inline_data: { mime_type: mime, data: a.data.toString("base64") } });
     } else {
-      const uri = await subirArchivoGemini(audio.data, mime, "reunion");
+      const uri = await subirArchivoGemini(a.data, mime, "reunion");
       parts.push({ file_data: { mime_type: mime, file_uri: uri } });
     }
   }

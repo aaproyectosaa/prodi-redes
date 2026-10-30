@@ -713,10 +713,12 @@ export interface Reunion {
   duracion_min?: number | null;
   /** Link de la videollamada (Jitsi Meet, gratis). */
   link: string;
+  /** Reunión en persona (se grabó con el micrófono, sin videollamada). */
+  presencial?: boolean;
   participantes: string[];
   creada_por: string;
   estado: "programada" | "realizada";
-  /** Grabaciones de audio subidas a Drive (la última se usa para la minuta). */
+  /** Grabaciones de audio subidas a Drive (para la minuta se usa la última, con todas sus partes). */
   attachments_crudo?: import("@/integrations/firebase/types").DriveAttachmentRef[];
   notas: string | null;
   minuta: Minuta | null;

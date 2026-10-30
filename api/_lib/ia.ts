@@ -214,8 +214,8 @@ const ESQUEMA_MINUTA = {
 };
 
 /** Minuta de una reunión: con audio la arma Gemini (lo escucha entero); con notas escritas, Claude. */
-export async function generarMinutaIA(prompt: string, audio?: { data: Buffer; mime: string }): Promise<gemini.MinutaIA> {
-  if (audio) {
+export async function generarMinutaIA(prompt: string, audio?: { data: Buffer; mime: string } | { data: Buffer; mime: string }[]): Promise<gemini.MinutaIA> {
+  if (audio && (!Array.isArray(audio) || audio.length)) {
     if (!hayGemini()) throw new Error("Para armar la minuta desde el audio falta GEMINI_API_KEY en Vercel (con notas escritas anda igual).");
     return gemini.generarMinutaIA(prompt, audio);
   }
