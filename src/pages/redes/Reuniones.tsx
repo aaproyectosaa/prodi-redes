@@ -35,6 +35,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { es } from "date-fns/locale";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   Select,
@@ -246,37 +249,82 @@ function ClienteDeReunion({ reunion: r, className }: { reunion: Reunion; classNa
   return <span className={className}>Interna</span>;
 }
 
+const HORAS_REUNION = Array.from({ length: 29 }, (_, i) => {
+  const m = 7 * 60 + i * 30;
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${m % 60 ? "30" : "00"}`;
+});
+
 /**
- * Día y hora: tocando cualquier parte del campo se abre el calendario (el del navegador solo lo abría desde el
- * iconito, que en modo oscuro casi no se veía).
+ * Día y hora con el calendario del sistema (el del navegador en modo oscuro casi no se veía y no se abría bien).
+ * El valor es el mismo de un datetime-local: "AAAA-MM-DDTHH:mm".
  */
 function CampoFechaHora({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const abrir = (el: HTMLInputElement | null) => {
-    try {
-      el?.showPicker?.();
-    } catch {
-      el?.focus();
-    }
-  };
+  const [abierto, setAbierto] = useState(false);
+  const [dia, hora] = (value || aInputAR(new Date())).split("T");
+  const fechaDia = new Date(`${dia}T12:00:00`);
+  const hoy = aInputAR(new Date()).slice(0, 10);
+  const etiquetaDia =
+    dia === hoy ? "Hoy" : fechaDia.toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" }).replace(/./g, "");
+  const lista = HORAS_REUNION.includes(hora) ? HORAS_REUNION : [...HORAS_REUNION, hora].sort();
+  const aDia = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
   return (
-    <div className="relative">
-      <Input
-        type="datetime-local"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onClick={(e) => abrir(e.currentTarget)}
-        className={cn(SUAVE, "h-12 cursor-pointer pr-11 [color-scheme:light] dark:[color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0")}
-      />
-      <button
-        type="button"
-        tabIndex={-1}
-        aria-label="Elegir día y hora"
-        onClick={(e) => abrir(e.currentTarget.previousElementSibling as HTMLInputElement | null)}
-        className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-primary hover:bg-primary/10"
-      >
-        <CalendarClock className="h-4 w-4" />
-      </button>
-    </div>
+    <Popover open={abierto} onOpenChange={setAbierto}>
+      <PopoverTrigger asChild>
+        <button type="button" className={cn(SUAVE, "flex h-12 w-full items-center gap-2 border px-3.5 text-left text-sm font-medium")}>
+          <CalendarClock className="h-4 w-4 shrink-0 text-primary" />
+          <span className="flex-1 truncate capitalize">{etiquetaDia}</span>
+          <span className="tabular-nums text-muted-foreground">{hora}</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-auto rounded-2xl p-0">
+        <div className="flex flex-col sm:flex-row">
+          <Calendar
+            mode="single"
+            locale={es}
+            weekStartsOn={1}
+            selected={fechaDia}
+            defaultMonth={fechaDia}
+            onSelect={(d) => d && onChange(`${aDia(d)}T${hora}`)}
+            initialFocus
+          />
+          <div className="border-t p-2 sm:w-28 sm:border-l sm:border-t-0">
+            <p className="px-1 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Hora</p>
+            <div className="grid max-h-40 grid-cols-4 gap-1 overflow-y-auto sm:max-h-[17rem] sm:grid-cols-1">
+              {lista.map((h) => (
+                <button
+                  key={h}
+                  type="button"
+                  ref={(el) => {
+                    if (el && h === hora) el.scrollIntoView({ block: "center" });
+                  }}
+                  onClick={() => {
+                    onChange(`${dia}T${h}`);
+                    setAbierto(false);
+                  }}
+                  className={cn(
+                    "h-9 rounded-lg text-sm font-semibold tabular-nums transition-colors",
+                    h === hora ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  {h}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                onChange(aInputAR(new Date()));
+                setAbierto(false);
+              }}
+              className="mt-2 h-9 w-full rounded-lg text-xs font-semibold text-primary hover:bg-primary/10"
+            >
+              Ahora
+            </button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
