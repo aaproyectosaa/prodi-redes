@@ -715,6 +715,8 @@ export interface Reunion {
   link: string;
   /** Reunión en persona (se grabó con el micrófono, sin videollamada). */
   presencial?: boolean;
+  /** Dónde es la reunión en persona (dirección o lugar, texto libre). */
+  ubicacion?: string | null;
   participantes: string[];
   creada_por: string;
   estado: "programada" | "realizada";

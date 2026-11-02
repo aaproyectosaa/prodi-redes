@@ -107,8 +107,8 @@ export default function Reuniones() {
                 <Mic className="h-6 w-6" />
               </span>
               <span className="min-w-0 flex-1 space-y-1">
-                <span className="block text-lg font-bold leading-tight">Grabar reunión presencial</span>
-                <span className="block text-sm text-white/80">Dejá el celu sobre la mesa: sigue grabando con la pantalla bloqueada y la IA arma la minuta.</span>
+                <span className="block text-lg font-bold leading-tight">Reunión presencial</span>
+                <span className="block text-sm text-white/80">Agendala con día y lugar, o grabala ahora: sigue con la pantalla bloqueada y la IA arma la minuta.</span>
               </span>
               <AudioLines className="h-6 w-6 shrink-0 text-white/60" />
             </span>
@@ -186,34 +186,67 @@ export default function Reuniones() {
   );
 }
 
-/** Reunión en persona: se crea y se empieza a grabar en un toque (sin videollamada ni invitaciones). */
+/** Link a Google Maps para una dirección escrita a mano. */
+const linkMapa = (ubicacion: string) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ubicacion)}`;
+
+/** Ubicación de una reunión en persona, con link al mapa. */
+function Ubicacion({ texto, className }: { texto: string; className?: string }) {
+  return (
+    <a
+      href={linkMapa(texto)}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className={cn("inline-flex min-w-0 items-center gap-1 hover:text-primary hover:underline", className)}
+    >
+      <MapPin className="h-3.5 w-3.5 shrink-0" />
+      <span className="truncate">{texto}</span>
+    </a>
+  );
+}
+
+/**
+ * Reunión en persona, sin videollamada ni invitaciones: con día, hora y lugar.
+ * Si es ahora se empieza a grabar en un toque; si es más adelante, queda agendada.
+ */
 function PresencialDialog({ open, onOpenChange, onCreada }: { open: boolean; onOpenChange: (v: boolean) => void; onCreada: (id: string) => void }) {
   const { clientes } = useRedes();
   const { user, profile } = useUserProfileContext();
   const [titulo, setTitulo] = useState("");
   const [clienteId, setClienteId] = useState("interna");
+  const [fecha, setFecha] = useState(aInputAR(new Date()));
+  const [ubicacion, setUbicacion] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setTitulo("");
     setClienteId("interna");
+    setFecha(aInputAR(new Date()));
+    setUbicacion("");
   }, [open]);
 
   const cliente = clientes.find((c) => c.id === clienteId);
+  // Más de 15 minutos para adelante: se agenda; si no, se graba ya.
+  const esMasAdelante = fecha ? new Date(desdeInputAR(fecha)).getTime() - Date.now() > 15 * 60_000 : false;
 
-  const empezar = async () => {
+  const guardar = async () => {
     if (!user) return;
     setSaving(true);
     try {
-      const fecha = new Date().toISOString();
+      const cuando = fecha ? desdeInputAR(fecha) : new Date().toISOString();
       const t = titulo.trim() || (cliente ? `Reunión con ${cliente.nombre}` : "Reunión de equipo");
-      const { id } = await crearReunion({ titulo: t, proyecto: cliente ?? null, fecha, participantes: [], chat: null, presencial: true }, user.uid, profile?.nombre ?? "");
+      const { id } = await crearReunion(
+        { titulo: t, proyecto: cliente ?? null, fecha: cuando, participantes: [], chat: null, presencial: true, ubicacion: ubicacion.trim() || null },
+        user.uid,
+        profile?.nombre ?? ""
+      );
       onOpenChange(false);
       onCreada(id);
-      await grabarReunion({ id, titulo: t, fecha }, cliente?.nombre ?? "Interno", "presencial");
+      if (esMasAdelante) toast.success(`Reunión agendada para el ${fechaHora(cuando)}`);
+      else await grabarReunion({ id, titulo: t, fecha: cuando }, cliente?.nombre ?? "Interno", "presencial");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo empezar");
+      toast.error(err instanceof Error ? err.message : "No se pudo guardar");
     } finally {
       setSaving(false);
     }
@@ -221,7 +254,7 @@ function PresencialDialog({ open, onOpenChange, onCreada }: { open: boolean; onO
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md gap-0 overflow-hidden p-0 sm:rounded-3xl">
+      <DialogContent className="max-h-[92dvh] max-w-md gap-0 overflow-y-auto p-0 sm:rounded-3xl">
         <div className="relative overflow-hidden bg-gradient-to-br from-primary via-violet-600 to-fuchsia-600 px-6 pb-6 pt-7 text-white">
           <span className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-white/15 blur-2xl" />
           <DialogHeader className="relative space-y-3 text-left">
@@ -229,8 +262,10 @@ function PresencialDialog({ open, onOpenChange, onCreada }: { open: boolean; onO
               <Mic className="h-6 w-6" />
             </span>
             <div className="space-y-1">
-              <DialogTitle className="text-[22px] font-bold tracking-tight text-white">Grabar reunión presencial</DialogTitle>
-              <DialogDescription className="text-white/80">Dejá el celu cerca de quienes hablan. Al terminar, la IA arma la minuta sola.</DialogDescription>
+              <DialogTitle className="text-[22px] font-bold tracking-tight text-white">Reunión presencial</DialogTitle>
+              <DialogDescription className="text-white/80">
+                Elegí el día y el lugar. Si es ahora, empieza a grabar; al terminar, la IA arma la minuta sola.
+              </DialogDescription>
             </div>
           </DialogHeader>
         </div>
@@ -239,15 +274,34 @@ function PresencialDialog({ open, onOpenChange, onCreada }: { open: boolean; onO
             <Label className={ETIQUETA}>Tema</Label>
             <Input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ej: Arranque con el cliente" className={cn(SUAVE, "h-12 text-[15px] font-medium")} />
           </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label className={ETIQUETA}>Cliente</Label>
+              <ElegirCliente value={clienteId} onChange={setClienteId} clientes={clientes} opciones={[{ value: "interna", label: "Reunión interna" }]} className={cn(SUAVE, "h-12")} />
+            </div>
+            <div className="space-y-2">
+              <Label className={ETIQUETA}>Día y hora</Label>
+              <Input type="datetime-local" value={fecha} onChange={(e) => setFecha(e.target.value)} className={cn(SUAVE, "h-12")} />
+            </div>
+          </div>
           <div className="space-y-2">
-            <Label className={ETIQUETA}>Cliente</Label>
-            <ElegirCliente value={clienteId} onChange={setClienteId} clientes={clientes} opciones={[{ value: "interna", label: "Reunión interna" }]} className={cn(SUAVE, "h-12")} />
+            <Label className={ETIQUETA}>Ubicación</Label>
+            <div className="relative">
+              <MapPin className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input value={ubicacion} onChange={(e) => setUbicacion(e.target.value)} placeholder="Ej: Oficina del cliente, Av. Pellegrini 1234, Rosario" className={cn(SUAVE, "h-12 pl-10")} />
+            </div>
           </div>
         </div>
         <DialogFooter className="px-6 pb-6 pt-5">
-          <Button onClick={() => void empezar()} disabled={saving} className="h-12 w-full rounded-2xl bg-gradient-to-r from-primary to-fuchsia-600 text-base font-semibold shadow-lg shadow-primary/25">
-            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <span className="mr-2 h-2.5 w-2.5 rounded-full bg-white" />}
-            Empezar a grabar
+          <Button onClick={() => void guardar()} disabled={saving} className="h-12 w-full rounded-2xl bg-gradient-to-r from-primary to-fuchsia-600 text-base font-semibold shadow-lg shadow-primary/25">
+            {saving ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : esMasAdelante ? (
+              <CalendarClock className="mr-2 h-4 w-4" />
+            ) : (
+              <span className="mr-2 h-2.5 w-2.5 rounded-full bg-white" />
+            )}
+            {esMasAdelante ? "Agendar reunión" : "Empezar a grabar"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -306,6 +360,7 @@ function ProximaHero({ reunion: r, onAbrir }: { reunion: Reunion; onAbrir: () =>
             <span className="block text-sm capitalize text-muted-foreground">
               {formatearFecha(r.fecha, { weekday: "long", hour: "2-digit", minute: "2-digit" })}
             </span>
+            {r.ubicacion && <Ubicacion texto={r.ubicacion} className="max-w-full text-sm text-muted-foreground" />}
           </span>
         </button>
         <div className="flex flex-wrap items-center justify-between gap-3 sm:flex-col sm:items-end">
@@ -356,6 +411,7 @@ function FilaReunion({ reunion: r, onAbrir, conResumen = false }: { reunion: Reu
             {r.presencial ? <MapPin className="h-3.5 w-3.5" /> : <Video className="h-3.5 w-3.5" />}
             {r.presencial ? "En persona" : "Videollamada"}
           </span>
+          {r.ubicacion && <Ubicacion texto={r.ubicacion} className="max-w-[16rem]" />}
         </span>
         {conResumen && r.minuta?.resumen && <span className="mt-1.5 line-clamp-2 block text-xs leading-relaxed text-muted-foreground">{r.minuta.resumen}</span>}
       </span>
@@ -385,12 +441,14 @@ function NuevaReunionDialog({
   const [clienteId, setClienteId] = useState("interna");
   const [fecha, setFecha] = useState(aInputAR(new Date()));
   const [sel, setSel] = useState<Set<string>>(new Set());
+  const [ubicacion, setUbicacion] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     if (editar) {
       setTitulo(editar.titulo);
+      setUbicacion(editar.ubicacion ?? "");
       setClienteId(editar.proyecto_id ?? "interna");
       setFecha(aInputAR(new Date(editar.fecha)));
       setSel(new Set(editar.participantes.filter((id) => id !== user?.uid)));
@@ -421,6 +479,7 @@ function NuevaReunionDialog({
       const participantes = Array.from(new Set([...sel, editar.creada_por, user.uid]));
       const nuevoTitulo = titulo.trim() || editar.titulo;
       await actualizarReunion(editar.id, {
+        ...(editar.presencial ? { ubicacion: ubicacion.trim() || null } : {}),
         titulo: nuevoTitulo,
         fecha: nuevaFecha,
         participantes,
@@ -502,7 +561,9 @@ function NuevaReunionDialog({
           <div className="space-y-1">
             <DialogTitle className="text-[22px] font-bold tracking-tight">{editar ? "Editar reunión" : "Nueva reunión"}</DialogTitle>
             <DialogDescription>
-              {editar
+              {editar?.presencial
+                ? "Cambiá el tema, el día y la hora, el lugar o quiénes participan."
+                : editar
                 ? "Cambiá el tema, el día y la hora o quiénes participan. El link de la videollamada sigue siendo el mismo."
                 : "Se crea un link de videollamada gratis (Jitsi Meet). No hace falta instalar nada."}
             </DialogDescription>
@@ -529,6 +590,15 @@ function NuevaReunionDialog({
               <Input type="datetime-local" value={fecha} onChange={(e) => setFecha(e.target.value)} className={cn(SUAVE, "h-12")} />
             </div>
           </div>
+          {editar?.presencial && (
+            <div className="space-y-2">
+              <Label className={ETIQUETA}>Ubicación</Label>
+              <div className="relative">
+                <MapPin className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input value={ubicacion} onChange={(e) => setUbicacion(e.target.value)} placeholder="Dirección o lugar" className={cn(SUAVE, "h-12 pl-10")} />
+              </div>
+            </div>
+          )}
           <div className="space-y-2">
             <Label className={ETIQUETA}>
               Participantes {sel.size > 0 && <span className="font-normal normal-case tracking-normal">· {sel.size}</span>}
@@ -700,9 +770,20 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
 
         <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
           {reunion.presencial ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-              <MapPin className="h-3.5 w-3.5" /> Reunión en persona
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                <MapPin className="h-3.5 w-3.5" /> Reunión en persona
+              </span>
+              {reunion.ubicacion && (
+                <Button asChild variant="outline" size="sm" className="h-8 max-w-full rounded-full">
+                  <a href={linkMapa(reunion.ubicacion)} target="_blank" rel="noreferrer">
+                    <MapPin className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{reunion.ubicacion}</span>
+                    <ExternalLink className="ml-1.5 h-3 w-3 shrink-0" />
+                  </a>
+                </Button>
+              )}
+            </div>
           ) : (
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild className="h-11 rounded-2xl px-5 font-semibold shadow-lg shadow-primary/25">
