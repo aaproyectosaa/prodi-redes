@@ -246,6 +246,40 @@ function ClienteDeReunion({ reunion: r, className }: { reunion: Reunion; classNa
   return <span className={className}>Interna</span>;
 }
 
+/**
+ * Día y hora: tocando cualquier parte del campo se abre el calendario (el del navegador solo lo abría desde el
+ * iconito, que en modo oscuro casi no se veía).
+ */
+function CampoFechaHora({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const abrir = (el: HTMLInputElement | null) => {
+    try {
+      el?.showPicker?.();
+    } catch {
+      el?.focus();
+    }
+  };
+  return (
+    <div className="relative">
+      <Input
+        type="datetime-local"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onClick={(e) => abrir(e.currentTarget)}
+        className={cn(SUAVE, "h-12 cursor-pointer pr-11 [color-scheme:light] dark:[color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0")}
+      />
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label="Elegir día y hora"
+        onClick={(e) => abrir(e.currentTarget.previousElementSibling as HTMLInputElement | null)}
+        className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-primary hover:bg-primary/10"
+      >
+        <CalendarClock className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
 /** Link a Google Maps para una dirección escrita a mano. */
 const linkMapa = (ubicacion: string) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ubicacion)}`;
 
@@ -375,7 +409,7 @@ function PresencialDialog({ open, onOpenChange, onCreada }: { open: boolean; onO
             </div>
             <div className="space-y-2">
               <Label className={ETIQUETA}>Día y hora</Label>
-              <Input type="datetime-local" value={fecha} onChange={(e) => setFecha(e.target.value)} className={cn(SUAVE, "h-12")} />
+              <CampoFechaHora value={fecha} onChange={setFecha} />
             </div>
           </div>
           {esNuevo && (
@@ -688,7 +722,7 @@ function NuevaReunionDialog({
             </div>
             <div className="space-y-2">
               <Label className={ETIQUETA}>Día y hora</Label>
-              <Input type="datetime-local" value={fecha} onChange={(e) => setFecha(e.target.value)} className={cn(SUAVE, "h-12")} />
+              <CampoFechaHora value={fecha} onChange={setFecha} />
             </div>
           </div>
           {editar?.presencial && (
