@@ -25,6 +25,8 @@ export type CondicionReceptor = "responsable_inscripto" | "monotributo" | "exent
 
 /** Códigos de ARCA. */
 const CBTE = { A: 1, B: 6, C: 11 } as const;
+/** Nota de crédito de cada letra. */
+const CBTE_NC = { A: 3, B: 8, C: 13 } as const;
 const COND_RECEPTOR: Record<CondicionReceptor, number> = { responsable_inscripto: 1, exento: 4, consumidor_final: 5, monotributo: 6 };
 const DOC_CUIT = 80;
 const DOC_SIN_IDENTIFICAR = 99;
@@ -173,12 +175,16 @@ export async function autorizarFactura(facturaId: string, uid: string, opts: { r
   const enDuda = !!f.arca_en_curso_at && !opts.reintentar;
 
   const p = (await db.collection("projects").doc(f.proyecto_id).get()).data() ?? {};
-  const receptor = (p.facturacion?.condicion_iva as CondicionReceptor | undefined) ?? (digitos(f.cuit).length === 11 ? undefined : "consumidor_final");
+  // Sin la condición cargada no se adivina: así salió una B a un responsable inscripto (Polinea, 10/2026).
+  const receptor = p.facturacion?.condicion_iva as CondicionReceptor | undefined;
   if (!receptor || !(receptor in COND_RECEPTOR)) {
     await ref.update({ arca_en_curso_at: null });
     throw new HttpError(400, "Falta la condición frente al IVA del cliente (en la ficha del cliente → facturación)");
   }
-  const { letra, datos } = comprobanteDe(f, receptor, condicion, puntoVenta);
+  // El CUIT de la ficha si la boleta se armó antes de cargarlo.
+  const cuitCliente = digitos(f.cuit) || digitos(p.facturacion?.cuit);
+  if (cuitCliente && cuitCliente !== digitos(f.cuit)) await ref.update({ cuit: cuitCliente });
+  const { letra, datos } = comprobanteDe({ ...f, cuit: cuitCliente || null }, receptor, condicion, puntoVenta);
   const guardar = async (numero: number, cae: string, caeVto: string, fecha: string) => {
     const datosArca: DatosArca = {
       cae,
@@ -236,6 +242,105 @@ export async function autorizarFactura(facturaId: string, uid: string, opts: { r
     await ref.update({ arca_en_curso_at: null, arca_error: msg.slice(0, 500) });
     // Con qué CUIT, punto de venta y ambiente se pidió: así se ve si la configuración de Vercel es la que corresponde.
     throw new HttpError(502, `ARCA rechazó la factura: ${msg} (CUIT ${cuit}, punto de venta ${puntoVenta}, ${produccion ? "producción" : "homologación"})`);
+  }
+  return guardar(Number(det.CbteDesde), res.cae, res.caeFchVto, hoyAR());
+}
+
+/** Nota de crédito que anula entera una factura autorizada. */
+export interface NotaCredito {
+  cae: string;
+  cae_vto: string;
+  tipo: "A" | "B" | "C";
+  cbte_tipo: number;
+  punto_venta: number;
+  numero: number;
+  fecha: string;
+  importe: number;
+  homologacion: boolean;
+  /** La factura que anula (queda de registro). */
+  anula: DatosArca;
+  at: string;
+  por: string;
+}
+
+/**
+ * Anula una factura autorizada con una nota de crédito por el total (misma letra, mismo receptor). La boleta queda
+ * sin CAE: se vuelve a autorizar y sale con los datos de facturación actuales (p. ej. A en vez de B).
+ */
+export async function notaCreditoFactura(facturaId: string, uid: string): Promise<NotaCredito> {
+  const { arca, puntoVenta, produccion, cuit } = cliente();
+  const db = adminDb();
+  const ref = db.collection("facturas").doc(facturaId);
+  type ConNc = Factura & { arca?: DatosArca | null; nc_en_curso_at?: string | null; notas_credito?: NotaCredito[] };
+  const f = await db.runTransaction(async (tx) => {
+    const x = (await tx.get(ref)).data() as ConNc | undefined;
+    if (!x) throw new HttpError(404, "No existe la factura");
+    if (!x.arca?.cae) throw new HttpError(400, "Esa factura no está autorizada en ARCA: no hace falta nota de crédito");
+    if (!x.nc_en_curso_at) tx.update(ref, { nc_en_curso_at: new Date().toISOString() });
+    return x;
+  });
+  const a = f.arca!;
+  const receptor: CondicionReceptor = a.receptor_condicion ?? (a.tipo === "A" ? "responsable_inscripto" : "consumidor_final");
+  const emisor: CondicionEmisor = a.emisor_condicion ?? (a.tipo === "C" ? "monotributo" : "responsable_inscripto");
+  const { datos } = comprobanteDe({ ...f, cuit: a.doc_nro ? String(a.doc_nro) : f.cuit }, receptor, emisor, puntoVenta);
+  const tipo = a.tipo;
+  const nc: Comprobante = {
+    ...datos,
+    CbteTipo: CBTE_NC[tipo],
+    DocTipo: a.doc_tipo ?? datos.DocTipo,
+    DocNro: a.doc_nro ?? datos.DocNro,
+    CbtesAsoc: [{ Tipo: a.cbte_tipo, PtoVta: a.punto_venta, Nro: a.numero, Cuit: String(a.emisor_cuit ?? cuit), CbteFch: aYMD(a.fecha) }],
+  };
+  if (a.importe != null && Math.abs(Number(a.importe) - nc.ImpTotal) >= 0.01) {
+    await ref.update({ nc_en_curso_at: null });
+    throw new HttpError(400, `El importe de la factura cambió desde que se autorizó ($${a.importe} → $${nc.ImpTotal}): revisalo antes de anularla`);
+  }
+  const guardar = async (numero: number, cae: string, caeVto: string, fecha: string) => {
+    const nota: NotaCredito = {
+      cae,
+      cae_vto: caeVto.includes("-") ? caeVto : `${caeVto.slice(0, 4)}-${caeVto.slice(4, 6)}-${caeVto.slice(6, 8)}`,
+      tipo,
+      cbte_tipo: nc.CbteTipo,
+      punto_venta: puntoVenta,
+      numero,
+      fecha,
+      importe: nc.ImpTotal,
+      homologacion: !produccion,
+      anula: a,
+      at: new Date().toISOString(),
+      por: uid,
+    };
+    await ref.update({ arca: null, arca_error: null, arca_en_curso_at: null, nc_en_curso_at: null, notas_credito: [...(f.notas_credito ?? []), nota] });
+    return nota;
+  };
+  const svc = arca.electronicBillingService;
+  // Un pedido anterior quedó sin respuesta: si ARCA ya la había hecho, se toma esa (no se duplica).
+  if (f.nc_en_curso_at) {
+    try {
+      const ultimo = Number((await svc.getLastVoucher(puntoVenta, nc.CbteTipo)).cbteNro) || 0;
+      for (let n = ultimo; n > Math.max(0, ultimo - 15); n--) {
+        const v = await svc.getVoucherInfo(n, puntoVenta, nc.CbteTipo);
+        if (!v?.codAutorizacion) continue;
+        if (Number(v.docNro) === Number(nc.DocNro) && Math.abs(Number(v.impTotal) - nc.ImpTotal) < 0.01) {
+          const f8 = String(v.cbteFch);
+          return guardar(n, String(v.codAutorizacion), String(v.fchVto ?? ""), `${f8.slice(0, 4)}-${f8.slice(4, 6)}-${f8.slice(6, 8)}`);
+        }
+      }
+    } catch (err) {
+      throw new HttpError(502, `No se pudo consultar en ARCA si la nota de crédito ya había salido: ${err instanceof Error ? err.message : err}. Probá de nuevo en un rato.`);
+    }
+  }
+  let res;
+  try {
+    res = await svc.createNextVoucher(nc);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new HttpError(502, `ARCA no hizo la nota de crédito: ${msg}. Probá de nuevo (antes se revisa si ya salió).`);
+  }
+  const det = res.response.FeDetResp?.FECAEDetResponse?.[0];
+  if (!res.cae || det?.Resultado !== "A") {
+    await ref.update({ nc_en_curso_at: null });
+    throw new HttpError(502, `ARCA rechazó la nota de crédito: ${motivos(res.response) || "sin detalle"}`);
   }
   return guardar(Number(det.CbteDesde), res.cae, res.caeFchVto, hoyAR());
 }

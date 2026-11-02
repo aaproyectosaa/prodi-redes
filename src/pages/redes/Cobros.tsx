@@ -71,6 +71,9 @@ import {
   saldoDe,
   reactivarFactura,
   reenviarMail,
+  notaCredito,
+  autorizarEnArca,
+  numeroArca,
   textoCobro,
   useFacturas,
   volverAPendiente,
@@ -743,6 +746,38 @@ function PasoCobrar({
                 >
                   <Mail className="mr-2 h-4 w-4" /> Mandar por mail de nuevo
                 </DropdownMenuItem>
+                {f.arca?.cae && (
+                  <DropdownMenuItem
+                    className="text-destructive"
+                    onClick={() =>
+                      toast.warning(`¿Anular la ${numeroArca(f.arca!)} de ${f.cliente}?`, {
+                        description: "Se hace una nota de crédito en ARCA por el total. Después se autoriza de nuevo con los datos actuales del cliente.",
+                        duration: 20000,
+                        action: {
+                          label: "Sí, anular",
+                          onClick: () =>
+                            void notaCredito(f)
+                              .then((r) =>
+                                toast.success(`Nota de crédito ${r.nota.tipo} ${String(r.nota.punto_venta).padStart(4, "0")}-${String(r.nota.numero).padStart(8, "0")} hecha`, {
+                                  description: "Ahora falta autorizar la factura nueva.",
+                                  duration: 30000,
+                                  action: {
+                                    label: "Autorizar ahora",
+                                    onClick: () =>
+                                      void autorizarEnArca(f)
+                                        .then((x) => toast.success(`${numeroArca(x.arca)} autorizada. Mandásela por mail desde ⋯`))
+                                        .catch((e) => toast.error(e instanceof Error ? e.message : "No se pudo autorizar", { duration: 15000 })),
+                                  },
+                                })
+                              )
+                              .catch((e) => toast.error(e instanceof Error ? e.message : "No se pudo anular", { duration: 15000 })),
+                        },
+                      })
+                    }
+                  >
+                    <Undo2 className="mr-2 h-4 w-4" /> Anular con nota de crédito…
+                  </DropdownMenuItem>
+                )}
                 {/* Nunca se le mandó (p. ej. se registró un pago en el mes equivocado y se deshizo): vuelve a Emitir. */}
                 {!f.emitida_por && (
                   <DropdownMenuItem onClick={() => void volverASinEmitir(f).then(() => toast.success(`${f.cliente}: vuelve a «Emitir»`)).catch(err)}>

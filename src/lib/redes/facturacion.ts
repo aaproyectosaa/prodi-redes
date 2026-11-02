@@ -199,6 +199,12 @@ export async function autorizarEnArca(f: FacturaDoc, reintentar = false) {
   return callApi<{ ok: true; arca: NonNullable<Factura["arca"]> }>("/api/pagos/arca-autorizar", { factura_id: f.id, reintentar });
 }
 
+/** Anula en ARCA una factura autorizada con nota de crédito por el total: queda sin CAE para autorizarla de nuevo. */
+export async function notaCredito(f: FacturaDoc) {
+  assertEditable();
+  return callApi<{ ok: true; nota: { tipo: string; punto_venta: number; numero: number } }>("/api/pagos/nota-credito", { factura_id: f.id });
+}
+
 /** "Factura A 0003-00000012" */
 export const numeroArca = (a: NonNullable<Factura["arca"]>) =>
   `Factura ${a.tipo} ${String(a.punto_venta).padStart(4, "0")}-${String(a.numero).padStart(8, "0")}`;

@@ -107,6 +107,8 @@ export interface Factura {
   arca?: DatosArca | null;
   /** Último rechazo de ARCA, para mostrarlo. */
   arca_error?: string | null;
+  /** Notas de crédito que anularon facturas autorizadas antes (la boleta queda para autorizar de nuevo). Lo escribe el servidor. */
+  notas_credito?: { tipo: "A" | "B" | "C"; punto_venta: number; numero: number; fecha: string; cae: string; importe: number; homologacion: boolean; anula: DatosArca; at: string }[];
   demo_ejemplo?: boolean;
 }
 

@@ -11,6 +11,7 @@
 //      → si entra en el plan se crea; si no, se cobra como video extra y se crea al pagar.
 //        Si lo filma el cliente ("Yo mando el material", o la ficha dice que filma él) arranca esperando su material.
 // POST /api/pagos/arca-autorizar { factura_id, reintentar? }  (admin/administración) → CAE de ARCA para una boleta emitida
+// POST /api/pagos/nota-credito  { factura_id }  (admin/administración) → anula la factura en ARCA con nota de crédito (queda para autorizar de nuevo)
 // POST /api/pagos/arca-estado    (admin) → prueba la conexión con ARCA
 // POST /api/pagos/reenviar-mail  { factura_id } (admin/administración) → vuelve a mandar por mail una boleta o factura emitida
 
@@ -50,7 +51,7 @@ import {
   type TipoMaterial,
 } from "../_lib/pedidos";
 import { hoyAR, mesAR, sumarMeses } from "../_lib/fecha";
-import { autorizarFactura, estadoArca } from "../_lib/arca";
+import { autorizarFactura, estadoArca, notaCreditoFactura } from "../_lib/arca";
 import { viajeYaPago, viaticoDe, type ViaticoVideo } from "../_lib/viaticos";
 import { cuentaJornada, MAX_VIDEOS_JORNADA, promoJornada } from "../_lib/jornada";
 import { actualizarMora, moraBloquea } from "../_lib/mora";
@@ -870,6 +871,13 @@ async function arcaAutorizar(req: VercelRequest) {
   return { ok: true, arca: await autorizarFactura(factura_id, caller.uid, { reintentar: !!reintentar }) };
 }
 
+async function notaCredito(req: VercelRequest) {
+  const caller = await requireCaller(req, ["admin", "administracion"]);
+  const { factura_id } = body<{ factura_id?: string }>(req);
+  if (!factura_id || !/^[^/\s]{1,200}$/.test(factura_id)) throw new HttpError(400, "Falta la factura");
+  return { ok: true, nota: await notaCreditoFactura(factura_id, caller.uid) };
+}
+
 async function arcaEstado(req: VercelRequest) {
   await requireCaller(req, ["admin"]);
   return { ok: true, ...(await estadoArca()) };
@@ -1283,6 +1291,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "facturar") res.status(200).json(await facturar(req));
     else if (accion === "emitir") res.status(200).json(await emitir(req));
     else if (accion === "arca-autorizar") res.status(200).json(await arcaAutorizar(req));
+    else if (accion === "nota-credito") res.status(200).json(await notaCredito(req));
     else if (accion === "reenviar-mail") res.status(200).json(await reenviarMail(req));
     else if (accion === "arca-estado") res.status(200).json(await arcaEstado(req));
     else if (accion === "mp-detalle") res.status(200).json(await mpDetalle(req));
