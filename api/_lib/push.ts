@@ -50,6 +50,11 @@ export async function borrarSuscripciones(uid: string, endpoint?: string) {
   else await getPool().query("delete from push_suscripciones where uid = $1", [uid]);
 }
 
+export async function existeSuscripcion(uid: string, endpoint: string): Promise<boolean> {
+  const r = await getPool().query("select 1 from push_suscripciones where uid = $1 and endpoint = $2", [uid, endpoint]);
+  return r.rowCount! > 0;
+}
+
 /** Prueba: manda un aviso a cada dispositivo del usuario y devuelve qué pasó con cada uno. */
 export async function probarPush(uid: string): Promise<{ configurado: boolean; dispositivos: { equipo: string; ok: boolean; estado?: number; error?: string }[] }> {
   if (!configurar()) return { configurado: false, dispositivos: [] };

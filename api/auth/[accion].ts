@@ -8,14 +8,16 @@
 // POST /api/auth/cambiar-clave { actual, nueva }            → { token }  (cierra las otras sesiones)
 // POST /api/auth/usar-link    { token, nueva }              → { token, email }  (link para crear o cambiar la contraseña)
 // POST /api/auth/push         { suscripcion } | { quitar: endpoint | true }  (avisos push de este dispositivo)
+// POST /api/auth/push-prueba  { uid? }  → prueba los avisos propios (o de otra persona, solo admin)
+// POST /api/auth/push-estado  { endpoint } → { existe }  (si este equipo sigue anotado)
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createHash, timingSafeEqual } from "crypto";
 import { AuthError, cambiarClave, crearUsuario, iniciarSesion, tokenDeSesion, usarLinkDeClave, usuarioFresco, verificarClave, verificarSesion } from "../_lib/cuentas";
 import { extractBearerToken, HttpError } from "../_lib/auth";
-import { body, sendError } from "../_lib/http";
+import { body, requireCaller, sendError } from "../_lib/http";
 import { getPool } from "../_lib/db";
-import { borrarSuscripciones, guardarSuscripcion, probarPush } from "../_lib/push";
+import { borrarSuscripciones, existeSuscripcion, guardarSuscripcion, probarPush } from "../_lib/push";
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** Compara dos textos sin que el tiempo revele cuántas letras coinciden. */
@@ -80,8 +82,18 @@ async function handlerAccion(accion: string, req: VercelRequest) {
       return { ok: true };
     }
     case "push-prueba": {
+      // El admin puede probar los avisos de otra persona (Equipo): ve en qué equipos le llegan y en cuáles fallan.
+      if (b.uid && typeof b.uid === "string") {
+        await requireCaller(req, ["admin"]);
+        return probarPush(b.uid);
+      }
       const u = await sesion(req);
       return probarPush(u.uid);
+    }
+    case "push-estado": {
+      // ¿El servidor todavía tiene anotado este equipo? (si el servicio de avisos lo dio de baja, se borró).
+      const u = await sesion(req);
+      return { existe: typeof b.endpoint === "string" && (await existeSuscripcion(u.uid, b.endpoint)) };
     }
     default:
       throw new HttpError(404, "Acción desconocida");

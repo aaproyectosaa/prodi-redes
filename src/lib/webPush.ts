@@ -1,7 +1,7 @@
 // Avisos push con Web Push estándar (claves VAPID), sin Firebase.
 import { doc, updateDoc } from "@/lib/db";
 import { db } from "@/integrations/firebase/client";
-import { guardarPush } from "@/lib/auth";
+import { guardarPush, pushEstado } from "@/lib/auth";
 import { enHostChat, enModoChat } from "@/lib/chatApp";
 
 const SW_PATH = "/sw.js";
@@ -111,8 +111,12 @@ function base64ABytes(b64: string): Uint8Array<ArrayBuffer> {
 /**
  * Vuelve a anotar este equipo con la app desde la que se abrió (Prodi o Prodi Chat), sin pedir nada: así los
  * avisos del chat llegan solo a Prodi Chat y no dos veces. Una vez por sesión, solo si ya tiene avisos activados.
+ *
+ * Si el servidor ya no lo tiene (el servicio de avisos lo dio de baja: cambió el navegador, se borraron datos…), la
+ * anotación del celular está muerta: se saca una nueva sin preguntar (el permiso ya estaba dado). Antes el perfil
+ * seguía diciendo "activado" y no llegaba nada.
  */
-export async function reanotarAppPush(): Promise<void> {
+export async function reanotarAppPush(userId?: string): Promise<void> {
   try {
     if (sessionStorage.getItem("prodi-push-app")) return;
     sessionStorage.setItem("prodi-push-app", "1");
@@ -123,6 +127,10 @@ export async function reanotarAppPush(): Promise<void> {
     const reg = await navigator.serviceWorker.getRegistration("/");
     const sub = await reg?.pushManager.getSubscription();
     if (!sub) return;
+    if (userId && !(await pushEstado(sub.endpoint))) {
+      await subscribeWebPush(userId);
+      return;
+    }
     await guardarPush(sub.toJSON(), undefined, enHostChat() || enModoChat() ? "chat" : "sistema");
   } catch {
     /* nada: se reintenta la próxima vez que se abra */

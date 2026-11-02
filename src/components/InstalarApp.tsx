@@ -369,22 +369,23 @@ export function AvisoActivarAvisos({ uid }: { uid?: string }) {
 
   useEffect(() => {
     if (!uid || typeof Notification === "undefined") return;
-    // Primero que instalen la app (el popup de instalar va antes); después, los avisos.
-    // En iPhone además es obligatorio: los avisos solo funcionan con la app instalada.
-    if (!app.instalada) return;
-    if (yaMostrado(CLAVE_AVISOS)) return;
     let cancel = () => undefined as void;
     let vivo = true;
     void import("@/lib/webPush").then(async ({ isWebPushSupported, subscribeWebPush, reanotarAppPush }) => {
       if (!(await isWebPushSupported())) return;
       const permiso = Notification.permission;
       if (permiso === "granted") {
-        // Ya dio permiso: si el celular perdió la anotación, se vuelve a anotar solo, sin preguntar nada; si la tiene,
-        // se confirma de qué app es (Prodi o Prodi Chat), para que los avisos no lleguen dos veces.
+        // Ya dio permiso (instalada o no): si el equipo perdió la anotación, se vuelve a anotar solo, sin preguntar
+        // nada; si la tiene, se revisa que siga viva y se confirma de qué app es (Prodi o Prodi Chat).
+        if (yaMostrado(CLAVE_AVISOS)) return;
+        marcarMostrado(CLAVE_AVISOS);
         if (!(await equipoSuscripto())) await subscribeWebPush(uid).catch(() => undefined);
-        else await reanotarAppPush();
+        else await reanotarAppPush(uid);
         return;
       }
+      // Primero que instalen la app (el popup de instalar va antes); después, los avisos.
+      // En iPhone además es obligatorio: los avisos solo funcionan con la app instalada.
+      if (!app.instalada || yaMostrado(CLAVE_AVISOS)) return;
       // Ya respondió en este equipo (activar, "más tarde" o bloqueado): no se vuelve a preguntar.
       // Si quiere activarlos después, está en su perfil.
       if (respondioAvisos()) return;

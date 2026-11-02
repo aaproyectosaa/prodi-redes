@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   BarChart3,
+  Bell,
   Copy,
   Eye,
   KeyRound,
@@ -95,6 +96,33 @@ const COLOR_ROL: Record<string, string> = {
 const colorRol = (r: string | undefined) => COLOR_ROL[r ?? "pending"] ?? "bg-muted text-muted-foreground";
 /** Orden de los grupos de la lista: primero los que esperan rol, después el equipo y al final clientes y contactos. */
 const ORDEN_GRUPOS = ["pending", ...ROLES.map((r) => r.value as string), "contacto"];
+/** Le manda un aviso de prueba a cada equipo de la persona y muestra en cuáles llegó y en cuáles falló. */
+async function probarAvisos(p: Profile) {
+  const nombre = p.nombre?.split(" ")[0] || "esta persona";
+  try {
+    const r = await callApi<{ configurado: boolean; dispositivos: { equipo: string; ok: boolean; estado?: number; error?: string }[] }>("/api/auth/push-prueba", { uid: p.id });
+    if (!r.configurado) return void toast.error("Los avisos push no están configurados en el servidor (faltan las claves VAPID).");
+    if (!r.dispositivos.length) {
+      return void toast.error(`${nombre} no tiene ningún equipo anotado para recibir avisos`, {
+        description: "Que entre a Perfil → Notificaciones y active los avisos (en iPhone, desde la app instalada en la pantalla de inicio).",
+        duration: 15000,
+      });
+    }
+    const bien = r.dispositivos.filter((d) => d.ok);
+    const mal = r.dispositivos.filter((d) => !d.ok);
+    const texto = [
+      bien.length ? `Le llegó a: ${bien.map((d) => d.equipo).join(", ")}.` : "",
+      mal.length ? `Falló en: ${mal.map((d) => `${d.equipo}${d.estado === 404 || d.estado === 410 ? " (vencido, ya se borró)" : d.estado ? ` (${d.estado})` : ""}`).join(", ")}.` : "",
+      !bien.length ? "Que abra la app: si ya había dado permiso, se vuelve a anotar sola; si no, que active los avisos en Perfil → Notificaciones." : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    (bien.length ? toast.success : toast.error)(`Prueba de avisos de ${nombre}`, { description: texto, duration: 15000 });
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : "No se pudo probar");
+  }
+}
+
 const grupoDe = (p: Profile): string => (esPendiente(p) ? "pending" : (p.role as string));
 
 export default function Equipo() {
@@ -298,6 +326,11 @@ export default function Equipo() {
                     {!pendiente && p.role !== "admin" && (
                       <DropdownMenuItem onClick={() => navigate(`/reportes/${p.id}`)}>
                         <BarChart3 className="mr-2 h-4 w-4" /> Ver reporte
+                      </DropdownMenuItem>
+                    )}
+                    {!pendiente && (
+                      <DropdownMenuItem onClick={() => void probarAvisos(p)}>
+                        <Bell className="mr-2 h-4 w-4" /> Probar sus avisos
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuItem

@@ -199,6 +199,13 @@ export async function guardarPush(suscripcion: PushSubscriptionJSON | null, quit
   await llamar("push", quitar ? { quitar } : { suscripcion, app }, g.token);
 }
 
+/** ¿El servidor todavía tiene anotado este equipo para los avisos? */
+export async function pushEstado(endpoint: string): Promise<boolean> {
+  const g = leer();
+  if (!g) return true;
+  return (await llamar<{ existe: boolean }>("push-estado", { endpoint }, g.token)).existe;
+}
+
 // Compatibilidad con la inicialización anterior.
 export const getAuth = () => auth;
 export const setPersistence = async () => undefined;
