@@ -717,6 +717,8 @@ export interface Reunion {
   presencial?: boolean;
   /** Dónde es la reunión en persona (dirección o lugar, texto libre). */
   ubicacion?: string | null;
+  /** Cliente que todavía no está cargado en el sistema (reunión con alguien que está por entrar). */
+  cliente_externo?: string | null;
   participantes: string[];
   creada_por: string;
   estado: "programada" | "realizada";

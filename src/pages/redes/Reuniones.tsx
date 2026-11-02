@@ -58,6 +58,7 @@ import { aInputAR, desdeInputAR, formatearFecha } from "@/lib/fecha";
 import { fechaHora } from "@/lib/redes/format";
 import { cn, hrefSeguro } from "@/lib/utils";
 import type { Minuta, Reunion } from "@/lib/redes/types";
+import type { Project } from "@/integrations/firebase/types";
 
 /** Campos suaves (mismo estilo que Pedir un video). */
 const SUAVE =
@@ -186,6 +187,65 @@ export default function Reuniones() {
   );
 }
 
+/** Quiénes participan: el equipo y, si hay cliente elegido, sus usuarios. */
+function ElegirParticipantes({ cliente, sel, setSel }: { cliente?: Project; sel: Set<string>; setSel: React.Dispatch<React.SetStateAction<Set<string>>> }) {
+  const { profiles } = useAppData();
+  const { user } = useUserProfileContext();
+  const candidatos = profiles.filter((p) => {
+    if (p.id === user?.uid || !p.role || p.role === "pending" || ["cm", "pm", "disenador"].includes(p.role)) return false;
+    if (p.role !== "cliente") return true;
+    return cliente ? (cliente.team_roles?.cliente ?? []).includes(p.id) : false;
+  });
+  return (
+    <div className="space-y-2">
+      <Label className={ETIQUETA}>
+        Participantes {sel.size > 0 && <span className="font-normal normal-case tracking-normal">· {sel.size}</span>}
+      </Label>
+      <div className="max-h-56 space-y-0.5 overflow-y-auto rounded-2xl bg-muted/60 p-1.5">
+        {candidatos.map((p) => (
+          <label
+            key={p.id}
+            className={cn(
+              "flex cursor-pointer items-center gap-3 rounded-xl px-2.5 py-2 transition-colors",
+              sel.has(p.id) ? "bg-background shadow-sm" : "hover:bg-background/60"
+            )}
+          >
+            <Checkbox
+              checked={sel.has(p.id)}
+              onCheckedChange={() =>
+                setSel((prev) => {
+                  const n = new Set(prev);
+                  if (n.has(p.id)) n.delete(p.id);
+                  else n.add(p.id);
+                  return n;
+                })
+              }
+            />
+            <UserAvatar profile={p} size="sm" />
+            <span className="flex-1 truncate text-sm font-medium">{p.nombre}</span>
+            {p.role === "cliente" && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">Cliente</span>}
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** El cliente de la reunión: uno cargado, uno nuevo que todavía no está en el sistema, o interna. */
+function ClienteDeReunion({ reunion: r, className }: { reunion: Reunion; className?: string }) {
+  const { clienteById } = useRedes();
+  const cliente = clienteById(r.proyecto_id);
+  if (cliente) return <ClienteTag cliente={cliente} />;
+  if (r.cliente_externo)
+    return (
+      <span className={cn("inline-flex min-w-0 items-center gap-1.5", className)}>
+        <span className="truncate font-medium text-foreground">{r.cliente_externo}</span>
+        <span className="shrink-0 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400">Nuevo</span>
+      </span>
+    );
+  return <span className={className}>Interna</span>;
+}
+
 /** Link a Google Maps para una dirección escrita a mano. */
 const linkMapa = (ubicacion: string) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ubicacion)}`;
 
@@ -216,6 +276,8 @@ function PresencialDialog({ open, onOpenChange, onCreada }: { open: boolean; onO
   const [clienteId, setClienteId] = useState("interna");
   const [fecha, setFecha] = useState(aInputAR(new Date()));
   const [ubicacion, setUbicacion] = useState("");
+  const [clienteNuevo, setClienteNuevo] = useState("");
+  const [sel, setSel] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -224,9 +286,20 @@ function PresencialDialog({ open, onOpenChange, onCreada }: { open: boolean; onO
     setClienteId("interna");
     setFecha(aInputAR(new Date()));
     setUbicacion("");
+    setClienteNuevo("");
+    setSel(new Set());
   }, [open]);
 
   const cliente = clientes.find((c) => c.id === clienteId);
+  const esNuevo = clienteId === "nuevo";
+  // Al elegir un cliente se proponen su equipo y sus usuarios.
+  const elegirCliente = (id: string) => {
+    setClienteId(id);
+    const c = clientes.find((x) => x.id === id);
+    if (!c) return;
+    const t = c.team_roles ?? {};
+    setSel(new Set([...(t.productor ?? []), ...(t.cliente ?? [])]));
+  };
   // Más de 15 minutos para adelante: se agenda; si no, se graba ya.
   const esMasAdelante = fecha ? new Date(desdeInputAR(fecha)).getTime() - Date.now() > 15 * 60_000 : false;
 
@@ -235,16 +308,28 @@ function PresencialDialog({ open, onOpenChange, onCreada }: { open: boolean; onO
     setSaving(true);
     try {
       const cuando = fecha ? desdeInputAR(fecha) : new Date().toISOString();
-      const t = titulo.trim() || (cliente ? `Reunión con ${cliente.nombre}` : "Reunión de equipo");
+      const externo = esNuevo ? clienteNuevo.trim() : "";
+      if (esNuevo && !externo) throw new Error("Escribí el nombre del cliente nuevo");
+      const nombreCliente = cliente?.nombre ?? (externo || null);
+      const t = titulo.trim() || (nombreCliente ? `Reunión con ${nombreCliente}` : "Reunión de equipo");
       const { id } = await crearReunion(
-        { titulo: t, proyecto: cliente ?? null, fecha: cuando, participantes: [], chat: null, presencial: true, ubicacion: ubicacion.trim() || null },
+        {
+          titulo: t,
+          proyecto: cliente ?? null,
+          fecha: cuando,
+          participantes: Array.from(sel),
+          chat: null,
+          presencial: true,
+          ubicacion: ubicacion.trim() || null,
+          clienteExterno: externo || null,
+        },
         user.uid,
         profile?.nombre ?? ""
       );
       onOpenChange(false);
       onCreada(id);
-      if (esMasAdelante) toast.success(`Reunión agendada para el ${fechaHora(cuando)}`);
-      else await grabarReunion({ id, titulo: t, fecha: cuando }, cliente?.nombre ?? "Interno", "presencial");
+      if (esMasAdelante) toast.success(`Reunión agendada para el ${fechaHora(cuando)}${sel.size ? ". Les avisamos a los participantes." : ""}`);
+      else await grabarReunion({ id, titulo: t, fecha: cuando }, nombreCliente ?? "Interno", "presencial");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo guardar");
     } finally {
@@ -277,13 +362,34 @@ function PresencialDialog({ open, onOpenChange, onCreada }: { open: boolean; onO
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label className={ETIQUETA}>Cliente</Label>
-              <ElegirCliente value={clienteId} onChange={setClienteId} clientes={clientes} opciones={[{ value: "interna", label: "Reunión interna" }]} className={cn(SUAVE, "h-12")} />
+              <ElegirCliente
+                value={clienteId}
+                onChange={elegirCliente}
+                clientes={clientes}
+                opciones={[
+                  { value: "nuevo", label: "Cliente nuevo (todavía no cargado)" },
+                  { value: "interna", label: "Reunión interna" },
+                ]}
+                className={cn(SUAVE, "h-12")}
+              />
             </div>
             <div className="space-y-2">
               <Label className={ETIQUETA}>Día y hora</Label>
               <Input type="datetime-local" value={fecha} onChange={(e) => setFecha(e.target.value)} className={cn(SUAVE, "h-12")} />
             </div>
           </div>
+          {esNuevo && (
+            <div className="space-y-2">
+              <Label className={ETIQUETA}>Nombre del cliente nuevo</Label>
+              <Input
+                autoFocus
+                value={clienteNuevo}
+                onChange={(e) => setClienteNuevo(e.target.value)}
+                placeholder="Empresa o persona (ej: Panadería Don Juan)"
+                className={cn(SUAVE, "h-12 text-[15px] font-medium")}
+              />
+            </div>
+          )}
           <div className="space-y-2">
             <Label className={ETIQUETA}>Ubicación</Label>
             <div className="relative">
@@ -291,6 +397,7 @@ function PresencialDialog({ open, onOpenChange, onCreada }: { open: boolean; onO
               <Input value={ubicacion} onChange={(e) => setUbicacion(e.target.value)} placeholder="Ej: Oficina del cliente, Av. Pellegrini 1234, Rosario" className={cn(SUAVE, "h-12 pl-10")} />
             </div>
           </div>
+          <ElegirParticipantes cliente={cliente} sel={sel} setSel={setSel} />
         </div>
         <DialogFooter className="px-6 pb-6 pt-5">
           <Button onClick={() => void guardar()} disabled={saving} className="h-12 w-full rounded-2xl bg-gradient-to-r from-primary to-fuchsia-600 text-base font-semibold shadow-lg shadow-primary/25">
@@ -365,7 +472,7 @@ function ProximaHero({ reunion: r, onAbrir }: { reunion: Reunion; onAbrir: () =>
         </button>
         <div className="flex flex-wrap items-center justify-between gap-3 sm:flex-col sm:items-end">
           <div className="flex items-center gap-3">
-            {cliente ? <ClienteTag cliente={cliente} /> : <span className="text-xs text-muted-foreground">Interna</span>}
+            <ClienteDeReunion reunion={r} className="text-xs text-muted-foreground" />
             <Avatares ids={r.participantes} max={4} />
           </div>
           {!r.presencial && (
@@ -406,7 +513,7 @@ function FilaReunion({ reunion: r, onAbrir, conResumen = false }: { reunion: Reu
           <span className="inline-flex items-center gap-1">
             <CalendarClock className="h-3.5 w-3.5" /> {fechaHora(r.fecha)}
           </span>
-          {cliente ? <ClienteTag cliente={cliente} /> : <span>Interna</span>}
+          <ClienteDeReunion reunion={r} />
           <span className="inline-flex items-center gap-1">
             {r.presencial ? <MapPin className="h-3.5 w-3.5" /> : <Video className="h-3.5 w-3.5" />}
             {r.presencial ? "En persona" : "Videollamada"}
@@ -517,12 +624,6 @@ function NuevaReunionDialog({
     }
   };
 
-  const candidatos = profiles.filter((p) => {
-    if (p.id === user?.uid || !p.role || p.role === "pending" || ["cm", "pm", "disenador"].includes(p.role)) return false;
-    if (p.role !== "cliente") return true;
-    return cliente ? (cliente.team_roles?.cliente ?? []).includes(p.id) : false;
-  });
-
   const save = async (ahora: boolean) => {
     if (!user) return;
     setSaving(true);
@@ -599,37 +700,7 @@ function NuevaReunionDialog({
               </div>
             </div>
           )}
-          <div className="space-y-2">
-            <Label className={ETIQUETA}>
-              Participantes {sel.size > 0 && <span className="font-normal normal-case tracking-normal">· {sel.size}</span>}
-            </Label>
-            <div className="space-y-0.5 rounded-2xl bg-muted/60 p-1.5 sm:max-h-56 sm:overflow-y-auto">
-              {candidatos.map((p) => (
-                <label
-                  key={p.id}
-                  className={cn(
-                    "flex cursor-pointer items-center gap-3 rounded-xl px-2.5 py-2 transition-colors",
-                    sel.has(p.id) ? "bg-background shadow-sm" : "hover:bg-background/60"
-                  )}
-                >
-                  <Checkbox
-                    checked={sel.has(p.id)}
-                    onCheckedChange={() =>
-                      setSel((prev) => {
-                        const n = new Set(prev);
-                        if (n.has(p.id)) n.delete(p.id);
-                        else n.add(p.id);
-                        return n;
-                      })
-                    }
-                  />
-                  <UserAvatar profile={p} size="sm" />
-                  <span className="flex-1 truncate text-sm font-medium">{p.nombre}</span>
-                  {p.role === "cliente" && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">Cliente</span>}
-                </label>
-              ))}
-            </div>
-          </div>
+          <ElegirParticipantes cliente={cliente} sel={sel} setSel={setSel} />
         </div>
         <DialogFooter className="gap-2 sm:gap-2">
           {editar ? (
@@ -758,12 +829,17 @@ function ReunionSheet({ reunion, onClose }: { reunion: Reunion | null; onClose: 
           <SheetDescription asChild>
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span>{fechaHora(reunion.fecha)}</span>
-              {cliente && (
+              {cliente ? (
                 <>
                   <span>·</span>
                   <ClienteTag cliente={cliente} size="md" />
                 </>
-              )}
+              ) : reunion.cliente_externo ? (
+                <>
+                  <span>·</span>
+                  <ClienteDeReunion reunion={reunion} />
+                </>
+              ) : null}
             </div>
           </SheetDescription>
         </SheetHeader>

@@ -30,9 +30,11 @@ export interface NuevaReunion {
   participantes: string[];
   chat: Chat | null;
   jitsiBase?: string;
-  /** En persona: no hay videollamada ni invitación, se graba en el momento. */
+  /** En persona: sin videollamada; a los participantes les llega un aviso con el día, la hora y el lugar. */
   presencial?: boolean;
   ubicacion?: string | null;
+  /** Cliente que todavía no está cargado en el sistema (ej. uno que está por entrar). */
+  clienteExterno?: string | null;
 }
 
 export async function crearReunion(data: NuevaReunion, by: string, remitente: string): Promise<{ id: string; link: string }> {
@@ -44,7 +46,7 @@ export async function crearReunion(data: NuevaReunion, by: string, remitente: st
     chat_id: data.chat?.id ?? null,
     fecha: data.fecha,
     link,
-    ...(data.presencial ? { presencial: true, ubicacion: data.ubicacion ?? null } : {}),
+    ...(data.presencial ? { presencial: true, ubicacion: data.ubicacion ?? null, cliente_externo: data.clienteExterno ?? null } : {}),
     participantes: Array.from(new Set([...data.participantes, by])),
     creada_por: by,
     estado: "programada",
@@ -54,7 +56,19 @@ export async function crearReunion(data: NuevaReunion, by: string, remitente: st
     created_at: new Date().toISOString(),
   };
   const ref = await addDoc(collection(db, REUNIONES), r);
-  if (data.presencial) return { id: ref.id, link };
+  if (data.presencial) {
+    const otros = r.participantes.filter((p) => p !== by);
+    if (otros.length)
+      void avisar({
+        destinatarios: otros,
+        titulo: "Reunión presencial agendada",
+        cuerpo: [r.titulo, fechaHora(data.fecha), data.ubicacion].filter(Boolean).join(" · "),
+        link: `/reuniones?r=${ref.id}`,
+        clave: `reunion:${ref.id}`,
+        proyectoId: r.proyecto_id,
+      });
+    return { id: ref.id, link };
+  }
   const ahora = Math.abs(new Date(data.fecha).getTime() - Date.now()) < 10 * 60_000;
   if (data.chat) {
     await enviarMensaje(

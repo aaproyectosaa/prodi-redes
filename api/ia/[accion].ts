@@ -546,7 +546,8 @@ Armá la minuta de esta reunión en español rioplatense, clara y concreta.
 No inventes nada que no se haya dicho.
 
 Reunión: ${r.titulo}
-${cliente ? `Cliente: ${cliente}` : "Reunión interna del equipo"}
+${cliente ? `Cliente: ${cliente}` : r.cliente_externo ? `Cliente nuevo (todavía no trabaja con Prodi): ${r.cliente_externo}` : "Reunión interna del equipo"}
+${r.presencial ? `Reunión en persona${r.ubicacion ? ` en ${r.ubicacion}` : ""}` : "Videollamada"}
 Participantes: ${nombres || "sin datos"}
 ${r.notas ? `Notas tomadas durante la reunión:\n${r.notas}` : ""}`;
 
