@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { db, doc, getDoc } from "@/lib/db";
-import { AlertTriangle, Building2, CalendarDays, Copy, CopyPlus, ExternalLink, FileText, Loader2, MessageCircle, Package, Pencil, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, Building2, CalendarDays, CheckCircle2, Copy, CopyPlus, ExternalLink, FileText, Loader2, MessageCircle, Package, Pencil, Plus, Trash2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { PageShell } from "@/components/redes/PageShell";
 import { FilaKpis, Kpi, Vacio } from "@/components/redes/admin/AdminUI";
@@ -26,6 +26,7 @@ import {
   type Presupuesto,
 } from "@/lib/redes/presupuestos";
 import { cn } from "@/lib/utils";
+import { callApi } from "@/lib/redes/api";
 import { hace } from "@/lib/redes/format";
 import { PropuestaEditor, type DatosPropuesta } from "@/components/redes/PropuestaEditor";
 import { plantillaPropuesta, preciosFaltantes } from "../../../api/_lib/propuesta";
@@ -263,6 +264,61 @@ function Seguimiento({ p }: { p: Presupuesto }) {
   );
 }
 
+const MEDIOS = ["En una reunión", "Por WhatsApp", "Por teléfono"];
+
+/** Lo aceptó sin tocar el link (en una reunión, por teléfono…): queda aceptado y el lead pasa a Ganado. No cobra nada. */
+function AceptoPorOtroMedio({ p }: { p: Presupuesto }) {
+  const [open, setOpen] = useState(false);
+  const [como, setComo] = useState(MEDIOS[0]);
+  const [busy, setBusy] = useState(false);
+  const confirmar = async () => {
+    setBusy(true);
+    try {
+      await callApi("/api/web/presupuesto-aceptado", { id: p.id, como: como.trim().toLowerCase() });
+      toast.success(`Listo: ${p.empresa} aceptó el presupuesto`);
+      setOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+        <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Aceptó por otro medio
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>¿{p.empresa} lo aceptó?</DialogTitle>
+            <DialogDescription>Queda aceptado y el lead pasa a Ganado. No se le cobra nada: el cobro lo coordinás vos.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>¿Cómo lo aceptó?</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {MEDIOS.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setComo(m)}
+                  className={cn("rounded-full border px-3 py-1 text-xs font-medium", como === m ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted")}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+            <Input value={como} onChange={(e) => setComo(e.target.value)} placeholder="O escribilo" maxLength={120} />
+          </div>
+          <Button onClick={() => void confirmar()} disabled={busy || !como.trim()}>
+            {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />} Marcar como aceptado
+          </Button>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 function Fila({ p, onEditar, onDuplicar }: { p: Presupuesto; onEditar: () => void; onDuplicar: () => void }) {
   const navigate = useNavigate();
   const { settings } = useRedes();
@@ -295,17 +351,23 @@ function Fila({ p, onEditar, onDuplicar }: { p: Presupuesto; onEditar: () => voi
           {tot.mensual && tot.unico ? " + " : ""}
           {tot.unico ? `${plata(tot.unico_final, p.moneda)} una vez` : ""}
           {` · vale hasta el ${dia(p.validez)}`}
-          {p.aceptado ? ` · aceptó ${p.aceptado.nombre} el ${dia(p.aceptado.at)}` : ""}
+          {p.aceptado ? ` · aceptó ${p.aceptado.nombre} el ${dia(p.aceptado.at)}${p.aceptado.como ? ` (${p.aceptado.como})` : ""}` : ""}
         </p>
         {!p.aceptado && <Seguimiento p={p} />}
       </div>
       <div className="flex flex-wrap gap-1">
-        {p.aceptado ? (
+        {p.aceptado?.proyecto_id ? (
           <Button size="sm" variant="outline" onClick={() => navigate(`/clientes/${p.aceptado!.proyecto_id}`)}>
             Ver cliente
           </Button>
+        ) : p.aceptado ? (
+          // Lo aceptó por otro medio: el alta se hace desde el lead (con sus datos) o a mano.
+          <Button size="sm" onClick={() => navigate(p.lead_id ? `/clientes?lead=${p.lead_id}` : "/clientes")}>
+            <UserPlus className="mr-1.5 h-3.5 w-3.5" /> Dar de alta el cliente
+          </Button>
         ) : (
           <>
+            <AceptoPorOtroMedio p={p} />
             <Button size="sm" onClick={whatsapp}>
               <MessageCircle className="mr-1.5 h-3.5 w-3.5" /> WhatsApp
             </Button>

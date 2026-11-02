@@ -106,9 +106,37 @@ export async function verPresupuesto(token: string, equipo = false) {
     nota: p.nota ?? null,
     propuesta: p.propuesta ? limpiarPropuesta(p.propuesta) : null,
     estado: vencido ? "vencido" : p.estado,
+    /** Lo aceptó por otro medio: no tiene usuario todavía (el link no lo manda a entrar). */
+    sin_usuario: p.estado === "aceptado" && !p.aceptado?.uid,
     totales: totalesPresupuesto(p.items ?? [], p.tipo, ivaPct),
     creado: p.created_at,
   };
+}
+
+/**
+ * Lo aceptó por otro medio (en una reunión, por teléfono, por WhatsApp): el admin (o quien lo armó, si es de ventas)
+ * lo marca aceptado. No se crea usuario ni ficha: el cliente se da de alta después desde el lead, como siempre.
+ */
+export async function aceptarPorOtroMedio(id: string, como: string, caller: { uid: string; nombre?: string | null; email?: string | null; role: string }) {
+  const ref = adminDb().collection("presupuestos").doc(t(id, 80));
+  const p = (await ref.get()).data();
+  if (!p) throw new HttpError(404, "Este presupuesto no existe o fue borrado");
+  if (caller.role !== "admin" && p.created_by !== caller.uid) throw new HttpError(403, "No tenés permiso para esta acción");
+  if (p.estado === "aceptado") throw new HttpError(409, "Este presupuesto ya está aceptado");
+  const ahora = new Date().toISOString();
+  const medio = t(como, 120) || "otro medio";
+  const quien = t(p.contacto?.nombre, 80) || t(p.empresa, 80);
+  await ref.update({
+    estado: "aceptado",
+    aceptado: { at: ahora, nombre: quien, email: t(p.contacto?.email, 160), uid: null, proyecto_id: null, como: medio, por: caller.uid },
+    updated_at: ahora,
+  });
+  await anotarEnLead(
+    p.lead_id,
+    { at: ahora, de: null, a: "ganado", tipo: "presupuesto", texto: `Aceptó el presupuesto (${medio})`, por: caller.uid, por_nombre: caller.nombre || caller.email || "" },
+    { estado: "ganado", proximo_paso: null, ultimo_contacto_at: ahora }
+  );
+  return { ok: true, lead_id: typeof p.lead_id === "string" ? p.lead_id : null };
 }
 
 /** El cliente acepta: se crea (o se usa) su usuario, su ficha de cliente y entra. Devuelve la sesión. */

@@ -17,6 +17,7 @@
 // POST /api/web/wa-estado · wa-config { config_id } · wa-conectar { code, waba_id, phone_number_id }  (admin) WhatsApp de Prodi → leads
 // POST /api/web/meta-mensajes     (admin) { forzar? } trae los mensajes nuevos de IG y FB como leads
 // POST /api/web/meta-conectar     (admin) suscribe la página de Prodi y trae los formularios de 30 días
+// POST /api/web/presupuesto-aceptado { id, como } (admin o ventas, el suyo) → lo aceptó por otro medio: aceptado y lead en Ganado
 // POST /api/web/manual    { negocio, nombre?, email?, telefono?, instagram?, ubicacion?, rubro?, fuente?, notas?, estado? } → { id }  (lead cargado a mano)
 // POST /api/web/crm-espera { nombre, negocio, email, telefono?, plan, rubro? } → { ok }  (pública: lista de espera del CRM en somosprodi.com)
 // GET  /api/web/precios   → { planes: [con factura], sin_factura: [sin IVA] } con { id, nombre, neto, iva, comision, monto, … }
@@ -52,6 +53,7 @@ import { uploadBufferToDrive } from "../_lib/drive-server";
 /** Trabajan los leads de Prodi: el admin y quien tenga el rol Ventas. */
 const VENTAS = ["admin", "ventas"];
 import { fotoManual, unirLeads } from "../_lib/leads-unir";
+import { aceptarPorOtroMedio } from "../_lib/presupuestos";
 import { linksParaMandar } from "../_lib/catalogo";
 
 import { conectarWhatsApp, estadoWhatsApp, guardarConfigWhatsApp, recibirWhatsApp } from "../_lib/meta-whatsapp";
@@ -966,6 +968,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (accion === "seguimiento") res.status(200).json(await seguimiento(req));
     else if (accion === "actividad") res.status(200).json(await actividad(req));
     else if (accion === "borrar") res.status(200).json(await borrarLead(req));
+    else if (accion === "presupuesto-aceptado") {
+      const caller = await requireCaller(req, VENTAS);
+      const b = body<{ id?: string; como?: string }>(req);
+      res.status(200).json(await aceptarPorOtroMedio(String(b.id ?? ""), String(b.como ?? ""), caller));
+    }
     else if (accion === "datos") res.status(200).json(await datos(req));
     else if (accion === "visto") res.status(200).json(await visto(req));
     else if (accion === "meta-productos") {

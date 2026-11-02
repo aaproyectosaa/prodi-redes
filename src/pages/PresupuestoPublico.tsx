@@ -24,6 +24,7 @@ interface Vista {
   nota: string | null;
   propuesta: Propuesta | null;
   estado: string;
+  sin_usuario?: boolean;
   totales: { mensual: number; unico: number; iva_pct: number; mensual_final: number; unico_final: number };
 }
 
@@ -111,9 +112,9 @@ export default function PresupuestoPublico() {
         {p.estado === "aceptado" ? <CheckCircle2 className="h-6 w-6 text-emerald-400" /> : <Clock className="h-6 w-6 text-amber-300" />}
         <div>
           <p className="font-semibold">{p.estado === "aceptado" ? "¡Ya lo aceptaste!" : p.estado === "vencido" ? "Este presupuesto venció" : "Este presupuesto ya no está vigente"}</p>
-          <p className="text-sm text-[color:var(--p-suave,rgba(255,255,255,0.7))]">{p.estado === "aceptado" ? "Entrá con tu mail y tu contraseña." : "Escribinos y te mandamos uno actualizado."}</p>
+          <p className="text-sm text-[color:var(--p-suave,rgba(255,255,255,0.7))]">{p.estado === "aceptado" ? (p.sin_usuario ? "Te contactamos para arrancar." : "Entrá con tu mail y tu contraseña.") : "Escribinos y te mandamos uno actualizado."}</p>
         </div>
-        {p.estado === "aceptado" && (
+        {p.estado === "aceptado" && !p.sin_usuario && (
           <Button className="ml-auto" onClick={() => navigate("/auth")}>
             Entrar
           </Button>

@@ -17,6 +17,8 @@ export interface Presupuesto {
   empresa: string;
   contacto: { nombre?: string | null; email?: string | null; telefono?: string | null };
   plan_id?: string | null;
+  /** El lead del CRM del que salió (pasa solo a Ganado cuando lo aceptan). */
+  lead_id?: string | null;
   items: ItemPresupuesto[];
   moneda: "ARS" | "USD";
   tipo: "factura" | "boleta";
@@ -37,7 +39,8 @@ export interface Presupuesto {
   /** Veces que el cliente lo bajó en PDF y la última. */
   pdf_descargas?: number;
   pdf_at?: string | null;
-  aceptado?: { at: string; nombre: string; email: string; uid: string; proyecto_id: string } | null;
+  /** Lo aceptó desde el link (con usuario y ficha) o por otro medio (`como`: sin usuario ni ficha todavía). */
+  aceptado?: { at: string; nombre: string; email: string; uid: string | null; proyecto_id: string | null; como?: string } | null;
 }
 
 export const ESTADO_PRESUPUESTO: Record<EstadoPresupuesto | "vencido", { label: string; clase: string }> = {
