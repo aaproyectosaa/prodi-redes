@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Copy, KeyRound, LayoutDashboard, Loader2, MessageCircle, Plus, RefreshCw, Send, UserCheck, UserX } from "lucide-react";
+import { Copy, KeyRound, LayoutDashboard, Loader2, MessageCircle, Plus, RefreshCw, Send, Trash2, UserCheck, UserX } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -253,6 +253,24 @@ export function ContactosCliente({ cliente }: { cliente: Project }) {
                       >
                         {off ? <UserCheck className="h-4 w-4 sm:mr-1.5" /> : <UserX className="h-4 w-4 sm:mr-1.5" />}
                         <span className="hidden sm:inline">{off ? "Activar" : "Desactivar"}</span>
+                      </Button>
+                    )}
+                    {esAdmin && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={!!ocupado}
+                        className="text-muted-foreground hover:text-destructive"
+                        title="Borrar este usuario (por ejemplo, si el mail quedó mal escrito)"
+                        onClick={() =>
+                          toast.warning(`¿Eliminar a ${p.nombre} (${p.email ?? "sin mail"})?`, {
+                            description: "Se borra el usuario y sale del grupo de chat del cliente. No se puede deshacer.",
+                            duration: 20000,
+                            action: { label: "Sí, eliminar", onClick: () => void accion(p.id, p.nombre, "/api/usuarios/eliminar", {}) },
+                          })
+                        }
+                      >
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     )}
                   </div>
