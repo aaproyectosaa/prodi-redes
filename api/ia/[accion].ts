@@ -1476,6 +1476,15 @@ async function planCupos(req: VercelRequest) {
   return { cupos: await cuposDesde(b.proyecto_id, String(b.mes)) };
 }
 
+/** Al volver a mandar un plan, las ideas que el cliente ya aprobó (y tienen su video) siguen aprobadas. */
+function conAprobadas<T extends { id: string }>(ideas: T[], antes: unknown): T[] {
+  const ok = new Map(((antes ?? []) as IdeaPlan[]).filter((i) => i.respuesta?.ok && i.video_id).map((i) => [i.id, i]));
+  return ideas.map((i) => {
+    const a = ok.get(i.id);
+    return a ? { ...i, respuesta: a.respuesta, video_id: a.video_id } : i;
+  });
+}
+
 async function planEnviar(req: VercelRequest) {
   const caller = await requireCaller(req, ["admin", "productor"]);
   const b = body<{ proyecto_id?: string; mes?: string; ideas?: unknown; nota_equipo?: string }>(req);
@@ -1485,7 +1494,7 @@ async function planEnviar(req: VercelRequest) {
   const mes = String(b.mes);
   const db = adminDb();
   const ref = db.collection("planes_mes").doc(planId(pid, mes));
-  const ideas = limpiarIdeas(b.ideas).map((i) => ({ ...i, respuesta: null, video_id: null }));
+  let ideas = limpiarIdeas(b.ideas).map((i) => ({ ...i, respuesta: null, video_id: null }));
   if (!ideas.length) throw new HttpError(400, "El plan no tiene ideas");
   if (ideas.some((i) => i.idea.length < 10)) throw new HttpError(400, "Completá la descripción de cada idea");
   const nota = String(b.nota_equipo ?? "").trim().slice(0, 600) || null;
@@ -1494,6 +1503,7 @@ async function planEnviar(req: VercelRequest) {
     const p = (await tx.get(ref)).data();
     if (!p) throw new HttpError(404, "Primero armá el plan");
     if (p.estado !== "borrador") throw new HttpError(409, "Este plan ya se mandó al cliente");
+    ideas = conAprobadas(ideas, p.ideas);
     tx.update(ref, {
       ideas,
       nota_equipo: nota,
@@ -1566,7 +1576,7 @@ async function planEnviarCampania(req: VercelRequest) {
     const plan: Record<string, any> = await db.runTransaction(async (tx) => {
       const p = (await tx.get(ref)).data();
       if (!p || p.estado !== "borrador") throw new HttpError(409, "Otro del equipo ya lo mandó");
-      const ideas = limpiarIdeas(p.ideas).map((i) => ({ ...i, respuesta: null, video_id: null }));
+      const ideas = conAprobadas(limpiarIdeas(p.ideas).map((i) => ({ ...i, respuesta: null, video_id: null })), p.ideas);
       tx.update(ref, {
         ideas,
         // El mensaje va una sola vez (en el primer mes); los otros conservan el suyo si tenían.
@@ -1617,21 +1627,76 @@ async function planVotar(req: VercelRequest) {
   const b = body<{ proyecto_id?: string; mes?: string; idea_id?: string; ok?: boolean | null; comentario?: string | null }>(req);
   if (!b.proyecto_id || !MES_RE.test(String(b.mes)) || !b.idea_id) throw new HttpError(400, "Datos incompletos");
   await assertProjectAccess(caller, b.proyecto_id);
-  const ref = adminDb().collection("planes_mes").doc(planId(b.proyecto_id, String(b.mes)));
-  const plan = (await ref.get()).data();
-  if (!plan || plan.estado !== "enviado") throw new HttpError(409, "Este plan ya se respondió");
-  if (!((plan.ideas ?? []) as IdeaPlan[]).some((i) => i.id === b.idea_id)) throw new HttpError(404, "Esa idea ya no está");
+  const pid = b.proyecto_id;
+  const mes = String(b.mes);
+  const db = adminDb();
+  const ref = db.collection("planes_mes").doc(planId(pid, mes));
   const idea = String(b.idea_id);
   if (!/^[A-Za-z0-9_-]{1,60}$/.test(idea)) throw new HttpError(400, "Idea inválida");
-  await ref.update({
-    [`votos.${caller.uid}.${idea}`]: {
-      ok: typeof b.ok === "boolean" ? b.ok : null,
-      comentario: String(b.comentario ?? "").trim().slice(0, 600) || null,
-      nombre: caller.nombre || "Cliente",
-      at: new Date().toISOString(),
-    },
+  const voto = {
+    ok: typeof b.ok === "boolean" ? b.ok : null,
+    comentario: String(b.comentario ?? "").trim().slice(0, 600) || null,
+    nombre: caller.nombre || "Cliente",
+    at: new Date().toISOString(),
+  };
+  // Un "Va" del cliente aprueba esa idea en el momento (se crea el video), sin esperar a que conteste las demás.
+  const aprueba = voto.ok === true && caller.role === "cliente";
+  const proj: Record<string, any> = aprueba ? (await db.collection("projects").doc(pid).get()).data() ?? {} : {};
+  const team = (proj.team_roles ?? {}) as Record<string, string[]>;
+  const r = await db.runTransaction(async (tx) => {
+    const plan = (await tx.get(ref)).data();
+    if (!plan || plan.estado !== "enviado") throw new HttpError(409, "Este plan ya se respondió");
+    const ideas = (plan.ideas ?? []) as IdeaPlan[];
+    const i = ideas.find((x) => x.id === idea);
+    if (!i) throw new HttpError(404, "Esa idea ya no está");
+    // Ya aprobada (por él o por otro del equipo del cliente): queda como está.
+    if (i.respuesta?.ok && i.video_id) return { aprobada: true, nueva: null as IdeaPlan | null, todas: false, ideas };
+    if (!aprueba) {
+      tx.update(ref, { [`votos.${caller.uid}.${idea}`]: voto });
+      return { aprobada: false, nueva: null as IdeaPlan | null, todas: false, ideas };
+    }
+    const vRef = db.collection("videos").doc();
+    tx.set(vRef, {
+      ...videoDesdePedido(
+        pid,
+        team,
+        mes,
+        { titulo: i.titulo, idea: i.idea, objetivo: i.objetivo, pedido_por: caller.uid, filma_cliente: filmaElCliente(proj) },
+        "Idea del plan del mes aprobada por el cliente"
+      ),
+      pedido_cliente: false,
+      plan_idea_id: i.id,
+      ...(i.campania ? { campania: i.campania } : {}),
+      ...(plan.demo_ejemplo ? { demo_ejemplo: true } : {}),
+    });
+    const nueva: IdeaPlan = { ...i, respuesta: { ok: true, comentario: null }, video_id: vRef.id };
+    const nuevas = ideas.map((x) => (x.id === idea ? nueva : x));
+    // Si con esta ya están todas aprobadas, el plan queda cerrado.
+    const todas = nuevas.every((x) => x.respuesta?.ok && x.video_id);
+    const ahora = new Date().toISOString();
+    tx.update(ref, {
+      ideas: nuevas,
+      [`votos.${caller.uid}.${idea}`]: voto,
+      ...(todas ? { estado: "cerrado", respondido_at: ahora, respondido_por: caller.uid } : {}),
+      updated_at: ahora,
+    });
+    return { aprobada: true, nueva, todas, ideas: nuevas };
   });
-  return { ok: true };
+  if (r.nueva) {
+    if (r.todas) await aprender(pid, proj, aprendizajeCliente(mes, r.ideas, null));
+    await enviarAviso(
+      {
+        destinatarios: (team.productor ?? []).filter((x) => x !== caller.uid),
+        titulo: r.todas ? `${proj.nombre ?? "El cliente"} aprobó el plan` : `${proj.nombre ?? "El cliente"} aprobó una idea`,
+        cuerpo: r.todas ? `Aprobó todas las ideas (${r.ideas.length})` : `“${r.nueva.titulo}” ya está en marcha`,
+        link: `/videos?plan=${planId(pid, mes)}`,
+        clave: `plan_idea_ok:${planId(pid, mes)}:${idea}`,
+        proyectoId: pid,
+      },
+      appUrl(req)
+    ).catch((e) => console.warn("[plan-votar] aviso", pid, e));
+  }
+  return { ok: true, aprobada: r.aprobada, cerrado: r.todas };
 }
 
 async function planResponder(req: VercelRequest) {
@@ -1660,6 +1725,11 @@ async function planResponder(req: VercelRequest) {
     if (!ideas.length) throw new HttpError(409, "El plan no tiene ideas");
     const out: IdeaPlan[] = [];
     for (const i of ideas) {
+      // Las que ya se aprobaron al toque quedan como están (no se duplica el video).
+      if (i.respuesta?.ok && i.video_id) {
+        out.push(i);
+        continue;
+      }
       const r = resp.get(i.id);
       if (!r || typeof r.ok !== "boolean") throw new HttpError(400, "Decinos qué te parece cada idea");
       const comentario = String(r.comentario ?? "").trim().slice(0, 600) || null;

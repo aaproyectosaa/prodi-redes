@@ -91,7 +91,10 @@ export function PlanMesCliente({
   const ideas = filas;
   const enviados = planes.filter((p) => p.estado === "enviado");
   const aResponder = filas.filter((f) => f.p.estado === "enviado");
-  const respondidas = aResponder.filter(({ k }) => {
+  /** Ya aprobada al tocar "Va" (tiene su video en marcha): no se puede cambiar. */
+  const yaAprobada = (i: IdeaPlan) => !!(i.respuesta?.ok && i.video_id);
+  const respondidas = aResponder.filter(({ k, i }) => {
+    if (yaAprobada(i)) return true;
     const r = resp[k];
     return r?.ok === true || (r?.ok === false && r.comentario.trim().length > 0);
   }).length;
@@ -99,8 +102,18 @@ export function PlanMesCliente({
     const nuevo = { ok: resp[k]?.ok ?? null, comentario: resp[k]?.comentario ?? "", ...patch };
     setResp((prev) => ({ ...prev, [k]: nuevo }));
     if (p.estado !== "enviado") return;
-    // Se guarda al toque (el texto, cuando deja de escribir) para que lo vean los demás.
-    const guardar = () => void votarIdea(p.proyecto_id, p.mes, id, nuevo.ok, nuevo.comentario || null).catch(() => {});
+    // Se guarda al toque (el texto, cuando deja de escribir) para que lo vean los demás. El "Va" aprueba la idea ya.
+    const guardar = () =>
+      void votarIdea(p.proyecto_id, p.mes, id, nuevo.ok, nuevo.comentario || null)
+        .then(() => {
+          if (patch.ok === true) toast.success("¡Listo! Esta idea ya está aprobada y en marcha");
+        })
+        .catch((e) => {
+          if (patch.ok === true) {
+            toast.error(e instanceof Error ? e.message : "No se pudo aprobar, probá de nuevo");
+            setResp((prev) => ({ ...prev, [k]: { ok: null, comentario: nuevo.comentario } }));
+          }
+        });
     window.clearTimeout(guardarComentario.current[k]);
     if ("comentario" in patch) guardarComentario.current[k] = window.setTimeout(guardar, 700);
     else guardar();
@@ -133,6 +146,11 @@ export function PlanMesCliente({
       // Un mes por vez (cada uno es su plan); el mensaje va con el primero.
       const total = { aprobadas: 0, cambios: 0 };
       for (const [n, p] of enviados.entries()) {
+        // Si ya aprobó todo con "Va", el plan se cerró solo: no hay nada más que mandar.
+        if ((p.ideas ?? []).every(yaAprobada)) {
+          total.aprobadas += (p.ideas ?? []).length;
+          continue;
+        }
         const r = await responderPlan(
           p.proyecto_id,
           p.mes,
@@ -203,9 +221,10 @@ export function PlanMesCliente({
                 )}
                 <div className="space-y-3">
                   {ideas.map(({ k, p, i }, n) => {
-                    const r = resp[k];
+                    const aprobada = yaAprobada(i);
+                    const r = aprobada ? { ok: true, comentario: "" } : resp[k];
                     const enviado = p.estado === "enviado";
-                    const falta = intentado && enviado && !(r?.ok === true || (r?.ok === false && r.comentario.trim()));
+                    const falta = intentado && enviado && !aprobada && !(r?.ok === true || (r?.ok === false && r.comentario.trim()));
                     const primeroDelMes = campania && (n === 0 || ideas[n - 1].p.mes !== p.mes);
                     return (
                       <div key={k} className="space-y-3">
@@ -237,7 +256,11 @@ export function PlanMesCliente({
                             )}
                           </div>
                         </div>
-                        {enviado ? (
+                        {enviado && aprobada ? (
+                          <p className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                            <Check className="h-4 w-4" /> Aprobada · ya está en marcha
+                          </p>
+                        ) : enviado ? (
                           <>
                             <div className="mt-3 grid grid-cols-2 gap-2">
                               <Button
