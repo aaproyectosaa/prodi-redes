@@ -88,13 +88,14 @@ export function PlanMesCliente({
     : `Tus videos de ${meses[0] ? nombreMes(meses[0]) : ""}`;
   // Cada idea con su plan (clave "mes|id": los ids se repiten entre meses).
   const filas: { k: string; p: PlanMes; i: IdeaPlan }[] = planes.flatMap((p) => (p.ideas ?? []).map((i) => ({ k: `${p.mes}|${i.id}`, p, i })));
-  const ideas = filas;
-  const enviados = planes.filter((p) => p.estado === "enviado");
-  const aResponder = filas.filter((f) => f.p.estado === "enviado");
-  /** Ya aprobada al tocar "Va" (tiene su video en marcha): no se puede cambiar. */
+  /** Ya aprobada al tocar "Va" (tiene su video en marcha). */
   const yaAprobada = (i: IdeaPlan) => !!(i.respuesta?.ok && i.video_id);
-  const respondidas = aResponder.filter(({ k, i }) => {
-    if (yaAprobada(i)) return true;
+  // Mientras se vota, las ya aprobadas salen de la lista: ya están en marcha.
+  const ideas = filas.filter((f) => !(f.p.estado === "enviado" && yaAprobada(f.i)));
+  const aprobadasYa = filas.length - ideas.length;
+  const enviados = planes.filter((p) => p.estado === "enviado");
+  const aResponder = ideas.filter((f) => f.p.estado === "enviado");
+  const respondidas = aResponder.filter(({ k }) => {
     const r = resp[k];
     return r?.ok === true || (r?.ok === false && r.comentario.trim().length > 0);
   }).length;
@@ -106,7 +107,7 @@ export function PlanMesCliente({
     const guardar = () =>
       void votarIdea(p.proyecto_id, p.mes, id, nuevo.ok, nuevo.comentario || null)
         .then(() => {
-          if (patch.ok === true) toast.success("¡Listo! Esta idea ya está aprobada y en marcha");
+          if (patch.ok === true) toast.success("¡Listo! Idea aprobada: ya está en marcha");
         })
         .catch((e) => {
           if (patch.ok === true) {
@@ -219,6 +220,12 @@ export function PlanMesCliente({
                     {plan.nota_equipo}
                   </div>
                 )}
+                {aprobadasYa > 0 && enviados.length > 0 && (
+                  <p className="flex items-center gap-1.5 rounded-xl bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                    <Check className="h-4 w-4 shrink-0" />
+                    {aprobadasYa === 1 ? "1 idea ya está aprobada y en marcha" : `${aprobadasYa} ideas ya están aprobadas y en marcha`}
+                  </p>
+                )}
                 <div className="space-y-3">
                   {ideas.map(({ k, p, i }, n) => {
                     const aprobada = yaAprobada(i);
@@ -226,11 +233,12 @@ export function PlanMesCliente({
                     const enviado = p.estado === "enviado";
                     const falta = intentado && enviado && !aprobada && !(r?.ok === true || (r?.ok === false && r.comentario.trim()));
                     const primeroDelMes = campania && (n === 0 || ideas[n - 1].p.mes !== p.mes);
+                    const delMes = ideas.filter((x) => x.p.mes === p.mes).length;
                     return (
                       <div key={k} className="space-y-3">
                       {primeroDelMes && (
                         <p className="pt-2 text-xs font-bold uppercase tracking-wide text-primary">
-                          Se publican en {nombreMes(p.mes)} · {(p.ideas ?? []).length} video{(p.ideas ?? []).length === 1 ? "" : "s"}
+                          Se publican en {nombreMes(p.mes)} · {delMes} video{delMes === 1 ? "" : "s"}
                         </p>
                       )}
                       <div

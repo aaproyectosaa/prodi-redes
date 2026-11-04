@@ -1688,7 +1688,8 @@ async function planVotar(req: VercelRequest) {
     if (r.todas) await aprender(pid, proj, aprendizajeCliente(mes, r.ideas, null));
     await enviarAviso(
       {
-        destinatarios: (team.productor ?? []).filter((x) => x !== caller.uid),
+        // A todos los productores, también a quien la aprobó (le queda el aviso con el link al video).
+        destinatarios: team.productor ?? [],
         titulo: r.todas ? `${proj.nombre ?? "El cliente"} aprobó el plan` : `${proj.nombre ?? "El cliente"} aprobó una idea`,
         cuerpo: r.todas ? `Aprobó todas las ideas (${r.ideas.length})` : `“${r.nueva.titulo}” ya está en marcha`,
         link: `/videos?plan=${planId(pid, mes)}`,
