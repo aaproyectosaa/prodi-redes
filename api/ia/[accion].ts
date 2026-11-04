@@ -1639,8 +1639,10 @@ async function planVotar(req: VercelRequest) {
     nombre: caller.nombre || "Cliente",
     at: new Date().toISOString(),
   };
-  // Un "Va" del cliente aprueba esa idea en el momento (se crea el video), sin esperar a que conteste las demás.
-  const aprueba = voto.ok === true && caller.role === "cliente";
+  // Un "Va" aprueba esa idea en el momento (se crea el video), sin esperar a que conteste las demás.
+  // Vale igual si lo toca el admin desde la vista del cliente.
+  const aprueba = voto.ok === true;
+  const porEquipo = caller.role !== "cliente";
   const proj: Record<string, any> = aprueba ? (await db.collection("projects").doc(pid).get()).data() ?? {} : {};
   const team = (proj.team_roles ?? {}) as Record<string, string[]>;
   const r = await db.runTransaction(async (tx) => {
@@ -1662,7 +1664,7 @@ async function planVotar(req: VercelRequest) {
         team,
         mes,
         { titulo: i.titulo, idea: i.idea, objetivo: i.objetivo, pedido_por: caller.uid, filma_cliente: filmaElCliente(proj) },
-        "Idea del plan del mes aprobada por el cliente"
+        porEquipo ? "Idea del plan del mes aprobada (la marcó el equipo)" : "Idea del plan del mes aprobada por el cliente"
       ),
       pedido_cliente: false,
       plan_idea_id: i.id,
