@@ -94,6 +94,8 @@ const ChatSoloConRol = () => {
   const { role, loading } = useUserProfileContext();
   if (loading || !role) return <Cargando />;
   if (role === "pending") return null;
+  // En formación no tiene chat: solo la Academia.
+  if (role === "formacion") return <Navigate to="/academia" replace />;
   return <Chat />;
 };
 
@@ -135,7 +137,7 @@ const App = () => (
                 <Route path="/cobros" element={<RequireRole roles={["admin", "administracion"]}><Cobros /></RequireRole>} />
                 <Route path="/pagos-equipo" element={<RequireRole roles={["admin", "administracion"]}><PagosEquipo /></RequireRole>} />
                 <Route path="/mis-ganancias" element={<RequireRole roles={["productor", "editor", "pauta", "diseno", "socio"]}><MisGanancias /></RequireRole>} />
-                <Route path="/academia" element={<RequireRole roles={["admin", "productor", "editor", "pauta", "diseno"]}><Academia /></RequireRole>} />
+                <Route path="/academia" element={<RequireRole roles={["admin", "productor", "editor", "pauta", "diseno", "formacion"]}><Academia /></RequireRole>} />
                 <Route path="/socio" element={<RequireRole roles={["socio"]}><Socio /></RequireRole>} />
                 <Route path="/socios" element={<RequireRole roles={["admin"]}><Socios /></RequireRole>} />
                 <Route path="/postulantes" element={<RequireRole roles={["admin"]}><Postulantes /></RequireRole>} />

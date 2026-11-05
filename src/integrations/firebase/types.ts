@@ -21,6 +21,7 @@ export type UserRole =
   | "socio" // Socio comercial: trae clientes y cobra comisión (de afuera o del equipo)
   | "ventas" // Ventas: trabaja el CRM de Prodi (leads y presupuestos); se suma a otro rol
   | "contacto" // Contacto de un cliente que usa solo Prodi Chat (proyecto_id = su cliente)
+  | "formacion" // Productora en formación: solo ve la Academia hasta que el admin le cambia el rol
   // Roles del modelo anterior. Se leen para no romper datos viejos, pero ya
   // no se asignan: un usuario con alguno de estos queda "pendiente" hasta que
   // el admin le asigne un rol nuevo.

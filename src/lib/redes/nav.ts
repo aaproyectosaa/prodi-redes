@@ -247,6 +247,9 @@ export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {
           ],
         },
       ];
+    case "formacion":
+      // Productora en formación: solo la Academia, hasta que el admin le cambia el rol.
+      return [{ items: [{ label: "Academia", icon: GraduationCap, path: "/academia", mobile: true }] }];
     case "socio":
       // Socio comercial: sus empresarios, su link y lo que gana. Nada más del sistema.
       return [

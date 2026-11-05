@@ -318,6 +318,12 @@ export function bienvenidaDe(role: string | undefined, enChat: boolean): Diaposi
         ...chat,
         avisos,
       ];
+    case "formacion":
+      return [
+        { titulo: "Tu formación en Prodi", texto: "En la Academia está tu recorrido: 4 semanas para aprender a filmar y editar con el celular.", anim: "videos" },
+        { titulo: "Subí tus ejercicios", texto: "Cada semana tiene un ejercicio. Lo subís desde la lección y Lucas lo corrige con marcas en el video.", anim: "subir-material" },
+        avisos,
+      ];
     default:
       return [
         { titulo: "Todo el negocio a la vista", texto: "Clientes, videos, cobros y equipo, en un solo lugar.", anim: "videos" },

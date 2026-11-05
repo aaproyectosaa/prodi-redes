@@ -192,8 +192,8 @@ export function ReproductorMarcas({
 }
 
 /** Para edición: las correcciones en la línea de tiempo; tocando una salta a ese segundo. */
-export function MarcasEdicion({ video, marcas }: { video: Video; marcas: MarcaCorreccion[] }) {
-  const att = versionActual(video);
+export function MarcasEdicion({ video, attachment, marcas }: { video?: Video; attachment?: DriveAttachmentRef | null; marcas: MarcaCorreccion[] }) {
+  const att = attachment ?? (video ? versionActual(video) : null);
   const irRef = useRef<((t: number) => void) | null>(null);
   const [activa, setActiva] = useState<number | null>(null);
   const orden = useMemo(() => [...marcas].sort((a, b) => a.t - b.t), [marcas]);
@@ -236,6 +236,7 @@ interface MarcaEditable extends MarcaCorreccion {
  */
 export function CorreccionesDialog({
   video,
+  attachment,
   open,
   onOpenChange,
   title,
@@ -244,7 +245,9 @@ export function CorreccionesDialog({
   confirmLabel,
   onConfirm,
 }: {
-  video: Video;
+  /** El video del circuito (se corrige su última versión) o, para otra cosa (un ejercicio de la Academia), el archivo. */
+  video?: Video;
+  attachment?: DriveAttachmentRef | null;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   title: string;
@@ -253,7 +256,7 @@ export function CorreccionesDialog({
   confirmLabel: string;
   onConfirm: (nota: string, marcas: MarcaCorreccion[]) => Promise<void>;
 }) {
-  const att = versionActual(video);
+  const att = attachment ?? (video ? versionActual(video) : null);
   const [marcas, setMarcas] = useState<MarcaEditable[]>([]);
   const [nota, setNota] = useState("");
   const [saving, setSaving] = useState(false);

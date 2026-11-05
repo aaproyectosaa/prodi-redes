@@ -63,6 +63,11 @@ export const ROLES: RoleInfo[] = [
     description: "Trabaja el CRM de Prodi: leads, seguimiento y presupuestos. No ve la plata ni la configuración.",
   },
   {
+    value: "formacion",
+    label: "Productora en formación",
+    description: "Hace el recorrido de la Academia y solo ve la Academia. Cuando lo aprueba, le cambiás el rol.",
+  },
+  {
     value: "socio",
     label: "Vendedor a comisión",
     description: "Pasa clientes y cobra comisión cuando se hacen clientes. Ve solo los suyos y lo que gana.",
@@ -156,6 +161,8 @@ export const defaultRouteForRole = (role: UserRole | undefined): string => {
       return "/socio";
     case "ventas":
       return "/web";
+    case "formacion":
+      return "/academia";
     default:
       return "/auth";
   }

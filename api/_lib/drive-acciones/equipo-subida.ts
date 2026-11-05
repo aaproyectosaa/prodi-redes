@@ -17,8 +17,8 @@ import { ensureFolder, ROOT_FOLDER_NAME } from "../drive-server";
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
 /** Los mismos que antes podían subir con el acceso de la app. */
-const ROLES = ["admin", "productor", "editor", "pauta", "diseno"];
-const COLECCIONES = ["videos", "piezas_ia", "reuniones"];
+const ROLES = ["admin", "productor", "editor", "pauta", "diseno", "formacion"];
+const COLECCIONES = ["videos", "piezas_ia", "reuniones", "academia_entregas"];
 const MAX_GB = 10;
 /** Nada que se pueda ejecutar o abrir como página. */
 const BLOQUEADOS = /\.(exe|msi|bat|cmd|com|scr|pif|ps1|vbs|js|mjs|jar|sh|apk|app|dll|html?|xhtml|svg|hta)$/i;
@@ -46,6 +46,13 @@ async function destino(caller: Caller, coleccion: unknown, docId: unknown): Prom
   const d = (await db.collection(coleccion).doc(docId).get()).data();
   if (!d) throw new HttpError(404, "Ya no existe");
   const pid = typeof d.proyecto_id === "string" && d.proyecto_id ? d.proyecto_id : null;
+  if (coleccion === "academia_entregas") {
+    // Ejercicio de la Academia: solo lo sube quien lo hace (o el admin), y va a Progreso/Academia - <persona>.
+    if (d.uid !== caller.uid && caller.role !== "admin") throw new HttpError(403, "Este ejercicio no es tuyo");
+    return { coleccion, id: docId, cliente: `Academia - ${String(d.nombre ?? "Sin nombre")}` };
+  }
+  // En formación solo sube sus ejercicios.
+  if (caller.role === "formacion") throw new HttpError(403, "Solo podés subir tus ejercicios");
   if (coleccion === "reuniones") {
     // Reunión: la graba quien participa (o el admin); si es de un cliente, también su equipo.
     const participa = Array.isArray(d.participantes) && d.participantes.includes(caller.uid);

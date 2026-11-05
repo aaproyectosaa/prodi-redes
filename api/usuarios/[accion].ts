@@ -28,11 +28,12 @@ import { mailAvisoHtml } from "../_lib/mail-aviso";
 import { borrarEjemplo, cargarEjemplo } from "../_lib/ejemplo";
 import { anotarMinuto, anotarMinutosPasados, nuevoToken, resumenTiempo, tieneToken, uidDelToken } from "../_lib/mi-tiempo";
 import { rachaVacia, rachasDeRespuesta } from "../_lib/racha";
+import { enviarAviso, usuariosConRol } from "../_lib/notify";
 import { avisarAdmin, comisionEstandar, configValida } from "../_lib/socios";
 
 export const config = { maxDuration: 60 };
 
-const ROLES = ["admin", "productor", "editor", "pauta", "diseno", "administracion", "programador", "ventas", "socio", "cliente", "pending"];
+const ROLES = ["admin", "productor", "editor", "pauta", "diseno", "administracion", "programador", "ventas", "socio", "cliente", "formacion", "pending"];
 const ROL_EN_CLIENTE: Record<string, string> = { productor: "productor", editor: "editor", pauta: "pauta", diseno: "diseno", cliente: "cliente" };
 
 /**
@@ -379,6 +380,42 @@ async function chatBorrar(req: VercelRequest) {
   return { ok: true, mensajes };
 }
 
+/**
+ * Academia: avisa de una entrega. Si la manda quien la hizo, les llega a los super admin para revisarla;
+ * si la revisa el admin (aprobada o a corregir), le llega a quien la hizo.
+ */
+async function academiaAviso(req: VercelRequest, caller: Caller) {
+  const b = body<{ entrega_id?: string }>(req);
+  const id = String(b.entrega_id ?? "");
+  if (!/^[A-Za-z0-9_-]{1,160}$/.test(id)) throw new HttpError(400, "Falta la entrega");
+  const e = (await adminDb().collection("academia_entregas").doc(id).get()).data();
+  if (!e) throw new HttpError(404, "Ya no existe");
+  const tema = String(e.item_titulo ?? "un ejercicio");
+  if (e.uid === caller.uid && e.estado === "enviada") {
+    const admins = await usuariosConRol(["admin"]);
+    await enviarAviso(
+      { destinatarios: admins, titulo: `Ejercicio para revisar · ${String(e.nombre ?? caller.nombre)}`, cuerpo: tema, link: `/academia?entrega=${id}`, clave: `academia:${id}` },
+      appUrl(req)
+    );
+    return { ok: true };
+  }
+  if (caller.role === "admin" && (e.estado === "aprobada" || e.estado === "a_corregir")) {
+    const ok = e.estado === "aprobada";
+    await enviarAviso(
+      {
+        destinatarios: [String(e.uid)],
+        titulo: ok ? "¡Ejercicio aprobado!" : "Tu ejercicio tiene correcciones",
+        cuerpo: ok ? tema : `${tema}: mirá las marcas en el video y volvé a subirlo.`,
+        link: `/academia?entrega=${id}`,
+        clave: `academia-rev:${id}`,
+      },
+      appUrl(req)
+    );
+    return { ok: true };
+  }
+  throw new HttpError(409, "No hay nada para avisar");
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
@@ -431,6 +468,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       else if (accion === "contacto-invitar") res.status(200).json(await contactoInvitar(req, caller));
       else if (accion === "contacto-clave") res.status(200).json(await contactoClave(req, caller));
       else res.status(404).json({ error: "Acción desconocida" });
+      return;
+    }
+    if (accion === "academia-aviso") {
+      const caller = await requireCaller(req, ["admin", "formacion", "productor", "editor", "pauta", "diseno"]);
+      res.status(200).json(await academiaAviso(req, caller));
       return;
     }
     const admin = await requireCaller(req, ["admin"]);

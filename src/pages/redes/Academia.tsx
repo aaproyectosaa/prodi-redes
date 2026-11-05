@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
@@ -10,6 +11,8 @@ import {
   ListChecks,
   Lock,
   Megaphone,
+  PencilLine,
+  Route as RouteIcon,
   Palette,
   Play,
   ShieldCheck,
@@ -27,6 +30,10 @@ import { useAppData } from "@/contexts/app-data-context";
 import { db } from "@/integrations/firebase/client";
 import { collection, doc, onSnapshot, updateDoc } from "@/lib/db";
 import { avanceDe, completarLeccion, CURSOS, cursosDe, useProgresoAcademia, type Curso, type Leccion, type ProgresoAcademia, type RolCurso } from "@/lib/redes/academia";
+import { avanceRecorrido, useEntregas, useRecorridos, type EntregaAcademia, type ProgresoRecorrido, type Recorrido } from "@/lib/redes/academiaRecorrido";
+import { VerRecorrido } from "@/components/redes/academia/Recorrido";
+import { EntregasAdmin } from "@/components/redes/academia/EntregasAdmin";
+import { EditorRecorrido } from "@/components/redes/academia/EditorRecorrido";
 import { cn } from "@/lib/utils";
 
 // Academia Prodi: cursos por rol con lecciones cortas (video animado, lo importante, paso a paso y una pregunta).
@@ -421,7 +428,7 @@ function VerCurso({ curso, progreso, uid, libre }: { curso: Curso; progreso: Pro
 }
 
 /** Admin: el avance de cada persona del equipo y el modo "en capacitación". */
-function EquipoAcademia() {
+function EquipoAcademia({ recorridos, entregas }: { recorridos: Recorrido[]; entregas: EntregaAcademia[] | null }) {
   const { profiles } = useAppData();
   const [progresos, setProgresos] = useState<Record<string, ProgresoAcademia>>({});
   useEffect(
@@ -436,7 +443,7 @@ function EquipoAcademia() {
   const equipo = useMemo(
     () =>
       profiles
-        .filter((p) => p.activo !== false && ["productor", "editor", "pauta", "diseno"].some((r) => p.role === r || (p.roles_extra ?? []).includes(r as never)))
+        .filter((p) => p.activo !== false && ["productor", "editor", "pauta", "diseno", "formacion"].some((r) => p.role === r || (p.roles_extra ?? []).includes(r as never)))
         .sort((a, b) => Number(!!b.en_capacitacion) - Number(!!a.en_capacitacion) || a.nombre.localeCompare(b.nombre)),
     [profiles]
   );
@@ -475,9 +482,35 @@ function EquipoAcademia() {
                   <p className="truncate font-semibold">{p.nombre}</p>
                   {p.en_capacitacion && <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">En capacitación</p>}
                 </div>
-                <Switch checked={!!p.en_capacitacion} onCheckedChange={(v) => cambiar(p.id, v)} title="En capacitación" />
+                {p.role === "formacion" ? (
+                  <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[10px] font-semibold text-primary">En formación</span>
+                ) : (
+                  <Switch checked={!!p.en_capacitacion} onCheckedChange={(v) => cambiar(p.id, v)} title="En capacitación" />
+                )}
               </div>
               <div className="space-y-2">
+                {recorridos
+                  .filter((r) => r.roles.includes(p.role ?? ""))
+                  .map((r) => {
+                    const a = avanceRecorrido(r, progresos[p.id] as ProgresoRecorrido, (entregas ?? []).filter((e) => e.uid === p.id));
+                    const hechas = a.aprobados + Number(a.examen);
+                    return (
+                      <div key={r.id} className="flex items-center gap-3">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-fuchsia-500 text-white">
+                          <RouteIcon className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="flex items-center justify-between text-xs">
+                            <span className="font-medium">{r.titulo}</span>
+                            <span className={cn("text-muted-foreground", a.completo && "font-semibold text-emerald-600 dark:text-emerald-400")}>{a.completo ? "Completo" : `${a.aprobados}/${a.total} semanas`}</span>
+                          </p>
+                          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
+                            <div className={cn("h-full rounded-full bg-gradient-to-r", a.completo ? "from-emerald-500 to-teal-500" : "from-primary to-fuchsia-500")} style={{ width: `${(hechas / (a.total + 1)) * 100}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 {cursos.map((c) => {
                   const a = avanceDe(c, progresos[p.id]);
                   const Icono = ICONO[c.rol];
@@ -507,19 +540,71 @@ function EquipoAcademia() {
   );
 }
 
+/** Admin: un recorrido para revisar los ejercicios, verlo como lo hace la persona o editar el contenido. */
+function RecorridoAdmin({ recorrido, entregas, progreso, uid, nombre, abrir }: { recorrido: Recorrido; entregas: EntregaAcademia[] | null; progreso: ProgresoRecorrido | null; uid: string; nombre: string; abrir: string | null }) {
+  const [sub, setSub] = useState<"entregas" | "ver" | "editar">("entregas");
+  const pendientes = (entregas ?? []).filter((e) => e.recorrido_id === recorrido.id && e.estado === "enviada").length;
+  const opciones = [
+    { id: "entregas" as const, label: pendientes ? `Para revisar (${pendientes})` : "Ejercicios", icono: ListChecks },
+    { id: "ver" as const, label: "Ver el recorrido", icono: Play },
+    { id: "editar" as const, label: "Editar contenido", icono: PencilLine },
+  ];
+  return (
+    <div className="space-y-5">
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
+        {opciones.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            onClick={() => setSub(o.id)}
+            className={cn("flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-semibold", sub === o.id ? "border-primary bg-primary/10 text-primary" : "bg-card text-muted-foreground hover:text-foreground")}
+          >
+            <o.icono className="h-4 w-4" /> {o.label}
+          </button>
+        ))}
+      </div>
+      {sub === "entregas" ? (
+        <EntregasAdmin recorrido={recorrido} entregas={entregas} abrir={abrir} />
+      ) : sub === "ver" ? (
+        // Vista previa: el admin la ve toda abierta.
+        <VerRecorrido recorrido={recorrido} progreso={progreso} entregas={(entregas ?? []).filter((e) => e.uid === uid)} uid={uid} nombre={nombre} libre />
+      ) : (
+        <EditorRecorrido recorrido={recorrido} />
+      )}
+    </div>
+  );
+}
+
 export default function Academia() {
   const { user, role, roles, profile } = useUserProfileContext();
   const esAdmin = role === "admin";
-  const mios = cursosDe([role ?? "", ...(roles ?? [])]);
-  const [vista, setVista] = useState<string>(esAdmin ? "equipo" : mios[0]?.rol ?? "");
+  const misRoles = [role ?? "", ...(roles ?? [])];
+  const mios = cursosDe(misRoles);
+  const todosLosRecorridos = useRecorridos();
+  const recorridos = esAdmin ? todosLosRecorridos : todosLosRecorridos.filter((r) => r.roles.some((x) => misRoles.includes(x)));
+  const entregas = useEntregas(user?.uid, esAdmin);
+  // Link de un aviso: /academia?entrega=<id> abre ese ejercicio (el admin, para revisarlo).
+  const [params] = useSearchParams();
+  const entregaLink = params.get("entrega");
+  const deLink = entregaLink ? entregas?.find((e) => e.id === entregaLink) ?? null : null;
+  const [vista, setVista] = useState<string>(esAdmin ? "equipo" : recorridos[0] ? `rec:${recorridos[0].id}` : mios[0]?.rol ?? "");
+  useEffect(() => {
+    if (deLink) setVista(`rec:${deLink.recorrido_id}`);
+  }, [deLink?.id, deLink?.recorrido_id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    // Cuando cargan los recorridos, quien no tiene curso entra directo al suyo.
+    if (!vista && recorridos[0]) setVista(`rec:${recorridos[0].id}`);
+  }, [vista, recorridos]);
   const progreso = useProgresoAcademia(user?.uid);
   // El admin ve todos los cursos (para revisarlos) y puede abrir cualquier lección.
   const cursos = esAdmin ? CURSOS : mios;
   const curso = cursos.find((c) => c.rol === vista);
+  const recorrido = recorridos.find((r) => `rec:${r.id}` === vista);
+  const nombre = profile?.nombre ?? "";
 
   return (
     <PageShell title="Academia Prodi" subtitle="Lo que hay que saber para trabajar en Prodi, en lecciones cortas con video.">
-      {profile?.en_capacitacion && !esAdmin && (
+      {profile?.en_capacitacion && !esAdmin && role !== "formacion" && (
         <div className="mb-5 flex items-start gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/[0.08] p-4 text-sm">
           <GraduationCap className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
           <p>
@@ -527,7 +612,7 @@ export default function Academia() {
           </p>
         </div>
       )}
-      {(esAdmin || cursos.length > 1) && (
+      {(esAdmin || cursos.length + recorridos.length > 1) && (
         <div className="mb-5 flex gap-1.5 overflow-x-auto pb-1">
           {esAdmin && (
             <button
@@ -538,6 +623,19 @@ export default function Academia() {
               <GraduationCap className="h-4 w-4" /> El equipo
             </button>
           )}
+          {recorridos.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => setVista(`rec:${r.id}`)}
+              className={cn(
+                "flex h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-semibold transition-colors",
+                vista === `rec:${r.id}` ? "border-transparent bg-gradient-to-r from-primary to-fuchsia-500 text-white shadow-md" : "bg-card text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <RouteIcon className="h-4 w-4" /> {r.titulo}
+            </button>
+          ))}
           {cursos.map((c) => {
             const Icono = ICONO[c.rol];
             return (
@@ -557,7 +655,22 @@ export default function Academia() {
         </div>
       )}
       {vista === "equipo" && esAdmin ? (
-        <EquipoAcademia />
+        <EquipoAcademia recorridos={todosLosRecorridos} entregas={entregas} />
+      ) : recorrido && user ? (
+        esAdmin ? (
+          <RecorridoAdmin key={recorrido.id} recorrido={recorrido} entregas={entregas} progreso={progreso as ProgresoRecorrido | null} uid={user.uid} nombre={nombre} abrir={deLink?.recorrido_id === recorrido.id ? deLink.id : null} />
+        ) : (
+          <VerRecorrido
+            key={`${recorrido.id}-${deLink?.id ?? ""}`}
+            recorrido={recorrido}
+            progreso={progreso as ProgresoRecorrido | null}
+            entregas={entregas}
+            uid={user.uid}
+            nombre={nombre}
+            libre={false}
+            irA={deLink?.item_id ?? null}
+          />
+        )
       ) : curso && user ? (
         <VerCurso key={curso.rol} curso={curso} progreso={progreso} uid={user.uid} libre={esAdmin} />
       ) : (

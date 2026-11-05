@@ -40,6 +40,10 @@ async function enCapacitacion(c: Contexto): Promise<boolean> {
 /** De quién es un lead de Prodi: a quien se lo asignó el admin o, si no, quien lo cargó a mano. */
 export const duenoLead = (d: Data) => String(d.vendedor_id || d.creado_por || "");
 const ACTIVOS = [...TEAM, "administracion", "programador", "cliente"];
+/** Productora en formación: solo la Academia (su progreso, sus entregas y el contenido de los recorridos). */
+const enFormacion = (c: Contexto) => c.role === "formacion";
+/** Lo que la persona en formación escribe en su entrega (el resto, como la devolución y las marcas, es del admin). */
+const ENTREGA_ALUMNO = ["uid", "nombre", "recorrido_id", "modulo_id", "item_id", "item_titulo", "estado", "attachments_crudo", "nota_alumno", "enviada_at", "created_at", "updated_at"];
 
 /**
  * Contacto (solo chat): persona de un cliente que usa solo Prodi Chat. No lee nada del sistema (clientes, videos,
@@ -353,7 +357,7 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
     return esAdmin(c);
   }
   // Documentos que no existen: se puede saber que no existen (así la app espera a que aparezcan).
-  if (d === null) return activo(c) || esContacto(c) || id === c.uid;
+  if (d === null) return activo(c) || esContacto(c) || id === c.uid || enFormacion(c);
   switch (base) {
     case "profiles":
       return esTeam(c) || esFinanzas(c) || c.uid === id;
@@ -450,6 +454,10 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
       return equipoDe(c, d.proyecto_id) || clienteDe(c, d.proyecto_id);
     case "academia": // progreso de la Academia: cada uno el suyo (el admin, todos)
       return esAdmin(c) || c.uid === id;
+    case "academia_recorridos": // contenido de los recorridos (lo edita el admin): el equipo y quien está en formación
+      return esTeam(c) || esFinanzas(c) || enFormacion(c);
+    case "academia_entregas": // ejercicios de la Academia: cada uno los suyos (el admin, todos)
+      return esAdmin(c) || d.uid === c.uid;
     case "prodi_pedidos": // pedidos a @prodi (límite por minuto): solo el servidor
     case "whatsapp_verifications": // código de verificación (hasheado): solo lo usa el servidor
     case "notification_queue":
@@ -744,7 +752,16 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
     case "academia":
       // Cada uno marca sus lecciones (solo eso); el admin puede reiniciarlo.
       if (esAdmin(c)) return true;
-      return c.uid === id && !borra && soloCambia(antes, despues, ["completadas", "actualizado_at"]);
+      return c.uid === id && !borra && soloCambia(antes, despues, ["completadas", "checklist", "cuestionarios", "actualizado_at"]);
+    case "academia_recorridos":
+      return esAdmin(c);
+    case "academia_entregas": {
+      // Cada uno sube y manda a revisar los suyos; aprobar, devolver y las marcas son del admin. Lo aprobado no se toca.
+      if (esAdmin(c)) return true;
+      if (borra || despues!.uid !== c.uid || (antes && (antes.uid !== c.uid || antes.estado === "aprobada"))) return false;
+      if (!["borrador", "enviada"].includes(String(despues!.estado ?? "borrador"))) return false;
+      return soloCambia(antes, despues, ENTREGA_ALUMNO);
+    }
     case "crm_galeria": // se cargan por /api/drive/crm-archivo; desde la app solo se borran
       return !despues && (equipoDe(c, antes!.proyecto_id) || clienteDe(c, antes!.proyecto_id));
     case "presupuestos": // los arma el admin (o ventas, solo los suyos); lo aceptado lo escribe el servidor

@@ -62,6 +62,15 @@ async function enChatDe(uid: string, fileId: string): Promise<boolean> {
   return m.rows.length > 0;
 }
 
+/** ¿Es un archivo de una entrega suya de la Academia? */
+async function enSusEntregas(uid: string, fileId: string): Promise<boolean> {
+  const r = await getPool().query(
+    "select 1 from documentos where coleccion = 'academia_entregas' and data->>'uid' = $1 and data @> $2::jsonb limit 1",
+    [uid, JSON.stringify({ attachments_crudo: [{ drive_file_id: fileId }] })]
+  );
+  return r.rows.length > 0;
+}
+
 /**
  * ¿Puede ver este archivo? Tiene que estar en un video (o en su material elegido), pieza, reunión, en un chat del que es miembro o en la marca de un cliente
  * al que tenga acceso. Una sola consulta (usa el índice GIN de `data`).
@@ -72,6 +81,8 @@ export async function puedeVerArchivo(caller: Caller, fileId: string): Promise<b
   if (caller.role === "contacto") return enChatDe(caller.uid, fileId);
   // Lo que se mandó en sus chats lo ve cualquiera de ese chat (también Programación).
   if (await enChatDe(caller.uid, fileId)) return true;
+  // Sus ejercicios de la Academia (los suyos, nada más).
+  if (await enSusEntregas(caller.uid, fileId)) return true;
   if (!caller.roles.some((r) => ASIGNABLES.includes(r))) return false;
   const ref = [{ drive_file_id: fileId }];
   const r = await getPool().query(
