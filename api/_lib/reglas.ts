@@ -22,6 +22,8 @@ export interface Contexto {
   chats: Map<string, Data | null>;
   /** Con quién comparte algún chat (se calcula la primera vez que hace falta). */
   companeros?: Set<string>;
+  /** Vendedor de un cliente: la empresa a la que pertenece (profile.proyecto_id). Solo ve las visitas de ahí. */
+  empresaVendedor?: string | null;
   ex: Pick<PoolClient, "query">;
 }
 
@@ -51,6 +53,11 @@ const ENTREGA_ALUMNO = ["uid", "nombre", "recorrido_id", "modulo_id", "item_id",
  * chatean con él, sus tareas y sus avisos. Puede abrir privados y armar grupos solo con gente con la que ya comparte un chat.
  */
 const esContacto = (c: Contexto) => c.role === "contacto";
+/**
+ * Vendedor de un cliente (ej. DS Ingeniería): carga las visitas a fábricas con sus videos y fotos. No lee nada más del
+ * sistema: su perfil, sus avisos y las visitas de su empresa (las de todos los vendedores, con el nombre de quién la subió).
+ */
+const esVendedor = (c: Contexto) => c.role === "vendedor";
 const esAdmin = (c: Contexto) => c.role === "admin";
 const tiene = (c: Contexto, r: string) => c.roles.includes(r);
 const esTeam = (c: Contexto) => c.roles.some((r) => TEAM.includes(r));
@@ -357,7 +364,7 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
     return esAdmin(c);
   }
   // Documentos que no existen: se puede saber que no existen (así la app espera a que aparezcan).
-  if (d === null) return activo(c) || esContacto(c) || id === c.uid || enFormacion(c);
+  if (d === null) return activo(c) || esContacto(c) || esVendedor(c) || id === c.uid || enFormacion(c);
   switch (base) {
     case "profiles":
       return esTeam(c) || esFinanzas(c) || c.uid === id;
@@ -369,6 +376,10 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
       return equipoDe(c, d.proyecto_id) || clienteDe(c, d.proyecto_id);
     case "piezas_ia":
       return equipoDe(c, d.proyecto_id) || esFinanzas(c) || clienteDe(c, d.proyecto_id);
+    case "visitas_vendedores":
+      // Visitas de los vendedores del cliente: el equipo de ese cliente, el cliente y los vendedores de esa empresa.
+      // Las escribe solo el servidor (/api/drive/visita-*).
+      return equipoDe(c, d.proyecto_id) || clienteDe(c, d.proyecto_id) || (esVendedor(c) && !!c.empresaVendedor && d.proyecto_id === c.empresaVendedor);
     case "programados":
       // Mensajes programados del chat: cada uno ve los suyos.
       return d.by === c.uid;
@@ -813,7 +824,12 @@ export async function contexto(ex: Pick<PoolClient, "query">, uid: string, role:
       }
     }
   }
-  return { uid, role, roles, misClientes, misProyectos, chats: new Map(), ex };
+  let empresaVendedor: string | null = null;
+  if (role === "vendedor") {
+    const r = await ex.query("select data->>'proyecto_id' as pid from documentos where coleccion = 'profiles' and id = $1", [uid]);
+    empresaVendedor = r.rows[0]?.pid || null;
+  }
+  return { uid, role, roles, misClientes, misProyectos, chats: new Map(), empresaVendedor, ex };
 }
 
 /** Saca los campos que solo usa el servidor (tokens cifrados de Drive, etc.). */

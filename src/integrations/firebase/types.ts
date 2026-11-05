@@ -21,6 +21,7 @@ export type UserRole =
   | "socio" // Socio comercial: trae clientes y cobra comisión (de afuera o del equipo)
   | "ventas" // Ventas: trabaja el CRM de Prodi (leads y presupuestos); se suma a otro rol
   | "contacto" // Contacto de un cliente que usa solo Prodi Chat (proyecto_id = su cliente)
+  | "vendedor" // Vendedor de un cliente (ej. DS): carga visitas a fábricas con videos y fotos (proyecto_id = su empresa)
   | "formacion" // Productora en formación: solo ve la Academia hasta que el admin le cambia el rol
   // Roles del modelo anterior. Se leen para no romper datos viejos, pero ya
   // no se asignan: un usuario con alguno de estos queda "pendiente" hasta que
@@ -338,6 +339,8 @@ export interface Project {
     zona_pauta?: "chica" | "grande" | "nacional" | null;
     ciudad_pauta?: string | null;
   } | null;
+  /** Visitas de vendedores (ej. DS): sus vendedores cargan visitas a fábricas con videos y fotos. Lo prende el admin. */
+  visitas_activo?: boolean;
   /** CRM (beta): si el cliente ve "Mis contactos". Lo prende el admin. */
   crm_activo?: boolean;
   /** Lo que contrató además de Redes (web, sistema ERP, app, mantenimiento): cada uno suma un módulo a su panel. */

@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PageShell, Section, EmptyState } from "@/components/redes/PageShell";
+import { VendedoresCliente } from "@/components/redes/visitas/VendedoresCliente";
 import { VideoCard } from "@/components/redes/VideoCard";
 import { PlanUsage } from "@/components/redes/PlanUsage";
 import { PedirPiezaDialog, PiezaAprobarDialog, PiezaClienteCard } from "@/components/redes/PiezaDialogs";
@@ -544,6 +545,16 @@ export default function ClientePortal() {
         <TabsContent value="negocio" className="space-y-6">
           <TarjetaPerfil cliente={cliente} onCompletar={() => document.getElementById("datos-marca")?.scrollIntoView({ behavior: "smooth", block: "start" })} />
           <DatosMarcaCliente cliente={cliente} />
+          {/* Sus vendedores (si tiene las visitas a fábricas prendidas): los suma él mismo. */}
+          {cliente.visitas_activo && (
+            <div className="space-y-2">
+              <div>
+                <p className="font-semibold">Tus vendedores</p>
+                <p className="text-sm text-muted-foreground">Cargan desde el celular las visitas a fábricas con videos y fotos. Con eso armamos tus videos.</p>
+              </div>
+              <VendedoresCliente cliente={cliente} desdeCliente />
+            </div>
+          )}
           <div className="rounded-2xl border bg-card p-5">
             <p className="font-semibold">Tu marca</p>
             <p className="mb-4 text-sm text-muted-foreground">Tu logo y tus colores: con esto salen las piezas y los videos con tu identidad.</p>

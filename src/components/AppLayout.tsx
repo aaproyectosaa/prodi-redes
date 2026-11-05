@@ -38,7 +38,7 @@ const LayoutInner = () => {
   useAltoVisible();
   // El aviso de Prodi Chat no va adentro del chat, con el chat flotante abierto ni con el teclado afuera.
   // En formación no tiene chat: tampoco se le ofrece Prodi Chat.
-  const sinAvisoChat = teclado || dockAbierto || pathname.replace(/\/$/, "") === "/chat" || role === "formacion";
+  const sinAvisoChat = teclado || dockAbierto || pathname.replace(/\/$/, "") === "/chat" || role === "formacion" || role === "vendedor";
 
   useEffect(() => {
     if (authChecked && !user) navigate("/auth", { replace: true });

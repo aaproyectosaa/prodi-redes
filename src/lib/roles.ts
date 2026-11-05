@@ -106,6 +106,7 @@ export const getRoleInfo = (role: UserRole | undefined): RoleInfo => {
     return { ...PENDING_ROLE, label: LEGACY_LABELS[role]! };
   }
   if (role === "contacto") return CONTACTO_ROLE;
+  if (role === "vendedor") return VENDEDOR_ROLE;
   return ROLES.find((r) => r.value === role) ?? PENDING_ROLE;
 };
 
@@ -120,6 +121,17 @@ export const CONTACTO_ROLE: RoleInfo = {
 };
 
 export const esContacto = (role: UserRole | string | undefined | null) => role === "contacto";
+
+/**
+ * Vendedor de un cliente (ej. DS Ingeniería): carga las visitas a fábricas con videos y fotos para que Prodi arme los
+ * videos. Pertenece a un cliente (profile.proyecto_id). No está en ROLES: lo crean el super admin, la producción del
+ * cliente o el propio cliente desde «Vendedores y visitas».
+ */
+export const VENDEDOR_ROLE: RoleInfo = {
+  value: "vendedor",
+  label: "Vendedor del cliente",
+  description: "Carga las visitas a fábricas con sus videos y fotos. Solo ve las visitas de su empresa.",
+};
 
 /** Roles internos del equipo (no clientes). */
 export const TEAM_ROLES: UserRole[] = ["admin", "productor", "editor", "pauta", "diseno", "administracion"];
@@ -159,6 +171,8 @@ export const defaultRouteForRole = (role: UserRole | undefined): string => {
       return "/software";
     case "socio":
       return "/socio";
+    case "vendedor":
+      return "/visitas";
     case "ventas":
       return "/web";
     case "formacion":

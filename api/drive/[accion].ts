@@ -3,6 +3,7 @@
 // /api/drive/chat-subida · chat-archivo  (archivos del chat, ver _lib/drive-acciones/chat.ts)
 // /api/drive/equipo-subida · equipo-archivo  (lo que sube el equipo, ver _lib/drive-acciones/equipo-subida.ts)
 // /api/drive/video-subida · video-archivo · video-listo  (material que manda el cliente, ver _lib/drive-acciones/video-material.ts)
+// /api/drive/visita-*  (visitas de los vendedores de un cliente, ver _lib/drive-acciones/visitas.ts)
 // /api/drive/crm-subida · crm-archivo · crm-compartir  (fotos y videos del CRM para mandar a un contacto, ver _lib/crm-galeria.ts)
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
@@ -16,6 +17,7 @@ import mediaToken from "../_lib/drive-acciones/media-token";
 import oauthCallback from "../_lib/drive-acciones/oauth-callback";
 import startAuth from "../_lib/drive-acciones/start-auth";
 import { videoArchivo, videoListo, videoSubida } from "../_lib/drive-acciones/video-material";
+import { visitaArchivo, visitaBorrar, visitaCrear, visitaEditar, visitasActivar, visitaSubida, visitaVideo } from "../_lib/drive-acciones/visitas";
 
 export const config = { maxDuration: 60 };
 
@@ -36,6 +38,13 @@ const ACCIONES: Record<string, (req: VercelRequest, res: VercelResponse) => Prom
   "video-archivo": videoArchivo,
   "video-listo": videoListo,
   "video-subida": videoSubida,
+  "visita-archivo": visitaArchivo,
+  "visita-borrar": visitaBorrar,
+  "visita-crear": visitaCrear,
+  "visita-editar": visitaEditar,
+  "visita-subida": visitaSubida,
+  "visita-video": visitaVideo,
+  "visitas-activar": visitasActivar,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

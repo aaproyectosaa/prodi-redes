@@ -28,6 +28,9 @@ import {
   Trash2,
   Undo2,
   Upload,
+  Factory as IconoFabrica,
+  Video as IconoGrabar,
+  Users as IconoEquipo,
 } from "lucide-react";
 import type { AnimRecorrido } from "@/lib/novedades";
 import { cn } from "@/lib/utils";
@@ -834,6 +837,12 @@ export function Ilustracion({ anim }: { anim: AnimRecorrido }) {
       return <Icono icon={Images} texto="Piezas gráficas" />;
     case "pedir-video":
       return <PedirVideo />;
+    case "visita-nueva":
+      return <Icono icon={IconoFabrica} texto="Nueva visita" />;
+    case "visita-grabar":
+      return <Icono icon={IconoGrabar} texto="Grabás y se sube solo" />;
+    case "visita-equipo":
+      return <Icono icon={IconoEquipo} texto="Las visitas de todos" />;
     case "aprobar":
       return <Aprobar />;
     case "subir-material":

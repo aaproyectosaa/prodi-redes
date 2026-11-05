@@ -50,6 +50,7 @@ import { CONDICIONES_IVA, type CondicionIva, type Project, type ProjectTeamRole,
 import { COLORES } from "./Clientes";
 import { MarcaArchivos } from "@/components/redes/MarcaArchivos";
 import { ContactosCliente } from "@/components/redes/ContactosCliente";
+import { VendedoresCliente } from "@/components/redes/visitas/VendedoresCliente";
 import { ArranqueCliente } from "@/components/redes/ArranqueCliente";
 import { LogoCliente } from "@/components/redes/LogoCliente";
 import { DebitoAdmin } from "@/components/redes/Debito";
@@ -783,6 +784,11 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
 
       {isAdmin && <TraidoPorCliente cliente={cliente} />}
       <ContactosCliente cliente={cliente} />
+      {(isAdmin || cliente.visitas_activo) && (
+        <Section title="Vendedores y visitas" description="Los vendedores del cliente cargan desde el celular las visitas a fábricas con videos y fotos, para armar los videos.">
+          <VendedoresCliente cliente={cliente} />
+        </Section>
+      )}
 
       <Section title="Marca" description="La IA usa esto para escribir copys y diseñar piezas.">
         <div className="space-y-3 rounded-xl border bg-card p-4">

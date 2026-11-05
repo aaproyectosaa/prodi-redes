@@ -16,6 +16,12 @@
 // POST /api/usuarios/contacto-clave   { uid, password } → el super admin le pone la contraseña (cierra sus sesiones)
 // POST /api/usuarios/contacto-activo  { uid, activo }  → (des)activa y lo saca/suma al grupo del cliente
 // POST /api/usuarios/contacto-invitar { uid }          → link nuevo para crear la contraseña (y lo manda por mail)
+// Vendedores de un cliente (visitas a fábricas): super admin, la producción del cliente o el propio cliente:
+// POST /api/usuarios/vendedor-lista   { proyecto_id } → { vendedores }
+// POST /api/usuarios/vendedor-crear   { proyecto_id, nombre, email, telefono?, password? } → { uid, link, mail } o { uid, password }
+//   Con password (solo super admin): queda con esa contraseña y no se manda invitación.
+// POST /api/usuarios/vendedor-activo  { uid, activo }
+// POST /api/usuarios/vendedor-invitar { uid } → link nuevo para crear la contraseña (y lo manda por mail)
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import crypto from "crypto";
@@ -254,6 +260,128 @@ async function invitarContacto(email: string, nombre: string, cliente: string, l
   return enviados > 0;
 }
 
+// ---------------------------------------------------------------------------
+// Vendedores de un cliente: cargan las visitas a fábricas (ver api/_lib/drive-acciones/visitas.ts).
+
+/** El cliente y que quien llama pueda manejar sus vendedores: super admin, su producción o el mismo cliente. */
+async function clienteParaVendedores(caller: Caller, proyectoId: unknown) {
+  if (typeof proyectoId !== "string" || !proyectoId) throw new HttpError(400, "Falta el cliente");
+  const snap = await adminDb().collection("projects").doc(proyectoId).get();
+  if (!snap.exists) throw new HttpError(404, "Cliente no encontrado");
+  const p = snap.data() ?? {};
+  if (caller.role !== "admin") {
+    const team = (p.team_roles ?? {}) as Record<string, string[]>;
+    const produce = caller.roles.includes("productor") && Object.values(team).some((ids) => (ids ?? []).includes(caller.uid));
+    const esElCliente = caller.role === "cliente" && (team.cliente ?? []).includes(caller.uid);
+    if (!produce && !esElCliente) throw new HttpError(403, "Solo el super admin, la producción o el mismo cliente");
+  }
+  if (p.visitas_activo !== true) throw new HttpError(409, "Las visitas de vendedores no están activadas para este cliente");
+  return { id: proyectoId, nombre: String(p.nombre ?? "") };
+}
+
+async function invitarVendedor(email: string, nombre: string, cliente: string, link: string, req: VercelRequest) {
+  const enviados = await enviarMailsLote([
+    {
+      to: email,
+      asunto: `Tu acceso para cargar las visitas de ${cliente || "tu empresa"}`,
+      html: mailAvisoHtml({
+        titulo: "Ya podés cargar tus visitas",
+        cuerpo: `Desde el celular vas a poder cargar cada visita a una fábrica con sus videos y fotos${cliente ? ` para ${cliente}` : ""}.\nTocá el botón para crear tu contraseña (el link vence en 3 días). Después abrí la página en el celular y agregala a la pantalla de inicio.`,
+        link,
+        baseUrl: appUrl(req),
+        nombre,
+      }),
+    },
+  ]);
+  return enviados > 0;
+}
+
+async function vendedorLista(req: VercelRequest, caller: Caller) {
+  const b = body<{ proyecto_id?: string }>(req);
+  const cliente = await clienteParaVendedores(caller, b.proyecto_id);
+  const snap = await adminDb().collection("profiles").where("role", "==", "vendedor").get();
+  const vendedores = snap.docs
+    .filter((d) => d.data().proyecto_id === cliente.id)
+    .map((d) => {
+      const p = d.data();
+      return {
+        uid: d.id,
+        nombre: String(p.nombre ?? ""),
+        email: String(p.email ?? ""),
+        telefono: (p.telefono as string | null) ?? null,
+        activo: p.activo !== false,
+        ultimo_acceso: (p.ultimo_acceso as string | null) ?? null,
+      };
+    })
+    .sort((a, c) => Number(!a.activo) - Number(!c.activo) || a.nombre.localeCompare(c.nombre));
+  return { vendedores };
+}
+
+async function vendedorCrear(req: VercelRequest, caller: Caller) {
+  const b = body<{ proyecto_id?: string; nombre?: string; email?: string; telefono?: string; password?: string }>(req);
+  const cliente = await clienteParaVendedores(caller, b.proyecto_id);
+  const nombre = String(b.nombre ?? "").trim().slice(0, 80);
+  const email = String(b.email ?? "").trim().toLowerCase();
+  if (!nombre) throw new HttpError(400, "Completá el nombre");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email))
+    throw new HttpError(400, email.includes("@") ? `Revisá el mail: “${email}” no está completo (¿falta el punto, como en @hotmail.com?)` : "Revisá el mail: le falta la @");
+  // Poner la contraseña: solo el super admin (nadie más puede entrar como el vendedor).
+  if (b.password && caller.role !== "admin") throw new HttpError(403, "Solo el super admin puede poner la contraseña");
+  const password = b.password ? claveValida(b.password) : null;
+  let user;
+  try {
+    user = await crearUsuario({ email, displayName: nombre, password });
+  } catch (err: any) {
+    if (err?.code === "auth/email-already-exists") throw new HttpError(409, "Ya existe un usuario con ese mail");
+    throw err;
+  }
+  await adminDb()
+    .collection("profiles")
+    .doc(user.uid)
+    .set({
+      nombre,
+      email,
+      role: "vendedor",
+      proyecto_id: cliente.id,
+      telefono: String(b.telefono ?? "").trim().slice(0, 40) || null,
+      activo: true,
+      creado_por: caller.uid,
+      created_at: new Date().toISOString(),
+    });
+  if (password) return { ok: true, uid: user.uid, password };
+  const link = await linkDeClave(user.uid, appUrl(req));
+  const mail = await invitarVendedor(email, nombre, cliente.nombre, link, req);
+  // El link para crear la contraseña: el super admin y la producción lo ven (para pasarlo por WhatsApp); el cliente no.
+  return caller.role === "cliente" ? { ok: true, uid: user.uid, mail } : { ok: true, uid: user.uid, link, mail };
+}
+
+async function vendedorDe(req: VercelRequest, caller: Caller) {
+  const b = body<{ uid?: string; activo?: boolean }>(req);
+  if (!b.uid) throw new HttpError(400, "Falta el vendedor");
+  const p = (await adminDb().collection("profiles").doc(b.uid).get()).data();
+  if (!p || p.role !== "vendedor") throw new HttpError(404, "No es un vendedor");
+  const cliente = await clienteParaVendedores(caller, p.proyecto_id);
+  return { b, p, cliente, uid: b.uid };
+}
+
+async function vendedorActivo(req: VercelRequest, caller: Caller) {
+  const { b, uid } = await vendedorDe(req, caller);
+  const activo = !!b.activo;
+  await adminAuth().updateUser(uid, { disabled: !activo });
+  if (!activo) await adminAuth().revokeRefreshTokens(uid);
+  await adminDb().collection("profiles").doc(uid).set({ activo }, { merge: true });
+  olvidarPerfil(uid);
+  return { ok: true };
+}
+
+async function vendedorInvitar(req: VercelRequest, caller: Caller) {
+  const { p, cliente, uid } = await vendedorDe(req, caller);
+  if (p.activo === false) throw new HttpError(409, "El vendedor está desactivado");
+  const link = await linkDeClave(uid, appUrl(req));
+  const mail = await invitarVendedor(String(p.email ?? ""), String(p.nombre ?? ""), cliente.nombre, link, req);
+  return caller.role === "cliente" ? { ok: true, mail } : { ok: true, link, mail };
+}
+
 async function contactoCrear(req: VercelRequest, caller: Caller) {
   const b = body<{ proyecto_id?: string; nombre?: string; email?: string; telefono?: string; cargo?: string; password?: string; acceso?: string }>(req);
   const cliente = await clienteParaContactos(caller, b.proyecto_id);
@@ -305,7 +433,7 @@ async function contactoClave(req: VercelRequest, caller: Caller) {
   const b = body<{ uid?: string; password?: string }>(req);
   if (!b.uid) throw new HttpError(400, "Falta el usuario");
   const p = (await adminDb().collection("profiles").doc(b.uid).get()).data();
-  if (!p || !["contacto", "cliente"].includes(String(p.role))) throw new HttpError(404, "Solo para gente de un cliente");
+  if (!p || !["contacto", "cliente", "vendedor"].includes(String(p.role))) throw new HttpError(404, "Solo para gente de un cliente");
   const password = claveValida(b.password);
   await cambiarClave(b.uid, password);
   return { ok: true, password };
@@ -459,6 +587,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const mia = personas.find((x) => x.uid === yo.uid) ?? rachaVacia(yo.uid, yo.nombre);
       const admin = yo.roles.includes("admin");
       res.status(200).json({ yo: mia, ...(admin ? { personas, clientes } : {}) });
+      return;
+    }
+    if (accion.startsWith("vendedor-")) {
+      const caller = await requireCaller(req, ["admin", "productor", "cliente"]);
+      if (accion === "vendedor-lista") res.status(200).json(await vendedorLista(req, caller));
+      else if (accion === "vendedor-crear") res.status(200).json(await vendedorCrear(req, caller));
+      else if (accion === "vendedor-activo") res.status(200).json(await vendedorActivo(req, caller));
+      else if (accion === "vendedor-invitar") res.status(200).json(await vendedorInvitar(req, caller));
+      else res.status(404).json({ error: "Acción desconocida" });
       return;
     }
     if (accion.startsWith("contacto-")) {

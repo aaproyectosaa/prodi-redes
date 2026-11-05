@@ -45,7 +45,10 @@ export type AnimRecorrido =
   | "cronometro"
   | "guion-cliente"
   | "viaticos"
-  | "jornada";
+  | "jornada"
+  | "visita-nueva"
+  | "visita-grabar"
+  | "visita-equipo";
 
 export interface Diapositiva {
   titulo: string;
@@ -302,6 +305,14 @@ export function bienvenidaDe(role: string | undefined, enChat: boolean): Diaposi
         HABLAR_CLIENTE,
         ...chat,
         { titulo: "Mis ganancias", texto: "En el menú ves lo que llevás ganado en el mes.", anim: "ganancias" },
+        avisos,
+      ];
+    case "vendedor":
+      // Vendedor de un cliente (visitas a fábricas): lo justo para la primera vez.
+      return [
+        { titulo: "Cargá cada visita", texto: "Tocá «Nueva visita» y poné el título, la fábrica, dónde es y qué se ve.", anim: "visita-nueva" },
+        { titulo: "Grabá y se sube solo", texto: "Tocá «Grabar video» o «Sacar foto». Cada toma se sube sola apenas la terminás. Sin señal, se sube cuando vuelva.", anim: "visita-grabar" },
+        { titulo: "Todo el equipo a la vista", texto: "Abajo ves las visitas de todos los vendedores, con el nombre de quién la subió.", anim: "visita-equipo" },
         avisos,
       ];
     case "socio":

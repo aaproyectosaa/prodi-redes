@@ -22,7 +22,7 @@ import {
   Store,
   FolderOpen,
   Sparkles,
-  ListTodo, Inbox, Globe, Megaphone, FileText, Contact, Trophy, BookOpen, Handshake, GraduationCap } from "lucide-react";
+  ListTodo, Inbox, Globe, Megaphone, FileText, Contact, Trophy, BookOpen, Handshake, GraduationCap, Factory } from "lucide-react";
 import { servicioInfo, type IdServicio } from "@/lib/redes/servicios";
 import type { UserRole } from "@/integrations/firebase/types";
 import { getRoleInfo } from "@/lib/roles";
@@ -110,6 +110,8 @@ export interface OpcionesNav {
   crm?: "activo" | "pronto" | null;
   /** Lo que contrató además de Redes (web, ERP…): cada uno es un ítem en «Mis servicios». */
   servicios?: IdServicio[];
+  /** Algún cliente tiene las visitas de vendedores prendidas (DS): suma «Visitas» al menú de producción. */
+  visitas?: boolean;
 }
 
 export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {}): NavSection[] {
@@ -155,6 +157,7 @@ export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {
             { label: "Rodajes", icon: CalendarDays, path: "/rodajes" },
             { label: "Piezas gráficas", icon: ImageIcon, path: "/piezas" },
             { label: "Reuniones", icon: VideoIcon, path: "/reuniones" },
+            ...(opciones.visitas ? [{ label: "Visitas de vendedores", icon: Factory, path: "/visitas" }] : []),
           ],
         },
         {
@@ -180,6 +183,7 @@ export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {
             { label: "Chat", icon: MessageCircle, path: "/chat", mobile: true },
             { label: "Clientes", icon: Building2, path: "/clientes", mobile: true },
             { label: "Reuniones", icon: VideoIcon, path: "/reuniones" },
+            ...(opciones.visitas ? [{ label: "Visitas de vendedores", icon: Factory, path: "/visitas" }] : []),
             { label: "Mis ganancias", icon: HandCoins, path: "/mis-ganancias" },
             { label: "Academia", icon: GraduationCap, path: "/academia" },
           ],
@@ -250,6 +254,9 @@ export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {
     case "formacion":
       // Productora en formación: solo la Academia, hasta que el admin le cambia el rol.
       return [{ items: [{ label: "Academia", icon: GraduationCap, path: "/academia", mobile: true }] }];
+    case "vendedor":
+      // Vendedor de un cliente: solo sus visitas.
+      return [{ items: [{ label: "Visitas", icon: Factory, path: "/visitas", mobile: true }] }];
     case "socio":
       // Socio comercial: sus empresarios, su link y lo que gana. Nada más del sistema.
       return [

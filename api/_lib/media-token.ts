@@ -75,10 +75,24 @@ async function enSusEntregas(uid: string, fileId: string): Promise<boolean> {
  * ¿Puede ver este archivo? Tiene que estar en un video (o en su material elegido), pieza, reunión, en un chat del que es miembro o en la marca de un cliente
  * al que tenga acceso. Una sola consulta (usa el índice GIN de `data`).
  */
+/** ¿El archivo es de una visita de la empresa del vendedor? */
+async function enVisitasDeSuEmpresa(uid: string, fileId: string): Promise<boolean> {
+  const r = await getPool().query(
+    `select 1 from documentos v
+       join documentos p on p.coleccion = 'profiles' and p.id = $1
+      where v.coleccion = 'visitas_vendedores' and v.data @> $2::jsonb and v.data->>'proyecto_id' = p.data->>'proyecto_id'
+      limit 1`,
+    [uid, JSON.stringify({ archivos: [{ drive_file_id: fileId }] })]
+  );
+  return r.rows.length > 0;
+}
+
 export async function puedeVerArchivo(caller: Caller, fileId: string): Promise<boolean> {
   if (caller.roles.some((r) => GLOBALES.includes(r))) return true;
   // Contacto (solo chat): únicamente los archivos mandados en sus chats.
   if (caller.role === "contacto") return enChatDe(caller.uid, fileId);
+  // Vendedor de un cliente: el material de las visitas de su empresa (las suyas y las de sus compañeros).
+  if (caller.role === "vendedor") return enVisitasDeSuEmpresa(caller.uid, fileId);
   // Lo que se mandó en sus chats lo ve cualquiera de ese chat (también Programación).
   if (await enChatDe(caller.uid, fileId)) return true;
   // Sus ejercicios de la Academia (los suyos, nada más).
@@ -88,7 +102,8 @@ export async function puedeVerArchivo(caller: Caller, fileId: string): Promise<b
   const r = await getPool().query(
     `select coleccion, id, data->>'proyecto_id' as pid, data->'participantes' as participantes
        from documentos
-      where (coleccion in ('videos', 'piezas_ia', 'reuniones')
+      where (coleccion = 'visitas_vendedores' and data @> $9::jsonb)
+         or (coleccion in ('videos', 'piezas_ia', 'reuniones')
              and (data @> $1::jsonb or data @> $2::jsonb or data @> $3::jsonb or data @> $6::jsonb))
          or (coleccion = 'projects' and (data @> $4::jsonb or data @> $5::jsonb or data @> $7::jsonb or data @> $8::jsonb))
       limit 50`,
@@ -103,6 +118,8 @@ export async function puedeVerArchivo(caller: Caller, fileId: string): Promise<b
       // Versiones del logo y manuales de marca.
       JSON.stringify({ marca_archivos: { variantes: ref } }),
       JSON.stringify({ marca_archivos: { manuales: ref } }),
+      // Material de las visitas de los vendedores del cliente.
+      JSON.stringify({ archivos: ref }),
     ]
   );
   const proyectos = new Set<string>();

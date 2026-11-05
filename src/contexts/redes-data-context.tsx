@@ -135,7 +135,8 @@ export function RedesDataProvider({ children }: { children: ReactNode }) {
   const global = finanzas;
   const activo = !!uid && !!role && role !== "pending";
   // Contacto (solo chat): no ve nada del sistema, solo sus chats.
-  const soloChat = role === "contacto";
+  // Vendedor de un cliente: tampoco (solo sus visitas).
+  const soloChat = role === "contacto" || role === "vendedor";
 
   const clientes = useMemo(() => {
     const enabled = projects.filter(isProjectEnabled);

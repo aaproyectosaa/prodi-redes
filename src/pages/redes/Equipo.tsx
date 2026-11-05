@@ -142,7 +142,7 @@ export default function Equipo() {
     .filter((p) => !q || `${p.nombre} ${p.email}`.toLowerCase().includes(q.toLowerCase()))
     .filter((p) => {
       if (filtro === "equipo") return ["admin", "productor", "editor", "pauta", "diseno", "administracion"].includes(p.role ?? "");
-      if (filtro === "cliente") return p.role === "cliente" || p.role === "contacto";
+      if (filtro === "cliente") return p.role === "cliente" || p.role === "contacto" || p.role === "vendedor";
       if (filtro === "pendientes") return esPendiente(p);
       if (filtro === "inactivos") return p.activo === false;
       return true;
@@ -155,8 +155,8 @@ export default function Equipo() {
   // La gente de los clientes va por empresa (una empresa tiene varias personas; alguien de varias empresas aparece
   // en cada una); el equipo, por rol.
   const empresasDe = (p: Profile): string[] | null => {
-    if (p.role !== "cliente" && p.role !== "contacto") return null;
-    const ids = p.role === "contacto" && p.proyecto_id ? [p.proyecto_id] : clientesDe(p).map((c) => c.id);
+    if (p.role !== "cliente" && p.role !== "contacto" && p.role !== "vendedor") return null;
+    const ids = (p.role === "contacto" || p.role === "vendedor") && p.proyecto_id ? [p.proyecto_id] : clientesDe(p).map((c) => c.id);
     return ids.length ? ids.map((id) => `empresa:${id}`) : ["empresa:-"];
   };
   const clavesGrupo = (p: Profile): string[] => (esPendiente(p) ? ["pending"] : empresasDe(p) ?? [grupoDe(p)]);
