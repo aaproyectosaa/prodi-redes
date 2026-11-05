@@ -277,6 +277,7 @@ export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {
             { label: "Resultados", icon: TrendingUp, path: "/cliente?tab=resultados", mobile: true },
             { label: "Piezas gráficas", icon: ImageIcon, path: "/cliente?tab=piezas", mobile: true },
             { label: "Material", icon: FolderOpen, path: "/cliente?tab=material" },
+            ...(opciones.visitas ? [{ label: "Visitas de vendedores", icon: Factory, path: "/cliente?tab=visitas" }] : []),
           ],
         },
         ...(opciones.crm ? [
