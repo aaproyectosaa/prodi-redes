@@ -26,6 +26,7 @@ import { useChatDock } from "@/lib/redes/chatDock";
 import { useMontosOcultos } from "@/lib/privacidad";
 import { vinoDeChat, volverAlChat } from "@/lib/chatApp";
 import { ArrowLeft } from "lucide-react";
+import { MedidasPantalla } from "@/components/MedidasPantalla";
 
 const LayoutInner = () => {
   const navigate = useNavigate();
@@ -95,6 +96,7 @@ const LayoutInner = () => {
         <VideoSheet />
         <ChatDock />
         <GrabacionEnCurso />
+        {role === "admin" && !viewingAs && <MedidasPantalla />}
       </div>
     </RedesDataProvider>
   );

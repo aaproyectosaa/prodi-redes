@@ -275,7 +275,27 @@ html.modo-chat {
   left: 0;
   right: 0;
   top: var(--arriba-app, 0px);
-  bottom: 0;
+  bottom: calc(-1 * var(--falta-abajo, 0px));
+}
+/* iPhone con la app instalada: iOS puede dejar la caja fija más corta que la pantalla y aparece una franja negra abajo
+   (WebKit 237961). useAltoVisible mide lo que falta (--falta-abajo) y lo de abajo se estira hasta el borde. */
+html {
+  background-color: hsl(var(--background));
+}
+nav.hasta-abajo,
+div.hasta-abajo {
+  bottom: calc(-1 * var(--falta-abajo, 0px));
+}
+body::after {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(-1 * var(--falta-abajo, 0px));
+  height: var(--falta-abajo, 0px);
+  background-color: hsl(var(--background));
+  pointer-events: none;
+  z-index: -1;
 }
 /* iPad (pantalla de compu): la barra de estado se ve encima de la app, así que se deja su franja arriba. La app
    instalada además queda más baja que la pantalla (una franja vacía abajo): a pantalla completa toma el alto real

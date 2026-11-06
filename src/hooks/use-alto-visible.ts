@@ -6,6 +6,19 @@ export const esCampoDeTexto = (el: Element | null) =>
     (el as HTMLElement).isContentEditable ||
     (el.tagName === "INPUT" && !["checkbox", "radio", "range", "color", "file", "button", "submit"].includes((el as HTMLInputElement).type)));
 
+/** iPhone con la app instalada: cuánto le falta a una caja fija de pantalla completa para llegar al borde de abajo. */
+function medirFaltaAbajo() {
+  const instalada = (navigator as { standalone?: boolean }).standalone === true;
+  if (!instalada || !/iPhone/.test(navigator.userAgent) || window.innerWidth > window.innerHeight) return 0;
+  const prueba = document.createElement("div");
+  prueba.style.cssText = "position:fixed;top:0;bottom:0;left:0;width:1px;visibility:hidden;pointer-events:none";
+  document.body.appendChild(prueba);
+  const alto = prueba.getBoundingClientRect().height;
+  prueba.remove();
+  const falta = Math.round(Math.max(screen.width, screen.height) - alto);
+  return falta > 0 && falta <= 80 ? falta : 0;
+}
+
 /**
  * iPhone y iPad (Safari y app instalada): el teclado no achica la pantalla (100dvh sigue igual, `interactive-widget` no se
  * respeta). Safari además corre la parte visible (visualViewport.offsetTop) para mostrar el campo, así que una caja
@@ -57,6 +70,9 @@ export function useAltoVisible() {
         raiz.style.removeProperty("--alto-app");
         raiz.style.removeProperty("--arriba-app");
         raiz.classList.remove("teclado-ios");
+        const falta = medirFaltaAbajo();
+        if (falta) raiz.style.setProperty("--falta-abajo", `${falta}px`);
+        else raiz.style.removeProperty("--falta-abajo");
         // Safari a veces deja la página corrida al cerrar el teclado.
         if (window.scrollY !== 0 || raiz.scrollTop !== 0) window.scrollTo(0, 0);
       }
@@ -95,6 +111,7 @@ export function useAltoVisible() {
       raiz.style.removeProperty("--alto-app");
       raiz.style.removeProperty("--arriba-app");
       raiz.style.removeProperty("--alto-pantalla");
+      raiz.style.removeProperty("--falta-abajo");
       raiz.classList.remove("teclado-ios", "vista-fija", "pantalla-ipad");
     };
   }, []);

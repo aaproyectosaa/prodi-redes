@@ -309,7 +309,7 @@ export const MobileTabBar = ({ role }: { role?: UserRole }) => {
   const items = (pedidos && !base.includes(pedidos) && (pendientes["/pedidos"] || base.length < 4) ? [base[0], pedidos, ...base.slice(1)] : base).filter(Boolean).slice(0, 4);
   if (items.length === 0 || teclado) return null;
   return (
-    <nav className="safe-area-pb seguro-costados fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 backdrop-blur md:hidden">
+    <nav className="hasta-abajo safe-area-pb seguro-costados fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 backdrop-blur md:hidden">
       <div className="grid" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
         {items.map((item) => {
           const Icon = item.icon;

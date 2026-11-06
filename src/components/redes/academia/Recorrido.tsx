@@ -129,7 +129,7 @@ function Pantalla({
   }, [onCerrar]);
 
   return createPortal(
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80" role="dialog" aria-modal="true" aria-label={titulo}>
+    <div className="hasta-abajo fixed inset-0 z-[60] flex items-center justify-center bg-black/80" role="dialog" aria-modal="true" aria-label={titulo}>
       <div
         className={cn("relative flex h-full w-full flex-col overflow-hidden text-white transition-colors duration-300 sm:h-[min(92dvh,860px)] sm:max-w-[440px] sm:rounded-[2rem]", tono)}
         style={{ paddingTop: "max(12px, env(safe-area-inset-top))", paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}
@@ -224,6 +224,8 @@ const sacudir = { x: [0, -8, 8, -5, 5, 0] };
 
 function Opciones({ q, onResuelto }: { q: PreguntaRecorrido; onResuelto: (ok: boolean) => void }) {
   const [elegida, setElegida] = useState<number | null>(null);
+  // Cada vez en otro orden: la respuesta correcta no cae siempre en el mismo lugar.
+  const [orden] = useState(() => mezclar(q.opciones.map((_, j) => j)));
   const [antes, despues] = q.texto.split("___");
   const completar = despues !== undefined;
   const elegir = (j: number) => {
@@ -247,7 +249,8 @@ function Opciones({ q, onResuelto }: { q: PreguntaRecorrido; onResuelto: (ok: bo
         )}
       </p>
       <div className="space-y-2">
-        {q.opciones.map((o, j) => {
+        {orden.map((j) => {
+          const o = q.opciones[j];
           const ok = elegida !== null && j === q.correcta;
           const mal = elegida === j && j !== q.correcta;
           return (

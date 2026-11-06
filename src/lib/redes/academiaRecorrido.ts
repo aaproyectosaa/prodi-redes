@@ -94,14 +94,14 @@ export const NIVEL_1: Recorrido = {
         {
           id: "s1-preparar-celular",
           ejercicios: [
-            U("Uní cada cosa con para qué sirve", [["Limpiar la lente", "La imagen no sale lechosa"], ["Modo avión", "Nada corta la toma"], ["Brillo al máximo", "Ves bien lo que filmás"], ["20 GB libres", "No te quedás sin memoria"]]),
+            U("Uní cada cosa con para qué sirve", [["Limpiar la lente", "La imagen no sale borrosa"], ["Modo avión", "Nada corta la toma"], ["Brillo al máximo", "Ves bien lo que filmás"], ["20 GB libres", "No te quedás sin memoria"]]),
             P("Antes de filmar, dejá al menos ___ libres.", ["2 GB", "20 GB", "200 GB"], 1),
           ],
           video: "/academia/preparar-celular.mp4",
           titulo: "Preparar el celular",
           objetivo: "Llegar a cada rodaje con el celular listo para no perder tomas ni tiempo.",
           explicacion:
-            "Antes de filmar, el celular tiene que estar preparado. Son cinco cosas y te llevan dos minutos.\nLimpiá la lente con un paño: una huella deja la imagen lechosa y no se arregla después.\nDejá memoria libre (al menos 20 GB) y la batería cargada. Llevá batería externa.\nPoné modo avión o no molestar: una llamada en medio de una toma la arruina.\nSubí el brillo de la pantalla al máximo para ver bien lo que filmás, sobre todo afuera.",
+            "Antes de filmar, el celular tiene que estar preparado. Son cinco cosas y te llevan dos minutos.\nLimpiá la lente con un paño: una huella deja la imagen borrosa y no se arregla después.\nDejá memoria libre (al menos 20 GB) y la batería cargada. Llevá batería externa.\nPoné modo avión o no molestar: una llamada en medio de una toma la arruina.\nSubí el brillo de la pantalla al máximo para ver bien lo que filmás, sobre todo afuera.",
           bien: ["Lente limpia antes de cada toma importante.", "Celular en modo avión durante el rodaje.", "Batería al 100 % y batería externa en la mochila."],
           mal: ["Filmar con la lente sucia.", "Quedarte sin memoria en medio del rodaje.", "Que suene una notificación mientras alguien habla."],
         },
