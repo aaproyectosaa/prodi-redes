@@ -98,6 +98,7 @@ export const NIVEL_1: Recorrido = {
       lecciones: [
         {
           id: "s1-que-hace-prodi",
+          video: "/academia/como-trabaja-prodi.mp4",
           titulo: "Qué hace Prodi",
           objetivo: "Entender para qué sirve cada video que filmás y el camino que hace hasta que se publica.",
           explicacion:
@@ -109,6 +110,7 @@ export const NIVEL_1: Recorrido = {
         },
         {
           id: "s1-preparar-celular",
+          video: "/academia/preparar-celular.mp4",
           titulo: "Preparar el celular",
           objetivo: "Llegar a cada rodaje con el celular listo para no perder tomas ni tiempo.",
           explicacion:
@@ -161,6 +163,7 @@ export const NIVEL_1: Recorrido = {
       lecciones: [
         {
           id: "s2-luz",
+          video: "/academia/filmar-con-celular.mp4",
           titulo: "Luz natural",
           objetivo: "Aprovechar la luz de una ventana para que la imagen se vea limpia y clara.",
           explicacion:
@@ -224,6 +227,7 @@ export const NIVEL_1: Recorrido = {
       lecciones: [
         {
           id: "s3-antes",
+          video: "/academia/antes-del-rodaje.mp4",
           titulo: "Antes del rodaje",
           objetivo: "Llegar preparada para filmar todo sin olvidarte de nada.",
           explicacion:
@@ -246,6 +250,7 @@ export const NIVEL_1: Recorrido = {
         },
         {
           id: "s3-despues",
+          video: "/academia/despues-del-rodaje.mp4",
           titulo: "Después del rodaje",
           objetivo: "Que nada de lo filmado se pierda y la editora lo encuentre fácil.",
           explicacion:
@@ -298,6 +303,7 @@ export const NIVEL_1: Recorrido = {
         },
         {
           id: "s4-ritmo",
+          video: "/academia/edicion-que-vende.mp4",
           titulo: "Ritmo",
           objetivo: "Que la gente no pase de largo el video y llegue hasta el final.",
           explicacion:
@@ -493,3 +499,31 @@ export function ubicarItem(r: Recorrido, itemId: string): { modulo: string | nul
 }
 
 export type { DriveAttachmentRef };
+
+export interface ProximoPaso {
+  tipo: "leccion" | "ejercicio" | "cuestionario" | "examen";
+  modulo: ModuloRecorrido | null;
+  leccion: LeccionRecorrido | null;
+  /** Lucas pidió correcciones. */
+  corregir: boolean;
+  /** Ya mandó todo: le toca a Lucas revisar. */
+  espera: boolean;
+}
+
+/** Lo que le toca hacer ahora. Primero las correcciones. Sin nada pendiente (recorrido terminado), null. */
+export function proximoPaso(r: Recorrido, p: ProgresoRecorrido | null | undefined, entregas: EntregaAcademia[] | null | undefined): ProximoPaso | null {
+  const paso = (tipo: ProximoPaso["tipo"], modulo: ModuloRecorrido | null, extra: Partial<ProximoPaso> = {}): ProximoPaso => ({ tipo, modulo, leccion: null, corregir: false, espera: false, ...extra });
+  for (const m of r.modulos) {
+    if (moduloAprobado(m, p, entregas)) continue;
+    const estado = entregaDe(entregas, idEjercicioModulo(m.id))?.estado;
+    if (estado === "a_corregir") return paso("ejercicio", m, { corregir: true });
+    const leccion = m.lecciones.find((l) => !leccionHecha(l, p));
+    if (leccion) return paso("leccion", m, { leccion });
+    if (estado !== "enviada" && estado !== "aprobada") return paso("ejercicio", m);
+    if (!cuestionarioAprobado(m, p)) return paso("cuestionario", m);
+    return paso("ejercicio", m, { espera: true });
+  }
+  const examen = entregaDe(entregas, ID_EXAMEN)?.estado;
+  if (examen === "aprobada") return null;
+  return paso("examen", null, { corregir: examen === "a_corregir", espera: examen === "enviada" });
+}
