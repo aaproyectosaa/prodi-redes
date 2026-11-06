@@ -144,7 +144,7 @@ function Pantalla({
   return createPortal(
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80" role="dialog" aria-modal="true" aria-label={titulo}>
       <div
-        className={cn("relative flex h-dvh w-full flex-col overflow-hidden text-white transition-colors duration-300 sm:h-[min(92dvh,860px)] sm:max-w-[440px] sm:rounded-[2rem]", tono)}
+        className={cn("relative flex h-full w-full flex-col overflow-hidden text-white transition-colors duration-300 sm:h-[min(92dvh,860px)] sm:max-w-[440px] sm:rounded-[2rem]", tono)}
         style={{ paddingTop: "max(12px, env(safe-area-inset-top))", paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}
       >
         {total > 1 && (
@@ -247,7 +247,6 @@ function EntregaBox({
   entregas,
   uid,
   nombre,
-  opcional = false,
 }: {
   recorrido: Recorrido;
   modulo: ModuloRecorrido | null;
@@ -257,7 +256,6 @@ function EntregaBox({
   entregas: EntregaAcademia[] | null;
   uid: string;
   nombre: string;
-  opcional?: boolean;
 }) {
   const id = idEntrega(uid, itemId);
   const entrega = entregaDe(entregas, itemId);
@@ -315,7 +313,6 @@ function EntregaBox({
     <div className="space-y-4 rounded-3xl bg-card p-4 text-foreground">
       <div>
         <p className="text-lg font-bold leading-snug">{ejercicio ? ejercicio.consigna : itemTitulo}</p>
-        {opcional && <p className="mt-1 text-sm text-muted-foreground">Es opcional, pero si lo subís, Lucas te lo mira.</p>}
       </div>
 
       {/* Dónde está el ejercicio */}
@@ -525,7 +522,7 @@ function BienOMal({ leccion, onTermino }: { leccion: LeccionRecorrido; onTermino
 // ---------------------------------------------------------------------------------------------------------------
 // Lección: tarjetas de a una
 
-type TarjetaLeccion = { k: "portada" } | { k: "video" } | { k: "texto"; t: string } | { k: "juego" } | { k: "lista" } | { k: "practica" } | { k: "fin" };
+type TarjetaLeccion = { k: "portada" } | { k: "video" } | { k: "texto"; t: string } | { k: "juego" } | { k: "lista" } | { k: "fin" };
 
 function VerLeccion({
   recorrido,
@@ -559,7 +556,6 @@ function VerLeccion({
       .forEach((t) => lista.push({ k: "texto", t }));
     if (leccion.bien.length + leccion.mal.length > 0) lista.push({ k: "juego" });
     if (leccion.checklist.length) lista.push({ k: "lista" });
-    if (leccion.ejercicio) lista.push({ k: "practica" });
     lista.push({ k: "fin" });
     return lista;
   }, [leccion]);
@@ -616,7 +612,6 @@ function VerLeccion({
   if (t.k === "fin") pie = <BotonGrande onClick={onSiguiente}>{textoSiguiente} <ArrowRight className="h-5 w-5" /></BotonGrande>;
   else if (t.k === "juego" && !jugo) pie = <button type="button" onClick={() => ir(1)} className="flex h-10 w-full items-center justify-center text-sm font-medium text-white/75 hover:text-white">Saltar</button>;
   else if (t.k === "lista") pie = <BotonGrande disabled={faltan > 0} onClick={() => ir(1)}>{faltan > 0 ? `Te ${faltan === 1 ? "falta 1" : `faltan ${faltan}`}` : "Listo"} {faltan <= 0 && <ArrowRight className="h-5 w-5" />}</BotonGrande>;
-  else if (t.k === "practica") pie = <BotonGrande onClick={() => ir(1)}>Seguir <ArrowRight className="h-5 w-5" /></BotonGrande>;
   else pie = <BotonGrande onClick={() => ir(1)}>{t.k === "portada" ? "Empezar" : "Seguir"} <ArrowRight className="h-5 w-5" /></BotonGrande>;
 
   return (
@@ -689,12 +684,6 @@ function VerLeccion({
                   );
                 })}
               </div>
-            </div>
-          )}
-          {t.k === "practica" && (
-            <div className="space-y-3 px-4 pb-2 pt-2">
-              <p className="px-1 text-2xl font-bold">Probalo vos</p>
-              <EntregaBox recorrido={recorrido} modulo={modulo} itemId={leccion.id} itemTitulo={leccion.ejercicio} entregas={entregas} uid={uid} nombre={nombre} opcional />
             </div>
           )}
           {t.k === "fin" && (

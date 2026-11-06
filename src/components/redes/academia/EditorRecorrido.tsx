@@ -77,9 +77,6 @@ function EditorLeccion({ valor, onCambio, onBorrar }: { valor: LeccionRecorrido;
             <Lista label="Bien" valor={valor.bien} onCambio={(v) => set("bien", v)} />
             <Lista label="Mal" valor={valor.mal} onCambio={(v) => set("mal", v)} />
           </div>
-          <Campo label="Práctica (se puede subir; vacío = sin práctica)">
-            <Textarea value={valor.ejercicio} rows={2} onChange={(e) => set("ejercicio", e.target.value)} />
-          </Campo>
           <Lista label="Checklist" valor={valor.checklist} onCambio={(v) => set("checklist", v)} />
           <Campo label="Video (link de YouTube, Drive o .mp4; opcional)">
             <Input value={valor.video ?? ""} onChange={(e) => set("video", e.target.value.trim() || undefined)} placeholder="https://…" />
