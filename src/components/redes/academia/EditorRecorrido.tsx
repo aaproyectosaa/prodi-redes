@@ -49,6 +49,19 @@ function EditorEjercicio({ valor, onCambio }: { valor: EjercicioRecorrido; onCam
         <Textarea value={valor.consigna} rows={2} onChange={(e) => onCambio({ ...valor, consigna: e.target.value })} />
       </Campo>
       <Lista label="Pasos" valor={valor.pasos} onCambio={(pasos) => onCambio({ ...valor, pasos })} />
+      <Lista
+        label="Guion (opcional): Momento | Se ve | Se dice"
+        valor={(valor.guion ?? []).map((e) => `${e.momento} | ${e.seVe} | ${e.seDice}`)}
+        onCambio={(l) =>
+          onCambio({
+            ...valor,
+            guion: l.map((x) => {
+              const [momento = "", seVe = "", seDice = ""] = x.split("|").map((t) => t.trim());
+              return { momento, seVe, seDice };
+            }),
+          })
+        }
+      />
     </div>
   );
 }

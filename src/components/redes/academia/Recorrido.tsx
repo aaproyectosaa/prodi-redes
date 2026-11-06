@@ -141,11 +141,14 @@ function Pantalla({
     return () => window.removeEventListener("keydown", tecla);
   }, [onCerrar]);
 
+  // iPhone con la app instalada: la caja fija queda más corta que la pantalla (franja negra abajo). Se usa el alto real.
+  const altoIphone = (navigator as { standalone?: boolean }).standalone === true && window.innerWidth < 640 ? window.screen.height : null;
+
   return createPortal(
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80" role="dialog" aria-modal="true" aria-label={titulo}>
+    <div className={cn("fixed inset-0 z-[60] flex justify-center bg-black/80", altoIphone ? "items-start" : "items-center")} role="dialog" aria-modal="true" aria-label={titulo}>
       <div
         className={cn("relative flex h-full w-full flex-col overflow-hidden text-white transition-colors duration-300 sm:h-[min(92dvh,860px)] sm:max-w-[440px] sm:rounded-[2rem]", tono)}
-        style={{ paddingTop: "max(12px, env(safe-area-inset-top))", paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}
+        style={{ paddingTop: "max(12px, env(safe-area-inset-top))", paddingBottom: "max(16px, env(safe-area-inset-bottom))", ...(altoIphone ? { height: altoIphone } : {}) }}
       >
         {total > 1 && (
           <div className="flex shrink-0 gap-1 px-4 pb-2.5" aria-label={`Paso ${actual + 1} de ${total}`}>
@@ -324,6 +327,25 @@ function EntregaBox({
           </li>
         ))}
       </ol>
+
+      {!!ejercicio?.guion?.length && (
+        <div className="space-y-2">
+          <p className="text-base font-bold">Tu guion</p>
+          {ejercicio.guion.map((e) => (
+            <div key={e.momento} className="space-y-1.5 rounded-2xl bg-muted/60 p-3 text-sm">
+              <p className="font-semibold text-primary">{e.momento}</p>
+              <p>
+                <span className="text-muted-foreground">Se ve: </span>
+                {e.seVe}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Se dice: </span>
+                <span className="font-semibold">«{e.seDice}»</span>
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {!!ejercicio?.pasos.length && (
         <ol className="space-y-2">

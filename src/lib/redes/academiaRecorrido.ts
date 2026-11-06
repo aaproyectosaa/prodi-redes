@@ -31,10 +31,17 @@ export interface PreguntaRecorrido {
   correcta: number;
   porque?: string;
 }
+export interface EscenaGuion {
+  momento: string;
+  seVe: string;
+  seDice: string;
+}
 export interface EjercicioRecorrido {
   titulo: string;
   consigna: string;
   pasos: string[];
+  /** Guion listo para filmar (el examen final lo trae, así nadie tiene que pedirlo). */
+  guion?: EscenaGuion[];
 }
 export interface ModuloRecorrido {
   id: string;
@@ -362,8 +369,22 @@ export const NIVEL_1: Recorrido = {
   ],
   examen: {
     titulo: "Examen final",
-    consigna: "Con un guion que te da Lucas: planificar las tomas, filmar con el celular y editar un Reel completo. Si Lucas lo aprueba, se te habilita el rol de productora.",
-    pasos: ["Pedile el guion a Lucas.", "Escribí la lista de tomas (planos y recursos).", "Filmá con todo lo que aprendiste: luz, encuadre, audio y estabilidad.", "Editalo en CapCut con gancho, ritmo, subtítulos y llamado a la acción.", "Subí el Reel terminado y la lista de tomas acá."],
+    consigna: "Filmá y editá un Reel completo de un negocio de tu barrio con este guion. Si Lucas lo aprueba, se te habilita el rol de productora.",
+    pasos: [
+      "Elegí un negocio de tu barrio y pedile permiso para filmar. También a cada persona que aparezca.",
+      "Cambiá lo que está entre corchetes por los datos reales del negocio. No inventes nada: tiene que ser verdad.",
+      "Escribí la lista de tomas (planos y recursos).",
+      "Filmá con todo lo que aprendiste: luz, encuadre, audio y estabilidad.",
+      "Editalo en CapCut con gancho, ritmo, subtítulos y llamado a la acción.",
+      "Subí el Reel terminado y la lista de tomas acá.",
+    ],
+    guion: [
+      { momento: "Gancho · 0 a 3 segundos", seVe: "Detalle del [producto] bien de cerca, con movimiento.", seDice: "¿Todavía no probaste el [producto] de [negocio]?" },
+      { momento: "Quién es · 3 a 8 segundos", seVe: "Plano medio del dueño o la dueña en su local, mirando a la lente.", seDice: "Soy [nombre] y hace [años] que hacemos esto acá en [barrio]." },
+      { momento: "Por qué elegirlo · 8 a 16 segundos", seVe: "Tomas de recurso: manos trabajando y el producto en tres planos.", seDice: "Lo hacemos [cómo lo hacen]. Eso es lo que nos hace distintos." },
+      { momento: "Qué ofrece · 16 a 23 segundos", seVe: "Plano general del local y detalle de lo que más se vende.", seDice: "Lo que más nos piden es [lo más vendido]." },
+      { momento: "Llamado · 23 a 30 segundos", seVe: "Primer plano de la persona. En pantalla: el WhatsApp del negocio.", seDice: "Escribinos por WhatsApp y te lo dejamos listo." },
+    ],
   },
   glosario: [
     { termino: "Plano", definicion: "Cuánto se ve en la toma: general (todo el lugar), medio (de la cintura para arriba), primer plano (la cara) y detalle (algo muy de cerca)." },
