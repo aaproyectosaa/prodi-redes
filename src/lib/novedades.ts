@@ -331,8 +331,8 @@ export function bienvenidaDe(role: string | undefined, enChat: boolean): Diaposi
       ];
     case "formacion":
       return [
-        { titulo: "Tu formación en Prodi", texto: "En la Academia está tu recorrido: 4 semanas para aprender a filmar y editar con el celular.", anim: "videos" },
-        { titulo: "Subí tus ejercicios", texto: "Cada semana tiene un ejercicio. Lo subís desde la lección y Lucas lo corrige con marcas en el video.", anim: "subir-material" },
+        { titulo: "Tu formación en Prodi", texto: "En la Academia está tu recorrido: 4 semanas para aprender cómo se filma y se edita un video que vende.", anim: "videos" },
+        { titulo: "Aprendé jugando", texto: "Cada lección trae un video y ejercicios que se corrigen solos. Con el repaso aprobado, se abre la semana siguiente.", anim: "videos" },
         avisos,
       ];
     default:

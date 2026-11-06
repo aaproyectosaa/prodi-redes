@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
@@ -30,9 +29,9 @@ import { useAppData } from "@/contexts/app-data-context";
 import { db } from "@/integrations/firebase/client";
 import { collection, doc, onSnapshot, updateDoc } from "@/lib/db";
 import { avanceDe, completarLeccion, CURSOS, cursosDe, useProgresoAcademia, type Curso, type Leccion, type ProgresoAcademia, type RolCurso } from "@/lib/redes/academia";
-import { avanceRecorrido, useEntregas, useRecorridos, type EntregaAcademia, type ProgresoRecorrido, type Recorrido } from "@/lib/redes/academiaRecorrido";
+import { avanceRecorrido, useRecorridos, type ProgresoRecorrido, type Recorrido } from "@/lib/redes/academiaRecorrido";
+import { callApi } from "@/lib/redes/api";
 import { VerRecorrido } from "@/components/redes/academia/Recorrido";
-import { EntregasAdmin } from "@/components/redes/academia/EntregasAdmin";
 import { EditorRecorrido } from "@/components/redes/academia/EditorRecorrido";
 import { cn } from "@/lib/utils";
 
@@ -428,7 +427,7 @@ function VerCurso({ curso, progreso, uid, libre }: { curso: Curso; progreso: Pro
 }
 
 /** Admin: el avance de cada persona del equipo y el modo "en capacitación". */
-function EquipoAcademia({ recorridos, entregas }: { recorridos: Recorrido[]; entregas: EntregaAcademia[] | null }) {
+function EquipoAcademia({ recorridos }: { recorridos: Recorrido[] }) {
   const { profiles } = useAppData();
   const [progresos, setProgresos] = useState<Record<string, ProgresoAcademia>>({});
   useEffect(
@@ -451,6 +450,12 @@ function EquipoAcademia({ recorridos, entregas }: { recorridos: Recorrido[]; ent
     void updateDoc(doc(db, "profiles", id), { en_capacitacion: v })
       .then(() => toast.success(v ? "En capacitación: sus videos pasan por vos antes del cliente" : "Listo: ya manda sus videos al cliente"))
       .catch((e) => toast.error(e instanceof Error ? e.message : "No se pudo"));
+  const habilitar = (id: string, nombre: string) => {
+    if (!confirm(`¿Pasar a ${nombre} al rol Producción? Va a dejar de estar en formación.`)) return;
+    void callApi("/api/usuarios/editar", { uid: id, rol: "productor" })
+      .then(() => toast.success(`${nombre} ya es productora`))
+      .catch((e) => toast.error(e instanceof Error ? e.message : "No se pudo"));
+  };
   const ini = (n: string) =>
     n
       .split(/\s+/)
@@ -492,7 +497,7 @@ function EquipoAcademia({ recorridos, entregas }: { recorridos: Recorrido[]; ent
                 {recorridos
                   .filter((r) => r.roles.includes(p.role ?? ""))
                   .map((r) => {
-                    const a = avanceRecorrido(r, progresos[p.id] as ProgresoRecorrido, (entregas ?? []).filter((e) => e.uid === p.id));
+                    const a = avanceRecorrido(r, progresos[p.id] as ProgresoRecorrido);
                     const hechas = a.aprobados + Number(a.examen);
                     return (
                       <div key={r.id} className="flex items-center gap-3">
@@ -511,6 +516,11 @@ function EquipoAcademia({ recorridos, entregas }: { recorridos: Recorrido[]; ent
                       </div>
                     );
                   })}
+                {p.role === "formacion" && recorridos.some((r) => r.roles.includes("formacion") && avanceRecorrido(r, progresos[p.id] as ProgresoRecorrido).examen) && (
+                  <Button size="sm" onClick={() => habilitar(p.id, p.nombre)} className="w-full rounded-full">
+                    <Trophy className="mr-1.5 h-4 w-4" /> Aprobó el examen: habilitar como productora
+                  </Button>
+                )}
                 {cursos.map((c) => {
                   const a = avanceDe(c, progresos[p.id]);
                   const Icono = ICONO[c.rol];
@@ -540,12 +550,10 @@ function EquipoAcademia({ recorridos, entregas }: { recorridos: Recorrido[]; ent
   );
 }
 
-/** Admin: un recorrido para revisar los ejercicios, verlo como lo hace la persona o editar el contenido. */
-function RecorridoAdmin({ recorrido, entregas, progreso, uid, nombre, abrir }: { recorrido: Recorrido; entregas: EntregaAcademia[] | null; progreso: ProgresoRecorrido | null; uid: string; nombre: string; abrir: string | null }) {
-  const [sub, setSub] = useState<"entregas" | "ver" | "editar">("entregas");
-  const pendientes = (entregas ?? []).filter((e) => e.recorrido_id === recorrido.id && e.estado === "enviada").length;
+/** Admin: un recorrido para verlo como lo hace la persona o editar el contenido. */
+function RecorridoAdmin({ recorrido, progreso, uid }: { recorrido: Recorrido; progreso: ProgresoRecorrido | null; uid: string }) {
+  const [sub, setSub] = useState<"ver" | "editar">("ver");
   const opciones = [
-    { id: "entregas" as const, label: pendientes ? `Para revisar (${pendientes})` : "Ejercicios", icono: ListChecks },
     { id: "ver" as const, label: "Ver el recorrido", icono: Play },
     { id: "editar" as const, label: "Editar contenido", icono: PencilLine },
   ];
@@ -563,14 +571,8 @@ function RecorridoAdmin({ recorrido, entregas, progreso, uid, nombre, abrir }: {
           </button>
         ))}
       </div>
-      {sub === "entregas" ? (
-        <EntregasAdmin recorrido={recorrido} entregas={entregas} abrir={abrir} />
-      ) : sub === "ver" ? (
-        // Vista previa: el admin la ve toda abierta.
-        <VerRecorrido recorrido={recorrido} progreso={progreso} entregas={(entregas ?? []).filter((e) => e.uid === uid)} uid={uid} nombre={nombre} libre />
-      ) : (
-        <EditorRecorrido recorrido={recorrido} />
-      )}
+      {/* Vista previa: el admin la ve toda abierta. */}
+      {sub === "ver" ? <VerRecorrido recorrido={recorrido} progreso={progreso} uid={uid} libre /> : <EditorRecorrido recorrido={recorrido} />}
     </div>
   );
 }
@@ -582,15 +584,7 @@ export default function Academia() {
   const mios = cursosDe(misRoles);
   const todosLosRecorridos = useRecorridos();
   const recorridos = esAdmin ? todosLosRecorridos : todosLosRecorridos.filter((r) => r.roles.some((x) => misRoles.includes(x)));
-  const entregas = useEntregas(user?.uid, esAdmin);
-  // Link de un aviso: /academia?entrega=<id> abre ese ejercicio (el admin, para revisarlo).
-  const [params] = useSearchParams();
-  const entregaLink = params.get("entrega");
-  const deLink = entregaLink ? entregas?.find((e) => e.id === entregaLink) ?? null : null;
   const [vista, setVista] = useState<string>(esAdmin ? "equipo" : recorridos[0] ? `rec:${recorridos[0].id}` : mios[0]?.rol ?? "");
-  useEffect(() => {
-    if (deLink) setVista(`rec:${deLink.recorrido_id}`);
-  }, [deLink?.id, deLink?.recorrido_id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     // Cuando cargan los recorridos, quien no tiene curso entra directo al suyo.
     if (!vista && recorridos[0]) setVista(`rec:${recorridos[0].id}`);
@@ -600,7 +594,6 @@ export default function Academia() {
   const cursos = esAdmin ? CURSOS : mios;
   const curso = cursos.find((c) => c.rol === vista);
   const recorrido = recorridos.find((r) => `rec:${r.id}` === vista);
-  const nombre = profile?.nombre ?? "";
 
   return (
     <PageShell title="Academia Prodi" subtitle="Lo que hay que saber para trabajar en Prodi, en lecciones cortas con video.">
@@ -655,21 +648,12 @@ export default function Academia() {
         </div>
       )}
       {vista === "equipo" && esAdmin ? (
-        <EquipoAcademia recorridos={todosLosRecorridos} entregas={entregas} />
+        <EquipoAcademia recorridos={todosLosRecorridos} />
       ) : recorrido && user ? (
         esAdmin ? (
-          <RecorridoAdmin key={recorrido.id} recorrido={recorrido} entregas={entregas} progreso={progreso as ProgresoRecorrido | null} uid={user.uid} nombre={nombre} abrir={deLink?.recorrido_id === recorrido.id ? deLink.id : null} />
+          <RecorridoAdmin key={recorrido.id} recorrido={recorrido} progreso={progreso as ProgresoRecorrido | null} uid={user.uid} />
         ) : (
-          <VerRecorrido
-            key={`${recorrido.id}-${deLink?.id ?? ""}`}
-            recorrido={recorrido}
-            progreso={progreso as ProgresoRecorrido | null}
-            entregas={entregas}
-            uid={user.uid}
-            nombre={nombre}
-            libre={false}
-            irA={deLink?.item_id ?? null}
-          />
+          <VerRecorrido key={recorrido.id} recorrido={recorrido} progreso={progreso as ProgresoRecorrido | null} uid={user.uid} libre={false} />
         )
       ) : curso && user ? (
         <VerCurso key={curso.rol} curso={curso} progreso={progreso} uid={user.uid} libre={esAdmin} />

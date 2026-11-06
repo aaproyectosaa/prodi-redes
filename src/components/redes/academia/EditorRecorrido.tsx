@@ -4,10 +4,10 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { guardarRecorrido, type EjercicioRecorrido, type LeccionRecorrido, type ModuloRecorrido, type PreguntaRecorrido, type Recorrido } from "@/lib/redes/academiaRecorrido";
+import { guardarRecorrido, type LeccionRecorrido, type ModuloRecorrido, type PreguntaRecorrido, type Recorrido } from "@/lib/redes/academiaRecorrido";
 import { cn } from "@/lib/utils";
 
-// Admin: editar el contenido de un recorrido (semanas, lecciones, ejercicios, cuestionarios, examen y glosario).
+// Admin: editar el contenido de un recorrido (semanas, lecciones, ejercicios, repasos, examen y glosario).
 // Las listas se escriben una por línea. Se guarda todo junto en academia_recorridos/{id}.
 
 const lineas = (s: string) => s.split("\n").map((x) => x.trim()).filter(Boolean);
@@ -39,33 +39,6 @@ function Lista({ label, valor, onCambio, rows = 3 }: { label: string; valor: str
   );
 }
 
-function EditorEjercicio({ valor, onCambio }: { valor: EjercicioRecorrido; onCambio: (v: EjercicioRecorrido) => void }) {
-  return (
-    <div className="space-y-2 rounded-xl border border-dashed p-3">
-      <Campo label="Título del ejercicio">
-        <Input value={valor.titulo} onChange={(e) => onCambio({ ...valor, titulo: e.target.value })} />
-      </Campo>
-      <Campo label="Consigna">
-        <Textarea value={valor.consigna} rows={2} onChange={(e) => onCambio({ ...valor, consigna: e.target.value })} />
-      </Campo>
-      <Lista label="Pasos" valor={valor.pasos} onCambio={(pasos) => onCambio({ ...valor, pasos })} />
-      <Lista
-        label="Guion (opcional): Momento | Se ve | Se dice"
-        valor={(valor.guion ?? []).map((e) => `${e.momento} | ${e.seVe} | ${e.seDice}`)}
-        onCambio={(l) =>
-          onCambio({
-            ...valor,
-            guion: l.map((x) => {
-              const [momento = "", seVe = "", seDice = ""] = x.split("|").map((t) => t.trim());
-              return { momento, seVe, seDice };
-            }),
-          })
-        }
-      />
-    </div>
-  );
-}
-
 function EditorLeccion({ valor, onCambio, onBorrar }: { valor: LeccionRecorrido; onCambio: (v: LeccionRecorrido) => void; onBorrar: () => void }) {
   const [abierta, setAbierta] = useState(false);
   const set = <K extends keyof LeccionRecorrido>(k: K, v: LeccionRecorrido[K]) => onCambio({ ...valor, [k]: v });
@@ -90,7 +63,10 @@ function EditorLeccion({ valor, onCambio, onBorrar }: { valor: LeccionRecorrido;
             <Lista label="Bien" valor={valor.bien} onCambio={(v) => set("bien", v)} />
             <Lista label="Mal" valor={valor.mal} onCambio={(v) => set("mal", v)} />
           </div>
-          <Lista label="Checklist" valor={valor.checklist} onCambio={(v) => set("checklist", v)} />
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground">Ejercicios de la lección</p>
+            <EditorPreguntas valor={valor.ejercicios ?? []} onCambio={(v) => set("ejercicios", v)} />
+          </div>
           <Campo label="Video (link de YouTube, Drive o .mp4; opcional)">
             <Input value={valor.video ?? ""} onChange={(e) => set("video", e.target.value.trim() || undefined)} placeholder="https://…" />
           </Campo>
@@ -115,18 +91,39 @@ function EditorPreguntas({ valor, onCambio }: { valor: PreguntaRecorrido[]; onCa
               <Trash2 className="h-4 w-4 text-red-600" />
             </Button>
           </div>
+          {p.ordenar ? (
+            <Lista label="Pasos en el orden correcto" valor={p.ordenar} onCambio={(ordenar) => set(i, { ...p, ordenar })} rows={4} />
+          ) : p.unir ? (
+            <Lista
+              label="Pares: «Palabra = Lo que va con ella»"
+              valor={p.unir.map((x) => `${x[0]} = ${x[1]}`)}
+              onCambio={(l) => set(i, { ...p, unir: l.map((x): [string, string] => { const [a = "", b = ""] = x.split("=").map((t) => t.trim()); return [a, b]; }) })}
+              rows={4}
+            />
+          ) : (
+            <>
           {p.opciones.map((o, j) => (
             <div key={j} className="flex items-center gap-2">
               <input type="radio" checked={p.correcta === j} onChange={() => set(i, { ...p, correcta: j })} title="Respuesta correcta" className="h-4 w-4 accent-emerald-500" />
               <Input value={o} onChange={(e) => set(i, { ...p, opciones: p.opciones.map((x, k) => (k === j ? e.target.value : x)) })} className="h-9" />
             </div>
           ))}
-          <p className="text-[11px] text-muted-foreground">Marcá con el círculo la respuesta correcta.</p>
+          <p className="text-[11px] text-muted-foreground">Marcá con el círculo la respuesta correcta. Para completar una frase, poné ___ en el texto.</p>
+            </>
+          )}
         </div>
       ))}
-      <Button variant="outline" size="sm" onClick={() => onCambio([...valor, { texto: "", opciones: ["", "", ""], correcta: 0 }])} className="rounded-full">
-        <Plus className="mr-1.5 h-4 w-4" /> Pregunta
-      </Button>
+      <div className="flex flex-wrap gap-1.5">
+        <Button variant="outline" size="sm" onClick={() => onCambio([...valor, { texto: "", opciones: ["", "", ""], correcta: 0 }])} className="rounded-full">
+          <Plus className="mr-1.5 h-4 w-4" /> Pregunta
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => onCambio([...valor, { texto: "Ordená los pasos", opciones: [], correcta: 0, ordenar: [] }])} className="rounded-full">
+          <Plus className="mr-1.5 h-4 w-4" /> Ordenar
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => onCambio([...valor, { texto: "Uní cada palabra con lo que significa", opciones: [], correcta: 0, unir: [] }])} className="rounded-full">
+          <Plus className="mr-1.5 h-4 w-4" /> Unir
+        </Button>
+      </div>
     </div>
   );
 }
@@ -138,7 +135,7 @@ function EditorModulo({ valor, onCambio, onBorrar }: { valor: ModuloRecorrido; o
     const usados = new Set(valor.lecciones.map((l) => l.id));
     let id = `${valor.id}-${slug("nueva")}`;
     for (let n = 2; usados.has(id); n++) id = `${valor.id}-nueva-${n}`;
-    set("lecciones", [...valor.lecciones, { id, titulo: "Nueva lección", objetivo: "", explicacion: "", bien: [], mal: [], ejercicio: "", checklist: [] }]);
+    set("lecciones", [...valor.lecciones, { id, titulo: "Nueva lección", objetivo: "", explicacion: "", bien: [], mal: [], ejercicios: [] }]);
   };
   return (
     <div className="rounded-2xl border bg-card">
@@ -167,11 +164,7 @@ function EditorModulo({ valor, onCambio, onBorrar }: { valor: ModuloRecorrido; o
             </Button>
           </div>
           <div className="space-y-2">
-            <p className="text-sm font-semibold">Ejercicio de la semana</p>
-            <EditorEjercicio valor={valor.ejercicio} onCambio={(v) => set("ejercicio", v)} />
-          </div>
-          <div className="space-y-2">
-            <p className="text-sm font-semibold">Cuestionario</p>
+            <p className="text-sm font-semibold">Repaso de la semana</p>
             <EditorPreguntas valor={valor.cuestionario} onCambio={(v) => set("cuestionario", v)} />
           </div>
           <Button variant="ghost" size="sm" onClick={onBorrar} className="text-red-600">
@@ -212,7 +205,7 @@ export function EditorRecorrido({ recorrido }: { recorrido: Recorrido }) {
     const n = r.modulos.length + 1;
     let id = `s${n}`;
     for (let k = n + 1; r.modulos.some((m) => m.id === id); k++) id = `s${k}`;
-    set("modulos", [...r.modulos, { id, titulo: `Semana ${n}`, subtitulo: "", lecciones: [], ejercicio: { titulo: `Ejercicio de la semana ${n}`, consigna: "", pasos: [] }, cuestionario: [] }]);
+    set("modulos", [...r.modulos, { id, titulo: `Semana ${n}`, subtitulo: "", lecciones: [], cuestionario: [] }]);
   };
 
   return (
@@ -241,7 +234,10 @@ export function EditorRecorrido({ recorrido }: { recorrido: Recorrido }) {
       </div>
       <div className="space-y-2 rounded-2xl border bg-card p-4">
         <p className="font-semibold">Examen final</p>
-        <EditorEjercicio valor={r.examen} onCambio={(v) => set("examen", v)} />
+        <Campo label="Descripción">
+          <Input value={r.examen.consigna} onChange={(e) => set("examen", { ...r.examen, consigna: e.target.value })} />
+        </Campo>
+        <EditorPreguntas valor={r.examen.preguntas} onCambio={(preguntas) => set("examen", { ...r.examen, preguntas })} />
       </div>
       <div className="space-y-2 rounded-2xl border bg-card p-4">
         <p className="font-semibold">Glosario</p>

@@ -512,36 +512,18 @@ async function chatBorrar(req: VercelRequest) {
  * Academia: avisa de una entrega. Si la manda quien la hizo, les llega a los super admin para revisarla;
  * si la revisa el admin (aprobada o a corregir), le llega a quien la hizo.
  */
+/** La persona en formación aprobó el examen final: se les avisa a los admin, que son quienes le cambian el rol. */
 async function academiaAviso(req: VercelRequest, caller: Caller) {
-  const b = body<{ entrega_id?: string }>(req);
-  const id = String(b.entrega_id ?? "");
-  if (!/^[A-Za-z0-9_-]{1,160}$/.test(id)) throw new HttpError(400, "Falta la entrega");
-  const e = (await adminDb().collection("academia_entregas").doc(id).get()).data();
-  if (!e) throw new HttpError(404, "Ya no existe");
-  const tema = String(e.item_titulo ?? "un ejercicio");
-  if (e.uid === caller.uid && e.estado === "enviada") {
-    const admins = await usuariosConRol(["admin"]);
-    await enviarAviso(
-      { destinatarios: admins, titulo: `Ejercicio para revisar · ${String(e.nombre ?? caller.nombre)}`, cuerpo: tema, link: `/academia?entrega=${id}`, clave: `academia:${id}` },
-      appUrl(req)
-    );
-    return { ok: true };
-  }
-  if (caller.role === "admin" && (e.estado === "aprobada" || e.estado === "a_corregir")) {
-    const ok = e.estado === "aprobada";
-    await enviarAviso(
-      {
-        destinatarios: [String(e.uid)],
-        titulo: ok ? "¡Ejercicio aprobado!" : "Tu ejercicio tiene correcciones",
-        cuerpo: ok ? tema : `${tema}: mirá las marcas en el video y volvé a subirlo.`,
-        link: `/academia?entrega=${id}`,
-        clave: `academia-rev:${id}`,
-      },
-      appUrl(req)
-    );
-    return { ok: true };
-  }
-  throw new HttpError(409, "No hay nada para avisar");
+  if (caller.role !== "formacion") return { ok: true };
+  const p = (await adminDb().collection("academia").doc(caller.uid).get()).data() as { cuestionarios?: Record<string, { aciertos?: number; total?: number }> } | undefined;
+  const nota = p?.cuestionarios?.examen;
+  if (!nota?.total || Number(nota.aciertos) < Math.ceil(Number(nota.total) * 0.8)) throw new HttpError(409, "No hay nada para avisar");
+  const admins = await usuariosConRol(["admin"]);
+  await enviarAviso(
+    { destinatarios: admins, titulo: `Aprobó el examen · ${caller.nombre}`, cuerpo: `${nota.aciertos} de ${nota.total} bien. Ya la podés habilitar como productora.`, link: "/academia", clave: `academia-examen:${caller.uid}` },
+    appUrl(req)
+  );
+  return { ok: true };
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
