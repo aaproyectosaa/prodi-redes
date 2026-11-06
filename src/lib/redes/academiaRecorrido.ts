@@ -355,8 +355,8 @@ export const NIVEL_1: Recorrido = {
       ],
       ejercicio: {
         titulo: "Ejercicio de la semana 4",
-        consigna: "Editar un Reel de 20 a 30 segundos con material real de Prodi. Lucas lo corrige con marcas en el video.",
-        pasos: ["Pedile a Lucas el material.", "Armá el proyecto 9:16 y cortá silencios y errores.", "Gancho al inicio, cambio de plano cada 2 o 3 segundos y llamado a la acción al final.", "Subtítulos revisados dentro de la zona segura.", "Exportá en 1080p a 30 fps, sin música, y subilo acá."],
+        consigna: "Editar un Reel de 20 a 30 segundos con lo que filmaste en la semana 2. Lucas lo corrige con marcas en el video.",
+        pasos: ["Usá lo que filmaste en el ejercicio de la semana 2: la persona hablando y las tomas de recurso.", "Armá el proyecto 9:16 y cortá silencios y errores.", "Gancho al inicio, cambio de plano cada 2 o 3 segundos y llamado a la acción al final.", "Subtítulos revisados dentro de la zona segura.", "Exportá en 1080p a 30 fps, sin música, y subilo acá."],
       },
       cuestionario: [
         P("¿En qué formato se arma el proyecto?", ["16:9", "9:16", "1:1"], 1),

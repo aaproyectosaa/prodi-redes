@@ -141,14 +141,11 @@ function Pantalla({
     return () => window.removeEventListener("keydown", tecla);
   }, [onCerrar]);
 
-  // iPhone con la app instalada: la caja fija queda más corta que la pantalla (franja negra abajo). Se usa el alto real.
-  const altoIphone = (navigator as { standalone?: boolean }).standalone === true && window.innerWidth < 640 ? window.screen.height : null;
-
   return createPortal(
-    <div className={cn("fixed inset-0 z-[60] flex justify-center bg-black/80", altoIphone ? "items-start" : "items-center")} role="dialog" aria-modal="true" aria-label={titulo}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80" role="dialog" aria-modal="true" aria-label={titulo}>
       <div
         className={cn("relative flex h-full w-full flex-col overflow-hidden text-white transition-colors duration-300 sm:h-[min(92dvh,860px)] sm:max-w-[440px] sm:rounded-[2rem]", tono)}
-        style={{ paddingTop: "max(12px, env(safe-area-inset-top))", paddingBottom: "max(16px, env(safe-area-inset-bottom))", ...(altoIphone ? { height: altoIphone } : {}) }}
+        style={{ paddingTop: "max(12px, env(safe-area-inset-top))", paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}
       >
         {total > 1 && (
           <div className="flex shrink-0 gap-1 px-4 pb-2.5" aria-label={`Paso ${actual + 1} de ${total}`}>
