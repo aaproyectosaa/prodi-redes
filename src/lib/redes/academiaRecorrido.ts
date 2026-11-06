@@ -122,6 +122,7 @@ export const NIVEL_1: Recorrido = {
         },
         {
           id: "s1-configuracion",
+          video: "/academia/configuracion-camara.mp4",
           titulo: "Configuración de la cámara",
           objetivo: "Que todo lo que filmes salga en el formato y la calidad que usamos en Prodi.",
           explicacion:
@@ -133,6 +134,7 @@ export const NIVEL_1: Recorrido = {
         },
         {
           id: "s1-estabilidad",
+          video: "/academia/estabilidad.mp4",
           titulo: "Estabilidad",
           objetivo: "Que tus tomas se vean firmes y profesionales, sin temblores.",
           explicacion:
@@ -175,6 +177,7 @@ export const NIVEL_1: Recorrido = {
         },
         {
           id: "s2-encuadre",
+          video: "/academia/encuadre-planos.mp4",
           titulo: "Encuadre y planos",
           objetivo: "Elegir bien qué entra en cada toma y dejar lugar para los textos de Instagram.",
           explicacion:
@@ -186,6 +189,7 @@ export const NIVEL_1: Recorrido = {
         },
         {
           id: "s2-recurso",
+          video: "/academia/tomas-recurso.mp4",
           titulo: "Tomas de recurso (B-roll)",
           objetivo: "Filmar las tomas que le dan ritmo al video y lo hacen fácil de editar.",
           explicacion:
@@ -197,6 +201,7 @@ export const NIVEL_1: Recorrido = {
         },
         {
           id: "s2-audio",
+          video: "/academia/audio.mp4",
           titulo: "Audio",
           objetivo: "Que se escuche clara la voz de quien habla, sin ruido ni eco.",
           explicacion:
@@ -239,6 +244,7 @@ export const NIVEL_1: Recorrido = {
         },
         {
           id: "s3-durante",
+          video: "/academia/durante-rodaje.mp4",
           titulo: "Durante el rodaje",
           objetivo: "Filmar todo lo que pide la lista y que la persona que habla se sienta cómoda.",
           explicacion:
@@ -262,6 +268,7 @@ export const NIVEL_1: Recorrido = {
         },
         {
           id: "s3-reglas",
+          video: "/academia/reglas-prodi.mp4",
           titulo: "Reglas de Prodi",
           objetivo: "Conocer lo que nunca se hace en Prodi, para cuidar a los clientes y a las personas.",
           explicacion:
@@ -292,6 +299,7 @@ export const NIVEL_1: Recorrido = {
       lecciones: [
         {
           id: "s4-proyecto",
+          video: "/academia/proyecto-capcut.mp4",
           titulo: "Proyecto nuevo en 9:16",
           objetivo: "Armar la base del Reel: ordenar las tomas y sacar lo que sobra.",
           explicacion:
@@ -315,6 +323,7 @@ export const NIVEL_1: Recorrido = {
         },
         {
           id: "s4-subtitulos",
+          video: "/academia/subtitulos.mp4",
           titulo: "Subtítulos",
           objetivo: "Que el video se entienda aunque se mire sin sonido.",
           explicacion:
@@ -326,6 +335,7 @@ export const NIVEL_1: Recorrido = {
         },
         {
           id: "s4-color-exportar",
+          video: "/academia/color-exportar.mp4",
           titulo: "Color y exportar",
           objetivo: "Entregar un video parejo y en el formato correcto.",
           explicacion:
