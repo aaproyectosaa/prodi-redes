@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bell, ChevronsUpDown, Eye, EyeOff, HelpCircle, LogOut, MessageCircle, Moon, Smartphone, Sun, User, UserRound } from "lucide-react";
+import { Bell, ChevronsUpDown, Eye, EyeOff, HelpCircle, Languages, LogOut, MessageCircle, Moon, Smartphone, Sun, User, UserRound } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import UserAvatar from "@/components/UserAvatar";
 import { RoleBadge } from "@/components/RoleBadge";
@@ -12,6 +12,7 @@ import { useInstalarApp } from "@/lib/instalar";
 import { useMontosOcultos } from "@/lib/privacidad";
 import { EVENTO_RECORRIDO } from "@/lib/novedades";
 import { cn } from "@/lib/utils";
+import { cambiarIdioma, enIngles } from "@/lib/idioma";
 import type { Profile } from "@/integrations/firebase/types";
 
 /**
@@ -50,7 +51,13 @@ export function PieSidebar({
   const oscuro = theme !== "light";
 
   const rapido = "relative flex h-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground";
-  const Rapidos = (
+  const Rapidos = enIngles ? (
+    <div className={cn("flex gap-1", collapsed ? "flex-col" : "items-center")}>
+      <button type="button" onClick={() => setTheme(oscuro ? "light" : "dark")} className={cn(rapido, collapsed ? "w-full" : "flex-1")} title={oscuro ? "Light mode" : "Dark mode"} data-tema>
+        {oscuro ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+      </button>
+    </div>
+  ) : (
     <div className={cn("flex gap-1", collapsed ? "flex-col" : "items-center")}>
       <button
         type="button"
@@ -135,25 +142,33 @@ export function PieSidebar({
             {profile?.email && <p className="truncate text-xs text-muted-foreground">{profile.email}</p>}
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
+          {/* Para el video de la revisión de Meta, que pide la interfaz en inglés. */}
+          <DropdownMenuItem onClick={() => cambiarIdioma(!enIngles)}>
+            <Languages className="mr-2 h-4 w-4" /> {enIngles ? "Cambiar a español" : "Switch to English"}
+          </DropdownMenuItem>
+          {!enIngles && (
           <DropdownMenuItem onClick={onPerfil}>
             <UserRound className="mr-2 h-4 w-4" /> Mi perfil
           </DropdownMenuItem>
-          {puedeVerComo && (
+          )}
+          {puedeVerComo && !enIngles && (
             <DropdownMenuItem onClick={() => setVerComo(true)}>
               <Eye className="mr-2 h-4 w-4" /> Ver como…
             </DropdownMenuItem>
           )}
-          {!app.instalada && (
+          {!app.instalada && !enIngles && (
             <DropdownMenuItem onClick={() => abrirInstalar()}>
               <Smartphone className="mr-2 h-4 w-4" /> Instalar la app
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem onClick={() => abrirInstalarChat()}>
-            <MessageCircle className="mr-2 h-4 w-4" /> Instalar Prodi Chat
-          </DropdownMenuItem>
+          {!enIngles && (
+            <DropdownMenuItem onClick={() => abrirInstalarChat()}>
+              <MessageCircle className="mr-2 h-4 w-4" /> Instalar Prodi Chat
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={onSalir} className="text-destructive focus:text-destructive">
-            <LogOut className="mr-2 h-4 w-4" /> Cerrar sesión
+            <LogOut className="mr-2 h-4 w-4" /> {enIngles ? "Log out" : "Cerrar sesión"}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

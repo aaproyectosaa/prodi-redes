@@ -660,8 +660,11 @@ export async function responderLead(leadId: string, texto: string, quien: { uid:
 
 // ── Herramientas del vendedor ─────────────────────────────────────────────────────────────────────────────────────
 
-/** Tres respuestas posibles para el lead, según la charla (la elige y la edita el vendedor antes de mandar). */
-export async function sugerirRespuestas(leadId: string, pedido?: string) {
+/**
+ * Tres respuestas posibles para el lead, según la charla (la elige y la edita el vendedor antes de mandar).
+ * "en": en inglés, para el sistema en inglés (video de la revisión de Meta).
+ */
+export async function sugerirRespuestas(leadId: string, pedido?: string, idioma: "es" | "en" = "es") {
   const conv = await conversacionLead(leadId);
   const lead = (await leerDoc(getPool(), COL, leadId)) as any;
   const charla = conv.mensajes
@@ -672,7 +675,7 @@ export async function sugerirRespuestas(leadId: string, pedido?: string) {
 
 Objetivo de venta: entender qué negocio tiene y qué necesita, generar confianza y llevarlo a una videollamada o a pasar su WhatsApp. No des precios cerrados por chat: los planes dependen de cuántos videos por mes.
 
-Escribí 3 respuestas distintas para mandar ahora (una más corta, una más cálida y una que avance hacia la reunión o el WhatsApp). Reglas: español rioplatense con voseo, natural como un DM (1 a 3 frases), sin sonar a robot, como máximo 1 emoji, sin saludar de nuevo si ya se saludó, respondé lo que preguntó.
+Escribí 3 respuestas distintas para mandar ahora (una más corta, una más cálida y una que avance hacia la reunión o el WhatsApp). Reglas: ${idioma === "en" ? "escribilas en inglés (aunque la charla esté en castellano)" : "español rioplatense con voseo"}, natural como un DM (1 a 3 frases), sin sonar a robot, como máximo 1 emoji, sin saludar de nuevo si ya se saludó, respondé lo que preguntó.
 ${pedido ? `Lo que quiere decir el vendedor: ${pedido}\n` : ""}
 Datos del lead: ${[lead?.negocio, lead?.nombre, lead?.rubro && `rubro ${lead.rubro}`, lead?.notas && `notas: ${String(lead.notas).slice(0, 300)}`].filter(Boolean).join(" · ")}
 

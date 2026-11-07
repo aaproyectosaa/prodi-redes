@@ -88,6 +88,16 @@ const RESPUESTAS_BASE: Respuesta[] = [
   { titulo: "Seguimiento", texto: "¡Hola {nombre}! ¿Pudiste ver lo que te pasé? Cualquier duda te ayudo." },
 ];
 
+/** Las de base en inglés (video de la revisión de Meta): las guardadas del equipo están en castellano. */
+const RESPUESTAS_EN: Respuesta[] = [
+  { titulo: "Greeting", texto: "Hi {nombre}! Thanks for reaching out 🙌 We're Prodi: we make videos for your business, publish them and run your Meta ads. What's your business?" },
+  { titulo: "Ask for WhatsApp", texto: "Could you share your WhatsApp number so I can tell you more and send you some examples of our work?" },
+  { titulo: "Book a call", texto: "Would a 15-minute video call this week work for you? Let me know which day and time suits you and we'll book it." },
+  { titulo: "Pricing", texto: "Our plans depend on how many videos per month you need. Tell me a bit about your business and I'll put together a tailored proposal." },
+  { titulo: "Examples", texto: "Here are some of our projects: https://somosprodi.com" },
+  { titulo: "Follow-up", texto: "Hi {nombre}! Did you get a chance to look at what I sent? Happy to help with any questions." },
+];
+
 const EMOJIS = ["🙌", "😊", "👌", "🔥", "🚀", "💪", "👏", "🙏", "✨", "📹", "📈", "✅", "👉", "😉", "🤝", "❤️"];
 
 const TIPO_SIN_TEXTO: Record<string, string> = {
@@ -109,7 +119,7 @@ function dia(at: string) {
   const t = d.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long", ...(d.getFullYear() !== hoy.getFullYear() ? { year: "numeric" } : {}) });
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
-const conNombre = (t: string, lead: LeadChat) => t.replace(/\{nombre\}/g, (lead.nombre || lead.negocio || "").replace(/^@/, "").split(/[\s.]/)[0] || "").replace(/¡Hola !/, "¡Hola!");
+const conNombre = (t: string, lead: LeadChat) => t.replace(/\{nombre\}/g, (lead.nombre || lead.negocio || "").replace(/^@/, "").split(/[\s.]/)[0] || "").replace(/¡Hola !/, "¡Hola!").replace(/^Hi !/, "Hi!");
 
 /** WhatsApp o mail que el lead escribió en el chat y todavía no está en su ficha. */
 function datosEnChat(mensajes: Mensaje[], lead: LeadChat) {
@@ -124,6 +134,12 @@ function datosEnChat(mensajes: Mensaje[], lead: LeadChat) {
 }
 
 function useRespuestas() {
+  if (enIngles) return RESPUESTAS_EN;
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- enIngles es fijo mientras la página está abierta
+  return useRespuestasGuardadas();
+}
+
+function useRespuestasGuardadas() {
   const [lista, setLista] = useState<Respuesta[] | null>(null);
   useEffect(
     () =>
@@ -249,7 +265,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
       setConv(r);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : tr("No se pudo traer la conversación", "Could not load the conversation"));
+      setError(enIngles ? "Could not load the conversation" : e instanceof Error ? e.message : "No se pudo traer la conversación");
     } finally {
       setCargando(false);
     }
@@ -304,10 +320,10 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
     setPanel("ia");
     setPensando(true);
     try {
-      const r = await callApi<{ opciones: string[] }>("/api/web/meta-sugerir", { id: lead.id, pedido: pedido.trim() || undefined });
+      const r = await callApi<{ opciones: string[] }>("/api/web/meta-sugerir", { id: lead.id, pedido: pedido.trim() || undefined, ...(enIngles ? { idioma: "en" } : {}) });
       setSugerencias(r.opciones);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : tr("La IA no pudo sugerir", "AI could not suggest replies"));
+      toast.error(enIngles ? "AI could not suggest replies" : e instanceof Error ? e.message : "La IA no pudo sugerir");
     } finally {
       setPensando(false);
     }
@@ -327,7 +343,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
       })
       .catch((e) => {
         setPendientes((l) => l.map((x) => (x.id === id ? { ...x, estado: "error" } : x)));
-        toast.error(e instanceof Error ? e.message : tr("No se pudo enviar", "Could not send"));
+        toast.error(enIngles ? "Could not send the message" : e instanceof Error ? e.message : "No se pudo enviar");
       });
   };
   const mandarProductos = (lista: Producto[]) => {
@@ -359,9 +375,9 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
   const guardarDato = async (campo: "telefono" | "email", valor: string) => {
     try {
       await callApi("/api/web/datos", { id: lead.id, [campo]: valor });
-      toast.success(campo === "telefono" ? "WhatsApp guardado en la ficha" : "Email guardado en la ficha");
+      toast.success(campo === "telefono" ? tr("WhatsApp guardado en la ficha", "WhatsApp number saved to the lead") : tr("Email guardado en la ficha", "Email saved to the lead"));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo guardar");
+      toast.error(enIngles ? "Could not save" : e instanceof Error ? e.message : "No se pudo guardar");
     }
   };
 
@@ -547,10 +563,10 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
           <div className="mb-1.5 flex items-center justify-between px-1">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{tr("Respuestas rápidas", "Quick replies")}</p>
             <div className="flex items-center gap-1">
-              <button type="button" onClick={() => setPanel("editar")} className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-primary hover:bg-primary/10">
+              <button type="button" onClick={() => setPanel("editar")} className={cn("flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-primary hover:bg-primary/10", enIngles && "hidden")}>
                 <Pencil className="h-3 w-3" /> {tr("Editar", "Edit")}
               </button>
-              <button type="button" onClick={() => setPanel(null)} className="rounded-md p-0.5 text-muted-foreground hover:bg-muted" aria-label="Cerrar">
+              <button type="button" onClick={() => setPanel(null)} className="rounded-md p-0.5 text-muted-foreground hover:bg-muted" aria-label={tr("Cerrar", "Close")}>
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -592,7 +608,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
             <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-primary">
               <Sparkles className="h-3 w-3" /> {tr("Respuestas sugeridas", "Suggested replies")}
             </p>
-            <button type="button" onClick={() => setPanel(null)} className="rounded-md p-0.5 text-muted-foreground hover:bg-muted" aria-label="Cerrar">
+            <button type="button" onClick={() => setPanel(null)} className="rounded-md p-0.5 text-muted-foreground hover:bg-muted" aria-label={tr("Cerrar", "Close")}>
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -640,15 +656,17 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
               <Herramienta activo={panel === "rapidas" || panel === "editar"} onClick={() => setPanel(panel === "rapidas" ? null : "rapidas")} titulo={tr("Respuestas guardadas del equipo", "Saved team replies")}>
                 <Zap className="h-3.5 w-3.5" /> {tr("Rápidas", "Quick replies")}
               </Herramienta>
+              {!enIngles && (
               <Herramienta activo={panel === "productos" || panel === "catalogo"} onClick={() => setPanel(panel === "productos" ? null : "productos")} titulo={tr("Mandar productos del catálogo (tarjeta con foto, precio y link)", "Send catalog products (card with photo, price and link)")}>
-                <ShoppingBag className="h-3.5 w-3.5" /> {tr("Productos", "Products")}
+                <ShoppingBag className="h-3.5 w-3.5" /> Productos
               </Herramienta>
+              )}
               <Herramienta activo={panel === "ia"} onClick={() => void sugerir()} titulo={tr("La IA lee la charla y te propone 3 respuestas", "AI reads the chat and suggests 3 replies")}>
                 <Sparkles className="h-3.5 w-3.5" /> {tr("Sugerir con IA", "Suggest with AI")}
               </Herramienta>
               <Popover>
                 <PopoverTrigger asChild>
-                  <button type="button" className="flex h-8 w-8 items-center justify-center rounded-full border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground" title="Emojis" aria-label="Emojis">
+                  <button type="button" className="flex h-8 w-8 items-center justify-center rounded-full border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground" title="Emoji" aria-label="Emoji">
                     <Smile className="h-3.5 w-3.5" />
                   </button>
                 </PopoverTrigger>
@@ -714,7 +732,7 @@ function AdjuntoVista({ a, mio }: { a: AdjuntoChat; mio: boolean }) {
   if (a.tipo === "imagen" && a.url && !roto)
     return (
       <a href={a.url} target="_blank" rel="noopener noreferrer" className={caja}>
-        <img src={a.preview || a.url} alt="Foto" loading="lazy" onError={() => setRoto(true)} className="max-h-64 w-full object-cover" />
+        <img src={a.preview || a.url} alt={tr("Foto", "Photo")} loading="lazy" onError={() => setRoto(true)} className="max-h-64 w-full object-cover" />
       </a>
     );
   if (a.tipo === "video" && a.url && !roto)
@@ -727,12 +745,12 @@ function AdjuntoVista({ a, mio }: { a: AdjuntoChat; mio: boolean }) {
         <span className="block px-2.5 py-2">
           {a.titulo && <span className="block truncate text-xs font-semibold">{a.titulo}</span>}
           {a.subtitulo && <span className={cn("block truncate text-[11px]", mio ? "text-white/75" : "text-muted-foreground")}>{a.subtitulo}</span>}
-          {a.link && <span className={cn("mt-0.5 block truncate text-[10px] underline", mio ? "text-white/80" : "text-primary")}>Ver</span>}
+          {a.link && <span className={cn("mt-0.5 block truncate text-[10px] underline", mio ? "text-white/80" : "text-primary")}>{tr("Ver", "View")}</span>}
         </span>
       </a>
     );
   // Vencido o sin vista previa: el aviso de siempre, con link si hay.
-  const etiqueta = a.tipo === "imagen" ? "Foto" : a.tipo === "video" ? "Video" : a.tipo === "audio" ? "Audio" : a.titulo || "Archivo";
+  const etiqueta = a.tipo === "imagen" ? tr("Foto", "Photo") : a.tipo === "video" ? "Video" : a.tipo === "audio" ? "Audio" : a.titulo || tr("Archivo", "File");
   return a.url ? (
     <a href={a.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs italic underline opacity-90">
       <Paperclip className="h-3 w-3" /> {etiqueta}

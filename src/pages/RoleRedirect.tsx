@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { defaultRouteForRole } from "@/lib/roles";
 import { useEmpresa } from "@/lib/empresa";
+import { enIngles } from "@/lib/idioma";
 
 const RoleRedirect = () => {
   const navigate = useNavigate();
@@ -17,7 +18,8 @@ const RoleRedirect = () => {
       return;
     }
     if (loading || !role || role === "pending") return;
-    navigate(empresa === "software" ? "/software" : defaultRouteForRole(role), { replace: true });
+    // En inglés (video de la revisión de Meta) se va directo a los leads.
+    navigate(enIngles && (role === "admin" || role === "ventas") ? "/web" : empresa === "software" ? "/software" : defaultRouteForRole(role), { replace: true });
   }, [user, role, loading, navigate, empresa]);
 
   return (

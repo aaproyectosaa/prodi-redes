@@ -17,6 +17,7 @@ import { temaElegido } from "@/lib/tema";
 import { AvisoInstalar, BotonInstalar } from "@/components/InstalarApp";
 import { BotonInstalarChat, InstalarChatHost } from "@/components/InstalarChat";
 import { CHAT_APP, CHAT_APP_INGRESAR, esRutaChatApp } from "@/lib/chatApp";
+import { cambiarIdioma, enIngles, tr } from "@/lib/idioma";
 
 const registerSchema = z.object({
   nombre: z.string().min(2, "El nombre debe tener al menos 2 caracteres").max(100),
@@ -30,8 +31,8 @@ const registerSchema = z.object({
 });
 
 const loginSchema = z.object({
-  email: z.string().email("Email inválido"),
-  password: z.string().min(1, "La contraseña es requerida"),
+  email: z.string().email(tr("Email inválido", "Invalid email")),
+  password: z.string().min(1, tr("La contraseña es requerida", "Password is required")),
 });
 
 const Auth = () => {
@@ -163,24 +164,26 @@ const Auth = () => {
         setTheme(profileData.theme);
       }
 
-      toast.success("¡Bienvenido!");
-      navigate(enChat ? CHAT_APP : defaultRouteForRole(role) === "/auth" ? "/" : defaultRouteForRole(role));
+      toast.success(tr("¡Bienvenido!", "Welcome!"));
+      navigate(enChat ? CHAT_APP : enIngles ? "/" : defaultRouteForRole(role) === "/auth" ? "/" : defaultRouteForRole(role));
     } catch (err) {
       const error = err as { message?: string; code?: string };
       if (err instanceof z.ZodError) {
         toast.error(err.errors[0].message);
       } else if (error.code === "auth/invalid-credential" || error.code === "auth/wrong-password" || error.code === "auth/user-not-found") {
-        toast.error("Email o contraseña incorrectos");
+        toast.error(tr("Email o contraseña incorrectos", "Wrong email or password"));
       } else {
-        toast.error(error.message || "Error al iniciar sesión");
+        toast.error(enIngles ? "Could not log in" : error.message || "Error al iniciar sesión");
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const titulo = linkClave ? "Creá tu contraseña" : isLogin ? (enChat ? "Ingresar a Prodi Chat" : "Ingresar al gestor") : "Crear cuenta";
-  const subtitulo = linkClave
+  const titulo = enIngles && isLogin && !linkClave && !enChat ? "Log in to Prodi" : linkClave ? "Creá tu contraseña" : isLogin ? (enChat ? "Ingresar a Prodi Chat" : "Ingresar al gestor") : "Crear cuenta";
+  const subtitulo = enIngles && isLogin && !linkClave && !enChat
+    ? "Lead management for Prodi's sales team"
+    : linkClave
     ? "Elegí una contraseña de al menos 6 caracteres."
     : isLogin
       ? enChat
@@ -255,7 +258,7 @@ const Auth = () => {
                     className={INPUT}
                   />
                 </Campo>
-                <Campo id="password" label="Contraseña">
+                <Campo id="password" label={tr("Contraseña", "Password")}>
                   <InputClave
                     id="password"
                     value={password}
@@ -294,14 +297,14 @@ const Auth = () => {
                 <div className="pt-1">
                   <Button type="submit" className={BOTON} disabled={loading}>
                     {loading && <Loader2 className="h-5 w-5 animate-spin" />}
-                    {loading ? "Procesando..." : isLogin ? "Ingresar" : "Registrarme"}
+                    {loading ? tr("Procesando...", "Logging in...") : isLogin ? tr("Ingresar", "Log in") : "Registrarme"}
                   </Button>
                 </div>
               </form>
               <div className="mt-5 text-center text-sm">
                 {/* Crear cuenta (con el código del equipo) solo con ?registro=1: a los clientes les damos el usuario nosotros. */}
                 {isLogin && !new URLSearchParams(window.location.search).has("registro") ? (
-                  <p className="text-muted-foreground">¿No tenés usuario? Pedíselo a tu contacto de Prodi.</p>
+                  <p className="text-muted-foreground">{tr("¿No tenés usuario? Pedíselo a tu contacto de Prodi.", "Accounts are created by the Prodi team.")}</p>
                 ) : (
                   <button type="button" onClick={() => setIsLogin(!isLogin)} className="font-medium text-primary hover:underline" disabled={loading}>
                     {isLogin ? "¿No tenés cuenta? Registrate" : "¿Ya tenés cuenta? Ingresá"}
@@ -312,11 +315,18 @@ const Auth = () => {
           )}
         </div>
 
-        <div className="mt-5">
-          {enChat ? <BotonInstalarChat className="justify-center" /> : <BotonInstalar className="justify-center" />}
-        </div>
+        {!enIngles && (
+          <div className="mt-5">
+            {enChat ? <BotonInstalarChat className="justify-center" /> : <BotonInstalar className="justify-center" />}
+          </div>
+        )}
+        {!enChat && !linkClave && (
+          <button type="button" onClick={() => cambiarIdioma(!enIngles)} className="mx-auto mt-4 block text-xs text-muted-foreground hover:text-foreground">
+            {enIngles ? "Español" : "English"}
+          </button>
+        )}
       </div>
-      {enChat ? <InstalarChatHost /> : <AvisoInstalar />}
+      {enChat ? <InstalarChatHost /> : !enIngles && <AvisoInstalar />}
     </div>
   );
 };
@@ -373,7 +383,7 @@ function InputClave({
         type="button"
         onClick={() => setVer((v) => !v)}
         disabled={disabled}
-        aria-label={ver ? "Ocultar contraseña" : "Mostrar contraseña"}
+        aria-label={ver ? tr("Ocultar contraseña", "Hide password") : tr("Mostrar contraseña", "Show password")}
         className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
       >
         {ver ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}

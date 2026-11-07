@@ -1008,8 +1008,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.status(200).json(await conectarWhatsApp(body<{ code?: string; waba_id?: string; phone_number_id?: string }>(req)));
     } else if (accion === "meta-sugerir") {
       await requireCaller(req, VENTAS);
-      const b = body<{ id?: string; pedido?: string }>(req);
-      res.status(200).json(await sugerirRespuestas(texto(b.id, 40), texto(b.pedido, 300)));
+      const b = body<{ id?: string; pedido?: string; idioma?: string }>(req);
+      res.status(200).json(await sugerirRespuestas(texto(b.id, 40), texto(b.pedido, 300), b.idioma === "en" ? "en" : "es"));
     } else if (accion === "respuestas") {
       await requireCaller(req, VENTAS);
       res.status(200).json(await guardarRespuestas(body<{ lista?: unknown }>(req).lista));

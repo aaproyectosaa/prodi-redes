@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
+import { tr } from "@/lib/idioma";
 import { useLlamada } from "@/lib/redes/chatVoz";
 
 // Versión nueva publicada mientras la app estaba abierta (pasa mucho con la app instalada, que nunca se cierra).
@@ -80,11 +81,11 @@ export function AvisoVersion() {
   // Con versión nueva: el aviso queda fijo hasta que se actualice.
   useEffect(() => {
     if (!nueva) return;
-    toast("Hay una versión nueva de Prodi", {
+    toast(tr("Hay una versión nueva de Prodi", "A new version of Prodi is available"), {
       id: "version-nueva",
-      description: "Actualizá para ver lo último. Se actualiza sola cuando cambies de pantalla.",
+      description: tr("Actualizá para ver lo último. Se actualiza sola cuando cambies de pantalla.", "Refresh to get the latest version."),
       duration: Infinity,
-      action: { label: "Actualizar", onClick: () => window.location.reload() },
+      action: { label: tr("Actualizar", "Refresh"), onClick: () => window.location.reload() },
     });
   }, [nueva]);
 

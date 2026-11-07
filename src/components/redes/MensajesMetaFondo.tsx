@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { toast } from "sonner";
+import { tr } from "@/lib/idioma";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { callApi } from "@/lib/redes/api";
 
@@ -44,7 +45,13 @@ export function MensajesMetaFondo() {
       try {
         const r = await callApi<{ nuevos: number; cada?: number }>("/api/web/meta-mensajes", {});
         anotar({ at: Date.now(), cada: r.cada ?? previo.cada ?? 2 * 60_000 });
-        if (r.nuevos > 0) toast.success(`${r.nuevos} lead${r.nuevos === 1 ? "" : "s"} nuevo${r.nuevos === 1 ? "" : "s"} por mensaje de Instagram`);
+        if (r.nuevos > 0)
+          toast.success(
+            tr(
+              `${r.nuevos} lead${r.nuevos === 1 ? "" : "s"} nuevo${r.nuevos === 1 ? "" : "s"} por mensaje de Instagram`,
+              `${r.nuevos} new lead${r.nuevos === 1 ? "" : "s"} from Instagram messages`
+            )
+          );
       } catch {
         /* sin conexión o sin página conectada: se reintenta en la próxima vuelta */
       } finally {

@@ -19,6 +19,8 @@ import { estiloSeccion, TituloSeccion, useSeccionesPlegables } from "@/component
 import { useRedes } from "@/contexts/redes-data-context";
 import { AnilloPerfilMenu } from "@/components/redes/cliente/PerfilCompleto";
 import { PieSidebar } from "@/components/PieSidebar";
+import { enIngles } from "@/lib/idioma";
+import { Inbox } from "lucide-react";
 
 const STORAGE_KEY = "sidebar-collapsed";
 
@@ -91,9 +93,11 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
   const { empresa } = useEmpresa();
   // En la compu el chat está en el botón flotante: el menú no lo repite (en el celular sigue en la barra de abajo).
   const conDock = !viewingAs && ROLES_DOCK.includes(role ?? "");
-  const sections = navForRoles(role, roles, empresa, { crm: estadoCrm(clientes), servicios: serviciosEnMenu(clientes), visitas: clientes.some((c) => c.visitas_activo) })
+  const todas = navForRoles(role, roles, empresa, { crm: estadoCrm(clientes), servicios: serviciosEnMenu(clientes), visitas: clientes.some((c) => c.visitas_activo) })
     .map((s) => ({ ...s, items: conDock ? s.items.filter((i) => i.path !== "/chat") : s.items }))
     .filter((s) => s.items.length > 0);
+  // En inglés (video de la revisión de Meta) el menú tiene solo los leads, que es lo que se muestra.
+  const sections = enIngles ? [{ title: "", items: [{ label: "Leads", icon: Inbox, path: "/web" } as NavItem] }] : todas;
   const pendientes = usePendientes();
   const plegables = useSeccionesPlegables();
   const roleLabel = getRoleInfo(role).label;
@@ -144,7 +148,7 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
         type="button"
         onClick={toggleCollapsed}
         className="absolute -right-3.5 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-primary text-primary-foreground shadow-lg transition-all hover:scale-110"
-        aria-label={collapsed ? "Expandir panel" : "Contraer panel"}
+        aria-label={collapsed ? (enIngles ? "Expand" : "Expandir panel") : enIngles ? "Collapse" : "Contraer panel"}
       >
         {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
       </button>
@@ -156,7 +160,7 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
           <div className="flex items-center gap-2">
             <img src={asset("/brand/logo-horizontal-blanco.png")} alt="Prodi" className="hidden h-6 w-auto dark:block" />
             <img src={asset("/brand/logo-horizontal-negro.png")} alt="Prodi" className="h-6 w-auto dark:hidden" />
-            <SelectorEmpresa />
+            {!enIngles && <SelectorEmpresa />}
           </div>
         )}
       </div>
@@ -214,7 +218,7 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
       <PieSidebar
         collapsed={collapsed}
         profile={profile}
-        roleLabel={roleLabel}
+        roleLabel={enIngles ? (role === "admin" ? "Admin" : "Sales") : roleLabel}
         avisos={unreadCount}
         avisosActivo={location.pathname === "/notificaciones"}
         onAvisos={() => navigate("/notificaciones")}

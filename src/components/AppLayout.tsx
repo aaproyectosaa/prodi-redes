@@ -27,6 +27,7 @@ import { useMontosOcultos } from "@/lib/privacidad";
 import { vinoDeChat, volverAlChat } from "@/lib/chatApp";
 import { ArrowLeft } from "lucide-react";
 import { MedidasPantalla } from "@/components/MedidasPantalla";
+import { enIngles } from "@/lib/idioma";
 
 const LayoutInner = () => {
   const navigate = useNavigate();
@@ -65,7 +66,7 @@ const LayoutInner = () => {
           {/* En el celular el encabezado va primero: es el que deja libre la barra de estado del iPhone. */}
           <MobileAppHeader profile={profile} role={role} />
           <VerComoBanner />
-          <AvisoAcademia />
+          {!enIngles && <AvisoAcademia />}
           {/* Se abrió desde Prodi Chat (en el celular no puede abrir la otra app): un toque para volver a los chats. */}
           {vinoDeChat() && (
             <button
@@ -76,27 +77,32 @@ const LayoutInner = () => {
               <ArrowLeft className="h-4 w-4" /> Volver a Prodi Chat
             </button>
           )}
-          <AvisoDescargarChat oculto={sinAvisoChat || vinoDeChat()} />
+          <AvisoDescargarChat oculto={sinAvisoChat || vinoDeChat() || enIngles} />
           <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
             {/* Al tocar el ojito se vuelve a dibujar la pantalla con los montos tapados o a la vista. */}
             <Outlet key={montosOcultos ? "ocultos" : "visibles"} />
           </main>
         </div>
         <MobileTabBar role={role} />
-        <AvisoInstalar />
-        <InstalarChatHost />
-        <AvisoActivarAvisos uid={viewingAs ? undefined : user?.uid} />
-        <RecorridoAuto />
-        <AvisoTarde />
-        <LeerAvisosALaVista uid={viewingAs ? undefined : user?.uid} />
+        {/* En inglés (video de la revisión de Meta) no sale ningún aviso al entrar ni el chat del equipo. */}
+        {!enIngles && (
+          <>
+            <AvisoInstalar />
+            <InstalarChatHost />
+            <AvisoActivarAvisos uid={viewingAs ? undefined : user?.uid} />
+            <RecorridoAuto />
+            <AvisoTarde />
+            <LeerAvisosALaVista uid={viewingAs ? undefined : user?.uid} />
+            <PedirFotoPerfil />
+            <MiDia />
+            <ChatDock />
+            {role === "admin" && !viewingAs && <MedidasPantalla />}
+          </>
+        )}
         <LatidoMiTiempo />
-        <PedirFotoPerfil />
-        <MiDia />
         <DriveUploadStatusBar />
         <VideoSheet />
-        <ChatDock />
         <GrabacionEnCurso />
-        {role === "admin" && !viewingAs && <MedidasPantalla />}
       </div>
     </RedesDataProvider>
   );

@@ -51,7 +51,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { useAppData } from "@/contexts/app-data-context";
 import { Handshake } from "lucide-react";
-import { enIngles, tr } from "@/lib/idioma";
+import { enIngles, haceEn, tr } from "@/lib/idioma";
 
 // Reservas de la landing de la campaña «No empezamos de cero» (somosprodi.com).
 // Las crea el servidor (/api/web/aplicar); acá se mueven y se anotan (/api/web/estado y /notas).
@@ -158,7 +158,12 @@ interface MensajeChat {
   mio?: boolean;
 }
 
-const TEXTO_SIN_TEXTO: Record<string, string> = { historia: "Respondió tu historia", publicacion: "Mandó una publicación", sticker: "Mandó un sticker", archivo: "Mandó un archivo" };
+const TEXTO_SIN_TEXTO: Record<string, string> = {
+  historia: tr("Respondió tu historia", "Replied to your story"),
+  publicacion: tr("Mandó una publicación", "Shared a post"),
+  sticker: tr("Mandó un sticker", "Sent a sticker"),
+  archivo: tr("Mandó un archivo", "Sent a file"),
+};
 
 /**
  * Cómo está la charla: el último mensaje (de quién y qué dijo), si está esperando respuesta y si nadie lo leyó.
@@ -303,6 +308,77 @@ async function mover(lead: LeadWeb, estado: Estado) {
 }
 
 export default function Web() {
+  return enIngles ? <WebIngles /> : <WebCastellano />;
+}
+
+/**
+ * En inglés (video de la revisión de Meta): las conversaciones de Instagram y Messenger, y al tocar una, su chat para
+ * responder desde acá. El tablero completo queda para el castellano.
+ */
+function WebIngles() {
+  const { leads, config } = useLeadsWeb();
+  const [abierto, setAbierto] = useState<string | null>(null);
+  const [ajustes, setAjustes] = useState(false);
+  const esAdmin = useUserProfileContext().role === "admin";
+  const lista = useMemo(
+    () =>
+      (leads ?? [])
+        .filter((l) => l.meta?.conversacion_id)
+        .map((l) => ({ l, c: charlaDe(l) }))
+        .sort((a, b) => (b.c.ultimo?.at ?? b.l.updated_at).localeCompare(a.c.ultimo?.at ?? a.l.updated_at)),
+    [leads]
+  );
+  const lead = (leads ?? []).find((l) => l.id === abierto) ?? null;
+  return (
+    <PageShell
+      title="Leads"
+      subtitle="Instagram and Messenger conversations with Prodi. Open one to reply from here."
+      className="max-w-3xl"
+      actions={
+        esAdmin && (
+          <Button variant="outline" onClick={() => setAjustes(true)}>
+            <Settings2 className="mr-2 h-4 w-4" /> Meta connection
+          </Button>
+        )
+      }
+    >
+      {leads === null ? (
+        <p className="py-10 text-center text-sm text-muted-foreground">Loading…</p>
+      ) : lista.length === 0 ? (
+        <EmptyState icon={MessageCircle} title="No conversations yet" description="When someone messages Prodi on Instagram or Messenger, it shows up here." />
+      ) : (
+        <div className="divide-y overflow-hidden rounded-2xl border bg-card">
+          {lista.map(({ l, c }) => {
+            const messenger = l.meta?.plataforma === "messenger";
+            const IconoRed = messenger ? MessageCircle : Instagram;
+            return (
+              <button key={l.id} type="button" onClick={() => setAbierto(l.id)} className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50">
+                <AvatarLead lead={l} className="h-10 w-10 rounded-full text-xs" />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2 truncate text-sm font-semibold">
+                    {l.negocio}
+                    {c.sinLeer && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                  </span>
+                  <span className="block truncate text-xs text-muted-foreground">{c.ultimo ? `${c.ultimo.mio ? "You: " : ""}${c.ultimo.texto}` : ""}</span>
+                </span>
+                <span className="shrink-0 text-right text-[11px] text-muted-foreground">
+                  <span className="flex items-center justify-end gap-1">
+                    <IconoRed className="h-3 w-3" /> {messenger ? "Messenger" : "Instagram"}
+                  </span>
+                  {c.ultimo?.at && <span className="block">{haceEn(c.ultimo.at)}</span>}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <LeadDetalle lead={lead} todos={leads ?? []} onClose={() => setAbierto(null)} />
+      <AjustesTemporada open={ajustes && esAdmin} onOpenChange={setAjustes} config={config} />
+    </PageShell>
+  );
+}
+
+function WebCastellano() {
   const { leads: leadsBase, config } = useLeadsWeb();
   const versionMovidos = useMovidos();
   // Los leads con los cambios de etapa que todavía no confirmó el servidor.
@@ -1176,12 +1252,12 @@ function LeadDetalle({ lead, todos, onClose }: { lead: LeadWeb | null; todos: Le
       <DialogContent className={cn("flex max-h-[92dvh] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden rounded-3xl bg-background p-0", soloChat ? "h-[min(860px,92dvh)] max-w-3xl" : conChat ? "h-[min(860px,92dvh)] max-w-5xl" : "max-w-xl")}>
         {/* Encabezado */}
         <DialogHeader className="shrink-0 flex-row items-center gap-3 space-y-0 border-b bg-gradient-to-r from-primary/[0.08] via-fuchsia-500/[0.05] to-transparent px-5 py-3.5 pr-12 text-left">
-          <AvatarEditable lead={lead} />
+          {soloChat ? <AvatarLead lead={lead} className="h-11 w-11 rounded-2xl text-sm shadow-md shadow-primary/25" /> : <AvatarEditable lead={lead} />}
           <div className="min-w-0 flex-1">
             <DialogTitle className="truncate text-lg">{lead.negocio}</DialogTitle>
             <DialogDescription className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
               <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold", o.clase)}>
-                <IconoOrigen className="h-3 w-3" /> {o.label}
+                <IconoOrigen className="h-3 w-3" /> {soloChat ? (lead.meta?.plataforma === "messenger" ? "Messenger" : "Instagram") : o.label}
               </span>
               {lead.nombre && lead.nombre !== lead.negocio.replace(/^@/, "") && <span>{lead.nombre}</span>}
               {!enIngles && <span>· llegó {hace(lead.created_at)}</span>}
@@ -1457,7 +1533,7 @@ function FormulariosMeta() {
       setToken("");
       toast.success(tr(`Conectado a ${r.pagina}: ${r.formularios} formulario${r.formularios === 1 ? "" : "s"}, ${r.nuevos} lead${r.nuevos === 1 ? "" : "s"} nuevo${r.nuevos === 1 ? "" : "s"}`, `Connected to ${r.pagina}: ${r.formularios} lead form${r.formularios === 1 ? "" : "s"}, ${r.nuevos} new lead${r.nuevos === 1 ? "" : "s"}`));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : tr("No se pudo conectar", "Could not connect"));
+      toast.error(enIngles ? "Could not connect" : err instanceof Error ? err.message : "No se pudo conectar");
     } finally {
       setConectando(false);
     }
@@ -1466,7 +1542,7 @@ function FormulariosMeta() {
     setConectando(true);
     try {
       const r = await callApi<{ nuevos: number; errores?: string[]; detalle?: string[] }>("/api/web/meta-mensajes", { forzar: true });
-      if (r.errores?.length) toast.warning(r.errores.join(" · "), { duration: 20000 });
+      if (r.errores?.length && !enIngles) toast.warning(r.errores.join(" · "), { duration: 20000 });
       toast.success(
         enIngles
           ? r.nuevos
@@ -1476,7 +1552,7 @@ function FormulariosMeta() {
         { duration: 15000 }
       );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : tr("No se pudieron traer los mensajes", "Could not fetch messages"));
+      toast.error(enIngles ? "Could not fetch messages" : err instanceof Error ? err.message : "No se pudieron traer los mensajes");
     } finally {
       setConectando(false);
     }
@@ -1487,7 +1563,7 @@ function FormulariosMeta() {
       const r = await callApi<{ pagina: string; formularios: number; nuevos: number }>("/api/web/meta-conectar", {});
       toast.success(tr(`Conectado a ${r.pagina}: ${r.formularios} formulario${r.formularios === 1 ? "" : "s"}, ${r.nuevos} lead${r.nuevos === 1 ? "" : "s"} nuevo${r.nuevos === 1 ? "" : "s"}`, `Connected to ${r.pagina}: ${r.formularios} lead form${r.formularios === 1 ? "" : "s"}, ${r.nuevos} new lead${r.nuevos === 1 ? "" : "s"}`));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : tr("No se pudo conectar", "Could not connect"));
+      toast.error(enIngles ? "Could not connect" : err instanceof Error ? err.message : "No se pudo conectar");
     } finally {
       setConectando(false);
     }
