@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { db, doc, onSnapshot, suscribirEscribiendo } from "@/lib/db";
 import { callApi } from "@/lib/redes/api";
 import { cn } from "@/lib/utils";
+import { enIngles, tr } from "@/lib/idioma";
 import { ConfigCatalogo, SelectorProductos, type Producto } from "./CatalogoProductos";
 
 // Chat de un lead que llegó por Instagram o Messenger: se lee y se contesta desde el CRM (api/_lib/meta-leads.ts).
@@ -90,21 +91,22 @@ const RESPUESTAS_BASE: Respuesta[] = [
 const EMOJIS = ["🙌", "😊", "👌", "🔥", "🚀", "💪", "👏", "🙏", "✨", "📹", "📈", "✅", "👉", "😉", "🤝", "❤️"];
 
 const TIPO_SIN_TEXTO: Record<string, string> = {
-  historia: "Respondió a una historia",
-  publicacion: "Compartió una publicación",
-  sticker: "Mandó un sticker",
-  archivo: "Foto, audio o archivo",
-  otro: "Reacción o mensaje sin texto",
+  historia: tr("Respondió a una historia", "Replied to a story"),
+  publicacion: tr("Compartió una publicación", "Shared a post"),
+  sticker: tr("Mandó un sticker", "Sent a sticker"),
+  archivo: tr("Foto, audio o archivo", "Photo, audio or file"),
+  otro: tr("Reacción o mensaje sin texto", "Reaction or message without text"),
 };
+const LOCALE = enIngles ? "en-US" : "es-AR";
 
-const hora = (at: string) => new Date(at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+const hora = (at: string) => new Date(at).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
 function dia(at: string) {
   const d = new Date(at);
   const hoy = new Date();
   const ayer = new Date(Date.now() - 86400_000);
-  if (d.toDateString() === hoy.toDateString()) return "Hoy";
-  if (d.toDateString() === ayer.toDateString()) return "Ayer";
-  const t = d.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", ...(d.getFullYear() !== hoy.getFullYear() ? { year: "numeric" } : {}) });
+  if (d.toDateString() === hoy.toDateString()) return tr("Hoy", "Today");
+  if (d.toDateString() === ayer.toDateString()) return tr("Ayer", "Yesterday");
+  const t = d.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long", ...(d.getFullYear() !== hoy.getFullYear() ? { year: "numeric" } : {}) });
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 const conNombre = (t: string, lead: LeadChat) => t.replace(/\{nombre\}/g, (lead.nombre || lead.negocio || "").replace(/^@/, "").split(/[\s.]/)[0] || "").replace(/¡Hola !/, "¡Hola!");
@@ -247,7 +249,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
       setConv(r);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo traer la conversación");
+      setError(e instanceof Error ? e.message : tr("No se pudo traer la conversación", "Could not load the conversation"));
     } finally {
       setCargando(false);
     }
@@ -305,7 +307,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
       const r = await callApi<{ opciones: string[] }>("/api/web/meta-sugerir", { id: lead.id, pedido: pedido.trim() || undefined });
       setSugerencias(r.opciones);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "La IA no pudo sugerir");
+      toast.error(e instanceof Error ? e.message : tr("La IA no pudo sugerir", "AI could not suggest replies"));
     } finally {
       setPensando(false);
     }
@@ -325,7 +327,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
       })
       .catch((e) => {
         setPendientes((l) => l.map((x) => (x.id === id ? { ...x, estado: "error" } : x)));
-        toast.error(e instanceof Error ? e.message : "No se pudo enviar");
+        toast.error(e instanceof Error ? e.message : tr("No se pudo enviar", "Could not send"));
       });
   };
   const mandarProductos = (lista: Producto[]) => {
@@ -404,7 +406,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
         <IconoRed className="h-4 w-4 shrink-0 text-pink-500" />
         <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
           <span className="font-semibold text-foreground">{red}</span>
-          {ultimoSuyo ? ` · último mensaje ${dia(ultimoSuyo.at).toLowerCase()}, ${hora(ultimoSuyo.at)}` : ""}
+          {ultimoSuyo ? ` · ${tr("último mensaje", "last message")} ${dia(ultimoSuyo.at).toLowerCase()}, ${hora(ultimoSuyo.at)}` : ""}
         </p>
         {conv &&
           (conv.puede_responder ? (
@@ -419,23 +421,23 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
               )}
               title={
                 extendida
-                  ? "Pasaron más de 24 h: se responde como persona (Human Agent), hasta 7 días después de su último mensaje"
-                  : "Meta deja responder hasta 24 h después del último mensaje del lead"
+                  ? tr("Pasaron más de 24 h: se responde como persona (Human Agent), hasta 7 días después de su último mensaje", "More than 24 h passed: a human agent replies (Human Agent tag), up to 7 days after their last message")
+                  : tr("Meta deja responder hasta 24 h después del último mensaje del lead", "Meta allows replies up to 24 h after the lead's last message")
               }
             >
               <Clock className="h-3 w-3" />{" "}
               {extendida
-                ? `Plazo extendido · ${horas >= 24 ? `${Math.floor(horas / 24)} d` : `${horas} h`}`
+                ? `${tr("Plazo extendido", "Human agent window")} · ${horas >= 24 ? `${Math.floor(horas / 24)} d` : `${horas} h`}`
                 : horas < 1
-                  ? "Menos de 1 h para responder"
-                  : `${horas} h para responder`}
+                  ? tr("Menos de 1 h para responder", "Less than 1 h to reply")
+                  : tr(`${horas} h para responder`, `${horas} h left to reply`)}
             </span>
           ) : (
             <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-              <Clock className="h-3 w-3" /> Ventana cerrada
+              <Clock className="h-3 w-3" /> {tr("Ventana cerrada", "Window closed")}
             </span>
           ))}
-        <button type="button" onClick={() => void cargar()} className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" title="Actualizar" aria-label="Actualizar">
+        <button type="button" onClick={() => void cargar()} className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" title={tr("Actualizar", "Refresh")} aria-label={tr("Actualizar", "Refresh")}>
           <RefreshCw className={cn("h-3.5 w-3.5", cargando && "animate-spin")} />
         </button>
       </div>
@@ -445,7 +447,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
         <div ref={caja} onScroll={alScroll} className="absolute inset-0 overflow-y-auto bg-background bg-[radial-gradient(circle_at_1px_1px,hsl(var(--border))_1px,transparent_0)] bg-[length:20px_20px] px-4 py-4 sm:px-6">
           {!conv && !error && (
             <p className="flex items-center justify-center gap-2 py-16 text-xs text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Trayendo la conversación…
+              <Loader2 className="h-4 w-4 animate-spin" /> {tr("Trayendo la conversación…", "Loading the conversation…")}
             </p>
           )}
           {error && <p className="rounded-xl bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">{error}</p>}
@@ -488,7 +490,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
                         onClick={() => mandar(f.m.texto, f.m.id)}
                         className="rounded-full bg-white/20 px-2 py-0.5 font-semibold text-white hover:bg-white/30"
                       >
-                        No se envió · Reintentar
+                        {tr("No se envió · Reintentar", "Not sent · Retry")}
                       </button>
                     ) : (
                       <>
@@ -501,7 +503,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
               </div>
             )
           )}
-          {conv && conv.mensajes.length === 0 && <p className="py-16 text-center text-xs text-muted-foreground">Todavía no hay mensajes.</p>}
+          {conv && conv.mensajes.length === 0 && <p className="py-16 text-center text-xs text-muted-foreground">{tr("Todavía no hay mensajes.", "No messages yet.")}</p>}
         </div>
         {!abajo && (
           <button
@@ -509,7 +511,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
             onClick={() => bajar()}
             className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full border bg-card px-3 py-1.5 text-xs font-medium shadow-lg hover:bg-muted"
           >
-            <ArrowDown className="h-3.5 w-3.5" /> {nuevos ? `${nuevos} nuevo${nuevos === 1 ? "" : "s"}` : "Abajo"}
+            <ArrowDown className="h-3.5 w-3.5" /> {nuevos ? tr(`${nuevos} nuevo${nuevos === 1 ? "" : "s"}`, `${nuevos} new`) : tr("Abajo", "Latest")}
           </button>
         )}
       </div>
@@ -517,14 +519,14 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
       {/* Datos que escribió en el chat */}
       {(detectados.telefono || detectados.email) && (
         <div className="flex flex-wrap items-center gap-1.5 border-t bg-emerald-500/5 px-3 py-2 text-xs">
-          <span className="text-muted-foreground">En el chat pasó:</span>
+          <span className="text-muted-foreground">{tr("En el chat pasó:", "Shared in the chat:")}</span>
           {detectados.telefono && (
             <button
               type="button"
               onClick={() => void guardarDato("telefono", detectados.telefono!)}
               className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 font-medium text-emerald-700 hover:bg-emerald-500/25 dark:text-emerald-300"
             >
-              <Phone className="h-3 w-3" /> Guardar {detectados.telefono} como WhatsApp
+              <Phone className="h-3 w-3" /> {tr(`Guardar ${detectados.telefono} como WhatsApp`, `Save ${detectados.telefono} as WhatsApp`)}
             </button>
           )}
           {detectados.email && (
@@ -533,7 +535,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
               onClick={() => void guardarDato("email", detectados.email!)}
               className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 font-medium text-emerald-700 hover:bg-emerald-500/25 dark:text-emerald-300"
             >
-              <AtSign className="h-3 w-3" /> Guardar {detectados.email}
+              <AtSign className="h-3 w-3" /> {tr("Guardar", "Save")} {detectados.email}
             </button>
           )}
         </div>
@@ -543,10 +545,10 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
       {panel === "rapidas" && (
         <div className="border-t bg-muted/40 p-2">
           <div className="mb-1.5 flex items-center justify-between px-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Respuestas rápidas</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{tr("Respuestas rápidas", "Quick replies")}</p>
             <div className="flex items-center gap-1">
               <button type="button" onClick={() => setPanel("editar")} className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-primary hover:bg-primary/10">
-                <Pencil className="h-3 w-3" /> Editar
+                <Pencil className="h-3 w-3" /> {tr("Editar", "Edit")}
               </button>
               <button type="button" onClick={() => setPanel(null)} className="rounded-md p-0.5 text-muted-foreground hover:bg-muted" aria-label="Cerrar">
                 <X className="h-3.5 w-3.5" />
@@ -588,7 +590,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
         <div className="border-t bg-gradient-to-br from-primary/[0.06] to-fuchsia-500/[0.06] p-2">
           <div className="mb-1.5 flex items-center justify-between px-1">
             <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-primary">
-              <Sparkles className="h-3 w-3" /> Respuestas sugeridas
+              <Sparkles className="h-3 w-3" /> {tr("Respuestas sugeridas", "Suggested replies")}
             </p>
             <button type="button" onClick={() => setPanel(null)} className="rounded-md p-0.5 text-muted-foreground hover:bg-muted" aria-label="Cerrar">
               <X className="h-3.5 w-3.5" />
@@ -596,7 +598,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
           </div>
           {pensando ? (
             <p className="flex items-center gap-2 px-1 py-4 text-xs text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Leyendo la charla y armando respuestas…
+              <Loader2 className="h-4 w-4 animate-spin" /> {tr("Leyendo la charla y armando respuestas…", "Reading the chat and drafting replies…")}
             </p>
           ) : (
             <div className="space-y-1.5">
@@ -610,11 +612,11 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
                   value={pedido}
                   onChange={(e) => setPedido(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && void sugerir()}
-                  placeholder="Pedile algo: ej. invitalo a una llamada el jueves"
+                  placeholder={tr("Pedile algo: ej. invitalo a una llamada el jueves", "Ask for something: e.g. invite them to a call on Thursday")}
                   className="h-8 rounded-full text-xs"
                 />
                 <Button size="sm" variant="outline" className="h-8 shrink-0 rounded-full text-xs" onClick={() => void sugerir()}>
-                  <RefreshCw className="mr-1 h-3 w-3" /> Otras
+                  <RefreshCw className="mr-1 h-3 w-3" /> {tr("Otras", "More")}
                 </Button>
               </div>
             </div>
@@ -627,22 +629,22 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
         {conv && !conv.puede_responder ? (
           <div className="flex items-center gap-2 rounded-xl bg-muted px-3 py-2.5 text-xs text-muted-foreground">
             <Clock className="h-4 w-4 shrink-0" />
-            <span className="flex-1">Pasaron más de 7 días desde su último mensaje: Meta no deja responder desde acá.</span>
+            <span className="flex-1">{tr("Pasaron más de 7 días desde su último mensaje: Meta no deja responder desde acá.", "More than 7 days since their last message: Meta does not allow replies from here.")}</span>
             <a href={appLink} target="_blank" rel="noopener noreferrer" className="shrink-0 rounded-full bg-primary px-3 py-1 font-semibold text-primary-foreground hover:bg-primary/90">
-              Abrir {red}
+              {tr("Abrir", "Open")} {red}
             </a>
           </div>
         ) : (
           <>
             <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-              <Herramienta activo={panel === "rapidas" || panel === "editar"} onClick={() => setPanel(panel === "rapidas" ? null : "rapidas")} titulo="Respuestas guardadas del equipo">
-                <Zap className="h-3.5 w-3.5" /> Rápidas
+              <Herramienta activo={panel === "rapidas" || panel === "editar"} onClick={() => setPanel(panel === "rapidas" ? null : "rapidas")} titulo={tr("Respuestas guardadas del equipo", "Saved team replies")}>
+                <Zap className="h-3.5 w-3.5" /> {tr("Rápidas", "Quick replies")}
               </Herramienta>
-              <Herramienta activo={panel === "productos" || panel === "catalogo"} onClick={() => setPanel(panel === "productos" ? null : "productos")} titulo="Mandar productos del catálogo (tarjeta con foto, precio y link)">
-                <ShoppingBag className="h-3.5 w-3.5" /> Productos
+              <Herramienta activo={panel === "productos" || panel === "catalogo"} onClick={() => setPanel(panel === "productos" ? null : "productos")} titulo={tr("Mandar productos del catálogo (tarjeta con foto, precio y link)", "Send catalog products (card with photo, price and link)")}>
+                <ShoppingBag className="h-3.5 w-3.5" /> {tr("Productos", "Products")}
               </Herramienta>
-              <Herramienta activo={panel === "ia"} onClick={() => void sugerir()} titulo="La IA lee la charla y te propone 3 respuestas">
-                <Sparkles className="h-3.5 w-3.5" /> Sugerir con IA
+              <Herramienta activo={panel === "ia"} onClick={() => void sugerir()} titulo={tr("La IA lee la charla y te propone 3 respuestas", "AI reads the chat and suggests 3 replies")}>
+                <Sparkles className="h-3.5 w-3.5" /> {tr("Sugerir con IA", "Suggest with AI")}
               </Herramienta>
               <Popover>
                 <PopoverTrigger asChild>
@@ -668,7 +670,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
                   </div>
                 </PopoverContent>
               </Popover>
-              {esperandoRespuesta && <span className="ml-auto rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">Espera tu respuesta</span>}
+              {esperandoRespuesta && <span className="ml-auto rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">{tr("Espera tu respuesta", "Awaiting your reply")}</span>}
             </div>
             <div className="flex items-end gap-2">
               <Textarea
@@ -682,7 +684,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
                   }
                 }}
                 rows={1}
-                placeholder={`Responder por ${red}…`}
+                placeholder={tr(`Responder por ${red}…`, `Reply on ${red}…`)}
                 className="max-h-[140px] min-h-[42px] resize-none rounded-2xl bg-muted/50 text-sm"
                 disabled={!conv}
                 maxLength={1000}
@@ -692,7 +694,7 @@ export function ChatLead({ lead }: { lead: LeadChat }) {
                 className="h-[42px] w-[42px] shrink-0 rounded-full bg-gradient-to-br from-primary to-fuchsia-500 shadow-md shadow-primary/25"
                 onClick={enviar}
                 disabled={!texto.trim() || !conv}
-                aria-label="Enviar"
+                aria-label={tr("Enviar", "Send")}
               >
                 <Send className="h-4 w-4" />
               </Button>

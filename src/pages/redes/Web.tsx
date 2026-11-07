@@ -51,6 +51,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useUserProfileContext } from "@/contexts/user-profile-context";
 import { useAppData } from "@/contexts/app-data-context";
 import { Handshake } from "lucide-react";
+import { enIngles, tr } from "@/lib/idioma";
 
 // Reservas de la landing de la campaña «No empezamos de cero» (somosprodi.com).
 // Las crea el servidor (/api/web/aplicar); acá se mueven y se anotan (/api/web/estado y /notas).
@@ -1145,6 +1146,7 @@ function LeadDetalle({ lead, todos, onClose }: { lead: LeadWeb | null; todos: Le
   const IconoOrigen = o.icono;
   // También el que entró por la web y se unió con el de Instagram: la conversación viene con la unión.
   const conChat = !!lead.meta?.conversacion_id;
+  const soloChat = conChat && enIngles;
 
   const datos = (
     <div className="space-y-4">
@@ -1171,7 +1173,7 @@ function LeadDetalle({ lead, todos, onClose }: { lead: LeadWeb | null; todos: Le
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className={cn("flex max-h-[92dvh] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden rounded-3xl bg-background p-0", conChat ? "h-[min(860px,92dvh)] max-w-5xl" : "max-w-xl")}>
+      <DialogContent className={cn("flex max-h-[92dvh] w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden rounded-3xl bg-background p-0", soloChat ? "h-[min(860px,92dvh)] max-w-3xl" : conChat ? "h-[min(860px,92dvh)] max-w-5xl" : "max-w-xl")}>
         {/* Encabezado */}
         <DialogHeader className="shrink-0 flex-row items-center gap-3 space-y-0 border-b bg-gradient-to-r from-primary/[0.08] via-fuchsia-500/[0.05] to-transparent px-5 py-3.5 pr-12 text-left">
           <AvatarEditable lead={lead} />
@@ -1182,13 +1184,17 @@ function LeadDetalle({ lead, todos, onClose }: { lead: LeadWeb | null; todos: Le
                 <IconoOrigen className="h-3 w-3" /> {o.label}
               </span>
               {lead.nombre && lead.nombre !== lead.negocio.replace(/^@/, "") && <span>{lead.nombre}</span>}
-              <span>· llegó {hace(lead.created_at)}</span>
-              <span className="hidden sm:inline">· {fechaHora(lead.created_at)}</span>
+              {!enIngles && <span>· llegó {hace(lead.created_at)}</span>}
+              {!enIngles && <span className="hidden sm:inline">· {fechaHora(lead.created_at)}</span>}
             </DialogDescription>
           </div>
         </DialogHeader>
 
-        {conChat ? (
+        {soloChat ? (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <ChatLead lead={lead} />
+          </div>
+        ) : conChat ? (
           <div className="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
             {/* En el celular: una cosa por vez (chat o ficha). En la compu, lado a lado. */}
             <div className="grid shrink-0 grid-cols-2 gap-1 border-b p-1.5 md:hidden">
@@ -1449,9 +1455,9 @@ function FormulariosMeta() {
     try {
       const r = await callApi<{ pagina: string; formularios: number; nuevos: number }>("/api/web/meta-token", { token: token.trim() });
       setToken("");
-      toast.success(`Conectado a ${r.pagina}: ${r.formularios} formulario${r.formularios === 1 ? "" : "s"}, ${r.nuevos} lead${r.nuevos === 1 ? "" : "s"} nuevo${r.nuevos === 1 ? "" : "s"}`);
+      toast.success(tr(`Conectado a ${r.pagina}: ${r.formularios} formulario${r.formularios === 1 ? "" : "s"}, ${r.nuevos} lead${r.nuevos === 1 ? "" : "s"} nuevo${r.nuevos === 1 ? "" : "s"}`, `Connected to ${r.pagina}: ${r.formularios} lead form${r.formularios === 1 ? "" : "s"}, ${r.nuevos} new lead${r.nuevos === 1 ? "" : "s"}`));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo conectar");
+      toast.error(err instanceof Error ? err.message : tr("No se pudo conectar", "Could not connect"));
     } finally {
       setConectando(false);
     }
@@ -1461,9 +1467,16 @@ function FormulariosMeta() {
     try {
       const r = await callApi<{ nuevos: number; errores?: string[]; detalle?: string[] }>("/api/web/meta-mensajes", { forzar: true });
       if (r.errores?.length) toast.warning(r.errores.join(" · "), { duration: 20000 });
-      toast.success(`${r.nuevos ? `${r.nuevos} lead${r.nuevos === 1 ? "" : "s"} nuevo${r.nuevos === 1 ? "" : "s"} por mensaje` : "No hay conversaciones nuevas"}${r.detalle?.length ? ` · ${r.detalle.join(" · ")}` : ""}`, { duration: 15000 });
+      toast.success(
+        enIngles
+          ? r.nuevos
+            ? `${r.nuevos} new lead${r.nuevos === 1 ? "" : "s"} from messages`
+            : "No new conversations"
+          : `${r.nuevos ? `${r.nuevos} lead${r.nuevos === 1 ? "" : "s"} nuevo${r.nuevos === 1 ? "" : "s"} por mensaje` : "No hay conversaciones nuevas"}${r.detalle?.length ? ` · ${r.detalle.join(" · ")}` : ""}`,
+        { duration: 15000 }
+      );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudieron traer los mensajes");
+      toast.error(err instanceof Error ? err.message : tr("No se pudieron traer los mensajes", "Could not fetch messages"));
     } finally {
       setConectando(false);
     }
@@ -1472,33 +1485,40 @@ function FormulariosMeta() {
     setConectando(true);
     try {
       const r = await callApi<{ pagina: string; formularios: number; nuevos: number }>("/api/web/meta-conectar", {});
-      toast.success(`Conectado a ${r.pagina}: ${r.formularios} formulario${r.formularios === 1 ? "" : "s"}, ${r.nuevos} lead${r.nuevos === 1 ? "" : "s"} nuevo${r.nuevos === 1 ? "" : "s"}`);
+      toast.success(tr(`Conectado a ${r.pagina}: ${r.formularios} formulario${r.formularios === 1 ? "" : "s"}, ${r.nuevos} lead${r.nuevos === 1 ? "" : "s"} nuevo${r.nuevos === 1 ? "" : "s"}`, `Connected to ${r.pagina}: ${r.formularios} lead form${r.formularios === 1 ? "" : "s"}, ${r.nuevos} new lead${r.nuevos === 1 ? "" : "s"}`));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo conectar");
+      toast.error(err instanceof Error ? err.message : tr("No se pudo conectar", "Could not connect"));
     } finally {
       setConectando(false);
     }
   };
   return (
     <div className="space-y-2 rounded-xl border bg-muted/40 p-3">
-      <p className="text-sm font-semibold">Formularios de los anuncios</p>
-      <p className="text-xs text-muted-foreground">Los que llenan el formulario de un anuncio de Prodi en Instagram o Facebook entran solos acá, con aviso. Conectalo una vez; también trae los de los últimos 30 días.</p>
+      <p className="text-sm font-semibold">{tr("Formularios de los anuncios", "Meta connection: Facebook Page and Instagram")}</p>
+      <p className="text-xs text-muted-foreground">
+        {tr(
+          "Los que llenan el formulario de un anuncio de Prodi en Instagram o Facebook entran solos acá, con aviso. Conectalo una vez; también trae los de los últimos 30 días.",
+          "Connects the Prodi Facebook Page and its Instagram account. Lead ad forms and Instagram / Messenger messages arrive here as leads, and the team replies from the lead's chat."
+        )}
+      </p>
       <Button size="sm" variant="outline" className="w-full" onClick={() => void conectar()} disabled={conectando}>
         {conectando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-        Conectar y traer formularios de Meta
+        {tr("Conectar y traer formularios de Meta", "Connect Facebook Page & Instagram")}
       </Button>
       {estado?.conectado && (
         <p className={cn("rounded-lg px-2.5 py-1.5 text-[11px]", estado.ultimo_aviso ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-700 dark:text-amber-300")}>
-          {estado.ultimo_aviso
-            ? `Al instante: Meta avisó el último mensaje ${hace(estado.ultimo_aviso)}.`
-            : "Meta todavía no avisó ningún mensaje al instante: se revisa solo cada 2 minutos con el sistema abierto."}
-          {estado.ultima_revision ? ` Última revisión ${hace(estado.ultima_revision)}.` : ""}
+          {enIngles
+            ? "Connected: new messages arrive automatically."
+            : estado.ultimo_aviso
+              ? `Al instante: Meta avisó el último mensaje ${hace(estado.ultimo_aviso)}.`
+              : "Meta todavía no avisó ningún mensaje al instante: se revisa solo cada 2 minutos con el sistema abierto."}
+          {estado.ultima_revision && !enIngles ? ` Última revisión ${hace(estado.ultima_revision)}.` : ""}
         </p>
       )}
       <Button size="sm" variant="outline" className="w-full" onClick={() => void traerMensajes()} disabled={conectando}>
-        <MessageCircle className="mr-2 h-4 w-4" /> Traer mensajes de Instagram y Facebook
+        <MessageCircle className="mr-2 h-4 w-4" /> {tr("Traer mensajes de Instagram y Facebook", "Fetch Instagram and Messenger messages")}
       </Button>
-      <div className="space-y-1.5 border-t pt-2">
+      <div className={cn("space-y-1.5 border-t pt-2", enIngles && "hidden")}>
         <p className="text-[11px] text-muted-foreground">
           Si Meta pide <b>leads_retrieval</b>: pegá acá el identificador de acceso de tu usuario (Gestor Prodi → Herramientas), ampliado en el Depurador de tokens de Meta, y tocá Usar.
         </p>
@@ -1537,6 +1557,13 @@ function AjustesTemporada({ open, onOpenChange, config }: { open: boolean; onOpe
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90dvh] w-[calc(100vw-1.5rem)] max-w-md overflow-y-auto rounded-2xl">
+        {enIngles ? (
+          <DialogHeader className="text-left">
+            <DialogTitle>Settings</DialogTitle>
+            <DialogDescription>Connect the Facebook Page and Instagram account used by the CRM.</DialogDescription>
+          </DialogHeader>
+        ) : (
+          <>
         <DialogHeader className="text-left">
           <DialogTitle>Temporada y cupos</DialogTitle>
           <DialogDescription>Las aplicaciones nuevas quedan en esta temporada. Los cupos ocupados son los ganados de la temporada.</DialogDescription>
@@ -1557,12 +1584,18 @@ function AjustesTemporada({ open, onOpenChange, config }: { open: boolean; onOpe
             {guardando ? "Guardando…" : "Guardar"}
           </Button>
         </div>
+          </>
+        )}
         <FormulariosMeta />
-        <ConectarWhatsApp />
-        <div className="space-y-2 rounded-xl border bg-muted/40 p-3">
-          <p className="text-sm font-semibold">Catálogo de productos</p>
-          <ConfigCatalogo negocio="prodi" />
-        </div>
+        {!enIngles && (
+          <>
+            <ConectarWhatsApp />
+            <div className="space-y-2 rounded-xl border bg-muted/40 p-3">
+              <p className="text-sm font-semibold">Catálogo de productos</p>
+              <ConfigCatalogo negocio="prodi" />
+            </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
