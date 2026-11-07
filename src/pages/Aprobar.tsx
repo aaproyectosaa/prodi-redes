@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { asset } from "@/lib/asset";
 import { callPublico, urlMediaPublica } from "@/lib/redes/api";
+import { urlVerDirectoDrive } from "@/utils/drive/driveMediaUrl";
 import { cn } from "@/lib/utils";
 
 interface VideoPublico {
@@ -133,10 +134,19 @@ export default function Aprobar() {
               <div className="space-y-3">
                 {video.final.map((f) => {
                   const m = urlMediaPublica(token, f.drive_file_id, f.mime_type);
+                  // Primero directo de Drive (no lo cobra Vercel); si Drive no lo da, por el servidor como siempre.
+                  const directo = f.drive_file_id.startsWith("demo/") ? m.url : urlVerDirectoDrive(f.drive_file_id);
+                  const respaldo = (e: React.SyntheticEvent<HTMLVideoElement | HTMLImageElement>) => {
+                    const el = e.currentTarget;
+                    if (el.dataset.respaldo) return;
+                    el.dataset.respaldo = "1";
+                    el.src = m.url;
+                  };
                   return m.tipo === "video" ? (
                     <video
                       key={f.drive_file_id}
-                      src={m.url}
+                      src={directo}
+                      onError={respaldo}
                       controls
                       playsInline
                       preload="metadata"
@@ -145,7 +155,8 @@ export default function Aprobar() {
                   ) : (
                     <img
                       key={f.drive_file_id}
-                      src={m.url}
+                      src={directo}
+                      onError={respaldo}
                       alt={f.name}
                       className="w-full rounded-3xl bg-black object-contain shadow-xl shadow-black/10 ring-1 ring-border"
                     />

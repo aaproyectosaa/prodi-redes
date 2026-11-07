@@ -6,7 +6,12 @@ import { auth } from "@/integrations/firebase/client";
 import { logVideo } from "@/utils/drive/videoDebug";
 import { ES_IOS, guardarArchivo, MAX_COMPARTIR } from "@/lib/compartirArchivo";
 
+/** Permisos ya pedidos (valen 1 hora): la misma URL deja que el navegador reuse lo que ya bajó. */
+const permisos = new Map<string, { url: string; hasta: number }>();
+
 export async function getDriveMediaPlayUrl(fileId: string): Promise<string> {
+  const guardado = permisos.get(fileId);
+  if (guardado && guardado.hasta > Date.now()) return guardado.url;
   const user = auth.currentUser;
   if (!user) {
     logVideo("auth:missing", { fileId });
@@ -29,7 +34,23 @@ export async function getDriveMediaPlayUrl(fileId: string): Promise<string> {
     throw new Error(data.error ?? `No se pudo abrir el archivo (${res.status})`);
   }
   logVideo("auth:token-ok", { fileId, uid: user.uid });
+  // Se usa hasta 50 minutos (el permiso vence a la hora).
+  permisos.set(fileId, { url: data.url, hasta: Date.now() + 50 * 60_000 });
   return data.url;
+}
+
+/**
+ * Ver un video o una foto directo desde Drive, sin pasar por el servidor de Prodi (pasar por el servidor es lo que
+ * cobra Vercel por GB). Anda con los archivos compartidos por link (lo que sube Prodi). Si Drive no lo deja (archivo
+ * privado, como los del chat, o un límite de Drive), el reproductor vuelve solo a getDriveMediaPlayUrl.
+ */
+export function urlVerDirectoDrive(fileId: string): string {
+  return urlDescargaDrive(fileId);
+}
+
+/** Miniatura de Drive (chica, no baja el archivo entero). */
+export function urlMiniaturaDrive(fileId: string, ancho = 400): string {
+  return `https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w${ancho}`;
 }
 
 /** Link para bajar el archivo directo de Drive (el servidor revisa el acceso y deja el archivo abierto con el link). */

@@ -46,7 +46,8 @@ export default async function handler(
   // Aunque falle, la respuesta nunca se interpreta como página.
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Content-Security-Policy", "sandbox; default-src 'none'");
-  res.setHeader("Cache-Control", "private, no-store");
+  // El navegador guarda lo que ya bajó mientras vale el permiso (así volver a ver un video no se paga dos veces).
+  res.setHeader("Cache-Control", "private, max-age=3000");
 
   try {
     validarTokenMedia(req.query.token, fileId);

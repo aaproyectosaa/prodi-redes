@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { FileText, Film, Images, Loader2, Play } from "lucide-react";
-import { getDriveMediaPlayUrl } from "@/utils/drive/driveMediaUrl";
+import { getDriveMediaPlayUrl, urlMiniaturaDrive } from "@/utils/drive/driveMediaUrl";
 import { cn } from "@/lib/utils";
 
 /**
@@ -25,6 +25,8 @@ export function MiniaturaMaterial({
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState(false);
+  // Primero la miniatura de Drive (chica, no pasa por el servidor); si Drive no la tiene, el archivo por el servidor.
+  const [sinMiniatura, setSinMiniatura] = useState(false);
   const esVideo = mime.startsWith("video/");
   const esFoto = mime.startsWith("image/");
 
@@ -36,6 +38,10 @@ export function MiniaturaMaterial({
       return () => URL.revokeObjectURL(u);
     }
     if (!fileId) return;
+    if (!sinMiniatura) {
+      setUrl(null);
+      return;
+    }
     let vivo = true;
     getDriveMediaPlayUrl(fileId)
       .then((u) => vivo && setUrl(u))
@@ -43,12 +49,24 @@ export function MiniaturaMaterial({
     return () => {
       vivo = false;
     };
-  }, [file, fileId, esVideo, esFoto]);
+  }, [file, fileId, esVideo, esFoto, sinMiniatura]);
+  const miniatura = !file && fileId && !sinMiniatura && (esVideo || esFoto) && !fileId.startsWith("demo/");
 
   const Icono = esVideo ? Film : esFoto ? Images : FileText;
   return (
     <div className={cn("relative aspect-square overflow-hidden rounded-xl border bg-muted", className)} title={nombre}>
-      {url && !error && esFoto ? (
+      {miniatura ? (
+        <>
+          <img src={urlMiniaturaDrive(fileId!)} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" onError={() => setSinMiniatura(true)} />
+          {esVideo && (
+            <span className="absolute inset-0 flex items-center justify-center">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white">
+                <Play className="h-3.5 w-3.5 fill-current" />
+              </span>
+            </span>
+          )}
+        </>
+      ) : url && !error && esFoto ? (
         <img src={url} alt="" className="h-full w-full object-cover" onError={() => setError(true)} />
       ) : url && !error && esVideo ? (
         <>

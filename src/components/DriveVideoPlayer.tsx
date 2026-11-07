@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, RefreshCw, Video as VideoIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getDriveMediaPlayUrl } from "@/utils/drive/driveMediaUrl";
+import { getDriveMediaPlayUrl, urlVerDirectoDrive } from "@/utils/drive/driveMediaUrl";
 import {
   logVideo,
   mediaErrorLabel,
@@ -62,6 +62,9 @@ export function DriveVideoPlayer({
   const [playbackError, setPlaybackError] = useState(false);
   const [debugDetail, setDebugDetail] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  // Primero directo de Drive (no pasa por el servidor, que es lo que cobra Vercel). Si falla, por el servidor.
+  const [directo, setDirecto] = useState(!fileId.startsWith("demo/"));
+  useEffect(() => setDirecto(!fileId.startsWith("demo/")), [fileId]);
   // Primero se intenta reproducirlo acá (muchos .MOV de iPhone son H.264 y Chrome los pasa aunque diga que no):
   // se ve al instante, sin esperar a que Drive lo convierta. Si no se puede (error, o solo audio sin imagen,
   // como un HEVC en Chrome), se ve con el reproductor de Drive.
@@ -78,6 +81,15 @@ export function DriveVideoPlayer({
     setPlaybackError(false);
     setDebugDetail(null);
     setSrc(null);
+
+    if (directo) {
+      logVideo("resolve-url:directo", { fileId });
+      setSrc(urlVerDirectoDrive(fileId));
+      setLoading(false);
+      return () => {
+        active = false;
+      };
+    }
 
     void (async () => {
       try {
@@ -131,7 +143,7 @@ export function DriveVideoPlayer({
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileId, mimeType, attempt, saltear]);
+  }, [fileId, mimeType, attempt, saltear, directo]);
 
   useEffect(() => {
     if (!autoPlay || !src) return;
@@ -145,9 +157,32 @@ export function DriveVideoPlayer({
     });
   }, [autoPlay, src, fileId]);
 
-  const retry = () => setAttempt((n) => n + 1);
+  // Si Drive directo no arranca en un rato (sin error, colgado), se pasa al servidor.
+  const cargoMetadata = useRef(false);
+  useEffect(() => {
+    cargoMetadata.current = false;
+    if (!directo || !src) return;
+    const t = window.setTimeout(() => {
+      if (!cargoMetadata.current) {
+        logVideo("element:directo-lento", { fileId });
+        setDirecto(false);
+      }
+    }, 15_000);
+    return () => window.clearTimeout(t);
+  }, [directo, src, fileId]);
+
+  const retry = () => {
+    setDirecto(false);
+    setAttempt((n) => n + 1);
+  };
 
   const handleVideoError = () => {
+    // Drive no lo dio directo (archivo no compartido, límite de Drive, formato): se pide por el servidor.
+    if (directo) {
+      logVideo("element:directo-fallo", { fileId });
+      setDirecto(false);
+      return;
+    }
     const el = videoRef.current;
     const code = el?.error?.code;
     const message = el?.error?.message;
@@ -233,7 +268,7 @@ export function DriveVideoPlayer({
         videoRef.current = el;
         onVideoEl?.(el);
       }}
-      key={`${fileId}-${attempt}`}
+      key={`${fileId}-${attempt}-${directo ? "d" : "s"}`}
       src={src}
       controls
       playsInline
@@ -245,6 +280,7 @@ export function DriveVideoPlayer({
       )}
       onError={handleVideoError}
       onLoadedMetadata={() => {
+        cargoMetadata.current = true;
         // Cargó pero sin imagen (códec que el navegador no lee, ej. HEVC): lo muestra Drive.
         if (videoRef.current && videoRef.current.videoWidth === 0 && formatoNoSoportado(mimeType)) {
           logVideo("element:sin-imagen", { fileId, mimeType });
