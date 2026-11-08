@@ -58,6 +58,7 @@ import { linksParaMandar } from "../_lib/catalogo";
 
 import { conectarWhatsApp, estadoWhatsApp, guardarConfigWhatsApp, recibirWhatsApp } from "../_lib/meta-whatsapp";
 import { conectarFormularios, guardarTokenUsuario, conversacionLead, enviarProductos, estadoMeta, guardarRespuestas, sugerirRespuestas, importarMensajes, recibirWebhook, responderLead, verificarWebhook } from "../_lib/meta-leads";
+import { avisarEtapaAMeta } from "../_lib/meta-conversiones";
 
 const COL = "leads_web";
 const CONFIG = { col: "web_config", id: "general" };
@@ -238,10 +239,15 @@ async function reunion(req: VercelRequest) {
 async function cambiar(req: VercelRequest, campo: "estado" | "notas") {
   const r = await cambiarLead(req, campo);
   if (r.avisar) await avisarEstadoAlSocio(r.avisar.lead, r.avisar.id, r.avisar.estado, appUrl(req));
+  // Si vino de un formulario de un anuncio, Meta se entera de la etapa nueva (aprende qué formularios venden).
+  if (r.etapa) await avisarEtapaAMeta(r.etapa.lead, r.etapa.estado);
   return { ok: true };
 }
 
-async function cambiarLead(req: VercelRequest, campo: "estado" | "notas"): Promise<{ avisar?: { lead: Record<string, unknown>; id: string; estado: string } }> {
+async function cambiarLead(
+  req: VercelRequest,
+  campo: "estado" | "notas"
+): Promise<{ avisar?: { lead: Record<string, unknown>; id: string; estado: string }; etapa?: { lead: Record<string, unknown>; estado: string } }> {
   const caller = await requireCaller(req, VENTAS);
   const b = body<{ id?: string; estado?: string; notas?: string }>(req);
   const id = texto(b.id, 40);
@@ -262,7 +268,8 @@ async function cambiarLead(req: VercelRequest, campo: "estado" | "notas"): Promi
       nuevo.ultimo_contacto_at = at;
     }
     await guardarDoc(cli, COL, id, nuevo);
-    return campo === "estado" && d.socio_id ? { avisar: { lead: d, id, estado: valor } } : {};
+    if (campo !== "estado") return {};
+    return { ...(d.socio_id ? { avisar: { lead: d, id, estado: valor } } : {}), etapa: { lead: d, estado: valor } };
   });
 }
 

@@ -11,6 +11,7 @@ import { destinatariosDe, enviarAviso } from "./notify";
 import { hoyAR } from "./fecha";
 import { totalesPresupuesto, type ItemPresupuesto } from "./presupuesto-calc";
 import { limpiarPropuesta } from "./propuesta";
+import { avisarEtapaAMeta } from "./meta-conversiones";
 
 const t = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
 
@@ -57,7 +58,11 @@ async function anotarEnLead(leadId: unknown, entrada: Record<string, unknown>, c
   const historial = [...(Array.isArray(l.historial) ? l.historial : []), entrada].slice(-100);
   await ref.update({ ...cambios, historial, updated_at: new Date().toISOString() });
   // Si lo trajo un socio comercial y cambió de etapa (propuesta, ganado), le avisamos.
-  if (typeof cambios.estado === "string" && cambios.estado !== l.estado) await avisarEstadoAlSocio(l, leadId, cambios.estado, process.env.APP_URL || "");
+  if (typeof cambios.estado === "string" && cambios.estado !== l.estado) {
+    await avisarEstadoAlSocio(l, leadId, cambios.estado, process.env.APP_URL || "");
+    // Si vino de un formulario de un anuncio, Meta se entera (aprende qué formularios terminan en cliente).
+    await avisarEtapaAMeta(l, cambios.estado);
+  }
 }
 
 export async function verPresupuesto(token: string, equipo = false) {

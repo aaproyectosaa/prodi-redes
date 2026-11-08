@@ -14,6 +14,8 @@ import { adminDb } from "./db";
 import { enviarAviso } from "./notify";
 import { decrypt, encrypt, type EncryptedPayload } from "./crypto";
 import { generarJSON } from "./ia";
+import { enviarMail } from "./informe";
+import { avisarEtapaAMeta } from "./meta-conversiones";
 
 const VERSION = () => process.env.META_GRAPH_VERSION || "v23.0";
 const COL = "leads_web";
@@ -87,7 +89,7 @@ async function guardarLead(lead: any, temporada: string, base: string): Promise<
     `Formulario de ${plataforma}${lead.form_name ? ` «${lead.form_name}»` : ""}${lead.ad_name ? ` · anuncio «${lead.ad_name}»` : ""}${lead.campaign_name ? ` · campaña «${lead.campaign_name}»` : ""}`,
     ...r.otras,
   ].join("\n");
-  await guardarDoc(pool, COL, id, {
+  const doc: Record<string, any> = {
     created_at: at,
     updated_at: new Date().toISOString(),
     temporada,
@@ -107,7 +109,8 @@ async function guardarLead(lead: any, temporada: string, base: string): Promise<
     origen: "meta:leadgen",
     meta: { leadgen_id: String(lead.id), form_id: lead.form_id ?? null, ad_id: lead.ad_id ?? null, campaign_name: lead.campaign_name ?? null, ad_name: lead.ad_name ?? null },
     historial: [{ at, de: null, a: "calificado", por: null, por_nombre: `Formulario de ${plataforma}` }],
-  });
+  };
+  await guardarDoc(pool, COL, id, doc);
   const admins = (await adminDb().collection("profiles").where("role", "==", "admin").get()).docs.filter((d) => d.data().activo !== false).map((d) => d.id);
   await enviarAviso(
     {
@@ -119,7 +122,32 @@ async function guardarLead(lead: any, temporada: string, base: string): Promise<
     },
     base
   ).catch(() => undefined);
+  await avisarEtapaAMeta(doc, "calificado");
+  // Recién llegado (no los de hace días que se traen al conectar): le escribimos al toque para que sepa que lo vimos.
+  if (doc.email && Date.now() - Date.parse(at) < 2 * 3600_000 && (await mailDeBienvenida(doc.email, doc.nombre))) {
+    doc.historial = [...doc.historial, { at: new Date().toISOString(), tipo: "email", texto: "Le llegó el mail de bienvenida automático", por: null, por_nombre: "Gestor Prodi" }];
+    await guardarDoc(pool, COL, id, doc).catch(() => undefined);
+  }
   return true;
+}
+
+/** El primer contacto automático con el que completó el formulario. Devuelve si salió. */
+async function mailDeBienvenida(email: string, nombre: string): Promise<boolean> {
+  const esc = (v: string) => v.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+  const primer = esc(limpio(nombre, 80).split(/\s+/)[0] ?? "");
+  const html = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.55;color:#222;max-width:520px">
+<p>¡Hola${primer ? ` ${primer}` : ""}!</p>
+<p>Gracias por dejarnos tus datos. Ya los recibimos y en breve te escribimos por WhatsApp para contarte cómo trabajamos y ver qué necesita tu negocio.</p>
+<p>Si querés adelantarte, respondé este mail o escribinos por Instagram a <a href="https://instagram.com/prodi.arg" style="color:#6F40FC">@prodi.arg</a>.</p>
+<p>Equipo Prodi<br><a href="https://somosprodi.com" style="color:#6F40FC">somosprodi.com</a></p>
+</div>`;
+  try {
+    await enviarMail([email], "Recibimos tus datos · Prodi", html);
+    return true;
+  } catch (err) {
+    console.warn("[meta-leads] No salió el mail de bienvenida:", err instanceof Error ? err.message : err);
+    return false;
+  }
 }
 
 const CAMPOS_LEAD = "id,created_time,field_data,form_id,ad_id,ad_name,campaign_name,platform";
