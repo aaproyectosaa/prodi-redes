@@ -381,11 +381,12 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
             precio_mensual: form.ovPrecio === "" ? null : Number(form.ovPrecio),
             precio_video_extra: form.ovExtra === "" ? null : Number(form.ovExtra),
             piezas_mes: form.ovPiezas === "" ? null : Number(form.ovPiezas),
+            linkedin_mes: form.ovLinkedin === "" ? null : Number(form.ovLinkedin),
             precio_extra_tiktok: form.ovExtraTiktok === "" ? null : Number(form.ovExtraTiktok),
             precio_extra_youtube: form.ovExtraYoutube === "" ? null : Number(form.ovExtraYoutube),
             precio_extra_short: form.ovExtraShort === "" ? null : Number(form.ovExtraShort),
             duracion_extra: Object.fromEntries(Object.entries(form.ovDuracion).map(([k, v]) => [k, v === "" ? null : Number(v)])),
-            redes: form.ovRedes,
+            redes: { ...form.ovRedes, linkedin: form.ovRedes.linkedin || Number(form.ovLinkedin) > 0 },
             pauta: { incluida: form.ovPauta || form.servicio === "solo_pauta", monto: (form.ovPauta || form.servicio === "solo_pauta") && form.ovPautaMonto !== "" ? Number(form.ovPautaMonto) : null },
             administracion_redes: form.ovAdminRedes,
           },
@@ -539,10 +540,26 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
                   <InputNumero value={form.ovVideos} onChange={(e) => set("ovVideos", e.target.value.replace(/\D/g, ""))} />
                 </div>
                 <div className="space-y-1">
+                  <Label className="text-xs">LinkedIn/mes</Label>
+                  <InputNumero
+                    value={form.ovLinkedin}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/\D/g, "");
+                      set("ovLinkedin", v);
+                      // Si tiene videos de LinkedIn, LinkedIn queda tildada en «Redes en las que trabajamos».
+                      if (Number(v) > 0 && !form.ovRedes.linkedin) set("ovRedes", { ...form.ovRedes, linkedin: true });
+                    }}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="space-y-1">
                   <Label className="text-xs">Abono $</Label>
                   <InputNumero value={form.ovPrecio} onChange={(e) => set("ovPrecio", e.target.value.replace(/\D/g, ""))} />
                 </div>
               </div>
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                LinkedIn/mes: videos aparte para LinkedIn (no descuentan de Videos/mes ni suman al abono). La página de LinkedIn se carga abajo, en «Contacto, redes y Meta».
+              </p>
             </div>
             <div>
               <p className="mb-1.5 text-xs text-muted-foreground">Video extra según para dónde es: precio y hasta cuántos minutos dura (vacío = el mismo precio que Instagram)</p>
@@ -646,7 +663,12 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
                     key={r.k}
                     type="button"
                     disabled={!isAdmin}
-                    onClick={() => set("ovRedes", { ...form.ovRedes, [r.k]: !form.ovRedes[r.k] })}
+                    onClick={() => {
+                      const on = !form.ovRedes[r.k];
+                      set("ovRedes", { ...form.ovRedes, [r.k]: on });
+                      // Sacar LinkedIn también saca sus videos del mes, así no queda un número sin la red.
+                      if (r.k === "linkedin" && !on) set("ovLinkedin", "");
+                    }}
                     className={cn(
                       "rounded-full border px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed",
                       form.ovRedes[r.k] ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground hover:border-primary/50"
@@ -916,6 +938,7 @@ function toForm(c: Project) {
     ovPrecio: o.precio_mensual != null ? String(o.precio_mensual) : "",
     ovExtra: o.precio_video_extra != null ? String(o.precio_video_extra) : "",
     ovPiezas: o.piezas_mes != null ? String(o.piezas_mes) : "",
+    ovLinkedin: o.linkedin_mes != null ? String(o.linkedin_mes) : "",
     ovExtraTiktok: o.precio_extra_tiktok != null ? String(o.precio_extra_tiktok) : "",
     ovExtraYoutube: o.precio_extra_youtube != null ? String(o.precio_extra_youtube) : "",
     ovExtraShort: o.precio_extra_short != null ? String(o.precio_extra_short) : "",

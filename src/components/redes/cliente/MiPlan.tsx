@@ -194,6 +194,7 @@ export function MiPlan({
               <p className="mt-1 text-3xl font-bold tracking-tight">{plan.nombre}</p>
               <p className="mt-1 text-sm text-white/85">
                 {plan.videosMes} videos con publicidad{cupoP.incluidas ? ` y ${cupoP.incluidas} piezas gráficas` : ""} por mes
+                {plan.linkedinMes > 0 ? `, más ${plan.linkedinMes} videos para LinkedIn` : ""}
               </p>
             </div>
             {plan.precioMensual > 0 && (

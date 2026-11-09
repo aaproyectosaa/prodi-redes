@@ -121,6 +121,7 @@ export async function contextoSistema(opts: {
       const pautaPlan = (ov.pauta ?? null) as { incluida?: boolean; monto?: number | null } | null;
       const incluye = [
         redesPlan.length ? `redes: ${redesPlan.join(", ")}` : null,
+        Number(ov.linkedin_mes) > 0 ? `${Number(ov.linkedin_mes)} videos por mes para LinkedIn (aparte del cupo)` : null,
         pautaPlan?.incluida ? `con pauta${opts.finanzas && pautaPlan.monto ? ` ($${Number(pautaPlan.monto).toLocaleString("es-AR")}/mes)` : ""}` : null,
         ov.administracion_redes ? "administración de redes (sin responder mensajes)" : null,
       ].filter(Boolean);

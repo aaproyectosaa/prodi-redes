@@ -24,6 +24,8 @@ export interface PlanEfectivo {
   plan: PlanRedes | null;
   nombre: string;
   videosMes: number;
+  /** Videos por mes para LinkedIn (aparte del cupo; 0 = no tiene). */
+  linkedinMes: number;
   precioMensual: number;
   /** Video extra de Instagram/Facebook (el de siempre). */
   precioVideoExtra: number;
@@ -47,11 +49,13 @@ export function planDe(project: Project | undefined, planes: PlanRedes[]): PlanE
     // Sin plan de la lista pero con lo suyo cargado (videos, abono…): es un plan a medida.
     nombre: plan?.nombre ?? ([o.videos_mes, o.precio_mensual, o.piezas_mes, o.precio_video_extra].some((v) => v != null) ? "Personalizado" : "Sin plan"),
     videosMes: o.videos_mes ?? plan?.videos_mes ?? 0,
+    linkedinMes: o.linkedin_mes ?? 0,
     precioMensual: o.precio_mensual ?? plan?.precio_mensual ?? 0,
     precioVideoExtra: meta,
     precioExtra: { meta, tiktok: o.precio_extra_tiktok ?? meta, short: o.precio_extra_short ?? meta, youtube: o.precio_extra_youtube ?? meta },
     duracionExtra: { meta: o.duracion_extra?.meta ?? null, tiktok: o.duracion_extra?.tiktok ?? null, short: o.duracion_extra?.short ?? null, youtube: o.duracion_extra?.youtube ?? null },
-    redes: REDES_PLAN.filter((r) => o.redes?.[r.k]).map((r) => r.label),
+    // Con videos de LinkedIn cargados, LinkedIn cuenta como red aunque no la hayan tildado.
+    redes: REDES_PLAN.filter((r) => o.redes?.[r.k] || (r.k === "linkedin" && (o.linkedin_mes ?? 0) > 0)).map((r) => r.label),
     pauta: o.pauta || project?.produccion?.servicio === "solo_pauta" ? { incluida: !!o.pauta?.incluida || project?.produccion?.servicio === "solo_pauta", monto: o.pauta?.monto ?? null } : null,
     administracionRedes: !!o.administracion_redes,
   };

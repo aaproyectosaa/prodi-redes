@@ -223,6 +223,8 @@ export interface Project {
   plan_redes_override?: {
     videos_mes?: number | null;
     piezas_mes?: number | null;
+    /** Videos por mes para LinkedIn. Van aparte: no descuentan del cupo de videos ni suman al abono. */
+    linkedin_mes?: number | null;
     precio_mensual?: number | null;
     precio_video_extra?: number | null;
     /** Video extra para TikTok, YouTube y YouTube Shorts (el de arriba es el de Instagram/Facebook). Vacío = el mismo. */
