@@ -9,7 +9,7 @@
 // POST /api/publico/pieza-cliente  { pieza_id, decision, nota? }
 // Catálogo del CRM (api/_lib/catalogo.ts; negocio = "prodi" o el id del cliente):
 // POST catalogo { negocio } · catalogo-conectar { negocio, url } · catalogo-producto { negocio, producto }
-// POST catalogo-borrar { negocio, id } · catalogo-links { negocio, ids, contacto: { col, id } }
+// POST catalogo-borrar { negocio, id } · catalogo-desconectar { negocio } · catalogo-links { negocio, ids, contacto: { col, id } }
 // POST catalogo-verificar { negocio, url }  (busca en la web el código que prueba que es del cliente)
 // POST catalogo-web { negocio, aprobar }  (admin: aprueba o rechaza la web que pidió conectar el cliente)
 // GET  /api/publico/ir?t=…   → link de un producto mandado: avisa en la ficha y lleva a la tienda
@@ -22,7 +22,7 @@ import { leerVideoPublico, responderCliente } from "../_lib/videos-server";
 import { streamDriveFile } from "../_lib/drive-stream";
 import { responderPiezaApp, responderVideoApp, type PedidoPieza, type PedidoVideo } from "../_lib/aprobar-cliente";
 import { aceptarPresupuesto, pdfPresupuesto, verPresupuesto } from "../_lib/presupuestos";
-import { abrirLink, borrarProducto, conectarCatalogo, guardarProducto, linksParaMandar, permitirNegocio, resolverWeb, verCatalogo, verificarWeb } from "../_lib/catalogo";
+import { abrirLink, borrarProducto, conectarCatalogo, desconectarCatalogo, guardarProducto, linksParaMandar, permitirNegocio, resolverWeb, verCatalogo, verificarWeb } from "../_lib/catalogo";
 import { mediaCompartido, verCompartido } from "../_lib/crm-galeria";
 
 export const config = { maxDuration: 60 };
@@ -75,6 +75,7 @@ async function catalogo(req: VercelRequest, accion: string) {
   if (accion === "catalogo-verificar") return verificarWeb(caller, negocio, String(b.url ?? ""));
   if (accion === "catalogo-producto") return guardarProducto(negocio, b.producto);
   if (accion === "catalogo-borrar") return borrarProducto(negocio, String(b.id ?? ""));
+  if (accion === "catalogo-desconectar") return desconectarCatalogo(negocio);
   if (accion === "catalogo-links") {
     const col = b.contacto?.col === "crm_contactos" ? "crm_contactos" : b.contacto?.col === "leads_web" ? "leads_web" : null;
     const id = String(b.contacto?.id ?? "");

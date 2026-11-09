@@ -297,6 +297,18 @@ export function ConfigCatalogo({ negocio }: { negocio: string }) {
       toast.error(e instanceof Error ? e.message : "No se pudo sacar");
     }
   };
+  const desconectar = async () => {
+    if (!conexion?.url) return;
+    if (!window.confirm(`¿Desconectar ${hostDe(conexion.url)}? Se sacan del catálogo los productos que vinieron de esa web (los cargados a mano quedan).`)) return;
+    try {
+      const r = await callApi<{ borrados: number }>("/api/publico/catalogo-desconectar", { negocio });
+      toast.success(`Web desconectada: se sacaron ${r.borrados} productos`);
+      setUrl("");
+      await cargar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo desconectar");
+    }
+  };
   const lista = verTodos ? productos ?? [] : (productos ?? []).slice(0, 12);
 
   return (
@@ -380,6 +392,14 @@ export function ConfigCatalogo({ negocio }: { negocio: string }) {
         {conexion?.actualizado_at && !conectando && (
           <p className={cn("text-[11px]", conexion.error ? "text-amber-600" : "text-muted-foreground")}>
             {conexion.error ? conexion.error : conexion.actualizado_at ? `${conexion.cantidad ?? 0} productos de ${PLATAFORMA[conexion.plataforma ?? ""] ?? "la web"} · actualizado ${hace(conexion.actualizado_at)}` : ""}
+            {conexion.url && (
+              <>
+                {" · "}
+                <button type="button" onClick={() => void desconectar()} className="font-semibold text-muted-foreground underline hover:text-foreground">
+                  Desconectar
+                </button>
+              </>
+            )}
           </p>
         )}
       </div>

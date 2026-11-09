@@ -471,6 +471,23 @@ export async function conectarCatalogo(caller: Caller, negocio: string, url: str
   return importar(negocio, host);
 }
 
+/**
+ * Desconecta la web del catálogo: se borran los productos que vinieron de ella (los cargados a mano quedan) y deja de
+ * actualizarse sola. La web aprobada del cliente se recuerda, así puede volver a conectarla sin comprobarla de nuevo.
+ */
+export async function desconectarCatalogo(negocio: string) {
+  const pool = getPool();
+  const prods = await adminDb().collection("catalogo_productos").where("negocio", "==", negocio).get();
+  let borrados = 0;
+  for (const d of prods.docs)
+    if (d.data().origen === "web") {
+      await borrarDoc(pool, "catalogo_productos", d.id);
+      borrados++;
+    }
+  await adminDb().collection("catalogos").doc(negocio).set({ negocio, url: null, plataforma: null, cantidad: 0, error: null, actualizado_at: null }, { merge: true });
+  return { ok: true, borrados };
+}
+
 /** "Ya lo puse": busca el código en la web; si está, la web queda aprobada y se traen los productos. */
 export async function verificarWeb(caller: Caller, negocio: string, url: string) {
   const host = hostDe(url);
@@ -634,7 +651,8 @@ export async function actualizarCatalogos() {
   for (const d of snap.docs) {
     if (Date.now() > hasta) break;
     const c = d.data();
-    const host = d.id === "prodi" ? hostDe(c.url) : hostDe(c.web_aprobada);
+    // Desconectado (sin url): no se vuelve a leer, aunque la web siga aprobada.
+    const host = !c.url ? null : d.id === "prodi" ? hostDe(c.url) : hostDe(c.web_aprobada);
     if (!host || (c.actualizado_at && Date.now() - Date.parse(String(c.actualizado_at)) < VIEJO_MS)) continue;
     try {
       await importar(d.id, host);
