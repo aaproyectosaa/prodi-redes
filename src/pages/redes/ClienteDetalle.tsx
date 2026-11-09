@@ -828,7 +828,7 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
             </Label>
             <Input value={form.emails} onChange={(e) => set("emails", e.target.value)} placeholder="duenio@marca.com, socio@marca.com" disabled={!isAdmin} />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <div className="space-y-1.5">
               <Label>Instagram</Label>
               <Input value={form.redes.instagram ?? ""} onChange={(e) => set("redes", { ...form.redes, instagram: e.target.value })} placeholder="@usuario" />
@@ -840,6 +840,10 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
             <div className="space-y-1.5">
               <Label>TikTok</Label>
               <Input value={form.redes.tiktok ?? ""} onChange={(e) => set("redes", { ...form.redes, tiktok: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>LinkedIn</Label>
+              <Input value={form.redes.linkedin ?? ""} onChange={(e) => set("redes", { ...form.redes, linkedin: e.target.value })} placeholder="linkedin.com/company/…" />
             </div>
             <div className="space-y-1.5">
               <Label>Página web</Label>
@@ -916,7 +920,7 @@ function toForm(c: Project) {
     ovExtraYoutube: o.precio_extra_youtube != null ? String(o.precio_extra_youtube) : "",
     ovExtraShort: o.precio_extra_short != null ? String(o.precio_extra_short) : "",
     ovDuracion: { meta: o.duracion_extra?.meta != null ? String(o.duracion_extra.meta) : "", tiktok: o.duracion_extra?.tiktok != null ? String(o.duracion_extra.tiktok) : "", youtube: o.duracion_extra?.youtube != null ? String(o.duracion_extra.youtube) : "", short: o.duracion_extra?.short != null ? String(o.duracion_extra.short) : "" },
-    ovRedes: { instagram: !!o.redes?.instagram, facebook: !!o.redes?.facebook, tiktok: !!o.redes?.tiktok, youtube: !!o.redes?.youtube },
+    ovRedes: { instagram: !!o.redes?.instagram, facebook: !!o.redes?.facebook, tiktok: !!o.redes?.tiktok, youtube: !!o.redes?.youtube, linkedin: !!o.redes?.linkedin },
     ovPauta: !!o.pauta?.incluida,
     ovPautaMonto: o.pauta?.monto != null ? String(o.pauta.monto) : "",
     ovAdminRedes: !!o.administracion_redes,

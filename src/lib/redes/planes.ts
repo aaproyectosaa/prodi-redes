@@ -17,6 +17,7 @@ export const REDES_PLAN = [
   { k: "facebook", label: "Facebook" },
   { k: "tiktok", label: "TikTok" },
   { k: "youtube", label: "YouTube" },
+  { k: "linkedin", label: "LinkedIn" },
 ] as const;
 
 export interface PlanEfectivo {

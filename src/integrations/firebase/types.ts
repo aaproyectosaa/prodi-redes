@@ -232,7 +232,7 @@ export interface Project {
     /** Hasta cuántos minutos dura el video extra en cada plataforma (lo que cubre ese precio). */
     duracion_extra?: { meta?: number | null; tiktok?: number | null; youtube?: number | null; short?: number | null } | null;
     /** En qué redes trabajamos. */
-    redes?: { instagram?: boolean; facebook?: boolean; tiktok?: boolean; youtube?: boolean } | null;
+    redes?: { instagram?: boolean; facebook?: boolean; tiktok?: boolean; youtube?: boolean; linkedin?: boolean } | null;
     /** Si incluye pauta y cuánto se invierte por mes (lo pone el cliente en Meta). */
     pauta?: { incluida: boolean; monto?: number | null } | null;
     /** Administración de redes (publicar, ordenar el perfil, historias). No incluye responder mensajes. */
@@ -322,6 +322,8 @@ export interface Project {
     instagram?: string;
     facebook?: string;
     tiktok?: string;
+    /** Página de empresa o perfil de LinkedIn. */
+    linkedin?: string;
     /** Página web (también la carga sola Prodi si alguien pasa el link en un chat). */
     web?: string;
   } | null;

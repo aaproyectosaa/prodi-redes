@@ -37,6 +37,7 @@ export interface PublicacionVideo {
   link_instagram?: string | null;
   link_facebook?: string | null;
   link_tiktok?: string | null;
+  link_linkedin?: string | null;
 }
 
 export interface PautaVideo {

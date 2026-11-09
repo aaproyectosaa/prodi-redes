@@ -159,7 +159,7 @@ export function renderInformeHtml({ nombre, label, baseUrl, resumen, publicados,
     .map((v) => {
       const fin = v.attachments_finalizado?.[0];
       const thumb = idDriveOk(fin?.drive_file_id) ? `https://drive.google.com/thumbnail?id=${fin.drive_file_id}&sz=w200` : "";
-      const link = linkOk(v.publicacion?.link_instagram) || linkOk(v.publicacion?.link_facebook) || linkOk(v.publicacion?.link_tiktok);
+      const link = linkOk(v.publicacion?.link_instagram) || linkOk(v.publicacion?.link_facebook) || linkOk(v.publicacion?.link_tiktok) || linkOk(v.publicacion?.link_linkedin);
       const fecha = fechaCorta(v.publicacion?.publicado_at);
       const esMejor = !!mejor && String(v.id ?? "") === mejor.id;
 

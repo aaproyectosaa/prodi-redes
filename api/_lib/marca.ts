@@ -39,6 +39,7 @@ export function marcaTexto(p: Record<string, any>): string {
     p.redes?.instagram && `Instagram: ${p.redes.instagram}`,
     p.redes?.facebook && `Facebook: ${p.redes.facebook}`,
     p.redes?.tiktok && `TikTok: ${p.redes.tiktok}`,
+    p.redes?.linkedin && `LinkedIn: ${p.redes.linkedin}`,
     p.redes?.web && `Página web: ${p.redes.web}`,
   ]
     .filter(Boolean)

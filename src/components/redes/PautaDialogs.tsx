@@ -147,6 +147,7 @@ export function PublicarDialog({
   const [ig, setIg] = useState("");
   const [fb, setFb] = useState("");
   const [tk, setTk] = useState("");
+  const [lk, setLk] = useState("");
   const [pauta, setPauta] = useState<PautaVideo>(pautaVacia());
   const [metaId, setMetaId] = useState("");
   const [saving, setSaving] = useState(false);
@@ -157,13 +158,14 @@ export function PublicarDialog({
     setIg(video.publicacion?.link_instagram ?? "");
     setFb(video.publicacion?.link_facebook ?? "");
     setTk(video.publicacion?.link_tiktok ?? "");
+    setLk(video.publicacion?.link_linkedin ?? "");
     setPauta(video.pauta ?? pautaVacia());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, video.id]);
 
   const save = async () => {
     if (!user) return;
-    if (!ig && !fb && !tk) {
+    if (!ig && !fb && !tk && !lk) {
       toast.error("Pegá al menos un link de la publicación");
       return;
     }
@@ -173,7 +175,7 @@ export function PublicarDialog({
         video,
         clienteById(video.proyecto_id),
         user.uid,
-        { link_instagram: ig || null, link_facebook: fb || null, link_tiktok: tk || null },
+        { link_instagram: ig || null, link_facebook: fb || null, link_tiktok: tk || null, link_linkedin: lk || null },
         pauta
       );
       await guardarMetaId(video, metaId);
@@ -223,6 +225,10 @@ export function PublicarDialog({
               <Label>Link de TikTok</Label>
               <Input value={tk} onChange={(e) => setTk(e.target.value)} placeholder="Opcional" />
             </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Link de LinkedIn</Label>
+            <Input value={lk} onChange={(e) => setLk(e.target.value)} placeholder="Opcional" />
           </div>
           <PautaFields pauta={pauta} setPauta={setPauta} />
           {pauta.activa && <MetaIdField value={metaId} onChange={setMetaId} />}
