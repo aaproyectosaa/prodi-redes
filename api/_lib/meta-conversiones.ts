@@ -31,7 +31,16 @@ export async function avisarEtapaAMeta(lead: Record<string, unknown> | null | un
     custom_data: { event_source: "crm", lead_event_source: "Gestor Prodi" },
   };
   try {
-    await graph(`${dataset}/events`, { data: JSON.stringify([evento]) }, process.env.META_CAPI_TOKEN?.trim() || process.env.META_ACCESS_TOKEN || "", "POST");
+    const capi = process.env.META_CAPI_TOKEN?.trim();
+    if (capi) {
+      // El token del Administrador de eventos no es de nuestra app: va sin la firma (appsecret_proof) de Gestor Prodi.
+      const r = await fetch(`https://graph.facebook.com/${process.env.META_GRAPH_VERSION || "v23.0"}/${dataset}/events`, {
+        method: "POST",
+        body: new URLSearchParams({ data: JSON.stringify([evento]), access_token: capi }),
+      });
+      const j: { error?: { message?: string } } = await r.json().catch(() => ({}));
+      if (!r.ok || j.error) throw new Error(j.error?.message ?? String(r.status));
+    } else await graph(`${dataset}/events`, { data: JSON.stringify([evento]) }, process.env.META_ACCESS_TOKEN || "", "POST");
   } catch (err) {
     console.warn(`[meta-conversiones] No se pudo avisar «${ETAPA[estado]}» del lead ${leadgenId}:`, err instanceof Error ? err.message : err);
   }
