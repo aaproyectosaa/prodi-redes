@@ -488,12 +488,14 @@ async function sumarMensajesNuevos(id: string, lead: any, c: any, propios: Set<s
 
 /** Para la pantalla: cuándo avisó Meta por última vez (formulario o mensaje) y cuándo se revisó. */
 export async function estadoMeta() {
-  const d = await leerDoc(getPool(), SECRETO.col, SECRETO.id);
+  const [d, c] = await Promise.all([leerDoc(getPool(), SECRETO.col, SECRETO.id), leerDoc(getPool(), "web_config", "meta_conversiones")]);
   return {
     conectado: !!d?.cifrado,
     pagina: d?.pagina ?? null,
     ultimo_aviso: d?.webhook_mensajes_at ?? null,
     ultima_revision: d?.mensajes_at ?? null,
+    // Lo último que respondió Meta al avisarle una etapa (api/_lib/meta-conversiones.ts).
+    conversiones: c ? { ok: !!c.ok, etapa: String(c.etapa ?? ""), error: (c.error as string) ?? null, at: String(c.at ?? "") } : null,
   };
 }
 

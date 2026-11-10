@@ -5,7 +5,12 @@
 // token con acceso a ese conjunto; si no está, usa META_ACCESS_TOKEN). Sin META_DATASET_ID no hace nada.
 // Nunca tira: si Meta no lo acepta, queda en el log y el CRM sigue igual.
 
+import { getPool, guardarDoc } from "./db";
 import { graph } from "./meta-leads";
+
+/** Lo último que respondió Meta (se ve en Leads → engranaje): si anda o por qué no. */
+const anotar = (r: { ok: boolean; etapa: string; error?: string }) =>
+  guardarDoc(getPool(), "web_config", "meta_conversiones", { ...r, at: new Date().toISOString() }).catch(() => undefined);
 
 /** El nombre de cada etapa como lo ve Meta (las mismas del tablero de Leads). */
 const ETAPA: Record<string, string> = {
@@ -22,7 +27,8 @@ export async function avisarEtapaAMeta(lead: Record<string, unknown> | null | un
   const meta = (lead?.meta ?? null) as { leadgen_id?: unknown } | null;
   const leadgenId = String(meta?.leadgen_id ?? "");
   // Solo los que vinieron de un formulario de Meta (los demás Meta no los conoce).
-  if (!dataset || lead?.origen !== "meta:leadgen" || !/^\d+$/.test(leadgenId) || !ETAPA[estado]) return;
+  if (lead?.origen !== "meta:leadgen" || !/^\d+$/.test(leadgenId) || !ETAPA[estado]) return;
+  if (!dataset) return void (await anotar({ ok: false, etapa: ETAPA[estado], error: "Falta META_DATASET_ID en Vercel" }));
   const evento = {
     event_name: ETAPA[estado],
     event_time: Math.floor(Date.now() / 1000),
@@ -41,7 +47,9 @@ export async function avisarEtapaAMeta(lead: Record<string, unknown> | null | un
       const j: { error?: { message?: string } } = await r.json().catch(() => ({}));
       if (!r.ok || j.error) throw new Error(j.error?.message ?? String(r.status));
     } else await graph(`${dataset}/events`, { data: JSON.stringify([evento]) }, process.env.META_ACCESS_TOKEN || "", "POST");
+    await anotar({ ok: true, etapa: ETAPA[estado] });
   } catch (err) {
+    await anotar({ ok: false, etapa: ETAPA[estado], error: (err instanceof Error ? err.message : String(err)).slice(0, 300) });
     console.warn(`[meta-conversiones] No se pudo avisar «${ETAPA[estado]}» del lead ${leadgenId}:`, err instanceof Error ? err.message : err);
   }
 }

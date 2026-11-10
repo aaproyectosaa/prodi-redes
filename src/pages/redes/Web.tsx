@@ -1520,7 +1520,12 @@ function FormulariosMeta() {
   const [conectando, setConectando] = useState(false);
   const [token, setToken] = useState("");
   // Si Meta está avisando al momento (webhook) o el sistema lo va a buscar cada tanto.
-  const [estado, setEstado] = useState<{ conectado: boolean; ultimo_aviso: string | null; ultima_revision: string | null } | null>(null);
+  const [estado, setEstado] = useState<{
+    conectado: boolean;
+    ultimo_aviso: string | null;
+    ultima_revision: string | null;
+    conversiones?: { ok: boolean; etapa: string; error: string | null; at: string } | null;
+  } | null>(null);
   useEffect(() => {
     callApi<typeof estado>("/api/web/meta-estado", {})
       .then(setEstado)
@@ -1589,6 +1594,13 @@ function FormulariosMeta() {
               ? `Al instante: Meta avisó el último mensaje ${hace(estado.ultimo_aviso)}.`
               : "Meta todavía no avisó ningún mensaje al instante: se revisa solo cada 2 minutos con el sistema abierto."}
           {estado.ultima_revision && !enIngles ? ` Última revisión ${hace(estado.ultima_revision)}.` : ""}
+        </p>
+      )}
+      {estado?.conversiones && !enIngles && (
+        <p className={cn("rounded-lg px-2.5 py-1.5 text-[11px]", estado.conversiones.ok ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-red-500/10 text-red-700 dark:text-red-300")}>
+          {estado.conversiones.ok
+            ? `Meta recibió la etapa «${estado.conversiones.etapa}» ${hace(estado.conversiones.at)}: aprende qué formularios venden.`
+            : `Meta no aceptó la etapa «${estado.conversiones.etapa}» (${hace(estado.conversiones.at)}): ${estado.conversiones.error}`}
         </p>
       )}
       <Button size="sm" variant="outline" className="w-full" onClick={() => void traerMensajes()} disabled={conectando}>
