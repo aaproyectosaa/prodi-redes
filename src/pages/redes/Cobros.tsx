@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
   Banknote,
+  CalendarClock,
   Check,
   ChevronDown,
   Clock,
@@ -40,6 +41,7 @@ import { ClienteTag } from "@/components/redes/ClienteTag";
 import { BoletaDialog } from "@/components/redes/admin/BoletaDialog";
 import { DatosFacturacionDialog, EditarFacturaDialog, MesNav } from "@/components/redes/admin/FacturaPartes";
 import { PagoParcialDialog } from "@/components/redes/admin/PagoParcialDialog";
+import { CobroDialog } from "@/components/redes/admin/CobroDialog";
 import { EmitirPrevia, UnirComprobanteDialog, nombreDoc, nombreDocs, type FilaEmitir } from "@/components/redes/admin/EmitirPrevia";
 import { Morosos, useMorosos } from "@/components/redes/admin/Morosos";
 import { ComoFunciona, FilaKpis, Kpi, Pestanias, Vacio as VacioAdmin, type Pestania } from "@/components/redes/admin/AdminUI";
@@ -182,6 +184,8 @@ export default function Cobros() {
 
   // Por id: así se ve en vivo lo que cambia (p. ej. el CAE de ARCA apenas se autoriza).
   const [verId, setVerId] = useState<string | null>(null);
+  /** Cobro ya registrado para corregir (el día que pagó y si se le cobró el interés). */
+  const [corregir, setCorregir] = useState<FacturaDoc | null>(null);
   const [previa, setPrevia] = useState<Factura | null>(null); // vista previa que todavía no se guardó
   const ver = facturas.find((x) => x.id === verId) ?? previa;
   const abrir = (f: Factura) => ("id" in f && typeof f.id === "string" ? (setVerId(f.id), setPrevia(null)) : (setVerId(null), setPrevia(f)));
@@ -308,6 +312,7 @@ export default function Cobros() {
               />
             )}
             {paso === "cobrar" && <PasoCobrar lista={pendientesV} delMes={vivas} hoy={hoy} cobro={cobro} onVer={abrir} />}
+            <CobroDialog fs={corregir ? [corregir] : null} onClose={() => setCorregir(null)} />
             {paso === "cobradas" &&
               (cobradasV.length ? (
                 <div className="divide-y rounded-2xl border bg-card px-4">
@@ -320,7 +325,20 @@ export default function Cobros() {
                     <span className="tabular-nums">
                       {formatARS(f.bruto)}
                       {f.interes_cobrado ? <span className="ml-1 text-xs text-muted-foreground">+ {formatARS(f.interes_cobrado)} interés</span> : null}
+                      {!f.interes_cobrado && f.interes_perdonado ? <span className="ml-1 text-xs text-muted-foreground">· sin interés</span> : null}
                     </span>
+                    {f.medio !== "mercadopago" && f.medio !== "adelantado" && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8"
+                        onClick={() => setCorregir(f)}
+                        aria-label="Corregir el día del pago y el interés"
+                        title="Corregir el día del pago y el interés"
+                      >
+                        <CalendarClock className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setVerId(f.id)} aria-label={`Ver ${nombreDoc(f.tipo)}`}>
                       <Eye className="h-4 w-4" />
                     </Button>
@@ -641,15 +659,19 @@ function PasoCobrar({
   const [sel, setSel] = useState<Set<string>>(new Set());
   useEffect(() => setSel((prev) => new Set([...prev].filter((id) => lista.some((f) => f.id === id)))), [lista]);
   const elegidas = lista.filter((f) => sel.has(f.id));
-  const cobrar = async (fs: FacturaDoc[], medio: MedioCobro) => {
-    try {
-      for (const f of fs) await marcarCobrada(f, medio);
-      toast.success(fs.length === 1 ? "Marcada como cobrada" : `${fs.length} marcadas como cobradas`);
-      setSel(new Set());
-    } catch (e) {
-      err(e);
-    }
-  };
+  // Al cobrar se elige el día que pagó de verdad y si se le cobra el interés (CobroDialog).
+  const [aCobrar, setACobrar] = useState<{ fs: FacturaDoc[]; medio: MedioCobro } | null>(null);
+  const cobrar = (fs: FacturaDoc[], medio: MedioCobro) => setACobrar({ fs, medio });
+  const dialogoCobro = (
+    <CobroDialog
+      fs={aCobrar?.fs ?? null}
+      medio={aCobrar?.medio}
+      onClose={() => {
+        setACobrar(null);
+        setSel(new Set());
+      }}
+    />
+  );
   if (!lista.length) return <Vacio texto="No hay nada por cobrar 🙌" />;
   const dialogoParcial = (
     <PagoParcialDialog
@@ -670,9 +692,10 @@ function PasoCobrar({
   return (
     <div className="space-y-3">
       {dialogoParcial}
+      {dialogoCobro}
       <UnirComprobanteDialog f={unir} delMes={delMes} onClose={() => setUnir(null)} />
       <Ayuda>
-        Cuando te paguen, tocá <b>Cobrada</b>. Las vencidas van primero, con el interés a hoy.
+        Cuando te paguen, tocá <b>Cobrada</b>: elegís el día que pagó y, si pagó tarde, si se le cobra el interés. Las vencidas van primero.
       </Ayuda>
       <Seleccion lista={lista} sel={sel} setSel={setSel}>
         {elegidas.length > 0 && (

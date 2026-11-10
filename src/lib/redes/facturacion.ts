@@ -215,14 +215,53 @@ export function recalcularMora(proyectoId: string) {
   return callApi("/api/pagos/mora-recalcular", { proyecto_id: proyectoId }).catch(() => undefined);
 }
 
-export async function marcarCobrada(f: FacturaDoc, medio: MedioCobro) {
+/**
+ * Cómo se registra un cobro: el día que pagó de verdad (a veces se anota días después) y si se le cobra el interés.
+ * Si pagó hasta el vencimiento no hay interés; si pagó después, se puede perdonar.
+ */
+export interface OpcionesCobro {
+  /** YYYY-MM-DD (Argentina). Sin esto: hoy. */
+  fecha?: string;
+  /** false: no se le cobra el interés (se perdona). Sin esto: se cobra si corresponde. */
+  conInteres?: boolean;
+}
+
+/** El momento del cobro: ahora si es hoy; si es otro día, ese día al mediodía (hora argentina). */
+const momentoDePago = (fecha: string) => (fecha === hoyAR() ? new Date().toISOString() : new Date(`${fecha}T12:00:00-03:00`).toISOString());
+
+/** Interés que correspondería si pagó ese día (para una ya cobrada, como si estuviera pendiente). */
+export function interesAlPagar(f: Pick<Factura, "estado" | "bruto" | "debitado" | "comision_mp" | "pagos" | "vencimiento">, fecha: string): number {
+  const base = f.estado === "cobrada" ? { ...f, estado: "pendiente" as const, pagos: null } : f;
+  return interesMora(base, fecha).interes;
+}
+
+export async function marcarCobrada(f: FacturaDoc, medio: MedioCobro, o: OpcionesCobro = {}) {
   assertEditable();
+  const fecha = o.fecha ?? hoyAR();
+  const corresponde = interesMora(f, fecha).interes;
+  const interes = o.conInteres === false ? 0 : corresponde;
   await updateDoc(doc(db, "facturas", f.id), {
     estado: "cobrada",
     medio,
-    cobrado_at: new Date().toISOString(),
+    cobrado_at: momentoDePago(fecha),
+    pagado_el: fecha,
     emitida_at: f.emitida_at ?? new Date().toISOString(),
-    interes_cobrado: interesMora(f, hoyAR()).interes,
+    interes_cobrado: interes,
+    interes_perdonado: corresponde > 0 && interes === 0 ? corresponde : null,
+  });
+  void recalcularMora(f.proyecto_id);
+}
+
+/** Corrige un cobro ya registrado: el día que pagó y si se le cobró el interés. */
+export async function corregirCobro(f: FacturaDoc, o: { fecha: string; conInteres: boolean }) {
+  assertEditable();
+  const corresponde = interesAlPagar(f, o.fecha);
+  const interes = o.conInteres ? corresponde : 0;
+  await updateDoc(doc(db, "facturas", f.id), {
+    cobrado_at: momentoDePago(o.fecha),
+    pagado_el: o.fecha,
+    interes_cobrado: interes,
+    interes_perdonado: corresponde > 0 && interes === 0 ? corresponde : null,
   });
   void recalcularMora(f.proyecto_id);
 }

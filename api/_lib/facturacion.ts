@@ -95,6 +95,10 @@ export interface Factura {
   cobrado_at?: string | null;
   /** Interés por mora que se cobró al marcarla cobrada (queda fijo para el historial). */
   interes_cobrado?: number | null;
+  /** Día en que pagó de verdad (YYYY-MM-DD), si se anotó después. */
+  pagado_el?: string | null;
+  /** Interés que correspondía y no se le cobró (se perdonó). */
+  interes_perdonado?: number | null;
   nota?: string | null;
   creada_at: string;
   creada_por: string;
