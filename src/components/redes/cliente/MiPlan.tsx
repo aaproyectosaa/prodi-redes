@@ -34,6 +34,7 @@ const ESTADO_PAGO: Record<string, string> = {
  */
 export function MiPlan({
   cliente,
+  vePrecios = true,
   email,
   onPedirVideo,
   onPedirSoloEdicion,
@@ -41,6 +42,8 @@ export function MiPlan({
   onCompletarPerfil,
 }: {
   cliente: Project;
+  /** false: es un empleado del cliente. Ve qué incluye el plan y lo que usó, sin precios, boletas ni deuda. */
+  vePrecios?: boolean;
   /** Ir a "Mi negocio" (para completar el perfil antes de definir la publicidad). */
   onCompletarPerfil?: () => void;
   email?: string;
@@ -111,7 +114,7 @@ export function MiPlan({
   return (
     <div className="space-y-6">
       {/* 1. Estado de cuenta */}
-      {debe.length > 0 ? (
+      {!vePrecios ? null : debe.length > 0 ? (
         <div className={cn("rounded-2xl border p-5", vencidas.length ? "border-destructive/40 bg-destructive/[0.06]" : "border-amber-500/40 bg-amber-500/[0.06]")}>
           <p className="flex items-center gap-2 text-sm font-semibold">
             <AlertTriangle className={cn("h-4 w-4", vencidas.length ? "text-destructive" : "text-amber-500")} />
@@ -197,7 +200,7 @@ export function MiPlan({
                 {plan.linkedinMes > 0 ? `, más ${plan.linkedinMes} videos para LinkedIn` : ""}
               </p>
             </div>
-            {plan.precioMensual > 0 && (
+            {vePrecios && plan.precioMensual > 0 && (
               <div className="rounded-2xl bg-white/15 px-4 py-2.5 text-right backdrop-blur">
                 <p className="text-2xl font-bold tabular-nums">{formatARS(plan.precioMensual)}</p>
                 <p className="text-[11px] text-white/80">
@@ -229,7 +232,7 @@ export function MiPlan({
                 )}
                 {plan.pauta?.incluida && (
                   <Incluye i={1} icono={Megaphone} color="from-amber-500/20 to-amber-500/5 text-amber-600 dark:text-amber-300" titulo="Publicidad">
-                    {(pautaCliente?.monto ?? plan.pauta.monto) ? (
+                    {vePrecios && (pautaCliente?.monto ?? plan.pauta.monto) ? (
                       <>
                         <span className="block text-lg font-bold tabular-nums text-foreground">{formatARS(pautaCliente?.monto ?? plan.pauta.monto)}</span>
                         <span>por mes invertidos en tus anuncios</span>
@@ -238,13 +241,13 @@ export function MiPlan({
                       "Armamos y manejamos tus anuncios"
                     )}
                     {/* Lo decide el cliente (la IA le sugiere); con el perfil completo. */}
-                    <button
+                    {vePrecios && <button
                       type="button"
                       onClick={() => setPautaOpen(true)}
                       className="mt-2 block text-xs font-semibold text-primary hover:underline"
                     >
                       {pautaCliente?.monto ? "Cambiar mi inversión" : "Definir cuánto invertir"}
-                    </button>
+                    </button>}
                   </Incluye>
                 )}
                 {plan.administracionRedes && (
@@ -283,7 +286,9 @@ export function MiPlan({
         </div>
       </div>
 
-      {/* 3. Cómo pagás y extras */}
+      {/* 3. Cómo pagás y extras (4 y 5: boletas y pagos). El empleado no los ve. */}
+      {vePrecios && (
+      <>
       <div className="grid gap-4 md:grid-cols-2">
         <DebitoCliente cliente={cliente} monto={totalBoleta} comision={settings.comision_mp_pct} email={email} />
         <ComprarExtras clienteId={cliente.id} plan={plan} onSoloEdicion={onPedirSoloEdicion} />
@@ -326,7 +331,10 @@ export function MiPlan({
         </details>
       )}
 
-      {abierta && <BoletaDialog f={abierta} cobro={cobro} onClose={() => setVer(null)} />}
+      </>
+      )}
+
+      {vePrecios && abierta && <BoletaDialog f={abierta} cobro={cobro} onClose={() => setVer(null)} />}
     </div>
   );
 }

@@ -16,6 +16,8 @@ export interface Contexto {
   roles: string[];
   /** Clientes donde el usuario es "cliente" (se calcula una vez por pedido). */
   misClientes: Set<string>;
+  /** De esos, donde es empleado (puestos[uid] = "empleado"): no ve boletas ni pagos. */
+  sinPrecios?: Set<string>;
   /** Clientes asignados a productor / editor / pauta / diseño (en cualquier rol de team_roles). */
   misProyectos: Set<string>;
   /** Chats leídos en este pedido (para saber si es miembro). */
@@ -390,9 +392,9 @@ export async function puedeLeer(c: Contexto, col: string, id: string, d: Data | 
       // ia_memoria/{cliente}
       return produceEn(c, id) || (esDiseno(c) && equipoDe(c, id));
     case "cobros":
-      return esFinanzas(c) || clienteDe(c, d.proyecto_id);
+      return esFinanzas(c) || (clienteDe(c, d.proyecto_id) && !c.sinPrecios?.has(d.proyecto_id));
     case "facturas":
-      return esFinanzas(c) || (clienteDe(c, d.proyecto_id) && ["pendiente", "cobrada"].includes(d.estado));
+      return esFinanzas(c) || (clienteDe(c, d.proyecto_id) && !c.sinPrecios?.has(d.proyecto_id) && ["pendiente", "cobrada"].includes(d.estado));
     // Cada uno ve cómo se le paga y sus liquidaciones ("Mis ganancias"); administración, las de todos.
     case "equipo_pagos":
       return esFinanzas(c) || id === c.uid;
@@ -792,13 +794,17 @@ export async function puedeEscribir(c: Contexto, col: string, id: string, antes:
 export async function contexto(ex: Pick<PoolClient, "query">, uid: string, role: string, rolesTodos: string[] = [role]): Promise<Contexto> {
   const roles = rolesTodos.length ? rolesTodos : [role];
   const misClientes = new Set<string>();
+  const sinPrecios = new Set<string>();
   const misProyectos = new Set<string>();
   if (role === "cliente") {
     const r = await ex.query(
-      "select id from documentos where coleccion = 'projects' and data @> jsonb_build_object('team_roles', jsonb_build_object('cliente', jsonb_build_array($1::text)))",
+      "select id, data->'puestos'->>$1::text as puesto from documentos where coleccion = 'projects' and data @> jsonb_build_object('team_roles', jsonb_build_object('cliente', jsonb_build_array($1::text)))",
       [uid]
     );
-    r.rows.forEach((x: { id: string }) => misClientes.add(x.id));
+    r.rows.forEach((x: { id: string; puesto: string | null }) => {
+      misClientes.add(x.id);
+      if (x.puesto === "empleado") sinPrecios.add(x.id);
+    });
   }
   if (roles.some((r) => ASIGNADOS.includes(r))) {
     // En cualquier rol del cliente (igual que assertProjectAccess / trabajaEn). Los clientes sin diseñadora asignada
@@ -829,7 +835,7 @@ export async function contexto(ex: Pick<PoolClient, "query">, uid: string, role:
     const r = await ex.query("select data->>'proyecto_id' as pid from documentos where coleccion = 'profiles' and id = $1", [uid]);
     empresaVendedor = r.rows[0]?.pid || null;
   }
-  return { uid, role, roles, misClientes, misProyectos, chats: new Map(), empresaVendedor, ex };
+  return { uid, role, roles, misClientes, sinPrecios, misProyectos, chats: new Map(), empresaVendedor, ex };
 }
 
 /** Saca los campos que solo usa el servidor (tokens cifrados de Drive, etc.). */

@@ -6,7 +6,7 @@
 // (ver interesMora en facturacion.ts). El admin puede dar una tregua: hasta esa fecha no pasa de "en mora".
 
 import { adminDb } from "./db";
-import { destinatariosDe, enviarAviso } from "./notify";
+import { duenosDe, enviarAviso } from "./notify";
 import { hoyAR } from "./fecha";
 import type { Factura } from "./facturacion";
 import { estadoMora, leerConfigMora, ORDEN_MORA, subeDe, type EstadoMora, type NivelMora } from "./mora-calc";
@@ -73,7 +73,7 @@ async function actualizarMoraUno(pid: string, base: string | null): Promise<Esta
       base
     ).catch((err) => console.warn("[mora] aviso admin", err));
     if (nuevo.nivel === "sin_extras" || nuevo.nivel === "pausa") {
-      const clientes = await destinatariosDe(pid, ["cliente"], false);
+      const clientes = await duenosDe(pid);
       if (clientes.length) {
         await enviarAviso(
           {

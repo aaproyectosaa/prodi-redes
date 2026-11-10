@@ -122,6 +122,13 @@ export async function destinatariosDe(proyectoId: string, roles: string[], inclu
   return Array.from(out);
 }
 
+/** Usuarios del cliente que ven los precios (dueño y gerente; sin marcar también): a ellos les llegan los avisos de deuda. */
+export async function duenosDe(proyectoId: string): Promise<string[]> {
+  const p = (await adminDb().collection("projects").doc(proyectoId).get()).data() ?? {};
+  const puestos = (p.puestos ?? {}) as Record<string, string>;
+  return ((p.team_roles?.cliente ?? []) as string[]).filter((id) => id && puestos[id] !== "empleado");
+}
+
 /**
  * Diseñadoras de un cliente (activas): las asignadas en su ficha (team_roles.diseno).
  * Si el cliente todavía no tiene ninguna asignada, el aviso le llega al admin (para que asigne a alguien): las

@@ -39,6 +39,7 @@ import { DatosMarcaCliente, TarjetaPerfil } from "@/components/redes/cliente/Per
 import { PlanMesCliente } from "@/components/redes/cliente/PlanMesCliente";
 import { usePlanMes } from "@/lib/redes/planMes";
 import { MiPlan } from "@/components/redes/cliente/MiPlan";
+import { vePrecios } from "@/lib/redes/puestos";
 import { ResultadosCliente } from "@/components/redes/cliente/ResultadosCliente";
 import { CupoVideos } from "@/components/redes/cliente/CupoVideos";
 import { MaterialCliente } from "@/components/redes/cliente/MaterialCliente";
@@ -354,7 +355,7 @@ export default function ClientePortal() {
         integrantes={cliente.team_roles?.cliente ?? []}
       />
       {/* Pagos atrasados: lo que debe y qué se le frena (arriba de todo, en cualquier sección). */}
-      <AvisoMoraCliente cliente={cliente} onPagar={tab === "plan" ? undefined : () => setTab("plan")} />
+      {vePrecios(cliente, profile?.id) && <AvisoMoraCliente cliente={cliente} onPagar={tab === "plan" ? undefined : () => setTab("plan")} />}
       {/* Las secciones se eligen desde el menú: sin pestañas repetidas. */}
       <Tabs value={tab} onValueChange={setTab}>
 
@@ -505,7 +506,7 @@ export default function ClientePortal() {
         </TabsContent>
 
         <TabsContent value="plan">
-          <MiPlan cliente={cliente} email={user?.email ?? undefined} onPedirVideo={() => setPedirVideo(true)}
+          <MiPlan cliente={cliente} vePrecios={vePrecios(cliente, profile?.id)} email={user?.email ?? undefined} onPedirVideo={() => setPedirVideo(true)}
             onPedirSoloEdicion={() => {
               setSoloEdicion(true);
               setPedirVideo(true);

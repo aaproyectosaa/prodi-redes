@@ -35,7 +35,7 @@ import {
 } from "../_lib/mercadopago";
 import { aplicarPago, estadoSuscripcion, precioAbono, proyectoDeSuscripcion, registrarAbono } from "../_lib/cobros";
 import { completarAlta, marcarAlta } from "../_lib/alta-web";
-import { destinatariosDe, disenadorasDe, enviarAviso } from "../_lib/notify";
+import { destinatariosDe, disenadorasDe, duenosDe, enviarAviso } from "../_lib/notify";
 import { ESTADOS_IDEA_EDITABLE, FORMATOS_PIEZA, cupoPieza, leerPedidoPieza, piezaDoc, precioPieza } from "../_lib/piezas";
 import { prepararFacturacion } from "../_lib/facturar";
 import { asuntoFactura, facturaId, mailFacturaHtml, periodoFactura, saldoDe, pagoUnaParte, type Factura } from "../_lib/facturacion";
@@ -580,7 +580,7 @@ async function moraRecordar(req: VercelRequest) {
   const e = await actualizarMora(proyecto_id, null);
   if (!e || e.dias <= 0) throw new HttpError(400, "Ese cliente no tiene pagos vencidos");
   const ars = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n || 0);
-  const clientes = await destinatariosDe(proyecto_id, ["cliente"], false);
+  const clientes = await duenosDe(proyecto_id);
   if (!clientes.length) throw new HttpError(400, "Ese cliente no tiene usuarios para avisarle");
   await enviarAviso(
     {

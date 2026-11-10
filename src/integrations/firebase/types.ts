@@ -30,6 +30,9 @@ export type UserRole =
   | "pm"
   | "disenador";
 
+/** Puesto de un usuario dentro de la empresa cliente: el empleado no ve los precios del servicio. */
+export type PuestoCliente = "dueno" | "gerente" | "empleado";
+
 export interface Profile {
   /** Roles además del principal (ej. Producción que también hace Pauta). Los define el super admin en Equipo. */
   roles_extra?: UserRole[];
@@ -343,6 +346,11 @@ export interface Project {
     zona_pauta?: "chica" | "grande" | "nacional" | null;
     ciudad_pauta?: string | null;
   } | null;
+  /**
+   * Puesto de cada usuario del cliente (uid → puesto). Solo el dueño y el gerente ven cuánto cuesta el servicio
+   * (abono, boletas, deuda). Sin marcar: lo ve (como el dueño). Lo marca el admin en Integrantes.
+   */
+  puestos?: Record<string, PuestoCliente>;
   /** Visitas de vendedores (ej. DS): sus vendedores cargan visitas a fábricas con videos y fotos. Lo prende el admin. */
   visitas_activo?: boolean;
   /** CRM (beta): si el cliente ve "Mis contactos". Lo prende el admin. */

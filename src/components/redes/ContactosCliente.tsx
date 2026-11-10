@@ -13,7 +13,10 @@ import { callApi } from "@/lib/redes/api";
 import { assertEditable } from "@/lib/redes/vistaComo";
 import { urlChatApp } from "@/lib/chatApp";
 import { cn } from "@/lib/utils";
-import type { Project } from "@/integrations/firebase/types";
+import { doc, updateDoc } from "@/lib/db";
+import { db } from "@/integrations/firebase/client";
+import { PUESTOS } from "@/lib/redes/puestos";
+import type { Project, PuestoCliente } from "@/integrations/firebase/types";
 
 type Acceso = "sistema" | "chat";
 const VACIO = { nombre: "", email: "", telefono: "", cargo: "", password: "" };
@@ -121,6 +124,21 @@ export function ContactosCliente({ cliente }: { cliente: Project }) {
   const [datos, setDatos] = useState<{ texto: string; nombre: string } | null>(null);
   const [claveDe, setClaveDe] = useState<{ uid: string; nombre: string; email: string; acceso: Acceso } | null>(null);
   const [nuevaClave, setNuevaClave] = useState("");
+  // Puestos con el cambio ya hecho (se ve al instante, sin esperar la próxima lectura).
+  const [puestos, setPuestos] = useState<Record<string, PuestoCliente>>(cliente.puestos ?? {});
+  const cambiarPuesto = async (uid: string, puesto: PuestoCliente) => {
+    const antes = puestos;
+    const nuevos = { ...puestos, [uid]: puesto };
+    setPuestos(nuevos);
+    try {
+      assertEditable();
+      await updateDoc(doc(db, "projects", cliente.id), { puestos: nuevos });
+      toast.success(puesto === "empleado" ? "Listo: no ve cuánto cuesta el servicio" : "Listo: ve cuánto cuesta el servicio");
+    } catch (err) {
+      setPuestos(antes);
+      toast.error(err instanceof Error ? err.message : "No se pudo guardar");
+    }
+  };
 
   const abrirNuevo = () => {
     setForm({ ...VACIO, password: esAdmin ? generarClave() : "" });
@@ -214,6 +232,32 @@ export function ContactosCliente({ cliente }: { cliente: Project }) {
                       {off && <span className="text-xs font-normal text-muted-foreground">Desactivado</span>}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">{[p.cargo, p.email, p.telefono].filter(Boolean).join(" · ")}</p>
+                    {!esContacto && (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <div className="inline-flex rounded-full border bg-background p-0.5">
+                          {PUESTOS.map((x) => {
+                            const actual = puestos[p.id] ?? "dueno";
+                            return (
+                              <button
+                                key={x.v}
+                                type="button"
+                                disabled={!esAdmin}
+                                onClick={() => actual !== x.v && void cambiarPuesto(p.id, x.v)}
+                                className={cn(
+                                  "h-6 rounded-full px-2.5 text-[11px] font-semibold",
+                                  actual === x.v ? "bg-primary text-primary-foreground" : "text-muted-foreground enabled:hover:text-foreground"
+                                )}
+                              >
+                                {x.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <span className="text-[11px] text-muted-foreground">
+                          {(puestos[p.id] ?? "dueno") === "empleado" ? "No ve el precio del servicio" : "Ve el precio del servicio"}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
                     {esAdmin && !off && (
