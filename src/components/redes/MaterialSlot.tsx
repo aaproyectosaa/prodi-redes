@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
-import { Camera, CheckCircle2, Download, ExternalLink, FolderOpen, Loader2, Upload } from "lucide-react";
+import { Camera, CheckCircle2, Download, ExternalLink, FolderOpen, Link2, Loader2, Upload, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -159,6 +160,50 @@ export function MaterialSlot({
     }
   };
 
+  // Pegar un link (Drive, WeTransfer, Dropbox…) en vez de subir los archivos: queda en material_links, como los del cliente.
+  const [pegando, setPegando] = useState(false);
+  const [link, setLink] = useState("");
+  const [guardandoLink, setGuardandoLink] = useState(false);
+  const guardarLink = async () => {
+    const url = link.trim();
+    if (!/^https?:\/\/\S+\.\S+/.test(url)) {
+      toast.error("Pegá el link completo (empieza con https://)");
+      return;
+    }
+    const antes = video.material_links ?? [];
+    if (antes.some((l) => l.url === url)) {
+      toast.error("Ese link ya está cargado");
+      return;
+    }
+    setGuardandoLink(true);
+    try {
+      assertEditable();
+      await updateDoc(doc(db, "videos", video.id), {
+        material_links: [...antes, { url, at: new Date().toISOString(), by: user?.uid ?? "" }],
+        updated_at: new Date().toISOString(),
+      });
+      setLink("");
+      setPegando(false);
+      toast.success("Link guardado");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo guardar el link");
+    } finally {
+      setGuardandoLink(false);
+    }
+  };
+  const quitarLink = async (url: string) => {
+    try {
+      assertEditable();
+      await updateDoc(doc(db, "videos", video.id), {
+        material_links: (video.material_links ?? []).filter((l) => l.url !== url),
+        updated_at: new Date().toISOString(),
+      });
+      toast.success("Link sacado");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo sacar");
+    }
+  };
+
   const activeUploads = uploads.filter((u) => u.status !== "done");
   // Videos de los sistemas anteriores: el material estaba en una carpeta de Drive (link), no subido al video.
   const linkViejo = String((slot === "crudo" ? video._viejo?.material_crudo : video._viejo?.material_finalizado) ?? "").trim();
@@ -168,20 +213,28 @@ export function MaterialSlot({
     linksCliente.length > 0 || (audience === "team" && /^https?:\/\//.test(linkViejo)) ? (
       <div className="space-y-2">
         {linksCliente.map((l) => (
+          <div key={l.url} className="flex items-center gap-1">
           <a
-            key={l.url}
             href={l.url}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-2.5 rounded-xl border border-primary/30 bg-primary/[0.05] px-3 py-2.5 text-sm transition-colors hover:border-primary/60"
+            className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-primary/30 bg-primary/[0.05] px-3 py-2.5 text-sm transition-colors hover:border-primary/60"
           >
             <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
             <span className="min-w-0 flex-1">
-              <span className="block font-medium">{/drive\.google|docs\.google/.test(l.url) ? "Material en el Drive del cliente" : "Link al material del cliente"}</span>
+              <span className="block font-medium">
+                {/drive\.google|docs\.google/.test(l.url) ? "Material en Drive" : "Link al material"}
+              </span>
               <span className="block truncate text-[11px] text-muted-foreground">{l.url}</span>
             </span>
             <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           </a>
+            {canUpload && audience === "team" && (
+              <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive" title="Sacar este link" onClick={() => void quitarLink(l.url)}>
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         ))}
         {audience === "team" && /^https?:\/\//.test(linkViejo) && (
       <a
@@ -343,7 +396,33 @@ export function MaterialSlot({
                 Filmar
               </Button>
             )}
+            {slot === "crudo" && !pegando && (
+              <Button variant="outline" className="bg-background" onClick={() => setPegando(true)}>
+                <Link2 className="mr-1.5 h-4 w-4" />
+                Pegar link de Drive
+              </Button>
+            )}
           </div>
+          {slot === "crudo" && pegando && (
+            <form
+              className="mt-1 flex w-full max-w-md gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void guardarLink();
+              }}
+            >
+              <Input autoFocus value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://drive.google.com/…" className="bg-background" />
+              <Button type="submit" disabled={guardandoLink || !link.trim()}>
+                {guardandoLink ? <Loader2 className="h-4 w-4 animate-spin" /> : "Guardar"}
+              </Button>
+              <Button type="button" variant="ghost" size="icon" aria-label="Cancelar" onClick={() => setPegando(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </form>
+          )}
+          {slot === "crudo" && pegando && (
+            <p className="text-[11px] text-muted-foreground">Compartí la carpeta con «Cualquier persona con el link» para que edición la pueda abrir.</p>
+          )}
         </div>
       )}
 

@@ -276,7 +276,8 @@ function VideoDetail({ video, onClose }: { video: Video; onClose: () => void }) 
   const nombre = (id: string | null | undefined) =>
     profiles.find((p) => p.id === id)?.nombre ?? (id ? "Usuario" : "Sin asignar");
 
-  const hasCrudo = (video.attachments_crudo?.length ?? 0) > 0;
+  // Material subido o un link a una carpeta (Drive, WeTransfer…) con las tomas.
+  const hasCrudo = (video.attachments_crudo?.length ?? 0) > 0 || (video.material_links?.length ?? 0) > 0;
   const hasFinal = (video.attachments_finalizado?.length ?? 0) > 0;
   const feedback = video.etapa === "edicion" ? video.feedback_cliente || video.feedback_interno : null;
   const feedbackDe = video.feedback_cliente ? "el cliente" : "producción";
