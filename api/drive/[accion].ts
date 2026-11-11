@@ -14,6 +14,7 @@ import { equipoArchivo, equipoSubida } from "../_lib/drive-acciones/equipo-subid
 import disconnect from "../_lib/drive-acciones/disconnect";
 import media from "../_lib/drive-acciones/media";
 import mediaToken from "../_lib/drive-acciones/media-token";
+import workerToken from "../_lib/drive-acciones/worker-token";
 import oauthCallback from "../_lib/drive-acciones/oauth-callback";
 import startAuth from "../_lib/drive-acciones/start-auth";
 import { videoArchivo, videoListo, videoSubida } from "../_lib/drive-acciones/video-material";
@@ -33,6 +34,7 @@ const ACCIONES: Record<string, (req: VercelRequest, res: VercelResponse) => Prom
   "equipo-subida": equipoSubida,
   media,
   "media-token": mediaToken,
+  "worker-token": workerToken,
   "oauth-callback": oauthCallback,
   "start-auth": startAuth,
   "video-archivo": videoArchivo,

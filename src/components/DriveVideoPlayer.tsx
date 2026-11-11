@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, RefreshCw, Video as VideoIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getDriveMediaPlayUrl, urlVerDirectoDrive } from "@/utils/drive/driveMediaUrl";
+import { getDriveMediaPlayUrl } from "@/utils/drive/driveMediaUrl";
 import {
   logVideo,
   mediaErrorLabel,
@@ -62,7 +62,7 @@ export function DriveVideoPlayer({
   const [playbackError, setPlaybackError] = useState(false);
   const [debugDetail, setDebugDetail] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
-  // Primero directo de Drive (no pasa por el servidor, que es lo que cobra Vercel). Si falla, por el servidor.
+  // Primero por el puente de Cloudflare (no lo cobra Vercel). Si falla, por el servidor de Prodi.
   const [directo, setDirecto] = useState(!fileId.startsWith("demo/"));
   useEffect(() => setDirecto(!fileId.startsWith("demo/")), [fileId]);
   // Primero se intenta reproducirlo acá (muchos .MOV de iPhone son H.264 y Chrome los pasa aunque diga que no):
@@ -83,9 +83,11 @@ export function DriveVideoPlayer({
     setSrc(null);
 
     if (directo) {
-      logVideo("resolve-url:directo", { fileId });
-      setSrc(urlVerDirectoDrive(fileId));
-      setLoading(false);
+      logVideo("resolve-url:puente", { fileId });
+      void getDriveMediaPlayUrl(fileId)
+        .then((url) => active && setSrc(url))
+        .catch(() => active && setDirecto(false))
+        .finally(() => active && setLoading(false));
       return () => {
         active = false;
       };
@@ -94,7 +96,7 @@ export function DriveVideoPlayer({
     void (async () => {
       try {
         logVideo("resolve-url:start", { fileId, mimeType, attempt });
-        const url = await getDriveMediaPlayUrl(fileId);
+        const url = await getDriveMediaPlayUrl(fileId, { servidor: true });
         const withBust =
           attempt > 0
             ? `${url}${url.includes("?") ? "&" : "?"}r=${attempt}`
@@ -157,7 +159,7 @@ export function DriveVideoPlayer({
     });
   }, [autoPlay, src, fileId]);
 
-  // Si Drive directo no arranca en un rato (sin error, colgado), se pasa al servidor.
+  // Si el puente no arranca en un rato (sin error, colgado), se pasa al servidor.
   const cargoMetadata = useRef(false);
   useEffect(() => {
     cargoMetadata.current = false;
@@ -177,7 +179,7 @@ export function DriveVideoPlayer({
   };
 
   const handleVideoError = () => {
-    // Drive no lo dio directo (archivo no compartido, límite de Drive, formato): se pide por el servidor.
+    // El puente no lo dio: se pide por el servidor.
     if (directo) {
       logVideo("element:directo-fallo", { fileId });
       setDirecto(false);

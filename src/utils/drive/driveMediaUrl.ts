@@ -7,11 +7,15 @@ import { logVideo } from "@/utils/drive/videoDebug";
 import { ES_IOS, guardarArchivo, MAX_COMPARTIR } from "@/lib/compartirArchivo";
 
 /** Permisos ya pedidos (valen 1 hora): la misma URL deja que el navegador reuse lo que ya bajó. */
-const permisos = new Map<string, { url: string; hasta: number }>();
+const permisos = new Map<string, { url: string; respaldo: string; hasta: number }>();
 
-export async function getDriveMediaPlayUrl(fileId: string): Promise<string> {
+/**
+ * URL para ver o bajar el archivo. Por defecto, por el puente de Cloudflare (no lo cobra Vercel).
+ * Con servidor: true, por el servidor de Prodi (el respaldo, si el puente no anda).
+ */
+export async function getDriveMediaPlayUrl(fileId: string, o: { servidor?: boolean } = {}): Promise<string> {
   const guardado = permisos.get(fileId);
-  if (guardado && guardado.hasta > Date.now()) return guardado.url;
+  if (guardado && guardado.hasta > Date.now()) return o.servidor ? guardado.respaldo : guardado.url;
   const user = auth.currentUser;
   if (!user) {
     logVideo("auth:missing", { fileId });
@@ -23,7 +27,7 @@ export async function getDriveMediaPlayUrl(fileId: string): Promise<string> {
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
     body: JSON.stringify({ fileId }),
   });
-  let data: { url?: string; error?: string } = {};
+  let data: { url?: string; respaldo?: string; error?: string } = {};
   try {
     data = await res.json();
   } catch {
@@ -35,17 +39,9 @@ export async function getDriveMediaPlayUrl(fileId: string): Promise<string> {
   }
   logVideo("auth:token-ok", { fileId, uid: user.uid });
   // Se usa hasta 50 minutos (el permiso vence a la hora).
-  permisos.set(fileId, { url: data.url, hasta: Date.now() + 50 * 60_000 });
-  return data.url;
-}
-
-/**
- * Ver un video o una foto directo desde Drive, sin pasar por el servidor de Prodi (pasar por el servidor es lo que
- * cobra Vercel por GB). Anda con los archivos compartidos por link (lo que sube Prodi). Si Drive no lo deja (archivo
- * privado, como los del chat, o un límite de Drive), el reproductor vuelve solo a getDriveMediaPlayUrl.
- */
-export function urlVerDirectoDrive(fileId: string): string {
-  return urlDescargaDrive(fileId);
+  const respaldo = data.respaldo ?? data.url;
+  permisos.set(fileId, { url: data.url, respaldo, hasta: Date.now() + 50 * 60_000 });
+  return o.servidor ? respaldo : data.url;
 }
 
 /** Miniatura de Drive (chica, no baja el archivo entero). */

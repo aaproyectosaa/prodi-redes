@@ -9,6 +9,8 @@ import { crearTokenMedia, fileIdValido, puedeVerArchivo } from "../media-token";
 import { getAppDriveAccessToken } from "../drive-connection";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
+/** Puente de Cloudflare (cloudflare/media): pasa los videos sin que Vercel cobre la transferencia. */
+const PUENTE = "https://prodi-media.prodi-redes.workers.dev";
 
 /** Que el archivo se pueda bajar con el link (lo mismo que se hace al subir). false si Drive no lo permite. */
 async function abrirConLink(fileId: string): Promise<boolean> {
@@ -40,8 +42,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return;
     }
     const { token, vence } = crearTokenMedia(fileId);
+    const q = `fileId=${encodeURIComponent(fileId)}&token=${encodeURIComponent(token)}`;
     res.status(200).json({
-      url: `/api/drive/media?fileId=${encodeURIComponent(fileId)}&token=${encodeURIComponent(token)}`,
+      // Por el puente de Cloudflare; si falla, el reproductor usa el respaldo (este servidor, como antes).
+      url: `${PUENTE}/?${q}`,
+      respaldo: `/api/drive/media?${q}`,
       expires_at: vence,
     });
   } catch (err) {
