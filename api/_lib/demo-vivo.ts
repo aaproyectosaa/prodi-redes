@@ -9,17 +9,20 @@
 //   demo-lista { proyecto_id } · demo-crear { proyecto_id, titulo, fecha? } · demo-borrar { demo_id }
 //   demo-estado { demo_id, estado: "en_vivo" | "terminada" } · demo-presentar { demo_id } (entra a transmitir)
 //   demo-activar { proyecto_id, activo } (solo admin: prende el módulo en el cliente)
-//   demo-quitar-camara { proyecto_id, pid } (esa cámara deja de conectarse)
+//   demo-quitar-camara { proyecto_id, pid } (esa cámara deja de conectarse) · demo-minuta { demo_id } (volver a armarla)
 // Sin usuario:
 //   demo-ver { t } · demo-entrar { t, nombre } (lead) · demo-camara { c, cam, nombre } (celular cámara)
 //   demo-latido { d, pid, llave, desde } · demo-senal { d, pid, llave, para, tipo, data }
 //   demo-mensaje { d, pid, llave, texto } · demo-interes { d, pid, llave, contacto? } · demo-salir { d, pid, llave }
+//   demo-texto { d, pid, llave, data, mime, desde } (voz de quien presenta, para la minuta)
 
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { VercelRequest } from "@vercel/node";
 import { adminDb, getPool } from "./db";
 import { appUrl, assertProjectAccess, body, HttpError, requireCaller, type Caller } from "./http";
 import { enviarAviso } from "./notify";
+import { waitUntil } from "@vercel/functions";
+import { armarMinutaDemo, guardarTextoDemo, type MinutaDemo } from "./demo-minuta";
 
 const COL = "demos_vivo";
 /** Si alguien deja de avisar que sigue (cerró la pestaña, se cortó), a los 20 s deja de figurar. */
@@ -39,9 +42,11 @@ interface Demo {
   inicio_at?: string | null;
   fin_at?: string | null;
   /** Leads que entraron (nombre y cuándo), para verlo después. */
-  visitas?: { nombre: string; at: string }[];
+  visitas?: { nombre: string; email?: string; at: string }[];
   /** Leads que tocaron "Quiero cotizar". */
   interesados?: { nombre: string; contacto: string; at: string }[];
+  /** Se arma sola al terminar (api/_lib/demo-minuta.ts). */
+  minuta?: MinutaDemo;
 }
 
 // ---- Firmas: los links y la llave de cada participante no se pueden inventar sin la clave del servidor ----
@@ -142,6 +147,7 @@ function vistaDemo(id: string, d: Demo, base: string) {
     fin_at: d.fin_at ?? null,
     visitas: d.visitas ?? [],
     interesados: d.interesados ?? [],
+    minuta: d.minuta ?? null,
     link: `${base}/vivo/${tokenLead(id)}`,
   };
 }
@@ -209,7 +215,19 @@ async function cambiarEstado(caller: Caller, b: { demo_id?: string; estado?: str
     await asegurarTablas();
     await getPool().query("delete from demo_part where demo_id = $1", [id]);
     await getPool().query("delete from demo_senal where demo_id = $1", [id]);
+    // La minuta se arma sola (con la voz de quien presentó y las preguntas) y les llega por mail a los leads.
+    waitUntil(armarMinutaDemo(id).catch((e) => console.warn("[demo] minuta", e)));
   } else throw new HttpError(400, "Estado inválido");
+  return { ok: true };
+}
+
+/** Volver a armar la minuta (si falló). */
+async function rehacerMinuta(caller: Caller, b: { demo_id?: string }) {
+  const id = String(b.demo_id ?? "");
+  const d = await demoConPermiso(caller, id);
+  if (d.estado !== "terminada") throw new HttpError(409, "La minuta se arma cuando termina la demo");
+  if (d.minuta?.estado === "lista") return { ok: true };
+  await armarMinutaDemo(id, true);
   return { ok: true };
 }
 
@@ -279,16 +297,18 @@ async function ver(b: { t?: string }) {
   return { titulo: d.titulo, fecha: d.fecha, estado: d.estado, ...(await nombreEmpresa(d.proyecto_id)) };
 }
 
-async function entrar(b: { t?: string; nombre?: string }) {
+async function entrar(b: { t?: string; nombre?: string; email?: string }) {
   const id = leerTokenLead(String(b.t ?? ""));
   const d = await leerDemo(id);
   const nombre = String(b.nombre ?? "").trim().slice(0, 60);
   if (!nombre) throw new HttpError(400, "Poné tu nombre para entrar");
+  const email = String(b.email ?? "").trim().toLowerCase().slice(0, 120);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new HttpError(400, "Poné tu mail: ahí te mandamos el resumen de la demo");
   if (d.estado === "terminada") throw new HttpError(409, "Esta demo ya terminó");
   await asegurarTablas();
   const pid = `l-${randomBytes(6).toString("hex")}`;
   await presencia(id, pid, "lead", nombre);
-  const visitas = [...(d.visitas ?? []), { nombre, at: new Date().toISOString() }].slice(-200);
+  const visitas = [...(d.visitas ?? []), { nombre, email, at: new Date().toISOString() }].slice(-200);
   await adminDb().collection(COL).doc(id).update({ visitas });
   await mensajeSistema(id, `${nombre} entró`, true);
   return { d: id, pid, llave: llaveDe(id, pid), titulo: d.titulo, estado: d.estado, ...(await nombreEmpresa(d.proyecto_id)) };
@@ -407,6 +427,20 @@ async function interes(b: Credencial & { contacto?: string }, base: string) {
   return { ok: true };
 }
 
+/** Voz de quien presenta (partes de ~30 s) para la minuta. Solo el presentador y con la demo en vivo. */
+async function texto(b: Credencial & { data?: string; mime?: string; desde?: string }) {
+  const { d, pid } = await credencial(b);
+  if (!pid.startsWith("p-")) throw new HttpError(403, "Solo quien presenta");
+  const demo = await leerDemo(d);
+  if (demo.estado !== "en_vivo" || typeof b.data !== "string" || !b.data) return { ok: true };
+  const audio = Buffer.from(b.data, "base64");
+  if (audio.length > 3 * 1024 * 1024) throw new HttpError(413, "Parte de audio demasiado grande");
+  const mime = /^[a-z]+\/[a-z0-9.+-]+/i.exec(String(b.mime ?? ""))?.[0] ?? "audio/webm";
+  const empresa = (await nombreEmpresa(demo.proyecto_id)).empresa;
+  await guardarTextoDemo(d, empresa, audio, mime, typeof b.desde === "string" ? b.desde : null);
+  return { ok: true };
+}
+
 async function salir(b: Credencial) {
   const { d, pid } = await credencial(b);
   await getPool().query("delete from demo_part where demo_id = $1 and pid = $2", [d, pid]);
@@ -431,6 +465,8 @@ export async function demoVivo(req: VercelRequest, accion: string): Promise<unkn
       return mensaje(b);
     case "demo-interes":
       return interes(b, base);
+    case "demo-texto":
+      return texto(b);
     case "demo-salir":
       return salir(b);
   }
@@ -450,6 +486,8 @@ export async function demoVivo(req: VercelRequest, accion: string): Promise<unkn
       return activar(caller, b);
     case "demo-quitar-camara":
       return quitarCamara(caller, b);
+    case "demo-minuta":
+      return rehacerMinuta(caller, b);
   }
   throw new HttpError(404, "Acción desconocida");
 }

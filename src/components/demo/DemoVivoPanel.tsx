@@ -4,12 +4,12 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import QRCode from "qrcode";
 import { toast } from "sonner";
-import { CalendarClock, Check, Copy, Flame, Loader2, Mic, MicOff, MoreHorizontal, Play, Plus, Radio, Share2, Smartphone, Square, Trash2, Users, Video, X } from "lucide-react";
+import { CalendarClock, Check, Copy, FileText, Flame, Loader2, Mic, MicOff, MoreHorizontal, Play, Plus, Radio, Share2, Smartphone, Square, Trash2, Users, Video, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { apiPanel, SalaDemo, type DemoPanel } from "@/lib/demoVivo";
+import { apiPanel, grabarParaMinuta, SalaDemo, type DemoPanel } from "@/lib/demoVivo";
 import { ChatDemo, PildoraVivo, VideoVivo, fechaDemo, useSala } from "@/components/demo/Comunes";
 
 interface Lista {
@@ -194,6 +194,8 @@ function TarjetaDemo({ d, onCompartir, onTransmitir, onCambio }: { d: DemoPanel;
         </div>
       )}
 
+      {terminada && <MinutaTarjeta d={d} onCambio={onCambio} />}
+
       {terminada ? (
         d.visitas.length > 0 && (
           <button type="button" onClick={() => setVer((v) => !v)} className="mt-3 text-sm font-medium text-primary">
@@ -211,6 +213,77 @@ function TarjetaDemo({ d, onCompartir, onTransmitir, onCambio }: { d: DemoPanel;
         </div>
       )}
       {ver && <p className="mt-2 text-sm text-muted-foreground">{[...new Set(d.visitas.map((v) => v.nombre))].join(" · ")}</p>}
+    </div>
+  );
+}
+
+function MinutaTarjeta({ d, onCambio }: { d: DemoPanel; onCambio: () => void }) {
+  const [abierta, setAbierta] = useState(false);
+  const [rehaciendo, setRehaciendo] = useState(false);
+  const m = d.minuta;
+  const rehacer = async () => {
+    setRehaciendo(true);
+    try {
+      await apiPanel("demo-minuta", { demo_id: d.id });
+      onCambio();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo");
+    } finally {
+      setRehaciendo(false);
+    }
+  };
+  // Demos de antes de la minuta: nada. Si quedó "armando" mucho tiempo (se cortó), se puede volver a armar.
+  if (!m) return null;
+  const trabada = m.estado === "armando" && Date.now() - new Date(m.at).getTime() > 10 * 60_000;
+  if (m.estado === "armando" && !trabada)
+    return (
+      <p className="mt-3 flex items-center gap-2 rounded-2xl bg-muted/60 px-3 py-2.5 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Armando la minuta…
+      </p>
+    );
+  if (m.estado === "vacia") return <p className="mt-3 rounded-2xl bg-muted/60 px-3 py-2.5 text-sm text-muted-foreground">Sin minuta: no se escuchó a nadie ni hubo preguntas.</p>;
+  if (m.estado === "error" || trabada)
+    return (
+      <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl bg-destructive/10 px-3 py-2.5 text-sm">
+        <span>No se pudo armar la minuta.</span>
+        <Button size="sm" variant="outline" disabled={rehaciendo} onClick={() => void rehacer()} className="rounded-full">
+          {rehaciendo ? <Loader2 className="h-4 w-4 animate-spin" /> : "Probar de nuevo"}
+        </Button>
+      </div>
+    );
+  const enviada = m.enviada_a?.length ?? 0;
+  return (
+    <div className="mt-3 rounded-2xl border bg-muted/30 p-4">
+      <div className="flex items-center gap-2">
+        <FileText className="h-4 w-4 text-primary" />
+        <p className="text-sm font-semibold">Minuta</p>
+        <span className="ml-auto text-xs text-muted-foreground">{enviada ? `Enviada por mail a ${enviada} ${enviada === 1 ? "persona" : "personas"}` : "Sin mails para enviar"}</span>
+      </div>
+      <p className="mt-2 text-sm leading-relaxed">{m.resumen}</p>
+      {abierta && (
+        <div className="mt-3 space-y-3 text-sm">
+          {[
+            ["Lo que se vio", m.temas ?? []],
+            ["Próximos pasos con el cliente", m.acuerdos ?? []],
+            ["Pendientes de la empresa", (m.tareas ?? []).map((t) => `${t.tarea}${t.responsable ? ` · ${t.responsable}` : ""}${t.fecha ? ` · ${t.fecha}` : ""}`)],
+          ]
+            .filter(([, l]) => (l as string[]).length)
+            .map(([t, l]) => (
+              <div key={t as string}>
+                <p className="mb-1 text-xs font-semibold text-muted-foreground">{t as string}</p>
+                <ul className="list-disc space-y-0.5 pl-5">
+                  {(l as string[]).map((x, i) => (
+                    <li key={i}>{x}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          {enviada > 0 && <p className="text-xs text-muted-foreground">Se mandó a: {m.enviada_a?.join(", ")}</p>}
+        </div>
+      )}
+      <button type="button" onClick={() => setAbierta((a) => !a)} className="mt-2 text-sm font-medium text-primary">
+        {abierta ? "Ver menos" : "Ver la minuta completa"}
+      </button>
     </div>
   );
 }
@@ -489,6 +562,12 @@ function Estudio({ demo, empresa, camarasPrendidas, onCompartir, onCerrar }: { d
       setOcupado(false);
     }
   };
+
+  // Mientras está en vivo, la voz se va pasando a texto para la minuta (se arma sola al terminar).
+  useEffect(() => {
+    if (!sala || !mic || estado !== "en_vivo") return;
+    return grabarParaMinuta(mic, sala.cred);
+  }, [sala, mic, estado]);
 
   const alternarMic = () => {
     mic?.getAudioTracks().forEach((t) => (t.enabled = !micPrendido));

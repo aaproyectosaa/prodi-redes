@@ -17,9 +17,20 @@ export interface DemoPanel {
   created_at: string;
   inicio_at: string | null;
   fin_at: string | null;
-  visitas: { nombre: string; at: string }[];
+  visitas: { nombre: string; email?: string; at: string }[];
   interesados: { nombre: string; contacto: string; at: string }[];
+  minuta: MinutaDemo | null;
   link: string;
+}
+
+export interface MinutaDemo {
+  estado: "armando" | "lista" | "vacia" | "error";
+  resumen?: string;
+  temas?: string[];
+  acuerdos?: string[];
+  tareas?: { tarea: string; responsable: string | null; fecha: string | null }[];
+  enviada_a?: string[];
+  at: string;
 }
 
 export interface Credencial {
@@ -289,6 +300,52 @@ export class SalaDemo {
     this.cerrarTodo();
     await apiDemo("demo-salir", { ...this.cred }).catch(() => undefined);
   }
+}
+
+function aBase64(b: Blob): Promise<string> {
+  return new Promise((ok, mal) => {
+    const r = new FileReader();
+    r.onload = () => ok(String(r.result).split(",")[1] ?? "");
+    r.onerror = () => mal(r.error);
+    r.readAsDataURL(b);
+  });
+}
+
+/**
+ * Graba la voz de quien presenta en partes de 30 s y las manda a pasar a texto (para la minuta). Devuelve cómo
+ * cortarla (manda lo último que quedó).
+ */
+export function grabarParaMinuta(mic: MediaStream, cred: Credencial): () => void {
+  if (typeof MediaRecorder === "undefined" || !mic.getAudioTracks().length) return () => undefined;
+  const tipos = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+  const mime = tipos.find((t) => MediaRecorder.isTypeSupported?.(t));
+  let activo = true;
+  let rec: MediaRecorder | null = null;
+  let timer = 0;
+  const tramo = () => {
+    if (!activo) return;
+    const partes: Blob[] = [];
+    const desde = new Date().toISOString();
+    try {
+      rec = new MediaRecorder(new MediaStream(mic.getAudioTracks()), { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: 32_000 });
+    } catch {
+      return;
+    }
+    rec.ondataavailable = (e) => e.data.size && partes.push(e.data);
+    rec.onstop = () => {
+      const blob = new Blob(partes, { type: rec?.mimeType || mime || "audio/webm" });
+      if (blob.size >= 3_000) void aBase64(blob).then((data) => apiDemo("demo-texto", { ...cred, data, mime: blob.type, desde }).catch(() => undefined));
+      tramo();
+    };
+    rec.start();
+    timer = window.setTimeout(() => rec?.state === "recording" && rec.stop(), 30_000);
+  };
+  tramo();
+  return () => {
+    clearTimeout(timer);
+    if (rec?.state === "recording") rec.stop();
+    activo = false;
+  };
 }
 
 /** Mantiene la pantalla prendida (celular cámara). Devuelve cómo soltarla. */

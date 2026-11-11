@@ -15,6 +15,8 @@ interface Info {
 }
 
 const CLAVE_NOMBRE = "prodi-demo-nombre";
+const CLAVE_MAIL = "prodi-demo-mail";
+const mailOk = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s.trim());
 
 export default function DemoLead() {
   const { token = "" } = useParams();
@@ -23,6 +25,13 @@ export default function DemoLead() {
   const [nombre, setNombre] = useState(() => {
     try {
       return localStorage.getItem(CLAVE_NOMBRE) ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const [email, setEmail] = useState(() => {
+    try {
+      return localStorage.getItem(CLAVE_MAIL) ?? "";
     } catch {
       return "";
     }
@@ -50,15 +59,16 @@ export default function DemoLead() {
   const entrar = async (e: FormEvent) => {
     e.preventDefault();
     const n = nombre.trim();
-    if (!n) return;
+    if (!n || !mailOk(email)) return;
     setEntrando(true);
     try {
       localStorage.setItem(CLAVE_NOMBRE, n);
+      localStorage.setItem(CLAVE_MAIL, email.trim());
     } catch {
       /* sin guardar */
     }
     try {
-      const r = await apiDemo<{ d: string; pid: string; llave: string; estado: EstadoDemo }>("demo-entrar", { t: token, nombre: n });
+      const r = await apiDemo<{ d: string; pid: string; llave: string; estado: EstadoDemo }>("demo-entrar", { t: token, nombre: n, email: email.trim() });
       const s = new SalaDemo({ d: r.d, pid: r.pid, llave: r.llave }, "lead", null);
       s.estado = r.estado;
       s.iniciar();
@@ -115,9 +125,20 @@ export default function DemoLead() {
                   maxLength={60}
                   className="h-14 w-full rounded-2xl border border-white/10 bg-white/5 px-5 text-[16px] placeholder:text-white/35 focus:border-violet-400 focus:outline-none"
                 />
+                <input
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Tu mail"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  maxLength={120}
+                  className="h-14 w-full rounded-2xl border border-white/10 bg-white/5 px-5 text-[16px] placeholder:text-white/35 focus:border-violet-400 focus:outline-none"
+                />
+                <p className="px-1 text-xs text-white/45">Al terminar te mandamos el resumen de la demo a tu mail.</p>
                 <button
                   type="submit"
-                  disabled={!nombre.trim() || entrando}
+                  disabled={!nombre.trim() || !mailOk(email) || entrando}
                   className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-500 text-base font-semibold shadow-xl shadow-violet-600/30 transition hover:brightness-110 disabled:opacity-50"
                 >
                   {entrando ? <Loader2 className="h-5 w-5 animate-spin" /> : info.estado === "en_vivo" ? "Entrar a la demo" : "Entrar y esperar"}
