@@ -123,7 +123,7 @@ export function DemoVivoPanel({ proyectoId, empresa }: { proyectoId: string; emp
         }}
       />
       <Compartir demo={compartir} empresa={empresa} onCerrar={() => setCompartir(null)} />
-      <Camaras abierto={camaras} onCerrar={() => setCamaras(false)} link={datos.camara_link} prendidas={datos.camaras} />
+      <Camaras abierto={camaras} onCerrar={() => setCamaras(false)} link={datos.camara_link} prendidas={datos.camaras} proyectoId={proyectoId} onCambio={traer} />
       {estudio && (
         <Estudio
           demo={estudio}
@@ -346,8 +346,24 @@ function Compartir({ demo, empresa, onCerrar }: { demo: DemoPanel | null; empres
   );
 }
 
-function Camaras({ abierto, onCerrar, link, prendidas }: { abierto: boolean; onCerrar: () => void; link: string; prendidas: { pid: string; nombre: string }[] }) {
+function Camaras({ abierto, onCerrar, link, prendidas, proyectoId, onCambio }: { abierto: boolean; onCerrar: () => void; link: string; prendidas: { pid: string; nombre: string }[]; proyectoId: string; onCambio: () => void }) {
   const [qr, setQr] = useState<string | null>(null);
+  const [quitando, setQuitando] = useState<string | null>(null);
+  const [quitadas, setQuitadas] = useState<string[]>([]);
+  const quitar = async (c: { pid: string; nombre: string }) => {
+    if (!confirm(`¿Quitar ${c.nombre}? Ese celular deja de conectarse. Para volver a usarlo, se escanea el QR de nuevo.`)) return;
+    setQuitando(c.pid);
+    try {
+      await apiPanel("demo-quitar-camara", { proyecto_id: proyectoId, pid: c.pid });
+      setQuitadas((q) => [...q, c.pid]);
+      toast.success(`${c.nombre} quitada`);
+      onCambio();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo");
+    } finally {
+      setQuitando(null);
+    }
+  };
   useEffect(() => {
     if (!abierto) return;
     void QRCode.toDataURL(link, { margin: 1, width: 480, color: { dark: "#0b0a12", light: "#ffffff" } }).then(setQr);
@@ -375,11 +391,23 @@ function Camaras({ abierto, onCerrar, link, prendidas }: { abierto: boolean; onC
               <p className="text-sm text-muted-foreground">Ninguna todavía.</p>
             ) : (
               <div className="flex flex-wrap gap-2">
-                {prendidas.map((c) => (
-                  <span key={c.pid} className="flex items-center gap-1.5 rounded-full bg-background px-3 py-1 text-sm font-medium">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500" /> {c.nombre}
-                  </span>
-                ))}
+                {prendidas
+                  .filter((c) => !quitadas.includes(c.pid))
+                  .map((c) => (
+                    <span key={c.pid} className="flex items-center gap-1.5 rounded-full bg-background py-1 pl-3 pr-1 text-sm font-medium">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500" /> {c.nombre}
+                      <button
+                        type="button"
+                        onClick={() => void quitar(c)}
+                        disabled={quitando === c.pid}
+                        aria-label={`Quitar ${c.nombre}`}
+                        title="Quitar esta cámara"
+                        className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        {quitando === c.pid ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                      </button>
+                    </span>
+                  ))}
               </div>
             )}
           </div>

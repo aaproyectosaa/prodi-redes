@@ -9,6 +9,7 @@
 //   demo-lista { proyecto_id } · demo-crear { proyecto_id, titulo, fecha? } · demo-borrar { demo_id }
 //   demo-estado { demo_id, estado: "en_vivo" | "terminada" } · demo-presentar { demo_id } (entra a transmitir)
 //   demo-activar { proyecto_id, activo } (solo admin: prende el módulo en el cliente)
+//   demo-quitar-camara { proyecto_id, pid } (esa cámara deja de conectarse)
 // Sin usuario:
 //   demo-ver { t } · demo-entrar { t, nombre } (lead) · demo-camara { c, cam, nombre } (celular cámara)
 //   demo-latido { d, pid, llave, desde } · demo-senal { d, pid, llave, para, tipo, data }
@@ -66,13 +67,13 @@ function leerTokenLead(t: string): string {
 }
 /** Link de las cámaras del cliente: /camara/<proyecto>.<versión>.<firma> (la versión cambia si se renueva). */
 const tokenCamara = (proyectoId: string, v: number) => `${proyectoId}.${v}.${firmar(`cam:${proyectoId}:${v}`)}`;
-async function leerTokenCamara(c: string): Promise<string> {
+async function leerTokenCamara(c: string): Promise<{ proyectoId: string; quitadas: string[] }> {
   const [pid, v, f] = String(c ?? "").split(".");
   if (!pid || !v || !f || !ID_OK.test(pid) || !igual(f, firmar(`cam:${pid}:${v}`))) throw new HttpError(404, "Este link de cámara no es válido");
   const p = (await adminDb().collection("projects").doc(pid).get()).data();
   if (!p || p.demo_vivo_activo !== true) throw new HttpError(403, "La demo en vivo no está activa para esta empresa");
   if (String(p.demo_camaras_v ?? 1) !== v) throw new HttpError(403, "Este link de cámara se renovó: escaneá el QR nuevo");
-  return pid;
+  return { proyectoId: pid, quitadas: Array.isArray(p.demo_camaras_quitadas) ? (p.demo_camaras_quitadas as string[]) : [] };
 }
 const llaveDe = (demoId: string, pid: string) => firmar(`p:${demoId}:${pid}`);
 
@@ -230,6 +231,26 @@ async function presentar(caller: Caller, b: { demo_id?: string }) {
   return { d: id, pid, llave: llaveDe(id, pid), titulo: d.titulo, estado: d.estado };
 }
 
+/** Quitar una cámara: deja de figurar, sale de la demo en vivo y ese celular ya no se conecta solo. */
+async function quitarCamara(caller: Caller, b: { proyecto_id?: string; pid?: string }) {
+  const proyectoId = String(b.proyecto_id ?? "");
+  const p = await puedeManejar(caller, proyectoId);
+  const pid = String(b.pid ?? "");
+  const cam = /^c-([a-z0-9]{6,20})$/.exec(pid)?.[1];
+  if (!cam) throw new HttpError(400, "Cámara inválida");
+  const quitadas = Array.isArray(p.demo_camaras_quitadas) ? (p.demo_camaras_quitadas as string[]) : [];
+  await adminDb()
+    .collection("projects")
+    .doc(proyectoId)
+    .update({ demo_camaras_quitadas: [...quitadas.filter((x) => x !== cam), cam].slice(-50) });
+  await asegurarTablas();
+  await getPool().query(
+    "delete from demo_part where pid = $1 and (demo_id = $2 or demo_id in (select id from documentos where coleccion = $3 and data->>'proyecto_id' = $4))",
+    [pid, `cam:${proyectoId}`, COL, proyectoId]
+  );
+  return { ok: true };
+}
+
 async function activar(caller: Caller, b: { proyecto_id?: string; activo?: boolean; renovar_camaras?: boolean }) {
   if (!caller.roles.includes("admin")) throw new HttpError(403, "Solo el super admin prende la demo en vivo");
   const id = String(b.proyecto_id ?? "");
@@ -275,9 +296,11 @@ async function entrar(b: { t?: string; nombre?: string }) {
 
 /** El celular cámara avisa que está prendido; si hay una demo en vivo de la empresa, se suma. */
 async function camara(b: { c?: string; cam?: string; nombre?: string }) {
-  const proyectoId = await leerTokenCamara(String(b.c ?? ""));
+  const { proyectoId, quitadas } = await leerTokenCamara(String(b.c ?? ""));
   const cam = String(b.cam ?? "");
   if (!/^[a-z0-9]{6,20}$/.test(cam)) throw new HttpError(400, "Cámara inválida");
+  // La quitaron desde el panel: deja de conectarse (el celular muestra el aviso y puede volver a sumarse).
+  if (quitadas.includes(cam)) throw new HttpError(410, "Esta cámara se quitó desde el panel");
   const nombre = String(b.nombre ?? "").trim().slice(0, 40) || "Cámara";
   await asegurarTablas();
   const pid = `c-${cam}`;
@@ -425,6 +448,8 @@ export async function demoVivo(req: VercelRequest, accion: string): Promise<unkn
       return presentar(caller, b);
     case "demo-activar":
       return activar(caller, b);
+    case "demo-quitar-camara":
+      return quitarCamara(caller, b);
   }
   throw new HttpError(404, "Acción desconocida");
 }

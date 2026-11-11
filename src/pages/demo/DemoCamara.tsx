@@ -37,7 +37,15 @@ export default function DemoCamara() {
     }
     setConfig(c);
   }} />;
-  return <Camara token={token} config={config} onCambiarNombre={() => setConfig(null)} />;
+  const olvidar = () => {
+    try {
+      localStorage.removeItem(claveConfig(token));
+    } catch {
+      /* nada */
+    }
+    setConfig(null);
+  };
+  return <Camara token={token} config={config} onCambiarNombre={() => setConfig(null)} onQuitada={olvidar} />;
 }
 
 function ElegirNombre({ onListo }: { onListo: (n: string) => void }) {
@@ -72,7 +80,7 @@ function ElegirNombre({ onListo }: { onListo: (n: string) => void }) {
 
 type Fase = "permiso" | "esperando" | "vivo" | "error";
 
-function Camara({ token, config, onCambiarNombre }: { token: string; config: Config; onCambiarNombre: () => void }) {
+function Camara({ token, config, onCambiarNombre, onQuitada }: { token: string; config: Config; onCambiarNombre: () => void; onQuitada: () => void }) {
   const [frente, setFrente] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [fase, setFase] = useState<Fase>("permiso");
@@ -81,6 +89,8 @@ function Camara({ token, config, onCambiarNombre }: { token: string; config: Con
   const [titulo, setTitulo] = useState("");
   const [sala, setSala] = useState<SalaDemo | null>(null);
   const salaRef = useRef<SalaDemo | null>(null);
+  const quitadaRef = useRef(onQuitada);
+  quitadaRef.current = onQuitada;
   useSala(sala);
 
   const prender = async (deFrente = frente) => {
@@ -150,7 +160,16 @@ function Camara({ token, config, onCambiarNombre }: { token: string; config: Con
         }
         setError(null);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Sin conexión");
+        const msg = e instanceof Error ? e.message : "Sin conexión";
+        // La quitaron desde el panel: se apaga y vuelve a elegir número (por si la quieren sumar de nuevo).
+        if (/se quitó/.test(msg)) {
+          vivo = false;
+          stream.getTracks().forEach((tr) => tr.stop());
+          alert("Quitaron esta cámara desde el panel. Si la querés volver a usar, elegí el número de nuevo.");
+          quitadaRef.current();
+          return;
+        }
+        setError(msg);
       }
       t = window.setTimeout(revisar, 3000);
     };
