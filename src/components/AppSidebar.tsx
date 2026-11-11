@@ -93,7 +93,7 @@ export const AppSidebar = ({ profile, role, children }: AppSidebarProps) => {
   const { empresa } = useEmpresa();
   // En la compu el chat está en el botón flotante: el menú no lo repite (en el celular sigue en la barra de abajo).
   const conDock = !viewingAs && ROLES_DOCK.includes(role ?? "");
-  const todas = navForRoles(role, roles, empresa, { crm: estadoCrm(clientes), servicios: serviciosEnMenu(clientes), visitas: clientes.some((c) => c.visitas_activo) })
+  const todas = navForRoles(role, roles, empresa, { crm: estadoCrm(clientes), servicios: serviciosEnMenu(clientes), visitas: clientes.some((c) => c.visitas_activo), demo: clientes.some((c) => c.demo_vivo_activo) })
     .map((s) => ({ ...s, items: conDock ? s.items.filter((i) => i.path !== "/chat") : s.items }))
     .filter((s) => s.items.length > 0);
   // En inglés (video de la revisión de Meta) el menú tiene solo los leads, que es lo que se muestra.

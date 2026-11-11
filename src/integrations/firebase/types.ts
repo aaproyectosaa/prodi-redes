@@ -353,6 +353,8 @@ export interface Project {
   puestos?: Record<string, PuestoCliente>;
   /** Visitas de vendedores (ej. DS): sus vendedores cargan visitas a fábricas con videos y fotos. Lo prende el admin. */
   visitas_activo?: boolean;
+  /** Demo en vivo (ej. DS): transmite demos con celulares como cámaras para sus leads. Lo prende el admin. */
+  demo_vivo_activo?: boolean;
   /** CRM (beta): si el cliente ve "Mis contactos". Lo prende el admin. */
   crm_activo?: boolean;
   /** Lo que contrató además de Redes (web, sistema ERP, app, mantenimiento): cada uno suma un módulo a su panel. */

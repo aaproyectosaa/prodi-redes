@@ -20,6 +20,7 @@ import {
 import { PageShell, Section, EmptyState } from "@/components/redes/PageShell";
 import { VendedoresCliente } from "@/components/redes/visitas/VendedoresCliente";
 import { VisitasCliente } from "@/components/redes/visitas/VisitasCliente";
+import { DemoVivoPanel } from "@/components/demo/DemoVivoPanel";
 import { VideoCard } from "@/components/redes/VideoCard";
 import { PlanUsage } from "@/components/redes/PlanUsage";
 import { PedirPiezaDialog, PiezaAprobarDialog, PiezaClienteCard } from "@/components/redes/PiezaDialogs";
@@ -56,7 +57,7 @@ import { DATOS_COBRO_DEFAULT } from "@/lib/redes/types";
 import { SelectorVista, VistaCalendario, useVista } from "@/components/redes/VistaCalendario";
 import { faltaMarca, pasosCliente, resumenMarca } from "@/lib/redes/proximoPaso";
 
-type Tab = "inicio" | "resultados" | "piezas" | "crm" | "contactos" | "vende" | "equipo" | "material" | "visitas" | "plan" | "negocio" | "servicios";
+type Tab = "inicio" | "resultados" | "piezas" | "crm" | "contactos" | "vende" | "equipo" | "material" | "visitas" | "demo" | "plan" | "negocio" | "servicios";
 
 const TITULOS: Partial<Record<Tab, string>> = {
   resultados: "Resultados",
@@ -67,6 +68,7 @@ const TITULOS: Partial<Record<Tab, string>> = {
   equipo: "Equipo de ventas",
   material: "Material",
   visitas: "Visitas de vendedores",
+  demo: "Demo en vivo",
   plan: "Mi plan",
   negocio: "Mi negocio",
   servicios: "Mis servicios",
@@ -80,6 +82,7 @@ const SUBTITULOS: Partial<Record<Tab, string>> = {
   equipo: "Quiénes atienden tus contactos y cómo le va a cada uno este mes.",
   material: "Todo lo que filmamos y lo que ya está editado, para ver y descargar.",
   visitas: "Las visitas a fábricas que cargan tus vendedores, con lo que filmaron. Con esto armamos tus videos.",
+  demo: "Mostrale a un cliente, en vivo y con tus cámaras, cómo la máquina hace su pieza.",
   plan: "Si estás al día, qué incluye tu plan, cuánto usaste y tus boletas.",
   negocio: "Tu marca y lo que vendés: con esto armamos tus videos y piezas.",
   servicios: "Lo que hacemos para tu negocio además de las redes: cómo va, dónde entrar y cómo pedirnos cambios.",
@@ -503,6 +506,10 @@ export default function ClientePortal() {
 
         <TabsContent value="visitas">
           {cliente.visitas_activo ? <VisitasCliente cliente={cliente} /> : <p className="text-sm text-muted-foreground">Las visitas de vendedores no están prendidas.</p>}
+        </TabsContent>
+
+        <TabsContent value="demo">
+          {cliente.demo_vivo_activo ? <DemoVivoPanel proyectoId={cliente.id} empresa={cliente.nombre} /> : <p className="text-sm text-muted-foreground">La demo en vivo no está prendida.</p>}
         </TabsContent>
 
         <TabsContent value="plan">

@@ -22,7 +22,7 @@ import {
   Store,
   FolderOpen,
   Sparkles,
-  ListTodo, Inbox, Globe, Megaphone, FileText, Contact, Trophy, BookOpen, Handshake, GraduationCap, Factory } from "lucide-react";
+  ListTodo, Inbox, Globe, Megaphone, FileText, Contact, Trophy, BookOpen, Handshake, GraduationCap, Factory, Radio } from "lucide-react";
 import { servicioInfo, type IdServicio } from "@/lib/redes/servicios";
 import type { UserRole } from "@/integrations/firebase/types";
 import { getRoleInfo } from "@/lib/roles";
@@ -112,6 +112,8 @@ export interface OpcionesNav {
   servicios?: IdServicio[];
   /** Algún cliente tiene las visitas de vendedores prendidas (DS): suma «Visitas» al menú de producción. */
   visitas?: boolean;
+  /** El cliente tiene la demo en vivo prendida (DS): suma «Demo en vivo» a su menú. */
+  demo?: boolean;
 }
 
 export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {}): NavSection[] {
@@ -278,6 +280,7 @@ export function navForRole(role: UserRole | undefined, opciones: OpcionesNav = {
             { label: "Piezas gráficas", icon: ImageIcon, path: "/cliente?tab=piezas", mobile: true },
             { label: "Material", icon: FolderOpen, path: "/cliente?tab=material" },
             ...(opciones.visitas ? [{ label: "Visitas de vendedores", icon: Factory, path: "/cliente?tab=visitas" }] : []),
+            ...(opciones.demo ? [{ label: "Demo en vivo", icon: Radio, path: "/cliente?tab=demo" }] : []),
           ],
         },
         ...(opciones.crm ? [

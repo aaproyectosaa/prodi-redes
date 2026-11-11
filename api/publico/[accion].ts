@@ -12,6 +12,7 @@
 // POST catalogo-borrar { negocio, id } · catalogo-desconectar { negocio } · catalogo-links { negocio, ids, contacto: { col, id } }
 // POST catalogo-verificar { negocio, url }  (busca en la web el código que prueba que es del cliente)
 // POST catalogo-web { negocio, aprobar }  (admin: aprueba o rechaza la web que pidió conectar el cliente)
+// POST demo-* → demo en vivo (api/_lib/demo-vivo.ts)
 // GET  /api/publico/ir?t=…   → link de un producto mandado: avisa en la ficha y lleva a la tienda
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
@@ -24,6 +25,7 @@ import { responderPiezaApp, responderVideoApp, type PedidoPieza, type PedidoVide
 import { aceptarPresupuesto, pdfPresupuesto, verPresupuesto } from "../_lib/presupuestos";
 import { abrirLink, borrarProducto, conectarCatalogo, desconectarCatalogo, guardarProducto, linksParaMandar, permitirNegocio, resolverWeb, verCatalogo, verificarWeb } from "../_lib/catalogo";
 import { mediaCompartido, verCompartido } from "../_lib/crm-galeria";
+import { demoVivo } from "../_lib/demo-vivo";
 
 export const config = { maxDuration: 60 };
 
@@ -121,6 +123,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.status(200).json(await responderPiezaApp(caller, body<PedidoPieza>(req), appUrl(req)));
     }
     else if (accion.startsWith("catalogo")) res.status(200).json(await catalogo(req, accion));
+    // Demo en vivo de un cliente (api/_lib/demo-vivo.ts): el panel, el lead y los celulares cámara.
+    else if (accion.startsWith("demo-")) res.status(200).json(await demoVivo(req, accion));
     else res.status(404).json({ error: "Acción desconocida" });
   } catch (err) {
     sendError(res, err);

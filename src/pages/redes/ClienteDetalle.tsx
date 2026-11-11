@@ -51,6 +51,7 @@ import { COLORES } from "./Clientes";
 import { MarcaArchivos } from "@/components/redes/MarcaArchivos";
 import { ContactosCliente } from "@/components/redes/ContactosCliente";
 import { VendedoresCliente } from "@/components/redes/visitas/VendedoresCliente";
+import { DemoVivoCliente } from "@/components/demo/DemoVivoPanel";
 import { ArranqueCliente } from "@/components/redes/ArranqueCliente";
 import { LogoCliente } from "@/components/redes/LogoCliente";
 import { DebitoAdmin } from "@/components/redes/Debito";
@@ -809,6 +810,12 @@ function ConfigCliente({ cliente, isAdmin }: { cliente: Project; isAdmin: boolea
       {(isAdmin || cliente.visitas_activo) && (
         <Section title="Vendedores y visitas" description="Los vendedores del cliente cargan desde el celular las visitas a fábricas con videos y fotos, para armar los videos.">
           <VendedoresCliente cliente={cliente} />
+        </Section>
+      )}
+
+      {(isAdmin || cliente.demo_vivo_activo) && (
+        <Section title="Demo en vivo" description="La empresa transmite demos en vivo para sus leads, con celulares como cámaras. Lo maneja ella sola desde su panel.">
+          <DemoVivoCliente proyectoId={cliente.id} empresa={cliente.nombre} activo={cliente.demo_vivo_activo === true} esAdmin={isAdmin} />
         </Section>
       )}
 

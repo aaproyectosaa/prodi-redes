@@ -40,6 +40,8 @@ const Pauta = lazy(() => import("./pages/redes/Pauta"));
 const Presupuestos = lazy(() => import("./pages/redes/Presupuestos"));
 const PresupuestoPublico = lazy(() => import("./pages/PresupuestoPublico"));
 const ArchivoPublico = lazy(() => import("./pages/ArchivoPublico"));
+const DemoLead = lazy(() => import("./pages/demo/DemoLead"));
+const DemoCamara = lazy(() => import("./pages/demo/DemoCamara"));
 const Bienvenida = lazy(() => import("./pages/Bienvenida"));
 const Rodajes = lazy(() => import("./pages/redes/Rodajes"));
 const ClientePortal = lazy(() => import("./pages/redes/ClientePortal"));
@@ -124,6 +126,9 @@ const App = () => (
               <Route path="/p/:token" element={<PresupuestoPublico />} />
               {/* Foto o video que un cliente del CRM le manda a su contacto */}
               <Route path="/v/:token" element={<ArchivoPublico />} />
+              {/* Demo en vivo: el lead mira con el link; el celular cámara entra con el QR. */}
+              <Route path="/vivo/:token" element={<DemoLead />} />
+              <Route path="/camara/:token" element={<DemoCamara />} />
               <Route path="/bienvenida" element={<Bienvenida />} />
 
               <Route element={<AppLayout />}>

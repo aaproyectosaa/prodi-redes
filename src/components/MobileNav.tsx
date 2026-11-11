@@ -55,7 +55,7 @@ export const MobileAppHeader = ({ profile, role }: Props) => {
   const puedeVerComo = realRole === "admin" && !viewingAs;
   const oscuro = theme !== "light";
   const { empresa } = useEmpresa();
-  const sections = navForRoles(role, roles, empresa, { crm: estadoCrm(clientes), servicios: serviciosEnMenu(clientes), visitas: clientes.some((c) => c.visitas_activo) });
+  const sections = navForRoles(role, roles, empresa, { crm: estadoCrm(clientes), servicios: serviciosEnMenu(clientes), visitas: clientes.some((c) => c.visitas_activo), demo: clientes.some((c) => c.demo_vivo_activo) });
   const plegables = useSeccionesPlegables();
   const pendientes = usePendientes();
 
@@ -300,7 +300,7 @@ export const MobileTabBar = ({ role }: { role?: UserRole }) => {
   const { empresa: empresaBarra } = useEmpresa();
   const { roles: rolesBarra, viewingAs } = useUserProfileContext();
   const { chats, clientes } = useRedes();
-  const todos = navForRoles(role, empresaBarra === "software" ? rolesBarra : [], empresaBarra, { crm: estadoCrm(clientes), servicios: serviciosEnMenu(clientes), visitas: clientes.some((c) => c.visitas_activo) }).flatMap((s) => s.items);
+  const todos = navForRoles(role, empresaBarra === "software" ? rolesBarra : [], empresaBarra, { crm: estadoCrm(clientes), servicios: serviciosEnMenu(clientes), visitas: clientes.some((c) => c.visitas_activo), demo: clientes.some((c) => c.demo_vivo_activo) }).flatMap((s) => s.items);
   // Si está la burbuja flotante del chat, "Chat" no se repite en la barra: ese lugar queda para otra cosa.
   const conBurbuja = !viewingAs && ROLES_DOCK.includes(role ?? "") && chats.length > 0;
   const base = todos.filter((i) => i.mobile && !(conBurbuja && i.path === "/chat"));
