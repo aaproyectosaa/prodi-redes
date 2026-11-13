@@ -15,6 +15,7 @@
 //   demo-latido { d, pid, llave, desde } · demo-senal { d, pid, llave, para, tipo, data }
 //   demo-mensaje { d, pid, llave, texto } · demo-interes { d, pid, llave, contacto? } · demo-salir { d, pid, llave }
 //   demo-texto { d, pid, llave, data, mime, desde } (voz de quien presenta, para la minuta)
+//   demo-ice { d, pid, llave } → servidores para conectarse (con el respaldo TURN de Cloudflare si está configurado)
 
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { VercelRequest } from "@vercel/node";
@@ -441,6 +442,48 @@ async function texto(b: Credencial & { data?: string; mime?: string; desde?: str
   return { ok: true };
 }
 
+// ---- Servidor de respaldo (TURN de Cloudflare) ----
+// Cuando dos redes no se pueden conectar directo (4G contra el wifi de una empresa, redes con firewall), el video pasa
+// por Cloudflare. Las claves del TURN quedan en el servidor (CF_TURN_KEY_ID y CF_TURN_API_TOKEN en Vercel); a cada
+// conexión se le dan credenciales que vencen solas. Sin las claves cargadas, se conecta como antes (solo directo).
+type Ice = { urls: string | string[]; username?: string; credential?: string };
+const STUN: Ice[] = [{ urls: ["stun:stun.cloudflare.com:3478", "stun:stun.l.google.com:19302"] }];
+const TTL_TURN_S = 6 * 3600;
+let iceGuardado: { ice: Ice[]; hasta: number } | null = null;
+
+async function servidoresIce(): Promise<{ iceServers: Ice[]; respaldo: boolean }> {
+  const id = process.env.CF_TURN_KEY_ID?.trim();
+  const token = process.env.CF_TURN_API_TOKEN?.trim();
+  if (!id || !token) return { iceServers: STUN, respaldo: false };
+  // Se reusan mientras les quede más de una hora (una demo dura bastante menos).
+  if (iceGuardado && iceGuardado.hasta - Date.now() > 3600_000) return { iceServers: iceGuardado.ice, respaldo: true };
+  try {
+    const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(id)}/credentials/generate-ice-servers`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ ttl: TTL_TURN_S }),
+    });
+    if (!r.ok) throw new Error(`TURN ${r.status}`);
+    const j = (await r.json()) as { iceServers?: Ice[] | Ice };
+    const lista = (Array.isArray(j.iceServers) ? j.iceServers : j.iceServers ? [j.iceServers] : [])
+      // El puerto 53 lo bloquean los navegadores: sin "trickle" haría esperar de más.
+      .map((s) => ({ ...s, urls: (Array.isArray(s.urls) ? s.urls : [s.urls]).filter((u) => !/:53(\?|$)/.test(u)) }))
+      .filter((s) => s.urls.length);
+    if (!lista.length) throw new Error("TURN sin servidores");
+    iceGuardado = { ice: lista, hasta: Date.now() + TTL_TURN_S * 1000 };
+    return { iceServers: lista, respaldo: true };
+  } catch (e) {
+    console.warn("[demo] TURN", e);
+    return { iceServers: STUN, respaldo: false };
+  }
+}
+
+/** Servidores para conectarse (con el respaldo si está configurado). Solo para quien está en la demo. */
+async function ice(b: Credencial) {
+  await credencial(b);
+  return servidoresIce();
+}
+
 async function salir(b: Credencial) {
   const { d, pid } = await credencial(b);
   await getPool().query("delete from demo_part where demo_id = $1 and pid = $2", [d, pid]);
@@ -467,6 +510,8 @@ export async function demoVivo(req: VercelRequest, accion: string): Promise<unkn
       return interes(b, base);
     case "demo-texto":
       return texto(b);
+    case "demo-ice":
+      return ice(b);
     case "demo-salir":
       return salir(b);
   }

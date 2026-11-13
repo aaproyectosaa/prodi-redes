@@ -72,7 +72,7 @@ function servidoresIce(): RTCIceServer[] {
 }
 
 /** Espera a juntar los caminos de conexión (sin mandarlos de a uno): como mucho 2,5 s. */
-function juntarCaminos(pc: RTCPeerConnection) {
+function juntarCaminos(pc: RTCPeerConnection, conRespaldo = false) {
   if (pc.iceGatheringState === "complete") return Promise.resolve();
   return new Promise<void>((ok) => {
     const fin = () => {
@@ -82,7 +82,8 @@ function juntarCaminos(pc: RTCPeerConnection) {
     };
     const cambio = () => pc.iceGatheringState === "complete" && fin();
     pc.addEventListener("icegatheringstatechange", cambio);
-    const t = setTimeout(fin, 2500);
+    // Con el respaldo (TURN) los caminos por Cloudflare tardan un poco más en aparecer.
+    const t = setTimeout(fin, conRespaldo ? 4000 : 2500);
   });
 }
 
@@ -143,8 +144,18 @@ export class SalaDemo {
     this.escuchas.forEach((f) => f());
   }
 
+  /** Servidores para conectarse que da Prodi (con el respaldo de Cloudflare si está); si falla, los de siempre. */
+  private ice: RTCIceServer[] | null = null;
+  private respaldo = false;
+
   iniciar() {
-    void this.vuelta();
+    void apiDemo<{ iceServers: RTCIceServer[]; respaldo: boolean }>("demo-ice", { ...this.cred })
+      .then((r) => {
+        if (r.iceServers?.length) this.ice = r.iceServers;
+        this.respaldo = !!r.respaldo;
+      })
+      .catch(() => undefined)
+      .finally(() => void this.vuelta());
   }
 
   /** Cambia lo que mando (prender o apagar la cámara, el micrófono del lead): rearma las conexiones de envío. */
@@ -214,7 +225,7 @@ export class SalaDemo {
   }
 
   private nuevoPc(pid: string, envio: boolean, sesion: string): Par {
-    const pc = new RTCPeerConnection({ iceServers: servidoresIce() });
+    const pc = new RTCPeerConnection({ iceServers: this.ice ?? servidoresIce() });
     const par: Par = { pid, pc, envio, sesion, creado: Date.now() };
     pc.onconnectionstatechange = () => {
       this.actualizarRemotos();
@@ -239,7 +250,7 @@ export class SalaDemo {
     for (const t of local.getTracks()) par.pc.addTransceiver(t, { direction: "sendonly", streams: [local] });
     try {
       await par.pc.setLocalDescription(await par.pc.createOffer());
-      await juntarCaminos(par.pc);
+      await juntarCaminos(par.pc, this.respaldo);
       if (this.pares.get(clave(true, pid)) !== par) return;
       await apiDemo("demo-senal", { ...this.cred, para: pid, tipo: "oferta", data: { sdp: par.pc.localDescription?.sdp, sesion } });
     } catch {
@@ -254,7 +265,7 @@ export class SalaDemo {
       try {
         await par.pc.setRemoteDescription({ type: "offer", sdp: data.sdp });
         await par.pc.setLocalDescription(await par.pc.createAnswer());
-        await juntarCaminos(par.pc);
+        await juntarCaminos(par.pc, this.respaldo);
         await apiDemo("demo-senal", { ...this.cred, para: de, tipo: "respuesta", data: { sdp: par.pc.localDescription?.sdp, sesion: data.sesion } });
       } catch {
         this.cerrarPar(clave(false, de));
