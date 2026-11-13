@@ -15,6 +15,7 @@
 //   demo-latido { d, pid, llave, desde } · demo-senal { d, pid, llave, para, tipo, data }
 //   demo-mensaje { d, pid, llave, texto } · demo-interes { d, pid, llave, contacto? } · demo-salir { d, pid, llave }
 //   demo-texto { d, pid, llave, data, mime, desde } (voz de quien presenta, para la minuta)
+//   demo-pedir-mostrar · demo-autorizar-mostrar { cliente, si } · demo-dejar-mostrar { d, pid, llave } (el cliente muestra su cámara en grande)
 //   demo-ice { d, pid, llave } → servidores para conectarse (con el respaldo TURN de Cloudflare si está configurado)
 
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
@@ -48,6 +49,8 @@ interface Demo {
   interesados?: { nombre: string; contacto: string; at: string }[];
   /** Se arma sola al terminar (api/_lib/demo-minuta.ts). */
   minuta?: MinutaDemo;
+  /** El cliente que está mostrando su cámara en grande (lo autorizó quien presenta). */
+  mostrando?: { pid: string; nombre: string } | null;
 }
 
 // ---- Firmas: los links y la llave de cada participante no se pueden inventar sin la clave del servidor ----
@@ -212,7 +215,7 @@ async function cambiarEstado(caller: Caller, b: { demo_id?: string; estado?: str
     await asegurarTablas();
     await mensajeSistema(id, "Empezó la demo");
   } else if (b.estado === "terminada") {
-    await adminDb().collection(COL).doc(id).update({ estado: "terminada", fin_at: ahora });
+    await adminDb().collection(COL).doc(id).update({ estado: "terminada", fin_at: ahora, mostrando: null });
     await asegurarTablas();
     await getPool().query("delete from demo_part where demo_id = $1", [id]);
     await getPool().query("delete from demo_senal where demo_id = $1", [id]);
@@ -362,15 +365,19 @@ async function latido(b: Credencial & { desde?: number }) {
   const [part, senales, msgs] = await Promise.all([
     pool.query("select pid, tipo, nombre from demo_part where demo_id = $1 and hasta > now() order by desde", [d]),
     pool.query("delete from demo_senal where demo_id = $1 and para = $2 and creado > now() - interval '1 minute' returning de, tipo, data", [d, pid]),
-    // Los leads no ven los avisos privados (quién más entró, quién quiere cotizar y su contacto).
-    pool.query("select id, pid, nombre, tipo, texto, creado from demo_msg where demo_id = $1 and id > $2 and (tipo <> 'privado' or $3 <> 'lead') order by id limit 100", [
+    // Los leads no ven los avisos privados (quién más entró, quién quiere cotizar y su contacto) ni los pedidos de
+    // mostrar cámara de otros.
+    pool.query("select id, pid, nombre, tipo, texto, creado from demo_msg where demo_id = $1 and id > $2 and (tipo not in ('privado', 'pedido') or $3 <> 'lead') order by id limit 100", [
       d,
       Number(b.desde) || 0,
       yo.rows[0].tipo,
     ]),
   ]);
+  const presentes = part.rows as { pid: string }[];
+  const mostrando = demo?.mostrando && presentes.some((x) => x.pid === demo.mostrando?.pid) ? demo.mostrando : null;
   return {
     estado,
+    mostrando,
     participantes: part.rows as { pid: string; tipo: Tipo; nombre: string }[],
     senales: senales.rows as { de: string; tipo: string; data: unknown }[],
     mensajes: (msgs.rows as { id: string; pid: string; nombre: string; tipo: string; texto: string; creado: string }[]).map((m) => ({ ...m, id: Number(m.id) })),
@@ -397,6 +404,44 @@ async function mensaje(b: Credencial & { texto?: string }) {
   const r = await getPool().query("select nombre from demo_part where demo_id = $1 and pid = $2", [d, pid]);
   if (!r.rowCount) throw new HttpError(403, "No estás en esta demo");
   await getPool().query("insert into demo_msg (demo_id, pid, nombre, texto) values ($1, $2, $3, $4)", [d, pid, r.rows[0].nombre, texto]);
+  return { ok: true };
+}
+
+// ---- El cliente pide mostrar su cámara (ej. "mirá esto, no entiendo dónde va enchufado") ----
+async function pedirMostrar(b: Credencial) {
+  const { d, pid } = await credencial(b);
+  if (!pid.startsWith("l-")) throw new HttpError(403, "Solo los clientes piden mostrar su cámara");
+  const r = await getPool().query("select nombre from demo_part where demo_id = $1 and pid = $2", [d, pid]);
+  if (!r.rowCount) throw new HttpError(403, "No estás en esta demo");
+  // Un pedido cada 20 s como mucho.
+  const reciente = await getPool().query("select 1 from demo_msg where demo_id = $1 and pid = $2 and tipo = 'pedido' and creado > now() - interval '20 seconds'", [d, pid]);
+  if (!reciente.rowCount) await getPool().query("insert into demo_msg (demo_id, pid, nombre, tipo, texto) values ($1, $2, $3, 'pedido', $4)", [d, pid, r.rows[0].nombre, `${r.rows[0].nombre} quiere mostrar su cámara`]);
+  return { ok: true };
+}
+
+/** Quien presenta acepta (la cámara del cliente pasa a verse en grande para todos) o rechaza. */
+async function autorizarMostrar(b: Credencial & { cliente?: string; si?: boolean }) {
+  const { d, pid } = await credencial(b);
+  if (!pid.startsWith("p-")) throw new HttpError(403, "Solo quien presenta autoriza");
+  const cliente = String(b.cliente ?? "");
+  const r = await getPool().query("select nombre from demo_part where demo_id = $1 and pid = $2 and tipo = 'lead'", [d, cliente]);
+  if (!r.rowCount) throw new HttpError(404, "Esa persona ya no está en la demo");
+  if (b.si) {
+    await adminDb().collection(COL).doc(d).update({ mostrando: { pid: cliente, nombre: r.rows[0].nombre } });
+    await mensajeSistema(d, `${r.rows[0].nombre} está mostrando su cámara`);
+  } else {
+    await getPool().query("insert into demo_msg (demo_id, pid, nombre, tipo, texto) values ($1, $2, '', 'rechazo', 'Ahora no')", [d, cliente]);
+  }
+  return { ok: true };
+}
+
+/** Deja de mostrar: lo corta el mismo cliente o quien presenta. */
+async function dejarMostrar(b: Credencial) {
+  const { d, pid } = await credencial(b);
+  const demo = await leerDemo(d);
+  if (!demo.mostrando) return { ok: true };
+  if (pid !== demo.mostrando.pid && !pid.startsWith("p-")) throw new HttpError(403, "No podés cortar eso");
+  await adminDb().collection(COL).doc(d).update({ mostrando: null });
   return { ok: true };
 }
 
@@ -504,6 +549,12 @@ export async function demoVivo(req: VercelRequest, accion: string): Promise<unkn
       return latido(b);
     case "demo-senal":
       return senal(b);
+    case "demo-pedir-mostrar":
+      return pedirMostrar(b);
+    case "demo-autorizar-mostrar":
+      return autorizarMostrar(b);
+    case "demo-dejar-mostrar":
+      return dejarMostrar(b);
     case "demo-mensaje":
       return mensaje(b);
     case "demo-interes":

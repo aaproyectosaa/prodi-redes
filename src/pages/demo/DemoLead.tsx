@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Flame, LayoutGrid, Loader2, MessageCircle, Mic, MicOff, Square, Video, VideoOff, Volume2, X } from "lucide-react";
+import { Flame, Hand, LayoutGrid, Loader2, MessageCircle, Mic, MicOff, Square, SwitchCamera, Video, VideoOff, Volume2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiDemo, SalaDemo, type EstadoDemo } from "@/lib/demoVivo";
 import { AudioVivo, ChatDemo, Circulo, SonidoRemoto, FondoDemo, PildoraVivo, VideoVivo, fechaDemo, tieneVideo, useSala } from "@/components/demo/Comunes";
@@ -204,6 +204,64 @@ function Sala({ sala, info }: { sala: SalaDemo; info: Info }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
+  // ---- Mostrar mi cámara en grande (lo pido y quien presenta me autoriza) ----
+  const yoMuestro = sala.mostrando?.pid === sala.cred.pid;
+  const muestraOtro = sala.mostrando && !yoMuestro ? otros.find((o) => o.pid === sala.mostrando?.pid) ?? null : null;
+  const [pidiendo, setPidiendo] = useState<number | null>(null);
+  const [atras, setAtras] = useState(true);
+  const pedirMostrar = async () => {
+    try {
+      await sala.pedirMostrar();
+      setPidiendo(sala.mensajes.at(-1)?.id ?? 0);
+      setAvisoMedios("Le pedimos a quien presenta que te deje mostrar tu cámara…");
+    } catch {
+      setAvisoMedios("No se pudo pedir. Probá de nuevo.");
+    }
+  };
+  // Si no contestan en un minuto, el pedido se da por vencido.
+  useEffect(() => {
+    if (pidiendo === null) return;
+    const t = setTimeout(() => setPidiendo(null), 60_000);
+    return () => clearTimeout(t);
+  }, [pidiendo]);
+  // Rechazado.
+  useEffect(() => {
+    if (pidiendo === null) return;
+    if (sala.mensajes.some((m) => m.tipo === "rechazo" && m.pid === sala.cred.pid && m.id > pidiendo)) {
+      setPidiendo(null);
+      setAvisoMedios("Ahora no te pueden mirar. Escribí tu pregunta en el chat.");
+    }
+  }, [sala.mensajes, pidiendo, sala.cred.pid]);
+  // Autorizado: se prende la cámara de atrás (para mostrar algo) en buena calidad; al cortar, se apaga.
+  const camaraMostrar = async (deAtras: boolean) => {
+    const c = await navigator.mediaDevices
+      ?.getUserMedia({ video: { facingMode: deAtras ? { ideal: "environment" } : "user", width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } } })
+      .catch(() => null);
+    if (!c) {
+      setAvisoMedios("No pudimos usar tu cámara. Revisá el permiso del navegador.");
+      void sala.dejarMostrar();
+      return;
+    }
+    miCam?.getTracks().forEach((t) => t.stop());
+    setMiCam(c);
+    setAtras(deAtras);
+    aplicar(miMic, c);
+  };
+  const [mostrandoAntes, setMostrandoAntes] = useState(false);
+  useEffect(() => {
+    if (yoMuestro && !mostrandoAntes) {
+      setPidiendo(null);
+      setMostrandoAntes(true);
+      void camaraMostrar(true);
+    } else if (!yoMuestro && mostrandoAntes) {
+      setMostrandoAntes(false);
+      miCam?.getTracks().forEach((t) => t.stop());
+      setMiCam(null);
+      aplicar(miMic, null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [yoMuestro, mostrandoAntes]);
+
   const [elegida, setElegida] = useState<string | null>(null);
   const [mosaico, setMosaico] = useState(false);
   const [sinSonido, setSinSonido] = useState(false);
@@ -253,6 +311,7 @@ function Sala({ sala, info }: { sala: SalaDemo; info: Info }) {
         <div className="hidden items-center gap-2 md:flex">
           <BotonMedio prendido={!!miMic} onClick={() => void alternarMic()} on={Mic} off={MicOff} etiqueta="micrófono" />
           <BotonMedio prendido={!!miCam} onClick={() => void alternarCam()} on={Video} off={VideoOff} etiqueta="cámara" />
+          {!yoMuestro && <BotonMostrar pidiendo={pidiendo !== null} onClick={() => void pedirMostrar()} />}
         </div>
         <BotonCotizar onClick={() => setCotizar(true)} className="hidden md:flex" />
       </header>
@@ -261,7 +320,29 @@ function Sala({ sala, info }: { sala: SalaDemo; info: Info }) {
         <div className="flex min-h-0 flex-1 flex-col gap-3">
           {/* Escenario */}
           <div ref={escenario} className="relative min-h-0 flex-1 overflow-hidden rounded-3xl bg-black ring-1 ring-white/10">
-            {camaras.length === 0 ? (
+            {yoMuestro && miCam ? (
+              <>
+                <VideoVivo stream={miCam} espejo={!atras} />
+                <div className="absolute inset-x-3 bottom-3 z-20 flex items-center gap-2 rounded-2xl bg-black/70 p-2 pl-4 backdrop-blur">
+                  <span className="relative mr-1 flex h-2.5 w-2.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+                  </span>
+                  <p className="min-w-0 flex-1 truncate text-sm font-semibold">Todos ven tu cámara</p>
+                  <button type="button" onClick={() => void camaraMostrar(!atras)} aria-label="Dar vuelta la cámara" className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 hover:bg-white/25">
+                    <SwitchCamera className="h-5 w-5" />
+                  </button>
+                  <button type="button" onClick={() => void sala.dejarMostrar()} className="h-10 rounded-xl bg-red-500 px-3 text-sm font-semibold hover:bg-red-400">
+                    Dejar de mostrar
+                  </button>
+                </div>
+              </>
+            ) : muestraOtro ? (
+              <>
+                <VideoVivo stream={muestraOtro.stream} />
+                <Etiqueta texto={`Muestra ${muestraOtro.nombre.split(" ")[0]}`} />
+              </>
+            ) : camaras.length === 0 ? (
               <Esperando estado={sala.estado} fecha={info.fecha} />
             ) : mosaico && camaras.length > 1 ? (
               <div className={cn("grid h-full gap-1", camaras.length > 2 ? "grid-cols-2 grid-rows-2" : "grid-cols-1 grid-rows-2 md:grid-cols-2 md:grid-rows-1")}>
@@ -304,15 +385,15 @@ function Sala({ sala, info }: { sala: SalaDemo; info: Info }) {
               </motion.div>
             )}
             <div className="pointer-events-none absolute right-3 top-3 z-10 flex gap-2">
-              {otros.filter((o) => tieneVideo(o.stream)).map((o) => (
+              {otros.filter((o) => tieneVideo(o.stream) && o.pid !== sala.mostrando?.pid).map((o) => (
                 <Circulo key={o.pid} stream={o.stream} nombre={o.nombre.split(" ")[0]} className="h-14 w-14 md:h-16 md:w-16" />
               ))}
-              {miCam && <Circulo stream={miCam} espejo nombre="Vos" className="h-14 w-14 md:h-16 md:w-16" />}
+              {miCam && !yoMuestro && <Circulo stream={miCam} espejo nombre="Vos" className="h-14 w-14 md:h-16 md:w-16" />}
             </div>
             {avisoMedios && (
               <p className="absolute inset-x-0 top-3 z-20 mx-auto w-fit max-w-[80%] rounded-full bg-black/80 px-4 py-2 text-center text-xs font-medium backdrop-blur">{avisoMedios}</p>
             )}
-            {camaras.length > 1 && (
+            {camaras.length > 1 && !sala.mostrando && (
               <button
                 type="button"
                 onClick={() => setMosaico((m) => !m)}
@@ -344,6 +425,7 @@ function Sala({ sala, info }: { sala: SalaDemo; info: Info }) {
           <div className="flex shrink-0 items-center gap-2 md:hidden">
             <BotonMedio prendido={!!miMic} onClick={() => void alternarMic()} on={Mic} off={MicOff} etiqueta="micrófono" />
             <BotonMedio prendido={!!miCam} onClick={() => void alternarCam()} on={Video} off={VideoOff} etiqueta="cámara" />
+            {!yoMuestro && <BotonMostrar pidiendo={pidiendo !== null} onClick={() => void pedirMostrar()} />}
             <button type="button" onClick={() => setChatAbierto(true)} className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-2xl bg-white/10 px-4 text-left text-sm">
               <MessageCircle className="h-4 w-4 shrink-0 text-violet-300" />
               <span className="truncate text-white/70">{ultimo && ultimo.tipo === "texto" ? `${ultimo.nombre}: ${ultimo.texto}` : "Hacé una pregunta"}</span>
@@ -382,6 +464,22 @@ function Sala({ sala, info }: { sala: SalaDemo; info: Info }) {
       </AnimatePresence>
       <Cotizar abierto={cotizar} onCerrar={() => setCotizar(false)} sala={sala} empresa={info.empresa} />
     </div>
+  );
+}
+
+/** Pedir mostrar mi cámara en grande (para mostrar algo: una máquina, dónde va un cable). */
+function BotonMostrar({ pidiendo, onClick }: { pidiendo: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={pidiendo}
+      aria-label="Pedir mostrar mi cámara"
+      title="Pedir mostrar mi cámara en grande"
+      className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition", pidiendo ? "animate-pulse bg-amber-400 text-black" : "bg-white/10 text-white/80 hover:bg-white/15")}
+    >
+      <Hand className="h-5 w-5" />
+    </button>
   );
 }
 

@@ -113,6 +113,26 @@ const SEG = 1000;
 /** Con cada persona puede haber dos conexiones: la que yo mando (e:) y la que recibo (r:). */
 const clave = (envio: boolean, pid: string) => `${envio ? "e" : "r"}:${pid}`;
 
+/**
+ * Calidad del video que mando: más margen (hasta 2,5 Mbps) y, si la conexión no da, que baje los cuadros por segundo
+ * antes que la definición (con movimiento se veía pixelado).
+ */
+async function ajustarCalidad(pc: RTCPeerConnection) {
+  for (const s of pc.getSenders()) {
+    if (s.track?.kind !== "video") continue;
+    try {
+      const p = s.getParameters() as RTCRtpSendParameters & { degradationPreference?: string };
+      if (!p.encodings?.length) p.encodings = [{}];
+      p.encodings[0].maxBitrate = 2_500_000;
+      p.encodings[0].maxFramerate = 30;
+      p.degradationPreference = "maintain-resolution";
+      await s.setParameters(p);
+    } catch {
+      /* algunos navegadores no dejan cambiarlo: sigue con lo de siempre */
+    }
+  }
+}
+
 /** Una sala de demo: se conecta, avisa que sigue, arma las conexiones y junta el chat. */
 export class SalaDemo {
   participantes: Participante[] = [];
@@ -121,6 +141,8 @@ export class SalaDemo {
   estado: EstadoDemo = "en_vivo";
   /** El servidor ya no me tiene adentro (me sacaron o se cortó demasiado). */
   fuera = false;
+  /** El cliente que muestra su cámara en grande (lo autorizó quien presenta). */
+  mostrando: { pid: string; nombre: string } | null = null;
   private pares = new Map<string, Par>();
   private desde = 0;
   private timer = 0;
@@ -184,12 +206,13 @@ export class SalaDemo {
     if (!this.ocupado) {
       this.ocupado = true;
       try {
-        const r = await apiDemo<{ estado: EstadoDemo; fuera?: boolean; participantes: Participante[]; senales: { de: string; tipo: string; data: { sdp?: string; sesion?: string } }[]; mensajes: MensajeDemo[] }>(
+        const r = await apiDemo<{ estado: EstadoDemo; fuera?: boolean; mostrando?: { pid: string; nombre: string } | null; participantes: Participante[]; senales: { de: string; tipo: string; data: { sdp?: string; sesion?: string } }[]; mensajes: MensajeDemo[] }>(
           "demo-latido",
           { ...this.cred, desde: this.desde }
         );
         this.estado = r.estado;
         this.fuera = !!r.fuera;
+        this.mostrando = r.mostrando ?? null;
         this.participantes = r.participantes.filter((p) => p.pid !== this.cred.pid);
         if (r.mensajes.length) {
           this.mensajes = [...this.mensajes, ...r.mensajes].slice(-200);
@@ -247,7 +270,11 @@ export class SalaDemo {
     if (!local) return;
     const sesion = Math.random().toString(36).slice(2, 10);
     const par = this.nuevoPc(pid, true, sesion);
-    for (const t of local.getTracks()) par.pc.addTransceiver(t, { direction: "sendonly", streams: [local] });
+    for (const t of local.getTracks()) {
+      // Cámaras y lo que muestra un cliente: que prefiera nitidez (si falta conexión, baja la fluidez en vez de pixelarse).
+      if (t.kind === "video" && "contentHint" in t) t.contentHint = "detail";
+      par.pc.addTransceiver(t, { direction: "sendonly", streams: [local] });
+    }
     try {
       await par.pc.setLocalDescription(await par.pc.createOffer());
       await juntarCaminos(par.pc, this.respaldo);
@@ -274,6 +301,7 @@ export class SalaDemo {
       const par = this.pares.get(clave(true, de));
       if (par && par.sesion === data.sesion && par.pc.signalingState === "have-local-offer") {
         await par.pc.setRemoteDescription({ type: "answer", sdp: data.sdp }).catch(() => this.cerrarPar(clave(true, de)));
+        await ajustarCalidad(par.pc);
       }
     } else if (tipo === "chau") {
       this.cerrarPar(clave(true, de));
@@ -310,6 +338,19 @@ export class SalaDemo {
   /** A cuántos les estoy mandando video y ya se conectaron. */
   get enviandoA() {
     return [...this.pares.values()].filter((p) => p.envio && p.pc.connectionState === "connected").length;
+  }
+
+  /** El cliente pide mostrar su cámara; quien presenta acepta o rechaza; cualquiera de los dos lo corta. */
+  pedirMostrar() {
+    return apiDemo("demo-pedir-mostrar", { ...this.cred });
+  }
+  autorizarMostrar(cliente: string, si: boolean) {
+    return apiDemo("demo-autorizar-mostrar", { ...this.cred, cliente, si });
+  }
+  dejarMostrar() {
+    this.mostrando = null;
+    this.avisar();
+    return apiDemo("demo-dejar-mostrar", { ...this.cred });
   }
 
   enviarMensaje(texto: string) {

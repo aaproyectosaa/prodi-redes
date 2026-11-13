@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import QRCode from "qrcode";
 import { toast } from "sonner";
-import { CalendarClock, Check, Copy, FileText, Flame, Loader2, Mic, MicOff, MoreHorizontal, Play, Plus, Radio, Share2, Smartphone, Square, Trash2, Users, Video, VideoOff, X } from "lucide-react";
+import { CalendarClock, Check, Copy, FileText, Flame, Hand, Loader2, Mic, MicOff, MoreHorizontal, Play, Plus, Radio, Share2, Smartphone, Square, Trash2, Users, Video, VideoOff, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -599,6 +599,22 @@ function Estudio({ demo, empresa, camarasPrendidas, onCompartir, onCerrar }: { d
   const clientesConMedios = sala?.remotos.filter((r) => r.tipo === "lead") ?? [];
   const principal = camaras.find((c) => c.pid === elegida) ?? null;
 
+  // Un cliente pidió mostrar su cámara: acepto (se ve en grande para todos) o rechazo.
+  const [respondidos, setRespondidos] = useState<number>(0);
+  const presentesIds = new Set((sala?.participantes ?? []).map((p) => p.pid));
+  const pedidos = (sala?.mensajes ?? []).filter((m) => m.tipo === "pedido" && m.id > respondidos && presentesIds.has(m.pid) && sala?.mostrando?.pid !== m.pid);
+  const pedido = pedidos.at(-1) ?? null;
+  const responder = async (si: boolean) => {
+    if (!sala || !pedido) return;
+    setRespondidos(pedido.id);
+    try {
+      await sala.autorizarMostrar(pedido.pid, si);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo");
+    }
+  };
+  const mostrando = sala?.mostrando ? clientesConMedios.find((c) => c.pid === sala.mostrando?.pid) ?? null : null;
+
   return createPortal(
     <div className="fixed inset-0 z-[70] flex flex-col bg-[#07060c] text-white" role="dialog" aria-modal="true" aria-label="Transmitir demo">
       <header className="flex shrink-0 items-center gap-3 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
@@ -617,7 +633,23 @@ function Estudio({ demo, empresa, camarasPrendidas, onCompartir, onCerrar }: { d
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 lg:flex-row">
         <div className="relative min-h-0 flex-1 overflow-hidden rounded-3xl bg-black ring-1 ring-white/10">
-          {estado !== "en_vivo" ? (
+          {estado === "en_vivo" && sala?.mostrando ? (
+            <div className="relative h-full w-full">
+              {mostrando && tieneVideo(mostrando.stream) ? (
+                <VideoVivo stream={mostrando.stream} />
+              ) : (
+                <div className="flex h-full items-center justify-center gap-2 text-white/60">
+                  <Loader2 className="h-5 w-5 animate-spin" /> Conectando la cámara de {sala.mostrando.nombre.split(" ")[0]}…
+                </div>
+              )}
+              <div className="absolute inset-x-3 bottom-3 z-20 flex items-center gap-2 rounded-2xl bg-black/70 p-2 pl-4 backdrop-blur">
+                <p className="min-w-0 flex-1 truncate text-sm font-semibold">{sala.mostrando.nombre} está mostrando su cámara</p>
+                <button type="button" onClick={() => void sala.dejarMostrar()} className="h-10 rounded-xl bg-red-500 px-4 text-sm font-semibold hover:bg-red-400">
+                  Cortar
+                </button>
+              </div>
+            </div>
+          ) : estado !== "en_vivo" ? (
             <div className="flex h-full flex-col items-center justify-center gap-6 p-6 text-center">
               <div className="space-y-2">
                 <p className="text-2xl font-bold">Todo listo para empezar</p>
@@ -660,6 +692,21 @@ function Estudio({ demo, empresa, camarasPrendidas, onCompartir, onCerrar }: { d
                   </span>
                 </button>
               ))}
+            </div>
+          )}
+          {/* Pedido de un cliente para mostrar su cámara */}
+          {pedido && (
+            <div className="absolute inset-x-3 top-3 z-30 mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-white p-3 text-black shadow-2xl">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-400">
+                <Hand className="h-5 w-5" />
+              </span>
+              <p className="min-w-0 flex-1 text-sm font-semibold leading-tight">{pedido.nombre.split(" ")[0]} quiere mostrar su cámara</p>
+              <button type="button" onClick={() => void responder(false)} className="h-10 rounded-xl px-3 text-sm font-semibold text-zinc-600 hover:bg-zinc-100">
+                Ahora no
+              </button>
+              <button type="button" onClick={() => void responder(true)} className="h-10 rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-white hover:bg-emerald-400">
+                Aceptar
+              </button>
             </div>
           )}
           {/* Clientes con cámara (arriba a la derecha) y yo (abajo a la izquierda), en círculos */}

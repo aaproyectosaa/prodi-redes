@@ -117,7 +117,7 @@ export function ChatDemo({ sala, yo, className, placeholder = "Escribí tu pregu
     <div className={cn("flex min-h-0 flex-col", className)}>
       <div ref={lista} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3">
         {mensajes.length === 0 && <p className="py-6 text-center text-sm text-white/40">Las preguntas aparecen acá.</p>}
-        {mensajes.map((m) =>
+        {mensajes.filter((m) => m.tipo !== "pedido" && m.tipo !== "rechazo").map((m) =>
           m.tipo === "sistema" || m.tipo === "privado" ? (
             <p key={m.id} className={cn("text-center text-xs", m.texto.startsWith("🔥") ? "font-semibold text-amber-300" : "text-white/40")}>
               {m.texto}
