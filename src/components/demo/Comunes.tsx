@@ -47,6 +47,37 @@ export function AudioVivo({ stream, onBloqueado }: { stream: MediaStream | null;
   return <audio ref={ref} autoPlay playsInline />;
 }
 
+/** Audio de otra persona (sin controles; en el presentador: la voz del lead que prendió el micrófono). */
+export function SonidoRemoto({ stream }: { stream: MediaStream }) {
+  const ref = useRef<HTMLAudioElement>(null);
+  useEffect(() => {
+    const a = ref.current;
+    if (!a) return;
+    a.srcObject = stream;
+    void a.play().catch(() => undefined);
+  }, [stream]);
+  return <audio ref={ref} autoPlay playsInline />;
+}
+
+/** Una persona en un círculo (presentador, cliente o uno mismo). */
+export function Circulo({ stream, nombre, espejo, className }: { stream: MediaStream | null; nombre?: string; espejo?: boolean; className?: string }) {
+  return (
+    <div className={cn("relative shrink-0", className)}>
+      <div className="h-full w-full overflow-hidden rounded-full bg-zinc-900 shadow-2xl ring-2 ring-white/80">
+        <VideoVivo stream={stream} contain={false} espejo={espejo} />
+      </div>
+      {nombre && (
+        <span className="absolute -bottom-1.5 left-1/2 max-w-[120%] -translate-x-1/2 truncate rounded-full bg-black/75 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur">
+          {nombre}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** ¿Este stream trae video? */
+export const tieneVideo = (s: MediaStream | null | undefined) => !!s?.getVideoTracks().some((t) => t.readyState === "live");
+
 export function PildoraVivo({ className }: { className?: string }) {
   return (
     <span className={cn("inline-flex items-center gap-1.5 rounded-full bg-red-500 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-lg shadow-red-500/30", className)}>

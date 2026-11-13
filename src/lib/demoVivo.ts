@@ -100,6 +100,7 @@ export interface Remoto {
 }
 
 interface Par {
+  pid: string;
   pc: RTCPeerConnection;
   envio: boolean;
   sesion: string;
@@ -108,6 +109,8 @@ interface Par {
 }
 
 const SEG = 1000;
+/** Con cada persona puede haber dos conexiones: la que yo mando (e:) y la que recibo (r:). */
+const clave = (envio: boolean, pid: string) => `${envio ? "e" : "r"}:${pid}`;
 
 /** Una sala de demo: se conecta, avisa que sigue, arma las conexiones y junta el chat. */
 export class SalaDemo {
@@ -144,16 +147,25 @@ export class SalaDemo {
     void this.vuelta();
   }
 
-  /** Cambia lo que mando (ej. el presentador prende o apaga el micrófono): rearma las conexiones de envío. */
+  /** Cambia lo que mando (prender o apagar la cámara, el micrófono del lead): rearma las conexiones de envío. */
   cambiarLocal(stream: MediaStream | null) {
     this.local = stream;
-    for (const [pid, p] of this.pares) if (p.envio) this.cerrarPar(pid);
+    for (const [k, p] of this.pares) if (p.envio) this.cerrarPar(k);
+    if (stream) this.ordenar();
+    this.avisar();
+  }
+  get miStream() {
+    return this.local;
   }
 
+  /**
+   * A quién le mando lo mío: las cámaras a todos menos a otras cámaras; el presentador (voz y su cámara) a los leads;
+   * el lead (si prendió cámara o micrófono) a todos los que miran, como una videollamada.
+   */
   private aQuienMando(p: Participante) {
     if (this.tipo === "camara") return p.tipo === "presentador" || p.tipo === "lead";
     if (this.tipo === "presentador") return p.tipo === "lead";
-    return false;
+    return p.tipo === "presentador" || p.tipo === "lead";
   }
 
   private async vuelta() {
@@ -189,30 +201,33 @@ export class SalaDemo {
 
   /** Cierra lo que se cayó y arma lo que falta. */
   private ordenar() {
-    const presentes = new Map(this.participantes.map((p) => [p.pid, p]));
-    for (const [pid, par] of this.pares) {
+    const presentes = new Set(this.participantes.map((p) => p.pid));
+    for (const [k, par] of this.pares) {
       const st = par.pc.connectionState;
       const trabado = st !== "connected" && Date.now() - par.creado > 15 * SEG;
-      if (!presentes.has(pid) || st === "failed" || st === "closed" || trabado) this.cerrarPar(pid);
+      if (!presentes.has(par.pid) || st === "failed" || st === "closed" || trabado) this.cerrarPar(k);
     }
-    if (!this.local || this.estado !== "en_vivo") return;
-    for (const p of this.participantes) if (this.aQuienMando(p) && !this.pares.has(p.pid)) void this.ofrecer(p.pid);
+    if (this.local?.getTracks().length && this.estado === "en_vivo") {
+      for (const p of this.participantes) if (this.aQuienMando(p) && !this.pares.has(clave(true, p.pid))) void this.ofrecer(p.pid);
+    }
     this.actualizarRemotos();
   }
 
   private nuevoPc(pid: string, envio: boolean, sesion: string): Par {
     const pc = new RTCPeerConnection({ iceServers: servidoresIce() });
-    const par: Par = { pc, envio, sesion, creado: Date.now() };
+    const par: Par = { pid, pc, envio, sesion, creado: Date.now() };
     pc.onconnectionstatechange = () => {
       this.actualizarRemotos();
       this.avisar();
     };
     pc.ontrack = (e) => {
-      par.stream = e.streams[0] ?? new MediaStream([e.track]);
+      // Cada pista nueva (ej. llega el video además de la voz) arma un stream nuevo, así el video se vuelve a dibujar.
+      const pistas = [...(par.stream?.getTracks() ?? []).filter((t) => t.id !== e.track.id), e.track];
+      par.stream = new MediaStream(pistas);
       this.actualizarRemotos();
       this.avisar();
     };
-    this.pares.set(pid, par);
+    this.pares.set(clave(envio, pid), par);
     return par;
   }
 
@@ -225,16 +240,16 @@ export class SalaDemo {
     try {
       await par.pc.setLocalDescription(await par.pc.createOffer());
       await juntarCaminos(par.pc);
-      if (this.pares.get(pid) !== par) return;
+      if (this.pares.get(clave(true, pid)) !== par) return;
       await apiDemo("demo-senal", { ...this.cred, para: pid, tipo: "oferta", data: { sdp: par.pc.localDescription?.sdp, sesion } });
     } catch {
-      this.cerrarPar(pid);
+      this.cerrarPar(clave(true, pid));
     }
   }
 
   private async recibir(de: string, tipo: string, data: { sdp?: string; sesion?: string }) {
     if (tipo === "oferta" && data.sdp) {
-      this.cerrarPar(de);
+      this.cerrarPar(clave(false, de));
       const par = this.nuevoPc(de, false, data.sesion ?? "");
       try {
         await par.pc.setRemoteDescription({ type: "offer", sdp: data.sdp });
@@ -242,20 +257,23 @@ export class SalaDemo {
         await juntarCaminos(par.pc);
         await apiDemo("demo-senal", { ...this.cred, para: de, tipo: "respuesta", data: { sdp: par.pc.localDescription?.sdp, sesion: data.sesion } });
       } catch {
-        this.cerrarPar(de);
+        this.cerrarPar(clave(false, de));
       }
     } else if (tipo === "respuesta" && data.sdp) {
-      const par = this.pares.get(de);
-      if (par?.envio && par.sesion === data.sesion && par.pc.signalingState === "have-local-offer") {
-        await par.pc.setRemoteDescription({ type: "answer", sdp: data.sdp }).catch(() => this.cerrarPar(de));
+      const par = this.pares.get(clave(true, de));
+      if (par && par.sesion === data.sesion && par.pc.signalingState === "have-local-offer") {
+        await par.pc.setRemoteDescription({ type: "answer", sdp: data.sdp }).catch(() => this.cerrarPar(clave(true, de)));
       }
-    } else if (tipo === "chau") this.cerrarPar(de);
+    } else if (tipo === "chau") {
+      this.cerrarPar(clave(true, de));
+      this.cerrarPar(clave(false, de));
+    }
   }
 
-  private cerrarPar(pid: string) {
-    const p = this.pares.get(pid);
+  private cerrarPar(k: string) {
+    const p = this.pares.get(k);
     if (!p) return;
-    this.pares.delete(pid);
+    this.pares.delete(k);
     p.pc.onconnectionstatechange = null;
     p.pc.ontrack = null;
     p.pc.close();
@@ -265,10 +283,10 @@ export class SalaDemo {
   private actualizarRemotos() {
     const nombres = new Map(this.participantes.map((p) => [p.pid, p]));
     const lista: Remoto[] = [];
-    for (const [pid, par] of this.pares) {
+    for (const par of this.pares.values()) {
       if (par.envio || !par.stream) continue;
-      const p = nombres.get(pid);
-      lista.push({ pid, tipo: p?.tipo ?? "camara", nombre: p?.nombre ?? "Cámara", stream: par.stream, conectado: par.pc.connectionState === "connected" });
+      const p = nombres.get(par.pid);
+      lista.push({ pid: par.pid, tipo: p?.tipo ?? "camara", nombre: p?.nombre ?? "Cámara", stream: par.stream, conectado: par.pc.connectionState === "connected" });
     }
     lista.sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { numeric: true }));
     this.remotos = lista;
@@ -288,7 +306,7 @@ export class SalaDemo {
   }
 
   private cerrarTodo() {
-    for (const pid of [...this.pares.keys()]) this.cerrarPar(pid);
+    for (const k of [...this.pares.keys()]) this.cerrarPar(k);
     this.avisar();
   }
 

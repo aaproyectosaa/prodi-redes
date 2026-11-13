@@ -4,13 +4,13 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import QRCode from "qrcode";
 import { toast } from "sonner";
-import { CalendarClock, Check, Copy, FileText, Flame, Loader2, Mic, MicOff, MoreHorizontal, Play, Plus, Radio, Share2, Smartphone, Square, Trash2, Users, Video, X } from "lucide-react";
+import { CalendarClock, Check, Copy, FileText, Flame, Loader2, Mic, MicOff, MoreHorizontal, Play, Plus, Radio, Share2, Smartphone, Square, Trash2, Users, Video, VideoOff, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { apiPanel, grabarParaMinuta, SalaDemo, type DemoPanel } from "@/lib/demoVivo";
-import { ChatDemo, PildoraVivo, VideoVivo, fechaDemo, useSala } from "@/components/demo/Comunes";
+import { ChatDemo, Circulo, PildoraVivo, SonidoRemoto, VideoVivo, fechaDemo, tieneVideo, useSala } from "@/components/demo/Comunes";
 
 interface Lista {
   demos: DemoPanel[];
@@ -574,8 +574,29 @@ function Estudio({ demo, empresa, camarasPrendidas, onCompartir, onCerrar }: { d
     setMicPrendido((v) => !v);
   };
 
+  // Mi cámara (la de esta compu o celular): al cliente le aparezco en un círculo.
+  const [miCam, setMiCam] = useState<MediaStream | null>(null);
+  const alternarCam = async () => {
+    if (!sala) return;
+    if (miCam) {
+      miCam.getTracks().forEach((t) => t.stop());
+      setMiCam(null);
+      sala.cambiarLocal(mic);
+      return;
+    }
+    const v = await navigator.mediaDevices
+      ?.getUserMedia({ video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 640 }, frameRate: { ideal: 24 } } })
+      .catch(() => null);
+    if (!v) return toast.error("No pudimos usar tu cámara. Revisá el permiso del navegador.");
+    setMiCam(v);
+    sala.cambiarLocal(new MediaStream([...(mic?.getAudioTracks() ?? []), ...v.getVideoTracks()]));
+  };
+  useEffect(() => () => miCam?.getTracks().forEach((t) => t.stop()), [miCam]);
+
   const camaras = sala?.remotos.filter((r) => r.tipo === "camara") ?? [];
   const leads = sala?.participantes.filter((p) => p.tipo === "lead") ?? [];
+  // Clientes que prendieron cámara o micrófono (los veo y escucho solo yo).
+  const clientesConMedios = sala?.remotos.filter((r) => r.tipo === "lead") ?? [];
   const principal = camaras.find((c) => c.pid === elegida) ?? null;
 
   return createPortal(
@@ -641,6 +662,27 @@ function Estudio({ demo, empresa, camarasPrendidas, onCompartir, onCerrar }: { d
               ))}
             </div>
           )}
+          {/* Clientes con cámara (arriba a la derecha) y yo (abajo a la izquierda), en círculos */}
+          {camaras.filter((c) => c.stream.getAudioTracks().length).map((c) => (
+            <SonidoRemoto key={c.pid} stream={c.stream} />
+          ))}
+          {clientesConMedios.length > 0 && (
+            <div className="pointer-events-none absolute right-3 top-3 flex gap-3">
+              {clientesConMedios.map((c) => (
+                <div key={c.pid}>
+                  <SonidoRemoto stream={c.stream} />
+                  {tieneVideo(c.stream) ? (
+                    <Circulo stream={c.stream} nombre={c.nombre.split(" ")[0]} className="h-16 w-16 sm:h-20 sm:w-20" />
+                  ) : (
+                    <span className="flex items-center gap-1.5 rounded-full bg-black/70 px-3 py-1.5 text-xs font-semibold backdrop-blur">
+                      <Mic className="h-3.5 w-3.5 text-emerald-400" /> {c.nombre.split(" ")[0]}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {miCam && <Circulo stream={miCam} espejo nombre="Vos" className="absolute bottom-3 left-3 h-20 w-20 sm:h-24 sm:w-24" />}
         </div>
 
         {/* Costado (compu) / abajo (celular): quiénes miran y preguntas */}
@@ -668,6 +710,16 @@ function Estudio({ demo, empresa, camarasPrendidas, onCompartir, onCerrar }: { d
           className={cn("flex h-14 w-14 items-center justify-center rounded-full transition disabled:opacity-40", micPrendido && mic ? "bg-white/15 hover:bg-white/25" : "bg-red-500 hover:bg-red-400")}
         >
           {micPrendido && mic ? <Mic className="h-6 w-6" /> : <MicOff className="h-6 w-6" />}
+        </button>
+        <button
+          type="button"
+          onClick={() => void alternarCam()}
+          disabled={!sala}
+          aria-label={miCam ? "Apagar mi cámara" : "Prender mi cámara"}
+          title={miCam ? "Apagar mi cámara" : "Mostrarme en un círculo"}
+          className={cn("flex h-14 w-14 items-center justify-center rounded-full transition disabled:opacity-40", miCam ? "bg-white text-black hover:bg-white/90" : "bg-white/15 hover:bg-white/25")}
+        >
+          {miCam ? <Video className="h-6 w-6" /> : <VideoOff className="h-6 w-6" />}
         </button>
         <button type="button" onClick={onCompartir} aria-label="Invitar" className="flex h-14 w-14 items-center justify-center rounded-full bg-white/15 hover:bg-white/25">
           <Share2 className="h-6 w-6" />

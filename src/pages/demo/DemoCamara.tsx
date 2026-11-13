@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Loader2, PlugZap, RefreshCw, SwitchCamera, Video } from "lucide-react";
+import { Loader2, Mic, MicOff, PlugZap, RefreshCw, SwitchCamera, Video } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiDemo, pantallaPrendida, SalaDemo } from "@/lib/demoVivo";
 import { FondoDemo, PildoraVivo, VideoVivo, useSala } from "@/components/demo/Comunes";
@@ -93,14 +93,26 @@ function Camara({ token, config, onCambiarNombre, onQuitada }: { token: string; 
   quitadaRef.current = onQuitada;
   useSala(sala);
 
+  // Micrófono de la cámara: viene apagado; se prende solo si alguien tiene que hablar desde acá.
+  const [micOn, setMicOn] = useState(false);
+  const micRef = useRef(false);
+  micRef.current = micOn;
+  const alternarMic = () => {
+    const nuevo = !micOn;
+    stream?.getAudioTracks().forEach((t) => (t.enabled = nuevo));
+    setMicOn(nuevo);
+  };
+
   const prender = async (deFrente = frente) => {
     setError(null);
     try {
       stream?.getTracks().forEach((t) => t.stop());
-      const s = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: deFrente ? "user" : { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
-        audio: false,
-      });
+      const video = { facingMode: deFrente ? "user" : { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } };
+      // Con micrófono (apagado); si no dan permiso al micrófono, sigue solo con video.
+      const s = await navigator.mediaDevices
+        .getUserMedia({ video, audio: { echoCancellation: true, noiseSuppression: true } })
+        .catch(() => navigator.mediaDevices.getUserMedia({ video, audio: false }));
+      s.getAudioTracks().forEach((t) => (t.enabled = micRef.current));
       setStream(s);
       setFrente(deFrente);
       setFase((f) => (f === "permiso" || f === "error" ? "esperando" : f));
@@ -247,6 +259,16 @@ function Camara({ token, config, onCambiarNombre, onQuitada }: { token: string; 
           {error && <p className="mt-1 text-xs text-red-300">{error}</p>}
         </div>
         <div className="flex gap-2">
+          {!!stream?.getAudioTracks().length && (
+            <button
+              type="button"
+              onClick={alternarMic}
+              aria-label={micOn ? "Apagar micrófono" : "Prender micrófono"}
+              className={cn("flex h-12 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-semibold backdrop-blur transition", micOn ? "bg-white text-black" : "bg-white/15 hover:bg-white/20")}
+            >
+              {micOn ? <Mic className="h-[18px] w-[18px]" /> : <MicOff className="h-[18px] w-[18px]" />} {micOn ? "Te escuchan" : "Mic apagado"}
+            </button>
+          )}
           <button type="button" onClick={() => void prender(!frente)} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-white/15 text-sm font-semibold backdrop-blur hover:bg-white/20">
             <SwitchCamera className="h-[18px] w-[18px]" /> Dar vuelta
           </button>

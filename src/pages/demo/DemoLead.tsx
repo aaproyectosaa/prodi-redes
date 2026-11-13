@@ -1,11 +1,11 @@
 // Lo que ve el lead: entra con el link (WhatsApp o donde sea), pone su nombre y mira la demo en vivo.
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Flame, LayoutGrid, Loader2, MessageCircle, Square, Volume2, X } from "lucide-react";
+import { Flame, LayoutGrid, Loader2, MessageCircle, Mic, MicOff, Square, Video, VideoOff, Volume2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiDemo, SalaDemo, type EstadoDemo } from "@/lib/demoVivo";
-import { AudioVivo, ChatDemo, FondoDemo, PildoraVivo, VideoVivo, fechaDemo, useSala } from "@/components/demo/Comunes";
+import { AudioVivo, ChatDemo, Circulo, SonidoRemoto, FondoDemo, PildoraVivo, VideoVivo, fechaDemo, tieneVideo, useSala } from "@/components/demo/Comunes";
 
 interface Info {
   titulo: string;
@@ -156,6 +156,54 @@ function Sala({ sala, info }: { sala: SalaDemo; info: Info }) {
   useSala(sala);
   const camaras = sala.remotos.filter((r) => r.tipo === "camara" && r.stream.getVideoTracks().length > 0);
   const voz = sala.remotos.find((r) => r.tipo === "presentador")?.stream ?? null;
+  const presentador = sala.remotos.find((r) => r.tipo === "presentador");
+  const otros = sala.remotos.filter((r) => r.tipo === "lead");
+  const escenario = useRef<HTMLDivElement>(null);
+  // Mi micrófono y mi cámara (opcionales): solo me ve y escucha quien presenta.
+  const [miMic, setMiMic] = useState<MediaStream | null>(null);
+  const [miCam, setMiCam] = useState<MediaStream | null>(null);
+  const [avisoMedios, setAvisoMedios] = useState<string | null>(null);
+  const aplicar = (m: MediaStream | null, c: MediaStream | null) =>
+    sala.cambiarLocal(m || c ? new MediaStream([...(m?.getAudioTracks() ?? []), ...(c?.getVideoTracks() ?? [])]) : null);
+  const alternarMic = async () => {
+    if (miMic) {
+      miMic.getTracks().forEach((t) => t.stop());
+      setMiMic(null);
+      return aplicar(null, miCam);
+    }
+    const m = await navigator.mediaDevices?.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }).catch(() => null);
+    if (!m) return setAvisoMedios("No pudimos usar tu micrófono. Revisá el permiso del navegador.");
+    setMiMic(m);
+    setAvisoMedios("Ya te escuchan todos en la demo.");
+    aplicar(m, miCam);
+  };
+  const alternarCam = async () => {
+    if (miCam) {
+      miCam.getTracks().forEach((t) => t.stop());
+      setMiCam(null);
+      return aplicar(miMic, null);
+    }
+    const c = await navigator.mediaDevices
+      ?.getUserMedia({ video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 480 }, frameRate: { ideal: 20 } } })
+      .catch(() => null);
+    if (!c) return setAvisoMedios("No pudimos usar tu cámara. Revisá el permiso del navegador.");
+    setMiCam(c);
+    setAvisoMedios("Ya te ven todos en la demo.");
+    aplicar(miMic, c);
+  };
+  useEffect(() => {
+    if (!avisoMedios) return;
+    const t = setTimeout(() => setAvisoMedios(null), 4000);
+    return () => clearTimeout(t);
+  }, [avisoMedios]);
+  useEffect(
+    () => () => {
+      miMic?.getTracks().forEach((t) => t.stop());
+      miCam?.getTracks().forEach((t) => t.stop());
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
   const [elegida, setElegida] = useState<string | null>(null);
   const [mosaico, setMosaico] = useState(false);
   const [sinSonido, setSinSonido] = useState(false);
@@ -187,6 +235,14 @@ function Sala({ sala, info }: { sala: SalaDemo; info: Info }) {
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-[#07060c] text-white">
       <AudioVivo stream={voz} onBloqueado={bloqueado} />
+      {/* Las cámaras traen micrófono (apagado salvo que alguien hable desde ahí). */}
+      {/* Los otros clientes que prendieron micrófono o cámara (como una videollamada). */}
+      {otros.map((o) => (
+        <SonidoRemoto key={o.pid} stream={o.stream} />
+      ))}
+      {camaras.filter((c) => c.stream.getAudioTracks().length).map((c) => (
+        <SonidoRemoto key={c.pid} stream={c.stream} />
+      ))}
       {/* Arriba */}
       <header className="flex shrink-0 items-center gap-3 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <div className="min-w-0 flex-1">
@@ -194,13 +250,17 @@ function Sala({ sala, info }: { sala: SalaDemo; info: Info }) {
           <p className="truncate font-semibold leading-tight">{info.titulo}</p>
         </div>
         {sala.estado === "en_vivo" && <PildoraVivo />}
+        <div className="hidden items-center gap-2 md:flex">
+          <BotonMedio prendido={!!miMic} onClick={() => void alternarMic()} on={Mic} off={MicOff} etiqueta="micrófono" />
+          <BotonMedio prendido={!!miCam} onClick={() => void alternarCam()} on={Video} off={VideoOff} etiqueta="cámara" />
+        </div>
         <BotonCotizar onClick={() => setCotizar(true)} className="hidden md:flex" />
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 md:flex-row">
         <div className="flex min-h-0 flex-1 flex-col gap-3">
           {/* Escenario */}
-          <div className="relative min-h-0 flex-1 overflow-hidden rounded-3xl bg-black ring-1 ring-white/10">
+          <div ref={escenario} className="relative min-h-0 flex-1 overflow-hidden rounded-3xl bg-black ring-1 ring-white/10">
             {camaras.length === 0 ? (
               <Esperando estado={sala.estado} fecha={info.fecha} />
             ) : mosaico && camaras.length > 1 ? (
@@ -232,6 +292,26 @@ function Sala({ sala, info }: { sala: SalaDemo; info: Info }) {
                 <Volume2 className="h-4 w-4" /> Tocá para escuchar
               </button>
             )}
+            {/* Quien presenta, en un círculo (se puede mover si tapa algo) */}
+            {presentador && tieneVideo(presentador.stream) && (
+              <motion.div
+                drag
+                dragConstraints={escenario}
+                dragMomentum={false}
+                className="absolute bottom-3 left-3 z-10 h-24 w-24 cursor-grab touch-none active:cursor-grabbing md:h-32 md:w-32"
+              >
+                <Circulo stream={presentador.stream} nombre={presentador.nombre.split(" ")[0]} className="h-full w-full" />
+              </motion.div>
+            )}
+            <div className="pointer-events-none absolute right-3 top-3 z-10 flex gap-2">
+              {otros.filter((o) => tieneVideo(o.stream)).map((o) => (
+                <Circulo key={o.pid} stream={o.stream} nombre={o.nombre.split(" ")[0]} className="h-14 w-14 md:h-16 md:w-16" />
+              ))}
+              {miCam && <Circulo stream={miCam} espejo nombre="Vos" className="h-14 w-14 md:h-16 md:w-16" />}
+            </div>
+            {avisoMedios && (
+              <p className="absolute inset-x-0 top-3 z-20 mx-auto w-fit max-w-[80%] rounded-full bg-black/80 px-4 py-2 text-center text-xs font-medium backdrop-blur">{avisoMedios}</p>
+            )}
             {camaras.length > 1 && (
               <button
                 type="button"
@@ -262,6 +342,8 @@ function Sala({ sala, info }: { sala: SalaDemo; info: Info }) {
 
           {/* Celular: último mensaje y botones */}
           <div className="flex shrink-0 items-center gap-2 md:hidden">
+            <BotonMedio prendido={!!miMic} onClick={() => void alternarMic()} on={Mic} off={MicOff} etiqueta="micrófono" />
+            <BotonMedio prendido={!!miCam} onClick={() => void alternarCam()} on={Video} off={VideoOff} etiqueta="cámara" />
             <button type="button" onClick={() => setChatAbierto(true)} className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-2xl bg-white/10 px-4 text-left text-sm">
               <MessageCircle className="h-4 w-4 shrink-0 text-violet-300" />
               <span className="truncate text-white/70">{ultimo && ultimo.tipo === "texto" ? `${ultimo.nombre}: ${ultimo.texto}` : "Hacé una pregunta"}</span>
@@ -300,6 +382,21 @@ function Sala({ sala, info }: { sala: SalaDemo; info: Info }) {
       </AnimatePresence>
       <Cotizar abierto={cotizar} onCerrar={() => setCotizar(false)} sala={sala} empresa={info.empresa} />
     </div>
+  );
+}
+
+/** Prender o apagar mi micrófono o mi cámara (apagados al entrar). */
+function BotonMedio({ prendido, onClick, on: On, off: Off, etiqueta }: { prendido: boolean; onClick: () => void; on: typeof Mic; off: typeof Mic; etiqueta: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={prendido ? `Apagar mi ${etiqueta}` : `Prender mi ${etiqueta}`}
+      title={prendido ? `Apagar mi ${etiqueta}` : `Prender mi ${etiqueta} para hablar en la demo`}
+      className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition", prendido ? "bg-white text-black" : "bg-white/10 text-white/80 hover:bg-white/15")}
+    >
+      {prendido ? <On className="h-5 w-5" /> : <Off className="h-5 w-5" />}
+    </button>
   );
 }
 
