@@ -1,8 +1,9 @@
-// Avisos push con Web Push estándar (claves VAPID), sin Firebase.
+// Avisos push con Web Push estándar (claves VAPID). En la app de las tiendas (Capacitor) van por Firebase (ver nativo.ts).
 import { doc, updateDoc } from "@/lib/db";
 import { db } from "@/integrations/firebase/client";
-import { guardarPush, pushEstado } from "@/lib/auth";
+import { guardarPush, guardarPushNativo, pushEstado } from "@/lib/auth";
 import { enHostChat, enModoChat } from "@/lib/chatApp";
+import { borrarTokenNativo, esNativo, iniciarAvisosNativos, plataformaNativa, tokenAvisosNativo } from "@/lib/nativo";
 
 const SW_PATH = "/sw.js";
 
@@ -32,6 +33,7 @@ export function isRunningAsInstalledPwa(): boolean {
 
 export async function isWebPushSupported(): Promise<boolean> {
   if (typeof window === "undefined") return false;
+  if (esNativo()) return true;
   if (!("Notification" in window) || !("serviceWorker" in navigator)) {
     return false;
   }
@@ -47,7 +49,16 @@ function normalizeVapidKey(raw: string | undefined): string {
   return (raw || "").trim().replace(/^["']|["']$/g, "").replace(/\s+/g, "");
 }
 
+/** App de las tiendas: permiso del teléfono + token de Firebase anotado en el servidor. */
+async function suscribirNativo(userId: string, pedirPermiso = true): Promise<string> {
+  const token = await tokenAvisosNativo(pedirPermiso);
+  await guardarPushNativo(token, plataformaNativa());
+  await updateDoc(doc(db, "profiles", userId), { push_enabled: true });
+  return `fcm:${token}`;
+}
+
 export async function subscribeWebPush(userId: string): Promise<string> {
+  if (esNativo()) return suscribirNativo(userId);
   const vapidKey = normalizeVapidKey(
     import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined
   );
@@ -123,6 +134,11 @@ export async function reanotarAppPush(userId?: string): Promise<void> {
   } catch {
     /* sin storage: igual sigue */
   }
+  if (esNativo()) {
+    // Sin preguntar: solo si el permiso ya está dado (el token puede haber cambiado).
+    if (userId) await suscribirNativo(userId, false).catch(() => undefined);
+    return;
+  }
   try {
     const reg = await navigator.serviceWorker.getRegistration("/");
     const sub = await reg?.pushManager.getSubscription();
@@ -138,6 +154,17 @@ export async function reanotarAppPush(userId?: string): Promise<void> {
 }
 
 export async function unsubscribeWebPush(userId: string, _token?: string | null) {
+  if (esNativo()) {
+    try {
+      const token = await tokenAvisosNativo(false);
+      await guardarPush(null, `fcm:${token}`);
+    } catch {
+      /* sin permiso: no había token */
+    }
+    await borrarTokenNativo();
+    await updateDoc(doc(db, "profiles", userId), { push_enabled: false });
+    return;
+  }
   try {
     const reg = await navigator.serviceWorker.getRegistration("/");
     const sub = await reg?.pushManager.getSubscription();
@@ -159,6 +186,19 @@ export function listenForegroundPush(
     url?: string;
   }) => void
 ): () => void {
+  if (esNativo()) {
+    // App de las tiendas: el aviso llega por Firebase; si el token cambia, se vuelve a anotar.
+    let parar = () => undefined as void;
+    let vivo = true;
+    void iniciarAvisosNativos({
+      alLlegar: onPayload,
+      alRenovarToken: (t) => void guardarPushNativo(t, plataformaNativa()).catch(() => undefined),
+    }).then((f) => (vivo ? (parar = f) : f()));
+    return () => {
+      vivo = false;
+      parar();
+    };
+  }
   if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return () => undefined;
   // El service worker manda el aviso a la pantalla abierta en vez de mostrar la notificación del sistema.
   const handler = (e: MessageEvent) => {

@@ -7,17 +7,19 @@
 // POST /api/auth/nombre       { nombre }
 // POST /api/auth/cambiar-clave { actual, nueva }            → { token }  (cierra las otras sesiones)
 // POST /api/auth/usar-link    { token, nueva }              → { token, email }  (link para crear o cambiar la contraseña)
-// POST /api/auth/push         { suscripcion } | { quitar: endpoint | true }  (avisos push de este dispositivo)
+// POST /api/auth/push         { suscripcion } | { nativo: { token, plataforma } } | { quitar: endpoint | true }  (avisos push de este dispositivo)
 // POST /api/auth/push-prueba  { uid? }  → prueba los avisos propios (o de otra persona, solo admin)
 // POST /api/auth/push-estado  { endpoint } → { existe }  (si este equipo sigue anotado)
+// POST /api/auth/pedir-baja   { motivo? }  → pide borrar la cuenta (lo exigen las tiendas): avisa a los admins
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createHash, timingSafeEqual } from "crypto";
 import { AuthError, cambiarClave, crearUsuario, iniciarSesion, tokenDeSesion, usarLinkDeClave, usuarioFresco, verificarClave, verificarSesion } from "../_lib/cuentas";
 import { extractBearerToken, HttpError } from "../_lib/auth";
-import { body, requireCaller, sendError } from "../_lib/http";
+import { appUrl, body, requireCaller, sendError } from "../_lib/http";
 import { getPool } from "../_lib/db";
-import { borrarSuscripciones, existeSuscripcion, guardarSuscripcion, probarPush } from "../_lib/push";
+import { borrarSuscripciones, existeSuscripcion, guardarSuscripcion, guardarTokenNativo, probarPush } from "../_lib/push";
+import { enviarAviso } from "../_lib/notify";
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** Compara dos textos sin que el tiempo revele cuántas letras coinciden. */
@@ -78,6 +80,7 @@ async function handlerAccion(accion: string, req: VercelRequest) {
     case "push": {
       const u = await sesion(req);
       if (b.quitar) await borrarSuscripciones(u.uid, typeof b.quitar === "string" ? b.quitar : undefined);
+      else if (b.nativo) await guardarTokenNativo(u.uid, String(b.nativo.token ?? ""), String(b.nativo.plataforma ?? ""));
       else await guardarSuscripcion(u.uid, b.suscripcion, b.app === "chat" ? "chat" : "sistema");
       return { ok: true };
     }
@@ -94,6 +97,26 @@ async function handlerAccion(accion: string, req: VercelRequest) {
       // ¿El servidor todavía tiene anotado este equipo? (si el servicio de avisos lo dio de baja, se borró).
       const u = await sesion(req);
       return { existe: typeof b.endpoint === "string" && (await existeSuscripcion(u.uid, b.endpoint)) };
+    }
+    case "pedir-baja": {
+      // Borrar la cuenta desde la app (Apple y Google lo piden). Lo hace un admin a mano (puede haber facturas o
+      // trabajos en curso): le llega el aviso con quién es y el motivo, y se le confirma por mail.
+      const u = await sesion(req);
+      const r = await getPool().query("select data->>'nombre' as nombre, data->>'email' as email from documentos where coleccion = 'profiles' and id = $1", [u.uid]);
+      const p = (r.rows[0] ?? {}) as { nombre?: string; email?: string };
+      const admins = await getPool().query("select id from documentos where coleccion = 'profiles' and data->>'role' = 'admin'");
+      const motivo = String(b.motivo ?? "").trim().slice(0, 300);
+      await enviarAviso(
+        {
+          destinatarios: admins.rows.map((x: { id: string }) => x.id),
+          titulo: "Pedido de baja de cuenta",
+          cuerpo: `${p.nombre || "Alguien"} (${p.email || u.email || u.uid}) pidió borrar su cuenta desde la app.${motivo ? ` Motivo: ${motivo}` : ""}`,
+          link: "/equipo",
+          clave: `baja:${u.uid}`,
+        },
+        appUrl(req)
+      );
+      return { ok: true };
     }
     default:
       throw new HttpError(404, "Acción desconocida");

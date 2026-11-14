@@ -6,8 +6,13 @@
 // (`datos.app`): los avisos del chat van solo a Prodi Chat y el resto solo a Prodi, para que no lleguen dos veces.
 // Si la persona no tiene la app de ese tipo, le llegan igual a la otra (nunca se quedan sin aviso).
 
+//
+// La app nativa (Prodi Chat de las tiendas) se anota con un token de Firebase: endpoint "fcm:<token>" y
+// datos.tipo = "fcm". Esos avisos salen por FCM (fcm.ts) en vez de Web Push.
+
 import webpush from "web-push";
 import { getPool } from "./db";
+import { enviarFcm, fcmConfigurado } from "./fcm";
 import { esHorarioDescanso, leerDescanso, ROLES_CON_DESCANSO } from "./descanso";
 
 export type AppPush = "chat" | "sistema";
@@ -36,6 +41,32 @@ export interface Suscripcion {
   keys: { p256dh: string; auth: string };
 }
 
+/** Datos guardados de un dispositivo: Web Push (navegador / app instalada) o token nativo de Firebase. */
+type DatosPush = (Suscripcion & { app?: AppPush; tipo?: undefined }) | { tipo: "fcm"; token: string; plataforma: "android" | "ios"; app: AppPush };
+
+const esNativa = (d: DatosPush): d is Extract<DatosPush, { tipo: "fcm" }> => d.tipo === "fcm";
+
+/** Ruta del aviso (sin el dominio): la app nativa abre todo dentro de Prodi Chat. */
+const rutaDe = (url: string) => {
+  try {
+    const u = new URL(url, "https://x.invalid");
+    return u.pathname + u.search + u.hash;
+  } catch {
+    return "/chat-app";
+  }
+};
+
+/** App nativa (App Store / Google Play): guarda el token de Firebase de este celular. */
+export async function guardarTokenNativo(uid: string, token: string, plataforma: string) {
+  if (typeof token !== "string" || !/^[\w:.-]{20,4096}$/.test(token)) throw new Error("Token inválido");
+  const datos = { tipo: "fcm", token, plataforma: plataforma === "ios" ? "ios" : "android", app: "chat" };
+  await getPool().query(
+    `insert into push_suscripciones (endpoint, uid, datos) values ($1, $2, $3::jsonb)
+     on conflict (endpoint) do update set uid = excluded.uid, datos = excluded.datos`,
+    [`fcm:${token}`, uid, JSON.stringify(datos)]
+  );
+}
+
 export async function guardarSuscripcion(uid: string, s: Suscripcion, app: AppPush = "sistema") {
   if (!s?.endpoint || !/^https:\/\//.test(s.endpoint) || !s.keys?.p256dh || !s.keys?.auth) throw new Error("Suscripción inválida");
   await getPool().query(
@@ -57,12 +88,20 @@ export async function existeSuscripcion(uid: string, endpoint: string): Promise<
 
 /** Prueba: manda un aviso a cada dispositivo del usuario y devuelve qué pasó con cada uno. */
 export async function probarPush(uid: string): Promise<{ configurado: boolean; dispositivos: { equipo: string; ok: boolean; estado?: number; error?: string }[] }> {
-  if (!configurar()) return { configurado: false, dispositivos: [] };
+  const web = configurar();
+  if (!web && !fcmConfigurado()) return { configurado: false, dispositivos: [] };
   const r = await getPool().query("select endpoint, datos from push_suscripciones where uid = $1", [uid]);
   const equipo = (endpoint: string) =>
+    endpoint.startsWith("fcm:") ? "App Prodi Chat (tienda)" :
     /push.apple.com/.test(endpoint) ? "iPhone / Mac (Apple)" : /fcm.googleapis/.test(endpoint) ? "Chrome / Android" : /mozilla/.test(endpoint) ? "Firefox" : /notify.windows/.test(endpoint) ? "Edge (Windows)" : "otro";
   const dispositivos = await Promise.all(
-    r.rows.map(async (row: { endpoint: string; datos: Suscripcion }) => {
+    r.rows.map(async (row: { endpoint: string; datos: DatosPush }) => {
+      if (esNativa(row.datos)) {
+        const res = await enviarFcm(row.datos.token, { title: "Prueba de Prodi", body: "Si ves esto, los avisos llegan a este dispositivo.", url: "/chat-app/avisos", tag: "prueba" });
+        if (!res.ok && res.borrar) await getPool().query("delete from push_suscripciones where endpoint = $1", [row.endpoint]);
+        return res.ok ? { equipo: equipo(row.endpoint), ok: true } : { equipo: equipo(row.endpoint), ok: false, estado: res.estado, error: res.error };
+      }
+      if (!web) return { equipo: equipo(row.endpoint), ok: false, error: "Faltan las claves VAPID" };
       try {
         await webpush.sendNotification(row.datos, JSON.stringify({ title: "Prueba de Prodi", body: "Si ves esto, los avisos llegan a este dispositivo.", url: "/notificaciones", tag: "prueba" }), { TTL: 600 });
         return { equipo: equipo(row.endpoint), ok: true };
@@ -86,14 +125,15 @@ export async function enviarPush(
   canal: AppPush = "sistema",
   opciones: { forzar?: boolean } = {}
 ): Promise<number> {
-  if (!configurar()) return 0;
+  const web = configurar();
+  if (!web && !fcmConfigurado()) return 0;
   // Horario de descanso del equipo: no suena; queda para el resumen de la mañana (el aviso igual está en Avisos).
   if (!opciones.forzar && (await descansando(uid))) {
     await retener(uid, aviso.title).catch((err) => console.warn("[push] no se pudo guardar para la mañana", err));
     return 0;
   }
   const r = await getPool().query("select endpoint, datos from push_suscripciones where uid = $1", [uid]);
-  const todas = r.rows as { endpoint: string; datos: Suscripcion & { app?: AppPush } }[];
+  const todas = r.rows as { endpoint: string; datos: DatosPush }[];
   // Las suscripciones viejas (sin app) son del sistema.
   const delCanal = todas.filter((row) => (row.datos.app === "chat" ? "chat" : "sistema") === canal);
   // Si no tiene la app de ese canal (ej. no instaló Prodi Chat, o un contacto que solo usa Prodi Chat), a todas.
@@ -101,6 +141,15 @@ export async function enviarPush(
   let enviados = 0;
   await Promise.all(
     filas.map(async (row) => {
+      if (esNativa(row.datos)) {
+        if (!fcmConfigurado()) return;
+        const res = await enviarFcm(row.datos.token, { ...aviso, url: rutaDe(aviso.url) });
+        if (res.ok) enviados++;
+        else if (res.borrar) await getPool().query("delete from push_suscripciones where endpoint = $1", [row.endpoint]);
+        else console.warn("[push] FCM no pudo mandar", res.estado, res.error);
+        return;
+      }
+      if (!web) return;
       try {
         // En Prodi Chat dentro del mismo sitio, el aviso del chat abre /chat-app (si no, se abría el sistema).
         const enChatApp = row.datos.app === "chat" && !chatUrl();

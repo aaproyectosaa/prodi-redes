@@ -1,0 +1,28 @@
+{
+  "name": "prodi-chat-movil",
+  "private": true,
+  "packageManager": "pnpm@12.9.1",
+  "version": "1.0.0",
+  "description": "Prodi Chat para App Store y Google Play (Capacitor). Abre prodi-chat.vercel.app y le suma lo nativo.",
+  "scripts": {
+    "sync": "cap sync",
+    "assets": "capacitor-assets generate --iconBackgroundColor \"#000000\" --iconBackgroundColorDark \"#000000\" --splashBackgroundColor \"#000000\" --splashBackgroundColorDark \"#000000\"",
+    "android:aab": "cap sync android && cd android && gradlew.bat bundleRelease",
+    "android:apk": "cap sync android && cd android && gradlew.bat assembleDebug",
+    "abrir:android": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor-firebase/messaging": "8.6.0",
+    "@capacitor/android": "8.6.0",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.6.0",
+    "@capacitor/ios": "8.6.0",
+    "@capacitor/keyboard": "8.0.6",
+    "@capacitor/splash-screen": "8.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "4.0.0",
+    "@capacitor/cli": "8.6.0",
+    "typescript": "^5.6.0"
+  }
+}

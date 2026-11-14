@@ -1,0 +1,52 @@
+# Codemagic (codemagic.io): compila Prodi Chat para iPhone en una Mac de la nube y la sube a TestFlight.
+# Se lanza a mano desde codemagic.io → Start new build → «Prodi Chat · iPhone». Guía: apps/chat-movil/GUIA-TIENDAS.md
+workflows:
+  prodi-chat-ios:
+    name: Prodi Chat · iPhone
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    working_directory: apps/chat-movil
+    integrations:
+      # Nombre con el que se cargó la clave de API de App Store Connect en Codemagic (Team settings → Integrations).
+      app_store_connect: Prodi App Store
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.somosprodi.chat
+      vars:
+        # El "Apple ID" numérico de la app (App Store Connect → la app → Información de la app).
+        APP_STORE_APP_ID: "0000000000"
+      # Grupo "firebase" con GOOGLE_SERVICE_INFO_PLIST = el GoogleService-Info.plist en base64
+      # (solo si no está en el repo, en ios/App/App/GoogleService-Info.plist).
+      groups:
+        - firebase
+      node: 22
+      xcode: latest
+    scripts:
+      - name: Instalar dependencias
+        script: |
+          corepack enable
+          pnpm install --ignore-workspace --frozen-lockfile
+      - name: Firebase (GoogleService-Info.plist)
+        script: |
+          if [ ! -f ios/App/App/GoogleService-Info.plist ]; then
+            if [ -z "$GOOGLE_SERVICE_INFO_PLIST" ]; then echo "Falta GoogleService-Info.plist (sin eso no hay avisos)"; exit 1; fi
+            echo "$GOOGLE_SERVICE_INFO_PLIST" | base64 --decode > ios/App/App/GoogleService-Info.plist
+          fi
+      - name: Sincronizar Capacitor
+        script: pnpm exec cap sync ios
+      - name: Firma (certificado y perfil de la App Store)
+        script: xcode-project use-profiles
+      - name: Número de compilación
+        script: |
+          ULTIMO=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APP_ID" 2>/dev/null || echo 0)
+          cd ios/App && agvtool new-version -all $((ULTIMO + 1))
+      - name: Compilar .ipa
+        script: xcode-project build-ipa --project ios/App/App.xcodeproj --scheme App
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true

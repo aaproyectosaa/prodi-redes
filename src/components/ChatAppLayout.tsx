@@ -24,6 +24,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { esContacto, getRoleInfo } from "@/lib/roles";
 import { toast } from "sonner";
 import { useAltoVisible } from "@/hooks/use-alto-visible";
+import { iniciarBotonAtras, seguirTemaEnBarras } from "@/lib/nativo";
 import {
   abrirEnSistema,
   CHAT_APP,
@@ -303,7 +304,12 @@ function ChatAppHeader() {
             >
               <LogOut className="h-4 w-4" /> Cerrar sesión
             </button>
-            <p className="mt-3 text-center text-[11px] text-muted-foreground">Prodi Chat</p>
+            <p className="mt-3 text-center text-[11px] text-muted-foreground">
+              Prodi Chat ·{" "}
+              <button type="button" className="underline-offset-2 hover:underline" onClick={() => abrirEnSistema("/privacidad-chat.html")}>
+                Privacidad
+              </button>
+            </p>
           </div>
         </SheetContent>
       </Sheet>
@@ -319,6 +325,19 @@ export function ChatAppLayout() {
   // En el celular, con una conversación abierta, la conversación ocupa toda la pantalla (tiene su propio "atrás").
   const conversacion = pathname.replace(/\/$/, "") === CHAT_APP && new URLSearchParams(search).has("c");
   useAltoVisible();
+
+  // App de las tiendas: botón atrás de Android y letras de la barra de arriba según el tema (en la web no hace nada).
+  useEffect(() => {
+    let quitarAtras = () => undefined as void;
+    let vivo = true;
+    void iniciarBotonAtras().then((f) => (vivo ? (quitarAtras = f) : f()));
+    const quitarBarras = seguirTemaEnBarras();
+    return () => {
+      vivo = false;
+      quitarAtras();
+      quitarBarras();
+    };
+  }, []);
 
   useEffect(() => {
     if (authChecked && !user) navigate(CHAT_APP_INGRESAR, { replace: true });

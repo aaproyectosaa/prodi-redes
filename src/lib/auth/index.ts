@@ -199,6 +199,20 @@ export async function guardarPush(suscripcion: PushSubscriptionJSON | null, quit
   await llamar("push", quitar ? { quitar } : { suscripcion, app }, g.token);
 }
 
+/** App de las tiendas: anota el token de Firebase de este celular (los avisos salen por FCM). */
+export async function guardarPushNativo(token: string, plataforma: "ios" | "android") {
+  const g = leer();
+  if (!g) return;
+  await llamar("push", { nativo: { token, plataforma } }, g.token);
+}
+
+/** Pide borrar la cuenta (desde Prodi Chat; lo exigen App Store y Google Play). */
+export async function pedirBajaCuenta(motivo: string) {
+  const g = leer();
+  if (!g) throw new Error("Volvé a ingresar");
+  await llamar("pedir-baja", { motivo }, g.token);
+}
+
 /** ¿El servidor todavía tiene anotado este equipo para los avisos? */
 export async function pushEstado(endpoint: string): Promise<boolean> {
   const g = leer();

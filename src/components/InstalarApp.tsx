@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { asset } from "@/lib/asset";
 import { APK_URL, esIPad, useInstalarApp, type Navegador, type Plataforma } from "@/lib/instalar";
 import { cn } from "@/lib/utils";
+import { esNativo, permisoAvisosNativo } from "@/lib/nativo";
 
 type Paso = { icon: React.ElementType; texto: React.ReactNode };
 
@@ -368,9 +369,34 @@ export function AvisoActivarAvisos({ uid }: { uid?: string }) {
   const [bloqueados, setBloqueados] = useState(false);
 
   useEffect(() => {
-    if (!uid || typeof Notification === "undefined") return;
+    if (!uid) return;
     let cancel = () => undefined as void;
     let vivo = true;
+    // App de las tiendas: el permiso es del teléfono (no hay Notification en la web de adentro).
+    if (esNativo()) {
+      void permisoAvisosNativo().then(async (permiso) => {
+        if (yaMostrado(CLAVE_AVISOS) || !vivo) return;
+        if (permiso === "granted") {
+          // Ya dio permiso: se anota (o renueva) el celular sin preguntar.
+          marcarMostrado(CLAVE_AVISOS);
+          const { reanotarAppPush } = await import("@/lib/webPush");
+          await reanotarAppPush(uid);
+          return;
+        }
+        if (respondioAvisos()) return;
+        setBloqueados(permiso === "denied");
+        cancel = cuandoNoHayDialogo(() => {
+          marcarMostrado(CLAVE_AVISOS);
+          marcarRespondioAvisos();
+          setOpen(true);
+        });
+      });
+      return () => {
+        vivo = false;
+        cancel();
+      };
+    }
+    if (typeof Notification === "undefined") return;
     void import("@/lib/webPush").then(async ({ isWebPushSupported, subscribeWebPush, reanotarAppPush }) => {
       if (!(await isWebPushSupported())) return;
       const permiso = Notification.permission;

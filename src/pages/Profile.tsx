@@ -39,6 +39,7 @@ import {
 } from "@/components/ChangePasswordForm";
 import { cn } from "@/lib/utils";
 import { RecorteFoto } from "@/components/RecorteFoto";
+import { BorrarCuenta } from "@/components/BorrarCuenta";
 import { AVATAR_LADO, AVATAR_MAX, guardarFotoPerfil } from "@/lib/avatares";
 
 const AVATAR_COLORS = [
@@ -495,6 +496,8 @@ const Profile = () => {
               {user && userHasPasswordProvider(user) && (
                 <ChangePasswordForm user={user} />
               )}
+
+              <BorrarCuenta />
 
               {/* En compu el guardar va al final; en el teléfono queda fijo abajo. */}
               <div className="hidden sm:block pt-1">{botonGuardar()}</div>

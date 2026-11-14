@@ -2,6 +2,7 @@
 // en iPhone se agrega a la pantalla de inicio desde Safari. No hace falta App Store ni Play Store.
 
 import { useEffect, useState } from "react";
+import { esNativo } from "@/lib/nativo";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -76,6 +77,8 @@ export const esIPad = () =>
 
 export function yaInstalada(): boolean {
   if (typeof window === "undefined") return false;
+  // La app de App Store / Google Play: ya está instalada (sin carteles de "instalar").
+  if (esNativo()) return true;
   return (
     window.matchMedia?.("(display-mode: standalone)").matches ||
     Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
